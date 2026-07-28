@@ -2,7 +2,7 @@
 id: PX-1
 title: Specify proxy behavior
 pillar: Signalling
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
@@ -26,7 +26,14 @@ the transaction (retransmissions, CANCEL, ACK to a non-2xx), and the degraded be
 dataplane delivers one elsewhere (stateless CANCEL forwarding, retransmission handling).
 
 ## Progress
-- (not started)
+- 2026-07-28 — spec drafted at `docs/specs/proxy-behavior.md`: sans-IO engine contract, mode
+  applicability table, §16.3–§16.11 rule tables with [sipx-clstr] decisions, RFC 5393 branch
+  cookie + Max-Breadth, transaction-affinity section, 37 numbered vectors (PB-V/P/F/R/C/S/A).
+- Open: the F4 token byte budget (≤ 200 B) is provisional — the "reviewed against AF-1"
+  acceptance box stays unchecked until AF-1 fixes the layout and this spec's F4 row is
+  re-reviewed.
+- Open: RFC 5393 branch-cookie computation flagged as an upstream candidate (spec §1) — CX-1
+  raises it with the ledger rows.
 
 ## Notes
 - Design: [proxy-engine](../designs/proxy-engine.md).

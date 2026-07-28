@@ -1,7 +1,7 @@
 # Design: Kubernetes operator, Helm packaging & autoscaling
 
 **Status:** proposed · **Pillar:** Cluster · **Epic:** `k8s-deployment-operator` ·
-**Stories:** KO-1 … KO-8
+**Stories:** KO-1 … KO-9
 
 ## Why
 
