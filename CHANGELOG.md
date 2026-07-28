@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The M0 load-bearing specs land** — written concurrently and cross-reconciled. The proxy
+  behavior spec (PX-1): RFC 3261 §16 amended by RFC 5393 as a sans-IO engine with 42 vectors.
+  The location service spec (RG-1): a canonical AoR byte form, the per-AoR CAS contract, the
+  PostgreSQL and in-memory mappings, forking-ordered lookups. The affinity token spec (AF-1):
+  byte-level layout with direction and a 64 B module-facts region, AEAD by default, worst-case
+  157 B against the 200 B URI-parameter budget, stateless replay semantics — and a settled
+  no-mid-dialog-refresh rule (route sets are fixed at establishment) now reflected in the
+  media-control reselection risk and KO-9. The hook framework spec (EX-1): thirteen phases
+  aligned to the proxy pipeline, closed per-phase effect sets, a manifest whose state-key
+  domain makes dialog-keyed module state unrepresentable. The harness design (CF-1): a
+  discrete-event clock, links-with-policies with faults as scheduled overrides, scenarios as
+  code over declarative schedule values, a per-component sipx-testkit upstream split, and the
+  conformance registry as a requirement-grain local extension of the kernel's per-RFC registry,
+  kernel rows inherited by reference. (PX-1, RG-1, AF-1, EX-1, CF-1)
+
 ## [0.1.0] — 2026-07-28
 
 ### Added

@@ -20,7 +20,9 @@ refresh machinery — so a drain ends because the node is empty, not because a t
 A proxy cannot originate in-dialog requests, so "re-INVITE drain" means exploiting refreshes
 that already pass through: session-timer re-INVITEs (RFC 4028, M3) give every live call a
 periodic transit through a healthy edge — the anchoring module re-anchors media off a draining
-relay and reissues Record-Route tokens off a draining shard/edge at exactly that moment.
+relay at exactly that moment. (Route-set tokens cannot be reissued mid-dialog — the route set
+is fixed at establishment, see the affinity-token spec — and they don't need to be: any edge
+routes on the existing token, so a draining *edge* only has to shed its owned flows.)
 Signalling flows drain by re-homing: a draining edge stops accepting, then closes RFC 5626
 flows gracefully so clients flow-recover to another edge immediately instead of at
 registration expiry.
@@ -30,8 +32,9 @@ registration expiry.
 flow recovery, and the location bindings' flow_refs move — observed in a harness scenario, no
 registration lost.
 - [ ] During a drain, session-timer refreshes passing through re-anchor media away from a
-draining rtpengine and mint fresh tokens that exclude the draining node; the call continues —
-asserted end-to-end in the harness.
+draining rtpengine (via the anchoring module and the node-set epoch — the existing token stays;
+mid-dialog reissue is impossible per the affinity-token spec); the call continues — asserted
+end-to-end in the harness.
 - [ ] The operator's drain stage (KO-4) uses activity, not only time: it terminates when owned
 flows and in-flight transactions reach zero, with the bounded window as the fallback, and
 reports which of the two ended the drain.

@@ -1,0 +1,48 @@
+{{/*
+  The whole point of the chart: `.Values.cluster` is emitted verbatim as the
+  SipxCluster spec — `cluster.name` included. No renaming, no flattening, no
+  derived fields. If this template ever grows logic that reshapes the tree, the
+  "one document describes the deployment" property is gone.
+
+  metadata.name is deliberately NOT cluster.name: the CR's identity follows the
+  Helm release so a values overlay upgrades the same resource in place. Naming
+  the CR from a values field turns `helm upgrade -f other.values.yaml` into
+  create-new-then-delete-old — two SipxClusters claiming the same node-global
+  ports, indefinitely if the delete fails.
+
+  The operator projects per-role config from this resource; the chart does not
+  render it (Helm has no toToml, and a hand-rolled one would be a second,
+  subtly different serializer).
+
+  PROVISIONAL: the API group and version come from values because KO-1 has not
+  pinned them yet. When it does, they become constants here.
+*/}}
+apiVersion: {{ .Values.crd.apiGroup }}/{{ .Values.crd.apiVersion }}
+kind: SipxCluster
+metadata:
+  name: {{ .Release.Name | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/part-of: telephony
+spec:
+  {{- /* deployment concerns the operator needs, kept out of the config tree */}}
+  image:
+    repository: {{ .Values.deployment.image.repository }}
+    tag: {{ .Values.deployment.image.tag | default .Chart.AppVersion | quote }}
+    pullPolicy: {{ .Values.deployment.image.pullPolicy }}
+  roles:
+    {{- toYaml .Values.deployment.roles | nindent 4 }}
+  {{- with .Values.deployment.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.deployment.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+  {{- /* the config schema, verbatim */}}
+  {{- toYaml .Values.cluster | nindent 2 }}

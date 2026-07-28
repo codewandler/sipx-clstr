@@ -1,0 +1,249 @@
+########################################################################
+# sipx-clstr — chart defaults
+#
+# Two trees, kept visibly apart:
+#
+#   deployment:  how it is deployed. Ordinary Helm; looks like Helm.
+#   cluster:     what it does. DP-1's config schema, verbatim — the same tree
+#                a node reads. The chart emits it into the SipxCluster spec
+#                without reshaping it.
+#
+# These defaults are the DEFAULT DEPLOYMENT SET: a self-contained, single-zone
+# environment that stands up on a local k3s/k3d cluster with no edits — one
+# node per role, one PostgreSQL, one operator-managed rtpengine, an echo trunk,
+# and the e2e probe on. `helm install` then a passing probe is KO-2's
+# acceptance. No carrier, no external database, no VPN.
+#
+# A deployment overlays its own values on top; an overlay that needs a new
+# template is a defect in this chart.
+#
+# NOTHING HERE RUNS YET. There is no operator image and no CRD — KO-1 pins the
+# custom resource and KO-3 implements the reconcile loop. Until then the chart
+# renders a resource nothing serves.
+########################################################################
+
+# Provisional until KO-1 pins the custom resource.
+crd:
+  apiGroup: sipx.dev
+  apiVersion: v1alpha1
+
+deployment:
+  image:
+    repository: ghcr.io/sipx/sipx-clstr
+    tag: ""                     # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  operator:
+    replicas: 1
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits:   { memory: 256Mi }
+
+  # One node per role. On a single-node cluster everything co-locates, which is
+  # why the local profile is "clustered but co-located" — it proves the config
+  # and the reconcile loop, not zone spread.
+  #
+  # Every replica of a host-networked role binds the same node-global port, so
+  # same-role replicas cannot share a node (KO-11). Replica counts above the
+  # node count are a placement error, not a capacity decision.
+  roles:
+    edge:
+      replicas: 1
+      hostNetwork: true         # UDP 5060 must see the real source address
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { memory: 512Mi }
+    registrar:
+      replicas: 1
+      hostNetwork: true         # registered against directly at its advertised port
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { memory: 512Mi }
+    proxy:
+      replicas: 1
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { memory: 512Mi }
+    e2eTester:
+      replicas: 1
+      resources:
+        requests: { cpu: 20m, memory: 64Mi }
+        limits:   { memory: 128Mi }
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Managed dependencies — a local convenience, never the production path.
+  postgresql:
+    enabled: true
+    storage: 1Gi
+  rtpengine:
+    enabled: true               # mirrors cluster.media.mode == "managed"
+    replicas: 1
+    hostNetwork: true
+    image:
+      repository: ghcr.io/sipwise/rtpengine
+      tag: "13.0"
+
+  serviceAccount:
+    create: true
+    name: ""
+
+########################################################################
+# cluster: DP-1's config schema.
+########################################################################
+
+cluster:
+  name: sipx-local
+  environment: local
+  zones: [local]
+
+  listener:
+    - role: edge
+      transport: udp
+      bind: "0.0.0.0:5060"
+      advertise: "${NODE_IP}:5060"
+    - role: edge
+      transport: tcp
+      bind: "0.0.0.0:5060"
+      advertise: "${NODE_IP}:5060"
+      connectionLifetime: 3605s
+      maxConnections: 2048
+    - role: registrar
+      transport: udp
+      bind: "0.0.0.0:5070"
+      advertise: "${NODE_IP}:5070"
+    - role: management
+      transport: http
+      bind: "127.0.0.1:8080"
+    # No TLS listener in the default set — a local self-signed cert proves
+    # nothing. A deployment overlay adds one.
+
+  registrar:
+    realm: sip.local
+    maxExpires: 3600s
+    minExpires: 60s
+    usePath: true
+    methodFiltering: true
+    maxContacts: 10
+    shards: 1
+    authBackend: location_store
+
+  locationStore:
+    backend: postgres
+    dsnRef: sipx-location/dsn      # created by the chart when postgresql.enabled
+    ha: single
+
+  numbering:
+    normalize: [strip_plus, strip_leading_zeros]
+    normalizeFields: [from_user, to_user, request_uri_user, pai_user]
+    ruriDigitsMin: 3
+    ruriDigitsMax: 20
+    ruriFallbackToUser: true
+    outbound:
+      e164Plus: true
+      anonymousFrom: "sip:anonymous@anonymous.invalid"   # RFC 5379 §5.1.4
+
+  security:
+    unknownSource: drop
+    maxForwards: 10
+    sanityCheck: true
+    answerOptionsKeepalive: true
+    rejectUserAgents: [friendly, scanner, sipcli, sipvicious, VaxSIPUserAgent, pplsip]
+    internalZone:
+      networks: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+    anonymousCalls:
+      mode: log
+      minDigits: 4
+      rejectStatus: 403
+
+  # The default set has no carrier and no internal core: it dials its own echo
+  # endpoint, which is what makes `helm install` self-contained.
+  destinationSet:
+    - name: echo
+      algorithm: hash-callid
+      forceDestination: true
+      onEmpty: { status: 404, reason: "No destination" }
+      members:
+        - { host: "sipx-echo", transport: udp, port: 5060 }
+
+  routeRule:
+    - name: echo-test
+      direction: outbound
+      match: { prefix: "999000" }
+      destination: pool-echo
+    - name: inbound-to-echo
+      direction: inbound
+      match: { any: true }
+      destination: echo
+
+  routingHook:
+    enabled: false
+
+  trunk:
+    - name: echo-server
+      pool: pool-echo
+      direction: outbound
+      test: true
+      failoverRank: 0
+      register: false
+      proxies:
+        - { weight: 1.0, host: "sipx-echo", port: 5060 }
+
+  quirkProfile: []
+
+  media:
+    mode: managed
+    ngTimeout: 3000ms
+    ngRetries: 2
+    portRange: { min: 30000, max: 30200 }
+    timeout: 60s
+    silentTimeout: 3600s
+    rewrite: [replace-origin, replace-session-connection]
+    strictSource: true
+    generateRtcp: false
+    codecs:
+      offer: [PCMA, PCMU, telephone-event]
+      transcode: []
+      mask: all
+
+  limit:
+    - name: per-destination-cps
+      kind: cps
+      scope: destination_number
+      algorithm: red
+      value: 10
+      onExceed: { status: 486, reason: "Busy (rate-limit threshold exceeded)" }
+
+  limits:
+    maxCallDuration: 28800s
+    timerC: 600s               # the 180s default silently caps long calls
+    frTimer: 3s
+    frInvTimer: 600s
+
+  nat:
+    detect: true
+    fixNatedRegister: true
+    contactAlias: true
+    keepalive: { method: OPTIONS, interval: 30s, natedOnly: true }
+
+  observability:
+    metrics: { enabled: true, path: /metrics, listener: management }
+    rpc:     { enabled: true, path: /RPC, listener: management }
+    logFormat: json
+    hep:
+      enabled: false
+    cdr:
+      enabled: true
+      fields: [callid, reply_code, from_number, to_number, call_direction]
+
+  probe:
+    enabled: true
+    schedule: 60s
+    tenant: e2e-test
+    targets:
+      - name: edge-udp
+        via: "${NODE_IP}"
+        transport: udp
+        destination: "9990001"

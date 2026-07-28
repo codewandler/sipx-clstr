@@ -88,7 +88,7 @@ otherwise the request is dropped (never guessed at).
 | V4 | Loop detection (see below) | `482 Loop Detected` |
 | V5 | `Max-Breadth` (RFC 5393): value ≥ 1 available for forwarding | `440 Max-Breadth Exceeded` |
 | V6 | `Proxy-Require`: every option tag supported by the active profile | `420 Bad Extension` + `Unsupported` listing the offenders |
-| V7 | Authentication (hook phase; policy per RG-2 / tenant) | `407 Proxy Authentication Required` |
+| V7 | Authentication (hook phases `BeforeAuth`/`AfterAuth`, [hook-framework](hook-framework.md); policy per RG-2 / tenant) | `407 Proxy Authentication Required` |
 
 **[sipx-clstr] rules:**
 - `Max-Forwards` absent → insert with value 70 before decrementing (§16.6 allows MAY; we do,
@@ -132,6 +132,10 @@ request that cannot receive ≥ 1 is not forwarded (V5).
 
 ## 7. Request forwarding (§16.6)
 
+**[sipx-clstr]** An empty resolved target set concludes the context with `480 Temporarily
+Unavailable` (§16.5's terminal case; the location service returns empty sets rather than
+deciding the response — [location-service](location-service.md) §7).
+
 Per target, in order — the untouched remainder of the message re-serializes byte-exact (kernel
 guarantee; the passthrough vectors assert it):
 
@@ -140,7 +144,7 @@ guarantee; the passthrough vectors assert it):
 | F1 | Copy the request | Lossless copy; unknown headers/bodies untouched |
 | F2 | Update the Request-URI to the target | Contact from location service keeps its parameters |
 | F3 | Decrement `Max-Forwards` | After the V3/insert rule |
-| F4 | Record-Route (dialog-forming requests when the platform must stay in the path) | One `Record-Route` per side carrying the affinity token as a URI parameter; direction distinguishes the sides (AF-1). Byte budget: the token parameter MUST stay ≤ 200 bytes — **provisional until AF-1 fixes the layout**; this row is re-reviewed then |
+| F4 | Record-Route (dialog-forming requests when the platform must stay in the path) | One `Record-Route` per side carrying the affinity token as a URI parameter; direction distinguishes the sides. Byte budget: the token URI **parameter** MUST stay ≤ 200 bytes — the budget authority is [affinity-token](affinity-token.md) §3 (worst case 157 B including the 64 B module-facts ceiling); the bound is per parameter, not per header line |
 | F5 | Add headers per policy/hooks | Hook phase `BeforeForward`; modules declare what they touch |
 | F6 | Route postprocessing | Strict-routing next hop: move Request-URI to last Route, first Route to Request-URI |
 | F7 | Determine next hop | First Route (lr) or Request-URI, handed to the route plan (RT-1); this spec consumes an ordered target, nothing more |
@@ -154,7 +158,7 @@ guarantee; the passthrough vectors assert it):
 | # | Rule |
 |---|---|
 | R1 | Match the branch (kernel does; unmatched responses on a stateful proxy are dropped) |
-| R2 | Pop the topmost Via (ours). A response with no Via left after the pop was addressed to us — not forwarded |
+| R2 | Pop the topmost Via (ours); hook `ResponseReceived` fires here. A response with no Via left after the pop was addressed to us — not forwarded |
 | R3 | `100` from a branch: absorbed, never forwarded |
 | R4 | Other 1xx: forward immediately; reset that branch's Timer C |
 | R5 | 2xx to INVITE: forward immediately, **always** — including after a final response was already chosen (RFC 6026); then cancel remaining pending branches |
@@ -163,7 +167,7 @@ guarantee; the passthrough vectors assert it):
 | R8 | `503` from a branch is treated as branch failure and MUST NOT be forwarded as `503`: it becomes `500 Server Internal Error` if it ends up the best response (§16.7 ¶ on 503) |
 | R9 | Branch timeout (kernel timer or Timer C without provisional): behaves as `408 Request Timeout` from that branch |
 | R10 | Branch transport error (§16.9): behaves as `503` from that branch (and therefore R8) |
-| R11 | Forwarding the chosen final response cancels every still-pending branch |
+| R11 | Forwarding the chosen final response cancels every still-pending branch; hook `BeforeResponseForward` runs before the `Respond` effect |
 
 ## 9. CANCEL and Timer C (§16.10, §16.8)
 
@@ -238,10 +242,11 @@ the rows here are the normative behavior matrix.
 
 | # | Given | Expect |
 |---|---|---|
-| PB-F-1 | Dialog-forming INVITE, 1 target | Forward: Via pushed (cookie present), `Max-Forwards` decremented, Record-Route + token ≤ 200 B, Timer C set 180 s |
+| PB-F-1 | Dialog-forming INVITE, 1 target | Forward: Via pushed (cookie present), `Max-Forwards` decremented, Record-Route with token parameter ≤ 200 B, Timer C set 180 s |
 | PB-F-2 | 3 targets (q-ordered) | 3 branches, unique branch ids, same cookie field rules, `Max-Breadth` divided |
 | PB-F-3 | Unknown header `X-Vendor: a, b` in request | Byte-identical in every forwarded branch |
 | PB-F-4 | Next hop is a strict router | F6 swap: R-URI ↔ Route ends |
+| PB-F-5 | Resolved target set is empty | → Respond `480` |
 
 **Responses (PB-R):**
 

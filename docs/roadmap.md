@@ -6,12 +6,16 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-28:_ the repository is the **design layer only** — vision, roadmap, epic designs
-and the seeded backlog. M0 is in flight; there is no code and no Cargo workspace yet. The sipx
-kernel this platform builds on has shipped its own M0–M4 (sans-IO core, transactions, UDP/TCP
-transports, DNS, digest client, media, CLI phone); TLS, WS and WSS exist on its main branch as
-in-progress, unreleased M5 work — a tracked row in the [upstream ledger](upstream.md), since M2
-TLS edges and M3 WSS clients depend on a release that contains them.
+_As of 2026-07-28:_ **M0 is all but complete.** The four load-bearing specs are written and
+cross-reconciled — proxy behavior, location service, affinity token, hook framework — and the
+deterministic-harness design is accepted with its sipx-testkit upstream split decided. Still
+open in M0: `CX-1` files the upstream stories in the sipx repo (every ledger row now has its
+decision recorded). There is no code yet; `CX-2` creates the Cargo workspace as the first act
+of M1. The sipx kernel this platform builds on has shipped its own M0–M4 (sans-IO core,
+transactions, UDP/TCP transports, DNS, digest client, media, CLI phone); TLS, WS and WSS exist
+on its main branch as in-progress, unreleased M5 work — a tracked row in the
+[upstream ledger](upstream.md), since M2 TLS edges and M3 WSS clients depend on a release that
+contains them.
 
 ## Milestones
 
@@ -45,13 +49,19 @@ TLS edges and M3 WSS clients depend on a release that contains them.
 
 ## Delivered
 
-- _Nothing yet — M0 is the first milestone._
+- **The M0 specs** (0.2.0): `docs/specs/proxy-behavior.md`, `location-service.md`,
+  `affinity-token.md`, `hook-framework.md`, and the accepted deterministic-harness design —
+  written concurrently, cross-reconciled (token budget 157 B ≤ 200 B end-to-end, hook phases
+  aligned to the proxy pipeline, no-mid-dialog-token-refresh propagated to media-control and
+  KO-9). Itemized history in [CHANGELOG.md](../CHANGELOG.md).
+- **The design scaffold** (0.1.0): vision, roadmap, eleven epic designs, the reviewed backlog,
+  the upstream ledger, the architecture charts.
 
 ## Next
 
-- The M0 ready queue on the [board](stories/README.md): `PX-1` proxy behavior spec, `RG-1`
-  location service spec, `AF-1` affinity token spec, `CF-1` harness design, `EX-1` hook framework
-  spec, `CX-1` filing the upstream sipx stories.
+- `CX-1` — file the upstream sipx stories (the last M0 story; all decisions it records are now
+  made), then `CX-2` opens M1 with the Cargo workspace. The operator epic advances in parallel
+  (`KO-2` in progress).
 
 ## Epics
 

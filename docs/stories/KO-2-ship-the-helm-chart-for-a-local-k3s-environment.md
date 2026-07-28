@@ -2,7 +2,7 @@
 id: KO-2
 title: Ship the Helm chart for a local k3s environment
 pillar: Cluster
-status: backlog
+status: in-progress
 priority: 
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
@@ -24,7 +24,19 @@ note: the headline deliverable — helm install on k3s
 - [ ] The README states plainly what the local environment does *not* prove (zone spread, real source preservation, HA of the store).
 
 ## Progress
-- (not started)
+- **Started 2026-07-28.** `deploy/helm/` holds the chart skeleton: `Chart.yaml`, `values.yaml`
+  carrying the default deployment set, and `templates/sipxcluster.yaml`, which emits
+  `.Values.cluster` verbatim into the SipxCluster spec. `helm lint` and `helm template` pass.
+- Contributed by the babelforce deployment (`~/babelforce/projects/babelforce-sip-clstr`), which had
+  built it downstream before the boundary was corrected: the chart belongs to this story, and a
+  consuming deployment carries only its own values.
+- **The API group and version are provisional** (`sipx.dev/v1alpha1`, held in `values.crd`) because
+  `KO-1` has not pinned the custom resource. They become template constants when it does.
+- Still missing, and the bulk of this story: the operator Deployment, the CRDs, RBAC, the managed
+  PostgreSQL and rtpengine dependencies, and a NOTES.txt. There is no image to run and no CRD to
+  validate against, so the rendered resource is currently unserved.
+- The default set's shape and the reasoning behind it (self-contained, echo trunk, probe on,
+  `hostNetwork` placement arithmetic) is exercised by that deployment's devspace profiles.
 
 ## Notes
 - Design: [k8s-deployment-operator](../designs/k8s-deployment-operator.md). Probe: [ET-6](ET-6-run-continuous-probes-against-the-reference-deployment.md). Reference topology it scales down from: [DP-2](DP-2-author-the-3-zone-reference-topology.md).

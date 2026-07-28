@@ -69,10 +69,12 @@ signalling — never general-purpose service pods.
   with the vision's HA non-goal).
 - Whether relay state persistence/restore on the media node is relied upon at all in v1, or
   treated purely as operator convenience.
-- Reselection propagation: tokens already minted carry the failed node's id, and there is no
-  token-free path to announce the replacement. Re-anchoring therefore implies a token refresh
-  carried by the next Record-Route opportunity (target refresh); AF-1 and ME-3 must state this
-  jointly.
+- Reselection propagation: tokens already minted carry the failed node's id, and the
+  [affinity-token](../specs/affinity-token.md) spec rules out mid-dialog token refresh (the
+  route set is fixed at dialog establishment, RFC 3261 §12.2). The replacement must therefore
+  be computable without a new token — e.g., every edge deterministically re-runs the rendezvous
+  selection over the current node-set epoch when the token's node is marked failed. Decided in
+  ME-3; until then this is the epic's sharpest open question.
 
 ## Acceptance / done
 

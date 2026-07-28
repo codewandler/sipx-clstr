@@ -1,0 +1,10 @@
+apiVersion: v2
+name: sipx-clstr
+description: >-
+  Installs the sipx-clstr operator, its CRDs and RBAC, and exactly one SipxCluster
+  resource rendered 1:1 from values.yaml. The default values are a self-contained,
+  single-zone environment that stands up on a local k3s/k3d cluster with no edits.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords: [sip, voip, proxy, registrar, rtpengine, cluster]
