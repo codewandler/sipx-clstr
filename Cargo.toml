@@ -1,0 +1,92 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+# Tracks the repository's release tags rather than the crates' own maturity: nothing here is
+# published yet (see `publish = false` on every crate), so a second version line would be a
+# number nobody could act on. It starts being meaningful when M1's exit criteria hold.
+version = "0.3.0"
+edition = "2024"
+# Matches the kernel's floor. Raising it above sipx's would make this platform unbuildable on a
+# toolchain that can build what it depends on, which is a strange thing to ask of anyone.
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/codewandler/sipx-clstr"
+authors = ["Timo Friedl <timofriedlberlin@gmail.com>"]
+keywords = ["sip", "voip", "proxy", "registrar", "cluster"]
+categories = ["network-programming"]
+
+[workspace.dependencies]
+# Internal crates
+sipx-clstr-proxy = { path = "crates/sipx-clstr-proxy", version = "0.3.0" }
+sipx-clstr-registrar = { path = "crates/sipx-clstr-registrar", version = "0.3.0" }
+sipx-clstr-probe = { path = "crates/sipx-clstr-probe", version = "0.3.0" }
+sipx-clstr-node = { path = "crates/sipx-clstr-node", version = "0.3.0" }
+sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.3.0" }
+
+# The kernel, pinned to a released tag rather than to a branch. sipx is not on crates.io, so a
+# git dependency is the only honest way to depend on it; a `tag` rather than a `branch` is what
+# makes a build reproducible, and what makes "which kernel version is this claim true of?" a
+# question with an answer. Bumping it is a deliberate act with a changelog entry.
+#
+# Pinned at 0.2.1, which contains UDP, TCP, TLS, WebSocket and WSS transports, all four
+# transaction machines, RFC 3263 resolution and the client side of digest.
+sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.2.1" }
+sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.2.1" }
+sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.2.1" }
+
+# Core
+bytes = "1"
+thiserror = "2"
+rand = "0.9"
+tracing = "0.1"
+# The loop-detection cookie is keyed (proxy-behavior §6) so an outsider cannot forge "not a loop".
+# RustCrypto rather than a bespoke construction: the arithmetic is not the interesting part, and a
+# hand-rolled MAC in a security position is a liability nobody asked for. Same crates the kernel
+# already uses, so the workspace does not grow a second hash stack.
+hmac = "0.12"
+sha2 = "0.10"
+# Only for the durable location store's binding-set encoding. A hand-rolled encoding for a schema
+# this shape would be a second parser to get wrong.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# `with-serde_json-1` is what lets a `jsonb` column round-trip as a `serde_json::Value`; without it
+# the binding set would need a bespoke text encoding, which is a second parser to get wrong.
+postgres = { version = "0.19", features = ["with-serde_json-1"] }
+
+# Async runtime. Never used by the sans-IO crates — if a `tokio` line appears in
+# sipx-clstr-proxy's or sipx-clstr-registrar's manifest, something has gone wrong with the
+# decision-logic-is-sans-IO rule, not merely with the dependency graph.
+tokio = { version = "1", default-features = false }
+
+# Test / bench
+pretty_assertions = "1"
+proptest = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Disabled deliberately: protocol code is full of small numeric casts and long match arms where
+# these fire without adding value.
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+# A proxy that panics on a message takes every call on the node with it. These are warnings here
+# and errors in CI (`-D warnings`); test modules opt out per-module.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -15,12 +15,15 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `docs/stories/` | one file per unit of work; `README.md` there is the **board** | board is generated |
 | `docs/upstream.md` | the ledger of what belongs in the sipx kernel rather than here | hand-written |
 | `docs/architecture.md` | the charts: request paths, roles, deployment control plane | hand-written |
+| `crates/` | the Rust workspace — `-proxy` and `-registrar` are sans-IO, `-node` is the driver layer, `-sim` the harness, `-probe` the e2e-tester | hand-written |
+| `scripts/` | the gate: `gate.sh` and the checks it runs | hand-written |
 | `deploy/helm/` | the chart, its templates and the default deployment set (`KO-2`) | hand-written |
 | `website/` | the published documentation site (Docusaurus), deployed on release | built by CI |
 | `CHANGELOG.md` | closed stories roll up here | hand-written |
 
-**The state of play, in one line:** M0 is all but complete — four specs written, no Rust yet; `CX-2`
-creates the Cargo workspace as the first act of M1. Check the board before assuming that is current.
+**The state of play, in one line:** M0 is complete and M1 is scoped as fourteen ordered stories
+(see the [roadmap](docs/roadmap.md#m1-in-detail)); the workspace exists and the gate is green, and
+`PX-2` is next. Check the board before assuming that is current.
 
 ## Non-negotiables
 
@@ -36,9 +39,10 @@ creates the Cargo workspace as the first act of M1. Check the board before assum
    fired-timer input, bytes enter as data, randomness enters as an injected source. Sockets,
    clocks, databases and RPC live in drivers. If a piece of protocol or cluster logic cannot run
    under the deterministic harness, its design is wrong.
-3. **No panics on network input, no `unsafe`.** When the workspace exists (`CX-2`),
-   `unsafe_code` is forbidden workspace-wide; `unwrap`, `expect`, `panic` and raw indexing are
-   lint warnings treated as errors in library code; test modules opt out per-module.
+3. **No panics on network input, no `unsafe`.** `unsafe_code` is forbidden workspace-wide;
+   `unwrap`, `expect`, `panic` and raw indexing are lint warnings, and CI builds with
+   `-D warnings`, so in library code they are errors. Test modules opt out per-module. A proxy
+   that panics on a message takes every call on the node with it.
 4. **Spec before code.** Non-trivial subsystems get a spec in `docs/specs/` first: normative RFC
    references, types, state tables, timers, and byte-level test vectors. Tests are derived from
    the spec's vectors.
@@ -68,20 +72,42 @@ creates the Cargo workspace as the first act of M1. Check the board before assum
 
 ## The gate
 
-The Cargo workspace does not exist yet (story `CX-2` creates it as the first act of M1). Until
-then, the gate before marking any story done is documentation consistency:
+Before marking any story done:
+
+```sh
+scripts/gate.sh
+```
+
+which is:
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+scripts/check-features.sh      # each crate with its optional features off, not just --all-features
+scripts/check-provenance.sh    # needs SIPX_DENYLIST or ~/notes/sipx-research/denylist.txt
+scripts/check-docs.sh          # links resolve; every epic has a design; every design path exists
+```
+
+If it is green locally and red in CI, that difference is a bug in `scripts/gate.sh` — fix it there
+rather than working around it in the workflow.
+
+**`check-provenance.sh` carries the carve-out from non-negotiable #1.** The denylist is supplied
+from outside the repository, deliberately; the *allowlist* — named integration and interop targets
+that may appear anywhere — is `scripts/provenance-allow.txt`, in the repository, with a reason per
+line. Adding a line is a deliberate act, and "we looked at it" is not a reason.
+
+**`check-features.sh` is not garnish.** `--all-features` hides a whole class of breakage: a crate
+that does not compile with an optional feature turned *off* is invisible until a consumer turns it
+off, and by then it is in a release.
+
+Documentation consistency is part of the gate rather than a separate practice, because `docs/` is
+published:
 
 - Every story's frontmatter is complete and the board regenerated (`/track:board`).
-- Every `epic:` slug has a matching `docs/designs/<slug>.md`; every `design:` path exists.
 - New specs carry normative references and test-vector tables, not prose alone.
-- Every relative link in `docs/` and the README resolves — CI checks this on every push, because
-  the documentation is published and a broken link there is a broken published page.
 - Anything added under `docs/` that should be readable on the site is reachable from
   `website/sidebars.js`; the site build fails on a broken link rather than shipping one.
-
-Once `CX-2` lands, the gate becomes the sipx-style command set (fmt, clippy `-D warnings`, tests
-with `--all-features`, a provenance check, and a feature-matrix check) and this section is updated
-by that story.
 
 ## Publishing
 

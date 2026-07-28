@@ -1,0 +1,12 @@
+# Integration and interop targets — the carve-out to AGENTS.md non-negotiable #1.
+#
+# These systems may be named anywhere in this repository, because this platform *talks to* them or
+# *is tested against* them. What stays forbidden is naming any of them — or anything else — as
+# behavioral precedent: "system X does it this way" is never a reason for a design decision here.
+# Rationale cites RFCs, sipx specs, or our own specs in docs/specs/.
+#
+# Adding a line is a deliberate act. State what the relationship is; "we looked at it" is not one.
+# Matching is case-insensitive and exact, so each line names one system rather than a family.
+
+rtpengine        # the media relay this platform controls over the NG protocol (ME-1, ME-2, KO-7)
+sipp             # traffic generator for the real-network interop harness (CF-3)

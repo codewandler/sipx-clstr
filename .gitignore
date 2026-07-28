@@ -1,4 +1,5 @@
-# Build output (workspace arrives with CX-2)
+# Build output. Cargo.lock *is* committed: this workspace produces a binary and a deployable
+# node, so a reproducible dependency set is the point.
 /target
 
 # Local research and scratch material — must never be committed

@@ -1,0 +1,59 @@
+# Vector rows that are deliberately not covered yet, and why.
+#
+# `scripts/check-vectors.py` reads this. Every row in a spec's vector table must be either covered by
+# a test or listed here with a reason and the story that will cover it — and a row listed here that
+# *is* covered is an error too, because a stale deferral is how a coverage report starts lying.
+#
+# This is the narrow, PB-only ancestor of the conformance registry `EX-2` specifies and `CF-2`
+# reports from. When that exists, this file folds into it.
+
+[[deferred]]
+id = "PB-C-4"
+story = "PX-2"
+reason = """
+A CANCEL matching no transaction is forwarded statelessly. By definition no response context exists
+for it, so it never reaches the engine — it is the driver's, and the driver design says so. It
+becomes testable when a driver exists to test (PX-4's stateless path, M2).
+"""
+
+[[deferred]]
+id = "PB-S-1"
+story = "PX-4"
+reason = "Stateless mode. Specified in PX-1, implemented in M2 when the token path gives it a consumer."
+
+[[deferred]]
+id = "PB-S-2"
+story = "PX-4"
+reason = "Stateless mode — M2."
+
+[[deferred]]
+id = "PB-S-3"
+story = "PX-4"
+reason = "Stateless mode — M2."
+
+[[deferred]]
+id = "PB-S-4"
+story = "PX-4"
+reason = """
+Stateless mode's deterministic branch: a retransmission must produce the byte-identical forwarded
+message. The stateful engine already derives its branch rather than randomising it, so the property
+holds today, but the row belongs to the stateless path it is written for — M2.
+"""
+
+[[deferred]]
+id = "PB-A-1"
+story = "AF-5"
+reason = """
+Transaction affinity: an INVITE retransmission delivered to a *second* edge, and the duplicate-fork
+counter that bounds it. Needs more than one node and needs the affinity token to exist — M2.
+"""
+
+[[deferred]]
+id = "PB-A-2"
+story = "AF-5"
+reason = "Transaction affinity — a non-2xx ACK at a foreign edge. Multi-node, M2."
+
+[[deferred]]
+id = "PB-A-3"
+story = "AF-5"
+reason = "Transaction affinity — a 2xx ACK routed by token at a foreign edge. Multi-node, M2."

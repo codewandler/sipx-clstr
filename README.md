@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://codewandler.github.io/sipx-clstr/"><img src="https://img.shields.io/badge/docs-codewandler.github.io%2Fsipx--clstr-E2622A" alt="Documentation"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/status-specs%20written%2C%20no%20code%20yet-2F3A45" alt="Status: design stage"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/status-M1%20in%20progress-2F3A45" alt="Status: M1 in progress"></a>
   <a href="https://github.com/codewandler/sipx"><img src="https://img.shields.io/badge/built%20on-sipx-F98A3C" alt="Built on sipx"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F3A45" alt="MIT or Apache 2.0 license"></a>
 </p>
@@ -25,10 +25,12 @@
 
 ---
 
-> **Read this first.** sipx-clstr is at the **design stage**. Four load-bearing specifications are
-> written and cross-reconciled; there is **no Rust code yet**. If you need a proxy to run today,
-> this is not it — but if you want to see the argument before the implementation, it is all here,
-> and that is deliberate.
+> **Read this first.** sipx-clstr is **early**. Four load-bearing specifications are written and
+> cross-reconciled, and the Cargo workspace now exists with its gate green — but **nothing
+> forwards a SIP message yet**. M1, which makes one node proxy and register, is
+> [scoped as fourteen ordered stories](docs/roadmap.md#m1-in-detail) with exit criteria you can
+> run. If you need a proxy today, this is not it — but if you want to see the argument before the
+> implementation, it is all here, and that is deliberate.
 
 ## The problem
 
@@ -84,13 +86,15 @@ multi-node test is treated as a bug in the design, not in the test.
 |---|---|
 | **Written** | Proxy behaviour, location service, affinity token, hook framework — four specs with normative rules and test-vector tables |
 | **Accepted** | The deterministic multi-node harness design, and its split with the upstream test kit |
-| **Not written** | Any Rust. The Cargo workspace is the first act of M1 |
-| **Built on** | [sipx](https://github.com/codewandler/sipx) — the SIP kernel this platform orchestrates. Protocol logic belongs there; this repo adds clustering |
+| **Building** | The Cargo workspace, its lints and the gate. Five crates, split along the sans-IO boundary — `tokio` is a dependency of the driver crate and of nothing else |
+| **Not yet** | Anything that forwards a SIP message. The proxy core, the registrar and the harness are M1 stories 3–8 |
+| **Built on** | [sipx](https://github.com/codewandler/sipx) 0.2.1 — the SIP kernel this platform orchestrates, pinned to a tag. Protocol logic belongs there; this repo adds clustering |
 
-**Milestones.** M0 foundation on paper *(all but complete)* → M1 one node that proxies and registers
-→ M2 a cluster you can deploy → M3 modern reachability (Outbound, GRUU, WebSocket, push) → M4
-service families. The detail, and what "done" means for each, is in
-**[the roadmap](docs/roadmap.md)**.
+**Milestones.** M0 foundation on paper *(complete)* → **M1 one node that proxies and registers
+*(in progress)*** → M2 a cluster you can deploy → M3 modern reachability (Outbound, GRUU,
+WebSocket, push) → M4 service families. M1 is
+[fourteen stories in a fixed order](docs/roadmap.md#m1-in-detail), each with the vectors that
+prove it; the rest, and what "done" means for each, is in **[the roadmap](docs/roadmap.md)**.
 
 ## Why specs first
 

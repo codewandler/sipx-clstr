@@ -1,9 +1,8 @@
 name: docs
 
-# The gate while there is no Cargo workspace (AGENTS.md → "The gate"): the
-# documentation *is* the deliverable, so its consistency is what CI can check.
-# When CX-2 lands the Rust workspace, this joins a build/test job rather than
-# being replaced by one.
+# `docs/` is the deliverable and the website is a view of it, so a broken relative link here is a
+# broken published page. The checks themselves live in `scripts/check-docs.py` so that the gate
+# (`scripts/gate.sh`) and this job run the same code rather than two drifting copies of it.
 
 on:
   push:
@@ -23,53 +22,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Relative links resolve
-        run: |
-          python3 - <<'PY'
-          import re, pathlib, sys
-          bad = []
-          for md in sorted(pathlib.Path('.').rglob('*.md')):
-              if any(p in ('.git', 'node_modules', 'build') for p in md.parts):
-                  continue
-              for m in re.finditer(r'\[([^\]]+)\]\(([^)]+)\)', md.read_text(encoding='utf-8')):
-                  target = m.group(2)
-                  if target.startswith(('http://', 'https://', '#', 'mailto:')):
-                      continue
-                  path = target.split('#')[0]
-                  if path and not (md.parent / path).resolve().exists():
-                      bad.append(f'{md}: [{m.group(1)}]({target})')
-          for b in bad:
-              print(f'broken link  {b}')
-          print(f'{len(bad)} broken link(s)')
-          sys.exit(1 if bad else 0)
-          PY
+      - name: Links resolve, epics have designs, design paths exist
+        run: scripts/check-docs.sh
 
-      - name: Every epic slug has a design, every design path exists
-        run: |
-          python3 - <<'PY'
-          import pathlib, re, sys
-          problems = []
-          for story in sorted(pathlib.Path('docs/stories').glob('*.md')):
-              if story.name in ('README.md', '_TEMPLATE.md'):
-                  continue
-              text = story.read_text(encoding='utf-8')
-              fm = text.split('---')[1] if text.startswith('---') else ''
-              epic = re.search(r'^epic:[ \t]*(\S+)[ \t]*$', fm, re.M)
-              design = re.search(r'^design:[ \t]*(\S+)[ \t]*$', fm, re.M)
-              if epic and not pathlib.Path(f'docs/designs/{epic.group(1)}.md').exists():
-                  problems.append(f'{story.name}: epic "{epic.group(1)}" has no design doc')
-              if design and not pathlib.Path(design.group(1)).exists():
-                  problems.append(f'{story.name}: design path "{design.group(1)}" does not exist')
-          for p in problems:
-              print(p)
-          print(f'{len(problems)} problem(s)')
-          sys.exit(1 if problems else 0)
-          PY
+      # The conformance report is generated from the spec and the test names, so a spec row that
+      # loses its proof — or a deferral that goes stale — fails here rather than quietly weakening
+      # what the report claims.
+      - name: Every spec vector is proved or deferred with a reason
+        run: scripts/check-vectors.py --check
 
       - name: The board is in sync with story frontmatter
         run: |
-          # The board is generated; a hand-edited or stale one is a defect. This
-          # asserts the committed board matches what the frontmatter produces.
+          # The board is generated; a hand-edited or stale one is a defect. This asserts the
+          # committed board matches what the frontmatter produces. The generator lives in the
+          # track plugin rather than in this repo, so the check is conditional on it being here.
           if [ -f scripts/gen_board.py ]; then
             python3 scripts/gen_board.py docs
             git diff --exit-code -- docs/stories/README.md

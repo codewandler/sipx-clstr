@@ -1,0 +1,37 @@
+[package]
+name = "sipx-clstr-registrar"
+description = "REGISTER processing and the location service: AoR canonicalization, bindings, compare-and-swap."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[features]
+default = []
+## The `LocationStore` contract as a runnable suite, so every backend runs the *same* rows (`RG-4`).
+##
+## Test code in a library, deliberately: the PostgreSQL backend lives in the driver crate — IO belongs
+## there — and it cannot reach a `#[cfg(test)]` module in this one. A suite copied per backend drifts,
+## and the copy that drifts is the one that stops catching things.
+test-suite = []
+## `serde` derives on the binding schema, so a durable backend can store a set without inventing its
+## own encoding.
+serde = ["dep:serde", "bytes/serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+sipx-sip.workspace = true
+bytes.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

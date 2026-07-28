@@ -18,15 +18,18 @@ const sidebars = {
         'specs/location-service',
         'specs/affinity-token',
         'specs/hook-framework',
+        'specs/e2e-probe',
       ],
     },
     {
       type: 'category',
       label: 'Designs',
       collapsed: true,
-      description: 'One design record per epic: why, the approach, what was rejected.',
+      description:
+        'One design record per epic, plus the story-level records for decisions worth reading on their own.',
       items: [
         'designs/proxy-engine',
+        'designs/proxy-transaction-driver',
         'designs/registrar-location',
         'designs/cluster-affinity',
         'designs/routing-trunks',
@@ -36,9 +39,11 @@ const sidebars = {
         'designs/deployment',
         'designs/k8s-deployment-operator',
         'designs/e2e-tester',
+        'designs/cluster-viz',
         'designs/services-b2bua',
       ],
     },
+    'reference/conformance',
     'upstream',
   ],
 };

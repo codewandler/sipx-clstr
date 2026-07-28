@@ -120,9 +120,17 @@ Every forwarded request gets one new topmost Via with a branch of the form
 
 - The transaction-unique part makes the branch unique per client transaction (fork branches
   differ here).
-- The cookie is a hash over the fields RFC 5393 names: Request-URI, To tag, From tag, Call-ID,
-  CSeq number, topmost incoming Via, and the sequence of Route values — the state that
-  determines processing. Identical cookie on a revisit = loop (V4); different = spiral.
+- The cookie is a hash over the fields that determine how the request is **routed**: Request-URI,
+  To tag, From tag, Call-ID, CSeq number, and the sequence of Route values. Identical cookie on a
+  revisit = loop (V4); different = spiral.
+- **The topmost incoming Via is deliberately NOT in the cookie** — corrected by PX-5, which found
+  that including it makes V4 structurally unable to fire. A looping request arrives carrying *our*
+  Via on top, so the recomputed cookie can never equal the one we minted, and every loop is
+  misjudged a spiral and forwarded until Max-Forwards expires at every node on the cycle. The
+  topmost Via decides where the *response* goes, not where the *request* is routed, so it is not
+  part of "all information affecting processing of a request" (§16.3 step 4). §16.6 step 8's
+  recommendation of it is about **entropy** for transaction uniqueness — which is where it belongs,
+  and where the implementation puts it: the branch's transaction-unique part.
 - **[sipx-clstr]:** the cookie is keyed (cluster token key family) so outsiders cannot forge
   "not a loop"; the hash and field-canonicalization are specified byte-exactly in the vectors.
 

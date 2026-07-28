@@ -1,0 +1,39 @@
+[package]
+name = "sipx-clstr-proxy"
+description = "Sans-IO RFC 3261 §16 forwarding: validation, forking, response aggregation, CANCEL."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+# Nothing is published until M1's exit criteria hold. Publishing a proxy core that has never
+# forwarded a message is a claim, not a release.
+publish = false
+
+[features]
+default = []
+## Converting a location-service lookup into targets the forwarding core can fork on (`RG-6`).
+##
+## Off by default, and optional on purpose: the forwarding core must not *depend* on the registrar,
+## because it also forwards to trunks (`RT-*`) and to plain Request-URIs. Making the coupling a
+## feature keeps it visible in the manifest and keeps the default build of this crate independent of
+## where its targets came from.
+registrar-targets = ["dep:sipx-clstr-registrar"]
+
+[dependencies]
+sipx-clstr-registrar = { workspace = true, optional = true }
+sipx-sip.workspace = true
+bytes.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

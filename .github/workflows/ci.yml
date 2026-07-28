@@ -1,0 +1,101 @@
+name: ci
+
+# The gate, run on every push and pull request. `scripts/gate.sh` runs the same steps locally, and
+# any difference between the two is a bug in the script rather than something to work around here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Warnings are errors here. They are warnings locally so that an in-progress edit is not
+  # unbuildable, and errors here so that none of them reach main.
+  RUSTFLAGS: -D warnings
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      # The kernel is a git dependency pinned to a tag, so the cache key is the lockfile: a kernel
+      # bump invalidates it, and nothing else does.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: fmt
+        run: cargo fmt --all --check
+
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: tests
+        run: cargo test --workspace --all-features
+
+      - name: features
+        run: scripts/check-features.sh
+
+      # The denylist is deliberately not in the repository. Without the secret this step exits 2
+      # rather than passing: a provenance gate that is quietly unconfigured is worse than none.
+      - name: provenance
+        env:
+          SIPX_DENYLIST: ${{ secrets.SIPX_DENYLIST }}
+        run: scripts/check-provenance.sh --history
+
+  # The durable location store gets its own job, with a real database. `RG-4`'s promise is that the
+  # PostgreSQL backend passes the *identical* suite the in-memory one does, and the only way to keep
+  # that true is to run it.
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: sipx
+          POSTGRES_DB: sipx
+        ports: ['5432:5432']
+        # Without a health check the job races the database's startup, which fails for a reason that
+        # has nothing to do with the code.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-pg-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-pg-${{ runner.os }}-
+
+      - name: The PostgreSQL backend against the location-store suite
+        env:
+          SIPX_CLSTR_TEST_DATABASE_URL: postgres://postgres:sipx@127.0.0.1:5432/sipx
+        run: cargo test -p sipx-clstr-node --features postgres

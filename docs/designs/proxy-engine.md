@@ -41,15 +41,21 @@ provisionals) → CANCEL propagation on a better final response or upstream CANC
 generation for branches cancelled before a final response. Timer C guards INVITE branches that
 stop receiving provisionals.
 
-**The proxy driver lives here, not in sipx.** The sipx transport `Driver`/`Handle` API is
-UA-shaped: one transaction, one target. A forking proxy needs one server transaction fanning out
-to N client transactions, each with its own destination and failure handling. Decision: build a
-proxy-shaped driver in this repo directly over `sipx_sip::transaction::TransactionLayer` (which
-already supports N client + M server transactions in one store and exposes the
-`Dispatch::{Matched, Created, Unmatched}` seam), reusing sipx-transport's connection pool and
-resolution machinery where the crate boundaries allow. Only generic primitives are upstreamed —
-the `Headers` surgery API (`remove_first`, `insert_at`, `retain`) needed for Via pop/push and
-Record-Route insertion is a sipx change ([upstream ledger](../upstream.md), story PX-3).
+**The proxy driver lives here, not in sipx** — but it is built on the kernel's endpoint, not
+beside it. This paragraph originally argued that `sipx_transport`'s API was "UA-shaped: one
+transaction, one target" and that a forking proxy therefore needed its own socket loop over
+`sipx_sip::transaction::TransactionLayer`. `PX-2` read the released kernel rather than
+remembering it and found that wrong in the way that matters: `Handle::send` creates one client
+transaction per call, N calls fan out concurrently over one `TransactionLayer`, and `send`
+inserts a `Via` only when one is absent — so a proxy that pushes its own keeps control of the
+branch, and the branch it chooses is the transaction key. **Decision: build on
+`sipx_transport::Handle`**, and file the two things a proxy needs that a UA does not (unmatched
+responses surfaced, requests not dropped silently) as kernel changes. Full rationale, the effect
+table and the backpressure analysis: [proxy-transaction-driver](proxy-transaction-driver.md).
+
+Only generic primitives are upstreamed — the `Headers` surgery API (`remove_first`, `insert_at`,
+`retain`) needed for Via pop/push and Record-Route insertion is a sipx change
+([upstream ledger](../upstream.md), story PX-3).
 
 **What the proxy never does:** own dialog state, rewrite bodies (that is `media-control`'s hook),
 or terminate calls. A dialog-terminating feature belongs in `services-b2bua`.
@@ -68,8 +74,10 @@ or terminate calls. A dialog-terminating feature belongs in `services-b2bua`.
 
 ## Risks & open questions
 
-- The exact crate boundary against sipx-transport: how much of the pool/resolution machinery is
-  importable versus needing extraction upstream. Settled during PX-2.
+- ~~The exact crate boundary against sipx-transport.~~ **Settled by PX-2:** the driver is built on
+  `sipx_transport::Handle`; `Pool`, `Resolver`, `resolve`, `Target` and `TransportKind` are all
+  public and imported as they are; nothing is extracted; two gaps are filed upstream as sipx
+  `T-18` and `T-19`.
 - Record-Route token size: RFC 3261 puts no hard limit on URI length, but UDP fragmentation is
   real; the affinity token spec (AF-1) must budget bytes with this epic in the review.
 - ~~Whether stateless mode ships in M1 at all.~~ **Decided:** stateless mode is defined in the

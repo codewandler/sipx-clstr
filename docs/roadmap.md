@@ -6,16 +6,19 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-28:_ **M0 is all but complete.** The four load-bearing specs are written and
-cross-reconciled — proxy behavior, location service, affinity token, hook framework — and the
-deterministic-harness design is accepted with its sipx-testkit upstream split decided. Still
-open in M0: `CX-1` files the upstream stories in the sipx repo (every ledger row now has its
-decision recorded). There is no code yet; `CX-2` creates the Cargo workspace as the first act
-of M1. The sipx kernel this platform builds on has shipped its own M0–M4 (sans-IO core,
-transactions, UDP/TCP transports, DNS, digest client, media, CLI phone); TLS, WS and WSS exist
-on its main branch as in-progress, unreleased M5 work — a tracked row in the
-[upstream ledger](upstream.md), since M2 TLS edges and M3 WSS clients depend on a release that
-contains them.
+_As of 2026-07-28:_ **M0 is complete and M1 is defined.** The four load-bearing specs are
+written and cross-reconciled — proxy behavior, location service, affinity token, hook framework
+— the deterministic-harness design is accepted with its sipx-testkit upstream split decided, and
+`CX-1` has filed the kernel gaps as stories in the sipx repo. M1 is scoped below: fourteen
+stories, in order, with exit criteria that name the vectors that prove them. `CX-2` creates the
+Cargo workspace as its first act.
+
+The sipx kernel this platform builds on has shipped its own M0–M4 — sans-IO core, transactions,
+UDP/TCP/**TLS/WS/WSS** transports, DNS, digest *client*, media, CLI phone — all released in
+0.2.0, which is the version M1 pins. What the kernel still owes this platform is four small
+things, none of which M1 blocks on: header editing operations (`S-15`), the server side of
+digest (`S-16`), the `Service-Route` header (`T-16`) and the testkit's timer queue and loopback
+link (`X-14`). See the [upstream ledger](upstream.md).
 
 ## Milestones
 
@@ -47,6 +50,70 @@ contains them.
   STIR/PASSporT, SIPREC, IMS profile options, and the B2BUA service (queues, IVR, conference).
   Scope is selected when M3 nears completion, not now.
 
+### M1 in detail
+
+M1 is the milestone where the specs become a program. Everything below is deliberately *one
+node*: nothing here needs a second one to be true, which is what makes it a foundation rather
+than half of M2.
+
+**The story set, in dependency order.** Priorities on the board match these numbers, so
+`/track:next` walks M1 top to bottom.
+
+| # | Story | What it adds | Proved by |
+|---|---|---|---|
+| 1 | `CX-2` | the Cargo workspace, the lints, the gate | the gate runs green on an empty workspace |
+| 2 | `PX-2` | design: one server transaction fanning out to N client transactions | design accepted; the effect vocabulary is named |
+| 3 | `CF-5` | the deterministic harness — seeded, virtual-time, multi-node | a scenario replays byte-identically from its seed |
+| 4 | `RG-3` | REGISTER on the in-memory `LocationStore` | `LS-C-*`, `LS-R-*` |
+| 5 | `PX-5` | stateful forwarding with forking and response aggregation | `PB-V-*`, `PB-F-*`, `PB-R-*` |
+| 6 | `PX-6` | CANCEL and Timer C | `PB-C-*` |
+| 7 | `RG-6` | forking target sets built from location lookups | `PB-F-2` fed by `LS-L-*` |
+| 8 | `PX-7` | the proxy torture vectors, run in the harness | the whole `PB-*` table, as a report |
+| 9 | `RG-2` | server-side digest — challenge, verify, replay window | RFC 7616 vectors + a replayed `nc` |
+| 10 | `RG-4` | the PostgreSQL `LocationStore` | the `LS-*` tables again, unchanged, on a second backend |
+| 11 | `ET-1` | the e2e-tester role and the probe contract | spec accepted with a verdict taxonomy |
+| 12 | `ET-2` | the sans-IO probe engine | failure scenarios as seeded harness tests |
+| 13 | `ET-3` | the echo answering endpoint (signalling only) | a probe reaches it and gets `pass` |
+| 14 | `CX-3` | the milestone's own end-to-end proof against real phones | two `sipx` CLI phones, one node, a real call |
+
+**Exit criteria.** M1 is done when every one of these is true, and each is a command someone
+else can run:
+
+1. The gate is green: `cargo fmt --check`, `cargo clippy --all-targets --all-features
+   -D warnings`, `cargo test --workspace --all-features`, the provenance check, the feature
+   matrix. No `unsafe` anywhere; no `unwrap`/`expect`/`panic` in library code.
+2. Two `sipx` CLI phones register through one sipx-clstr node, call each other through it, and
+   hang up — **with media flowing directly between them**, no relay in the path. (`CX-3`)
+3. Every vector in `docs/specs/proxy-behavior.md` §12 for validation, preprocessing, forwarding,
+   responses and CANCEL passes in the harness. The stateless rows (`PB-S-*`) and the affinity
+   rows (`PB-A-*`) are **not** in M1's set — they have no consumer until the token path exists.
+   (`PX-7`)
+4. Every vector in `docs/specs/location-service.md` §9 passes, and passes **identically** on both
+   `LocationStore` backends — the in-memory one and PostgreSQL. A backend that needs its own
+   version of a vector has broken the contract. (`RG-3`, `RG-4`)
+5. A digest-challenged REGISTER authenticates; a replayed nonce-count is rejected; a
+   *retransmitted* REGISTER with the same nonce-count is not mistaken for a replay. (`RG-2`)
+6. The probe dials the node, reaches the echo endpoint and reports `pass`; with the node stopped
+   it reports `fail(step, cause)` within its timer budget rather than hanging. (`ET-2`, `ET-3`)
+
+**Explicitly out of M1, with the reason:**
+
+| Out | Why |
+|---|---|
+| `PX-4` stateless forwarding | specified in `PX-1`, but nothing consumes it until mid-dialog requests carry tokens. Implementing it now means maintaining an untested second path for a milestone. |
+| all `AF-*` (affinity tokens) | one node has no affinity problem. The token is M2's defining subsystem and M1 must not pre-empt its shape. |
+| all `RT-*` (trunks, route plans) | M1 routes to registered contacts only. No carrier, no egress policy. |
+| all `ME-*` (media control) | M1's media flows direct between endpoints; there is no relay to control. |
+| `DP-1` config schema, `DP-2` topology, all `KO-*` | the deployment surface is a cluster surface. M1's node takes a **provisional** minimal config — listeners, the registrar realm, the store URL — which `DP-1` replaces rather than extends. Said out loud so nobody mistakes it for the schema. |
+| `RG-5` sharding | one node is one shard. |
+
+**M1 does not block on the kernel.** Three of the four filed sipx stories would make M1 code
+nicer, not possible: without `S-15` the proxy rebuilds a header collection to pop a `Via`
+(correct, just O(n) clones); without `X-14` the harness carries its own timer queue. `S-16` is
+the one real dependency — digest verification is protocol-generic and this repo does not
+shadow-implement kernel logic (AGENTS.md rule 6) — so `RG-2` sits at position 9, late enough
+that the kernel work has room, and M1's other thirteen stories do not wait for it.
+
 ## Delivered
 
 - **The M0 specs** (0.2.0): `docs/specs/proxy-behavior.md`, `location-service.md`,
@@ -59,9 +126,9 @@ contains them.
 
 ## Next
 
-- `CX-1` — file the upstream sipx stories (the last M0 story; all decisions it records are now
-  made), then `CX-2` opens M1 with the Cargo workspace. The operator epic advances in parallel
-  (`KO-2` in progress).
+- `CX-2` — the Cargo workspace and the gate, the first act of M1. Then the M1 set above, in
+  order. The operator epic advances in parallel (`KO-2` in progress) and the kernel stories
+  `CX-1` filed advance on sipx's own schedule.
 
 ## Epics
 
@@ -156,6 +223,16 @@ transactions, media sessions, shed rate — never CPU), with scale-in routed thr
 path and gated on the invariant metrics. Boundary: DP-1/DP-2 own the config schema and the
 topology; this epic owns packaging, automation and capacity, and the CR spec *is* DP-1's schema.
 [Design](designs/k8s-deployment-operator.md).
+
+### Live cluster visualization (`constellation`)
+
+The north star, watchable: the architecture chart drawn live, fed by an SSE stream that is a
+serialization of the harness trace — messages as particles, faults (drops, partitions, node
+kills, timer storms) as visible events, and the DP-3 invariant counters as a HUD that must not
+move. Three feeds share one schema and one page: a paced sim replay (works against the existing
+harness), an interactive sim with fault injection by POST, and — once DP-3/ET-5/DP-7 land — the
+real deployment. A dev tool, never part of the deployment surface.
+[Design](designs/cluster-viz.md).
 
 ### B2BUA services
 

@@ -7,7 +7,7 @@ priority: 4
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: UPSTREAM — sipx-testkit split; see docs/upstream.md
+note: UPSTREAM: sipx-testkit split filed as sipx X-14; see docs/upstream.md
 ---
 
 # Design the deterministic cluster harness

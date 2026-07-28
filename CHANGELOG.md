@@ -7,6 +7,269 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The constellation's first feed** (`VZ-1`, [design](docs/designs/cluster-viz.md)) — the
+  cluster, watchable: a dev adapter (`cargo run -p sipx-clstr-sim --example viz`) paces a seeded
+  scenario against the wall clock and streams it live over SSE, and a canvas page renders the
+  stage — messages as particles colored by method, drops/duplicates/breaks as visible faults,
+  timers as sweeping rings, and the DP-3 invariant counters as a HUD that must not move. The
+  stream is a serialization of the harness trace and nothing else: the frame vocabulary lives in
+  the library (`sipx_clstr_sim::viz`) behind an exhaustive match, so a new trace variant breaks
+  the build rather than rendering as nothing, and uninstrumented counters render as
+  *uninstrumented* rather than as a pretend zero. std-only HTTP, localhost-bound, `serde_json`
+  as a dev-dependency — no new runtime surface, and nothing a deployment could ship. The
+  end-to-end smoke test (`cargo test -p sipx-clstr-sim viz_smoke`) spawns the real server and
+  proves `/healthz`, the page, and the live frame stream — including backlog resync for a late
+  client — and the runbook lives at `crates/sipx-clstr-sim/examples/viz/README.md`.
+- **The Cargo workspace** (`CX-2`) — five crates drawn along the sans-IO boundary rather than by
+  subject matter, because that boundary is what the deterministic harness depends on:
+  `sipx-clstr-proxy` (RFC 3261 §16 forwarding), `-registrar` (bindings and REGISTER), `-sim` (the
+  harness), `-probe` (the e2e-tester) and `-node` (drivers, roles, the `sipx-clstr` binary).
+  **`tokio` is a dependency of `-node` and of nothing else** — the rule made mechanical, so a
+  violation shows up as a dependency-graph change rather than as a code review someone has to do.
+- **The kernel pinned to a released tag.** sipx is not on crates.io, so a git dependency is the
+  only honest way to depend on it; `tag = "v0.2.1"` rather than a branch is what makes "which
+  kernel version is this claim true of?" a question with an answer. `sipx-clstr --version` reports
+  it, and a test asserts the constant it reports matches the tag the workspace actually pins —
+  otherwise a bump with a forgotten constant leaves the binary confidently wrong about the one
+  thing it is asked during an incident.
+- **The gate** (`scripts/gate.sh`), which CI now runs step for step: fmt, clippy `-D warnings`,
+  tests, the feature matrix, provenance, and documentation consistency.
+  - `check-provenance.sh` carries **the integration carve-out**: `scripts/provenance-allow.txt`
+    names interop targets that may appear anywhere, in the repository with a reason per line —
+    not a contradiction, since a term we are willing to write down is by definition not one we
+    refuse. Matching is exact rather than prefix, or one allowed name would silently permit a
+    family of denied ones, and the script refuses to run if the allowlist swallows the whole
+    denylist.
+  - `check-features.sh` builds each crate with its optional features **off**. `--all-features`
+    hides a crate that does not compile without one, and that stays invisible until it is in a
+    release.
+  - `check-docs.py` moves the documentation checks out of the CI workflow into a script both the
+    workflow and `gate.sh` call, so there is one implementation instead of two that drift.
+
+- **The echo endpoint** (`ET-3`), and with it **the first scenario in which every component is
+  real** — the probe engine, the registrar, the forwarding core and the echo, with only a driver and
+  a network supplied by the test. The separation §9 demands is structural rather than promised: a
+  test reads the manifest and fails if this crate ever depends on the proxy, the registrar, the node
+  crate or `tokio`. An unmarked call is refused `403` rather than `404`, because the
+  address-of-record exists and the refusal is policy; `OPTIONS` is answered and unknown methods get
+  `405`, because silence would make the echo look like the dead listener the probe exists to detect.
+- **The probe engine and scheduler** (`ET-2`) — `sipx-clstr-probe`, 40 tests plus 5 harness
+  scenarios, and **all 19 `EP-*` vectors proved**. No clock, socket or sleep in the crate: `now` is a
+  parameter and jitter is an injected closure, so a failure scenario is a seed rather than a flake.
+  One `ProbeRun` record, which `ET-4`'s API and `ET-5`'s metrics read rather than each inventing a
+  view of it. The rate bound *defers and counts* rather than dropping — a skipped target is a blind
+  spot, a delayed one is only late — and the matrix's first runs are spread across one interval,
+  because a rollout starts many nodes at once.
+- **The probe contract** (`ET-1`, [spec](docs/specs/e2e-probe.md)) — eleven normative sections and 19
+  vectors, so the engine, the echo endpoint and the trigger API are derived from one contract rather
+  than three opinions. `inconclusive` is why the verdict taxonomy is three-valued: a probe that could
+  not run is not an outage, and conflating them trains operators to ignore the alert. A shed probe is
+  its own cause, because silence means the listener is gone and shedding means the platform is
+  protecting itself. The marker rides in `Subject`, which no intermediary has a reason to alter, so a
+  marker that does not come back is evidence about the *path* — and it must not be derivable from the
+  `Call-ID`, or something that merely saw the request go past could reflect it. Retries are explicitly
+  not the probe's job: a probe that retried would mask the marginal loss it exists to report.
+- **Decided: the echo is the same binary in `echo` mode**, a role rather than a service — one artifact
+  to build, version and secure for something whose whole job is to answer `200` and copy a header. The
+  constraint that made it a real question is absolute and is enforced at *load*: no proxy role ever
+  links a UAS, so a configuration asking for both is refused where a human is still watching.
+- **The `PostgreSQL` location store** (`RG-4`), verified against a real PostgreSQL 16. "Passes the
+  identical suite" is now literally true: `run_location_store_suite` takes a `&dyn LocationStore` and
+  both backends call that one function, because a suite copied per backend drifts and the copy that
+  drifts is the one that stops catching things. Serializability is a **revision predicate**, not an
+  isolation level, so K1 holds wherever a single statement is atomic; the first write is its own
+  compare-and-swap, because a `SELECT` then `INSERT` would let two nodes that both think an
+  address-of-record is new through — and a cold start is exactly when both think that. The backend
+  lives in the driver crate, since it is IO, which also keeps `tokio` a dependency of that crate and
+  of nothing else.
+- **A measured registration storm**: 500 devices at 716/s on first registration and 661/s on refresh —
+  flat, which is the finding, because one REGISTER costs one read and one write however large the
+  estate. The test asserts the *ratio* rather than a rate, so it catches an accidental O(n) read path
+  without encoding one machine's disk into the suite. Refresh writes are deliberately not coalesced:
+  ~14 seconds for ten thousand devices is not a reason to trade away the guarantee that the `200`
+  follows the commit.
+- **The PB vector table as a generated, checked report** (`PX-7`) —
+  `docs/reference/proxy-conformance.md`: 34 of 42 rows proved, 8 deferred with a reason and a story.
+  Coverage is derived from **test names**, never a hand-maintained list, so deleting a test deletes
+  the claim rather than leaving it standing. The check fails three ways, and the third is the one
+  that matters: a *stale deferral* — a row marked "not yet" that is in fact covered — is how a
+  coverage report starts lying about what it proves.
+- **Adversarial schedules over a pinned seed corpus** (`PX-7`) — 35 % loss, 30 % duplication,
+  1–120 ms jitter and a retransmission loop. A retransmitted INVITE never forks twice, asserted on
+  the branches the engine created rather than on messages observed, because the network legitimately
+  duplicates messages and only the branch count is the property. `HARNESS_SEED` replays any failure;
+  a malformed one panics rather than silently running the corpus, since otherwise a developer would
+  think they had reproduced something they had not.
+- **The registrar and the proxy meet** (`RG-6`) — a location lookup becomes forking targets, behind
+  the proxy's optional `registrar-targets` feature. Optional on purpose: the forwarding core also
+  forwards to trunks and to plain Request-URIs, so it must not *depend* on the registrar, and a
+  feature keeps the coupling visible in the manifest. Ordering is not redone — the lookup's order is
+  already a pure function of the set and `now`, so every node computes the same one, and a second
+  opinion here would be one too many. The scenario is one node running both real halves: two
+  endpoints register, one calls the other, and the call forks to both of the callee's devices.
+- **CANCEL and Timer C** (`PX-6`) — §9's C1–C6, with the `PB-C` vectors plus five harness scenarios
+  in which the **real** engine runs behind a driver for the first time. `AnswerCancel` is its own
+  effect because a CANCEL is its own transaction and its `200` is unconditional — it acknowledges the
+  CANCEL, not the cancellation. A branch that has produced no provisional gets its CANCEL *queued*
+  until one arrives, because a CANCEL that overtakes its INVITE cancels a transaction that does not
+  exist yet while the INVITE proceeds. Timer C with provisionals seen cancels; Timer C with total
+  silence concludes as `408`, since there is nothing at the far end worth cancelling. Verified across
+  24 seeds with jitter and duplication, and in virtual time — the same Timer C assertion against a
+  real clock would take three minutes a run.
+- **Stateful forwarding with forking** (`PX-5`) — `sipx-clstr-proxy`, 47 tests, running every
+  `PB-V`, `PB-P`, `PB-F` and `PB-R` vector. Validation, route preprocessing, the §16.6 forwarding
+  edits, parallel and sequential forking, response aggregation and best-response selection.
+  `PB-F-1` asserts the effect **sequence**, not just its contents: a Timer C armed before its INVITE
+  went out would measure the wrong interval, and only an ordered assertion catches that.
+- The rules that are easy to get subtly wrong, each pinned by a vector: `Max-Forwards: 0` refuses
+  every method including OPTIONS (a proxy answering on the target's behalf leaks topology); a branch
+  `503` becomes `500` upstream (the caller must not be told the destination is unavailable when what
+  happened is that we could not reach it); a second `2xx` for one INVITE is forwarded too, because
+  RFC 6026 makes that a fork rather than a bug; a re-INVITE is not Record-Routed (RFC 6141 — it
+  cannot alter an established route set, so it is pure cost); `401`/`407` aggregate every challenge
+  from every challenging branch.
+
+
+- **The location service** (`RG-3`) — `sipx-clstr-registrar`, 78 tests, plus 5 harness scenarios.
+  **Every vector table in the specification is executable**: 22 canonicalization rows, 21 REGISTER
+  rows, 6 consistency rows, 8 lookup rows, 3 shard-key rows.
+  - **Canonicalization is a total function, and §19.1.4 stays a comparison.** RFC 3261's URI
+    equivalence is non-transitive by its own example, so it can compare two contacts but can never
+    key a hash — two spellings of one address-of-record would land on two shards. The canonical
+    form is an injective printable encoding of §10.3 step 5's URI; the kernel's `equivalent` is used
+    only for matching within one address-of-record, where it is a linear scan.
+  - **The whole request commits or none of it does.** Expiry selection runs for every contact
+    before the first mutation, because one too-brief contact fails the entire REGISTER — deciding
+    per contact as you go leaves the first one committed. The quota is checked against the committed
+    outcome rather than the request, so a refresh or a removal can never trip it.
+  - **CAS serialization is proved under the harness rather than asserted at a store.** A synchronous
+    read-then-commit cannot race — the scheduler runs one input to completion — so the scenario's
+    registrar edge is two-phase, the way a driver awaiting a database is: a REGISTER reads and arms
+    the round trip, and the timer commits. Two edges given the same address-of-record at the same
+    instant both read revision *n*, one wins, the loser re-reads and commits at *n+2*. The test
+    asserts the race **happened**, not just that the result looks right: a serialization test that
+    silently never raced would pass for the wrong reason. It also asserts the ordering nobody thinks
+    to check — the `200` follows the commit, because a UA told it is reachable before the write
+    landed has been told something false.
+- **The deterministic cluster harness** (`CF-5`) — `sipx-clstr-sim`, 49 tests. Virtual time as a
+  discrete-event queue where advancing the clock *is* popping the queue; equal deadlines broken by
+  insertion sequence so the event order is a function of (scenario, seed) rather than of hash
+  iteration; timer cancellation by generation counter. Two link kinds whose difference is
+  load-bearing: a datagram link gets its reordering from latency jitter the way a wire does, and a
+  stream link is FIFO however the jitter lands, never loses a message however lossy the policy,
+  and fails by *breaking* rather than by silence. Messages are serialized and re-parsed across
+  every link, so a node that builds a message it cannot write out is a bug the harness catches,
+  and an unparseable arrival is traced rather than dropped — a serializer bug and an idle network
+  look identical from the receiving end.
+  - **The generator is written out rather than imported.** `rand` documents that its
+    general-purpose generators may change output between versions, and a cargo update that
+    silently reshuffled every recorded seed would break the one property the harness exists for.
+    Pinned by `SplitMix64`'s published vector, by xoshiro256\*\* from state `[1, 2, 3, 4]` worked
+    out by hand, and by a composite.
+  - **The first implementation of that generator was wrong, and the hand-computed vector caught
+    it.** xoshiro's state update is sequential — each step reads what the one before it wrote —
+    and the natural Rust spelling, a single array literal, computes every element from the *old*
+    state and yields a different, weaker generator that passes every smell test. One assertion
+    separates them.
+  - A livelocked scenario fails with a virtual timestamp instead of hanging CI.
+- **The proxy transaction driver is designed** (`PX-2`,
+  [design](docs/designs/proxy-transaction-driver.md)) — the seam `PX-5` implements against: one
+  task per proxied request owning its response context, branch streams in a `FuturesUnordered` so
+  responses, timers and an upstream CANCEL become one input at a time, no locks on the signalling
+  path, and the three places backpressure actually lives.
+
+### Changed
+
+- **The proxy driver is built on the kernel's endpoint, not beside it.** The epic design argued
+  that `sipx_transport`'s API was "UA-shaped: one transaction, one target" and that a forking
+  proxy therefore needed its own socket loop. Reading the released kernel rather than remembering
+  it found that wrong where it counts: `Handle::send` creates one client transaction per call, N
+  calls fan out over one transaction layer, and `send` inserts a `Via` only when one is absent —
+  so a proxy that pushes its own keeps control of the branch, and that branch *is* the transaction
+  key. The alternative would have meant reimplementing framing, three handshakes, NAT `Via`
+  rewriting, the pool and the retransmission driver, which is the rule against shadow-implementing
+  kernel logic in as many words.
+- **M1 is defined** rather than described: fourteen stories in a fixed order, each with what it
+  adds and the vectors that prove it, plus exit criteria that are commands and an explicit
+  out-of-scope table with reasons. The board reflects it — only stories with no unmet dependency
+  are `ready`, so the top of `Next` is always genuinely takeable.
+- **M1 does not block on the kernel.** Three of the four filed sipx stories would make M1 code
+  nicer, not possible; only server-side digest (`RG-2`) genuinely waits, and it sits ninth.
+
+### Fixed
+
+- **The probe's requests carried no `Via`** (found by `ET-3`'s end-to-end scenario). RFC 3261
+  §8.1.1.7 makes `Via` how a response finds its way back, so a compliant proxy refused the INVITE as
+  unanswerable and the probe reported a timeout it had caused itself. 24 unit vectors and 5 harness
+  scenarios had all agreed the engine was right; the first component that actually *validated* a
+  request disagreed within one run.
+- **The probe engine matched responses to whatever step was outstanding** (`ET-2`), with no
+  correlation at all. Under the duplication UDP produces routinely, a second `200` to REGISTER
+  arrived while the probe awaited INVITE and was read as the INVITE's answer — reporting a
+  `MarkerMismatch` the probe had manufactured. Found at seed 5 of a 16-seed sweep; responses are now
+  matched by the `CSeq` of the request that provoked them. Fixing it exposed that the unit fixtures
+  built responses with **no `CSeq`**, which is precisely why they could not have caught it; they now
+  play a peer that echoes it, as a real one does.
+- **The probe's rate bound did the opposite of bounding** (`ET-2`): `now.saturating_sub(per)` clamps
+  to zero, so the entry recorded at time zero was trimmed immediately and a second run went straight
+  through.
+- **Two races in the `PostgreSQL` backend, both flaky rather than broken** — the dangerous kind, since
+  each passed on a re-run. `CREATE TABLE IF NOT EXISTS` is *not* atomic against a concurrent `CREATE`,
+  so nodes starting together — a cold deployment, every rollout — collide on
+  `pg_type_typname_nsp_index`; the DDL now runs under an advisory lock. And the tests shared one
+  tenant while running concurrently, so one truncated another's rows mid-run and a commit came back
+  reporting the row had vanished. Each test now owns a tenant, which is the contract's own boundary.
+  Verified by ten consecutive runs against a freshly dropped table.
+- **`PB-V-9`'s test had been deleted and nothing noticed** — it went with the block rewritten to fix
+  the loop-detection cookie, and the suite stayed green because 45 other tests still passed. The new
+  coverage check flagged it on its first run, which is the entire argument for deriving coverage from
+  the spec rather than from the suite's own opinion of itself.
+- **`Max-Breadth` was not being honoured** (`PB-V-8`). It bounds *parallel* fan-out; with a budget of
+  1 and two targets the code forked both. RFC 5393 §5.2 requires the surplus to be serialized behind,
+  not truncated — truncating silently loses a device the user registered, and nobody notices until a
+  call does not ring on one phone.
+- **Every registered `Path` was silently dropped** (found by `RG-6`). `forward()` implemented every
+  §16.6 step except step 6 — applying the target's route set — so a registration's stored path never
+  reached the wire. RFC 3327 §5.3 makes that path the route toward the contact, and losing it makes a
+  UA behind a proxy unreachable in exactly the deployments Path exists for. Invisible to all 40
+  `PB-*` vectors because every one of them uses an empty route set: the defect lived in the gap
+  between two crates that were each correct alone, which is the argument for the integration
+  scenario. Now applied in stored order, ahead of any `Route` that survived preprocessing, with bare
+  URIs bracketed — because `sip:p;lr` unbracketed makes `;lr` a *header* parameter and loses
+  loose routing.
+- **Two CANCEL tests were passing for the wrong reason** (`PX-6`), and asking *why* they passed is
+  what surfaced it. The harness driver silently dropped every CANCEL — `self.perform(self.context.on_input(…))`
+  borrows `self` twice, and the stub helper written to dodge that returned no effects — and the
+  adversarial sweep passed anyway, because `run_until_idle` drains the queue past Timer C at 180 s, so
+  every seed reached its `487` through the timer rather than through the CANCEL. The scenarios now
+  advance a bounded 10 s of virtual time, and the constant that bounds them explains why.
+- **The loop-detection cookie could not detect a loop, and PX-5 proved it.** `proxy-behavior` §6
+  listed the topmost incoming `Via` among the cookie's fields. A looping request arrives carrying
+  *our own* `Via` on top, so the recomputed cookie can never equal the one we minted — every loop is
+  misjudged a spiral and forwarded, round the cycle, until `Max-Forwards` expires at every node on
+  it. The topmost `Via` decides where the *response* goes, not where the *request* is routed; RFC
+  3261 §16.6 step 8 recommends it as **entropy** for transaction uniqueness, which is a different
+  job. The spec is corrected, the cookie now covers routing state only, the `Via` feeds the branch's
+  unique part, and `PB-V-6` asserts an actual `482` end to end — which it could not have done
+  before.
+
+
+- **Two rows of the upstream ledger were wrong** (`CX-1`). TLS, WebSocket and WSS were recorded as
+  unreleased kernel work; they shipped in sipx 0.2.0, with interop runs, and `tls`/`ws`/`wss` are
+  default features. Nothing was blocked on a release that had already happened. The resolver row
+  assumed its own answer, so the story filed for it is written to *settle* upstream-vs-local
+  instead. The ledger gained a rule: a row can be wrong — re-read the kernel before believing one.
+- **The kernel gaps are filed** (`CX-1`): six stories in the sipx repository, in its conventions,
+  each naming a failing-first test and each earning its place in the kernel on its own rather than
+  only as a downstream ask. `PX-2` added two more, both found by reading the endpoint's dispatch:
+  a response matching no client transaction is **dropped**, though RFC 3261 §16.7 requires a
+  stateful proxy with no response context to forward it statelessly; and incoming requests are
+  delivered with `try_send`, so under backpressure they are lost silently, with no counter. A
+  dropped INVITE is a missed call the peer retransmits — a dropped 2xx ACK is a call that never
+  ends. Neither blocks M1; both must close before M2 claims a node can be killed.
+
 ## [0.3.0] — 2026-07-28
 
 ### Added

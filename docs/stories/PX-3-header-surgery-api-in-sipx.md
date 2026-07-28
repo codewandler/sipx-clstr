@@ -7,7 +7,7 @@ priority:
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
 areas: [proxy]
-note: UPSTREAM — see docs/upstream.md
+note: UPSTREAM: filed as sipx S-15 — see docs/upstream.md
 ---
 
 # Header surgery API in sipx

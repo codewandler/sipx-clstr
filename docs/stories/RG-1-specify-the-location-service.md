@@ -7,7 +7,7 @@ priority: 2
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, location]
-note: UPSTREAM: Path header — see docs/upstream.md
+note: UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 ---
 
 # Specify the location service

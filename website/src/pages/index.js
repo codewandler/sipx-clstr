@@ -58,11 +58,13 @@ export default function Home() {
 
         <section className="container" style={{paddingTop: '2.5rem'}}>
           <p className="status-note">
-            <strong>Where this actually is.</strong> sipx-clstr is at the design stage. Four
-            load-bearing specifications are written and cross-reconciled — proxy behaviour, location
-            service, affinity token, hook framework — and there is <strong>no Rust code yet</strong>.
-            If you need a proxy to run today, this is not it. If you want to read the argument before
-            the implementation, it is all here, and that is deliberate.
+            <strong>Where this actually is.</strong> sipx-clstr is early. Four load-bearing
+            specifications are written and cross-reconciled — proxy behaviour, location service,
+            affinity token, hook framework — and the Cargo workspace now exists with its gate green,
+            but <strong>nothing forwards a SIP message yet</strong>. M1, which makes one node proxy
+            and register, is scoped as fourteen ordered stories with exit criteria you can run. If
+            you need a proxy today, this is not it. If you want to read the argument before the
+            implementation, it is all here, and that is deliberate.
           </p>
         </section>
 

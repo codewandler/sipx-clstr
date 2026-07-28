@@ -1,0 +1,48 @@
+[package]
+name = "sipx-clstr-node"
+description = "The node: drivers, roles and the process that runs them. One binary, roles by config."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[[bin]]
+name = "sipx-clstr"
+path = "src/main.rs"
+
+[features]
+default = []
+## The PostgreSQL `LocationStore` backend (`RG-4`).
+##
+## It lives here rather than in the registrar because it is **IO**, and this crate is where IO
+## belongs. Keeping it out of the registrar is also what keeps that crate's default build free of a
+## database driver — and keeps `tokio` a dependency of this crate and of nothing else.
+postgres = ["dep:postgres", "dep:serde_json", "sipx-clstr-registrar/serde", "sipx-clstr-registrar/test-suite"]
+
+[dev-dependencies]
+bytes.workspace = true
+
+[dependencies]
+bytes.workspace = true
+postgres = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+# The registrar→proxy target bridge is what turns a lookup into a fork (`RG-6`).
+sipx-clstr-proxy = { workspace = true, features = ["registrar-targets"] }
+sipx-clstr-registrar.workspace = true
+sipx-clstr-probe.workspace = true
+sipx-sip.workspace = true
+sipx-transport.workspace = true
+thiserror.workspace = true
+# The async runtime lives here and nowhere below: this crate is the driver layer, and the driver
+# layer is the only place allowed to own a clock or a socket.
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "time", "signal"] }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

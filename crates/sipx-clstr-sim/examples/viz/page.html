@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>constellation — sipx-clstr</title>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #12151d; --line: #232836; --text: #d6dae4; --dim: #7d8494;
+    --edge: #5b8def; --endpoint: #8f9bb3; --bad: #e5484d; --uninstrumented: #4a4f5c;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  .panel { position: fixed; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; backdrop-filter: blur(2px); }
+  #topbar { top: 10px; left: 10px; right: 10px; display: flex; gap: 18px; align-items: baseline; }
+  #topbar .title { color: var(--edge); font-weight: 700; }
+  #topbar .k { color: var(--dim); }
+  #hud { top: 56px; right: 10px; min-width: 250px; }
+  #hud h2, #log h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin-bottom: 6px; }
+  #hud .counter { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
+  #hud .counter .v { font-weight: 700; }
+  #hud .counter.ok .v { color: #46a758; }
+  #hud .counter.moved .v { color: var(--bad); }
+  #hud .counter.uninstrumented { color: var(--uninstrumented); }
+  #log { left: 10px; bottom: 10px; max-width: 46%; }
+  #log .line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #log .line .who { color: var(--edge); }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div class="panel" id="topbar">
+  <span class="title">constellation</span>
+  <span><span class="k">scenario</span> <span id="scenario">—</span></span>
+  <span><span class="k">seed</span> <span id="seed">—</span></span>
+  <span><span class="k">weather</span> <span id="weather">—</span></span>
+  <span><span class="k">virtual</span> <span id="virtual">0.0s</span></span>
+  <span><span class="k">wall</span> <span id="wall">0.0s</span></span>
+  <span><span class="k">ratio</span> <span id="ratio">—</span></span>
+</div>
+<div class="panel" id="hud"><h2>invariants — must not move</h2><div id="counters"></div></div>
+<div class="panel" id="log"><h2>trace notes</h2><div id="lines"></div></div>
+
+<script>
+'use strict';
+// The page is a view of the stream and nothing else: every element on stage is drawn because a
+// frame arrived, and every frame is one trace entry (see docs/designs/cluster-viz.md). A
+// reconnect replays from the meta frame, so `reset` is the only state transition that matters.
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layout();
+}
+window.addEventListener('resize', resize);
+
+const COLORS = {
+  invite: '#f5a623', register: '#35c4d8', bye: '#e5484d', cancel: '#f5f5f5',
+  ack: '#8b8ba3', options: '#9b7ede', provisional: '#7ea6f5', ok: '#46a758',
+  err: '#d6409f', other: '#c8c8d2', malformed: '#777777',
+};
+const NODE_R = 17, EDGE_R = 22;
+
+const state = {
+  nodes: new Map(),   // id -> {id, name, role, x, y, lit, flashes: []}
+  links: [],          // {a, b, kind, flashUntil}
+  particles: [],      // {x1, y1, x2, y2, t0, dur, color, label, fate}
+  rings: new Map(),   // `${node}:${timer}` -> {node, t0}
+  log: [],
+  clock: { virtual: 0, wall: 0, ratio: 0 },
+  invariants: [],
+};
+
+function reset(meta) {
+  state.nodes.clear(); state.links = []; state.particles = [];
+  state.rings.clear(); state.log = [];
+  for (const n of meta.nodes) state.nodes.set(n.id, { ...n, x: 0, y: 0, lit: false, flashes: [] });
+  state.links = meta.links.map(l => ({ a: l.from, b: l.to, kind: l.kind, flashUntil: 0 }));
+  document.getElementById('scenario').textContent = meta.scenario;
+  document.getElementById('seed').textContent = meta.seed;
+  document.getElementById('weather').textContent = meta.weather;
+  layout();
+  renderLog();
+}
+
+function layout() {
+  const all = [...state.nodes.values()];
+  const edges = all.filter(n => n.role === 'edge');
+  const wings = all.filter(n => n.role !== 'edge');
+  edges.forEach((n, i) => { n.x = W * 0.5; n.y = H * ((i + 1) / (edges.length + 1)); });
+  const left = wings.filter((_, i) => i % 2 === 0);
+  const right = wings.filter((_, i) => i % 2 === 1);
+  left.forEach((n, i) => { n.x = W * 0.14; n.y = H * ((i + 1) / (left.length + 1)); });
+  right.forEach((n, i) => { n.x = W * 0.86; n.y = H * ((i + 1) / (right.length + 1)); });
+}
+
+function node(id) { return state.nodes.get(id); }
+
+function colorFor(summary) {
+  if (!summary) return COLORS.other;
+  const head = summary.split(' ')[0].toUpperCase();
+  switch (head) {
+    case 'INVITE': return COLORS.invite;
+    case 'REGISTER': return COLORS.register;
+    case 'BYE': return COLORS.bye;
+    case 'ACK': return COLORS.ack;
+    case 'CANCEL': return COLORS.cancel;
+    case 'OPTIONS': return COLORS.options;
+  }
+  const code = parseInt(head, 10);
+  if (code >= 200 && code < 300) return COLORS.ok;
+  if (code >= 300) return COLORS.err;
+  if (code >= 100) return COLORS.provisional;
+  return COLORS.other;
+}
+
+function shortLabel(summary) {
+  if (!summary) return '';
+  return summary.length > 44 ? summary.slice(0, 43) + '…' : summary;
+}
+
+function spawn(fromId, toId, color, label, fate, t0offset = 0) {
+  const a = node(fromId), b = node(toId);
+  if (!a || !b) return;
+  state.particles.push({
+    x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+    t0: performance.now() + t0offset, dur: 560, color, label, fate,
+  });
+}
+
+function linkFor(a, b) {
+  return state.links.find(l => (l.a === a && l.b === b) || (l.a === b && l.b === a));
+}
+
+function pushLog(who, text) {
+  state.log.unshift({ who, text });
+  if (state.log.length > 9) state.log.pop();
+  renderLog();
+}
+
+function renderLog() {
+  const el = document.getElementById('lines');
+  el.replaceChildren(...state.log.map(({ who, text }) => {
+    const div = document.createElement('div');
+    div.className = 'line';
+    const span = document.createElement('span');
+    span.className = 'who'; span.textContent = who + ' ';
+    div.append(span, document.createTextNode(text));
+    return div;
+  }));
+}
+
+function renderHud() {
+  const el = document.getElementById('counters');
+  el.replaceChildren(...state.invariants.map(c => {
+    const div = document.createElement('div');
+    div.className = 'counter ' + (c.value === null ? 'uninstrumented' : (c.value === 0 ? 'ok' : 'moved'));
+    const name = document.createElement('span'); name.textContent = c.name;
+    const v = document.createElement('span'); v.className = 'v';
+    v.textContent = c.value === null ? 'uninstrumented' : String(c.value);
+    div.append(name, v);
+    return div;
+  }));
+}
+
+function onTrace(f) {
+  switch (f.kind) {
+    case 'started': {
+      const n = node(f.node); if (n) n.lit = true;
+      break;
+    }
+    case 'sent': spawn(f.node, f.peer, colorFor(f.summary), shortLabel(f.summary), 'fly'); break;
+    case 'received': {
+      const n = node(f.node);
+      if (n) n.flashes.push({ t0: performance.now(), color: colorFor(f.summary) });
+      break;
+    }
+    case 'dropped': spawn(f.node, f.peer, colorFor(f.summary), shortLabel(f.summary), 'fizzle'); break;
+    case 'duplicated':
+      spawn(f.node, f.peer, colorFor(f.summary), shortLabel(f.summary), 'fly');
+      spawn(f.node, f.peer, colorFor(f.summary), shortLabel(f.summary), 'fly', 120);
+      break;
+    case 'broken': {
+      const l = linkFor(f.node, f.peer);
+      if (l) l.flashUntil = performance.now() + 1200;
+      break;
+    }
+    case 'malformed': spawn(f.peer, f.node, COLORS.malformed, '?? ' + (f.summary || ''), 'scramble'); break;
+    case 'timer_set': state.rings.set(f.node + ':' + f.timer, { node: f.node, t0: performance.now() }); break;
+    case 'timer_fired': {
+      state.rings.delete(f.node + ':' + f.timer);
+      const n = node(f.node);
+      if (n) n.flashes.push({ t0: performance.now(), color: '#e7c664' });
+      break;
+    }
+    case 'timer_cleared': state.rings.delete(f.node + ':' + f.timer); break;
+    case 'note': pushLog(f.node_name, f.summary || ''); break;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// rendering
+// ---------------------------------------------------------------------------------------------
+
+function drawLinks(now) {
+  for (const l of state.links) {
+    const a = node(l.a), b = node(l.b);
+    if (!a || !b) continue;
+    const flashing = now < l.flashUntil;
+    ctx.strokeStyle = flashing ? COLORS.bye : '#262c3b';
+    ctx.lineWidth = flashing ? 2.5 : 1.5;
+    if (l.kind === 'datagram') ctx.setLineDash([6, 5]); else ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function drawNodes(now) {
+  for (const n of state.nodes.values()) {
+    const r = n.role === 'edge' ? EDGE_R : NODE_R;
+    // flashes decay fast — a received message or a fired timer.
+    n.flashes = n.flashes.filter(f => now - f.t0 < 450);
+    for (const f of n.flashes) {
+      const p = (now - f.t0) / 450;
+      ctx.globalAlpha = 1 - p;
+      ctx.strokeStyle = f.color; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 4 + p * 14, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = '#161a24';
+    ctx.strokeStyle = n.lit ? (n.role === 'edge' ? '#5b8def' : '#8f9bb3') : '#3a4152';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (n.lit) {
+      ctx.fillStyle = n.role === 'edge' ? '#5b8def' : '#aab4c8';
+      ctx.beginPath(); ctx.arc(n.x, n.y, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = '#aeb6c6'; ctx.font = '12px ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.name, n.x, n.y + r + 16);
+  }
+}
+
+function drawRings(now) {
+  for (const ring of state.rings.values()) {
+    const n = node(ring.node);
+    if (!n) continue;
+    const r = (n.role === 'edge' ? EDGE_R : NODE_R) + 7;
+    const sweep = ((now - ring.t0) % 1400) / 1400;
+    ctx.strokeStyle = 'rgba(231, 199, 100, 0.75)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, r, -Math.PI / 2, -Math.PI / 2 + sweep * Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+function drawParticles(now) {
+  const labelled = state.particles.length <= 14;
+  state.particles = state.particles.filter(p => now - p.t0 < p.dur);
+  for (const p of state.particles) {
+    const t = Math.max(0, Math.min(1, (now - p.t0) / p.dur));
+    let frac = t, alpha = 1;
+    if (p.fate === 'fizzle') { frac = t * 0.62; alpha = 1 - t * t; }
+    let x = p.x1 + (p.x2 - p.x1) * frac;
+    let y = p.y1 + (p.y2 - p.y1) * frac;
+    if (p.fate === 'scramble') {
+      const wob = Math.sin(t * 28) * 9 * (1 - t);
+      const dx = p.x2 - p.x1, dy = p.y2 - p.y1;
+      const len = Math.hypot(dx, dy) || 1;
+      x += (-dy / len) * wob; y += (dx / len) * wob;
+      alpha = 1 - t * 0.7;
+    }
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    if (labelled && p.label) {
+      ctx.fillStyle = 'rgba(214, 218, 228, 0.85)';
+      ctx.font = '10px ui-monospace, Menlo, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.label, x, y - 10);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawClock() {
+  document.getElementById('virtual').textContent = state.clock.virtual.toFixed(1) + 's';
+  document.getElementById('wall').textContent = state.clock.wall.toFixed(1) + 's';
+  document.getElementById('ratio').textContent = state.clock.ratio.toFixed(1) + 'x';
+}
+
+function frame(now) {
+  ctx.clearRect(0, 0, W, H);
+  drawLinks(now); drawRings(now); drawParticles(now); drawNodes(now);
+  requestAnimationFrame(frame);
+}
+
+// ---------------------------------------------------------------------------------------------
+// the stream
+// ---------------------------------------------------------------------------------------------
+
+const source = new EventSource('/events');
+source.addEventListener('meta', e => reset(JSON.parse(e.data)));
+source.addEventListener('tick', e => { state.clock = JSON.parse(e.data); drawClock(); });
+source.addEventListener('invariant', e => { state.invariants = JSON.parse(e.data).counters; renderHud(); });
+for (const kind of ['started', 'sent', 'received', 'dropped', 'duplicated', 'broken',
+                    'malformed', 'timer_set', 'timer_fired', 'timer_cleared', 'note']) {
+  source.addEventListener(kind, e => onTrace(JSON.parse(e.data)));
+}
+
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -7,7 +7,7 @@ priority:
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity, proxy]
-note: blocked by AF-4, PX-5; UPSTREAM: Path header — see docs/upstream.md
+note: blocked by AF-4, PX-5; UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 ---
 
 # Round-trip tokens through Record-Route and Route

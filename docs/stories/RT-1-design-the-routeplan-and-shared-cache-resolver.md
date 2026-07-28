@@ -7,7 +7,7 @@ priority:
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, dns]
-note: UPSTREAM option — see docs/upstream.md
+note: UPSTREAM: filed as sipx T-17, which decides upstream-vs-local — see docs/upstream.md
 ---
 
 # Design the RoutePlan and shared-cache resolver

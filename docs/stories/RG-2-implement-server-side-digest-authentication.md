@@ -2,12 +2,12 @@
 id: RG-2
 title: Implement server-side digest authentication
 pillar: Signalling
-status: backlog
-priority: 
+status: blocked
+priority:
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, auth]
-note: UPSTREAM primitives — see docs/upstream.md
+note: M1 #9 · BLOCKED on sipx S-16 — digest primitives are kernel logic
 ---
 
 # Implement server-side digest authentication

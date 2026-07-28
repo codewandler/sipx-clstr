@@ -1,0 +1,458 @@
+//! The node: a real socket, the real registrar, the real forwarding core.
+//!
+//! This is [proxy-transaction-driver](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/proxy-transaction-driver.md)
+//! made real. `PX-2` settled the shape — build on `sipx_transport::Handle` rather than on a socket
+//! loop of our own — and this is that shape with sockets under it: one task per proxied request
+//! owning its response context, branches as `Handle::send` calls, and nothing shared on the
+//! signalling path because there is nothing to share.
+//!
+//! Everything that decides anything lives below, in the sans-IO crates. What is here is the part
+//! that cannot be tested without a network, which is why it is small enough to read in one sitting.
+
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use bytes::Bytes;
+use sipx_clstr_proxy::{
+    BranchId, CookieKey, Effect as ProxyEffect, Input as ProxyInput, ProxyConfig, ResponseContext,
+    targets_from_lookup,
+};
+use sipx_clstr_registrar::{
+    CanonicalAor, EdgeContext, InMemoryStore, LocationStore, TenantPolicy, Timestamp, apply,
+    register_command,
+};
+use sipx_sip::{
+    HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
+};
+use sipx_transport::{Config, Handle, Incoming, Target, TransportKind};
+
+/// How the node is configured.
+///
+/// Deliberately minimal and **provisional**: `DP-1` owns the real schema and replaces this rather
+/// than extending it, so nothing should grow to depend on its shape.
+#[derive(Debug, Clone)]
+pub struct NodeConfig {
+    /// Where to listen.
+    pub listen: SocketAddr,
+    /// The tenant every registration on this listener belongs to.
+    ///
+    /// One tenant per listener is the M1 simplification. The tenant never comes from the message —
+    /// a registrar that read its tenant from a URI would let a caller choose whose bindings to write.
+    pub tenant: String,
+    /// The host this node puts in its `Via` and `Record-Route`.
+    pub advertise: String,
+}
+
+impl NodeConfig {
+    /// A node listening on `listen`, advertising itself as that address.
+    #[must_use]
+    pub fn new(listen: SocketAddr) -> Self {
+        Self {
+            listen,
+            tenant: "default".to_owned(),
+            advertise: listen.to_string(),
+        }
+    }
+}
+
+/// Run the node until the process is asked to stop.
+///
+/// # Errors
+///
+/// Fails if the listener cannot be bound — the one error worth refusing to start over, since a node
+/// that silently listened nowhere would look healthy and answer nothing.
+pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
+    let (handle, mut incoming) = sipx_transport::bind(Config::new(config.listen)).await?;
+    tracing::info!(listen = %handle.local_addr(), tenant = %config.tenant, "node listening");
+
+    let store = Arc::new(InMemoryStore::new());
+    let policy = TenantPolicy::default();
+    let proxy = proxy_config(&config);
+
+    while let Some(arrival) = incoming.recv().await {
+        let handle = handle.clone();
+        let store = Arc::clone(&store);
+        let config = config.clone();
+        let proxy = proxy.clone();
+
+        // One task per arrival. The accept loop must never do work inline: it is the single consumer
+        // of the incoming channel, and the kernel delivers into that channel with `try_send`, so a
+        // blocked loop drops requests silently (sipx `T-19`).
+        tokio::spawn(async move {
+            if let Err(error) = serve(&handle, &store, &policy, &config, &proxy, arrival).await {
+                tracing::warn!(%error, "request handling failed");
+            }
+        });
+    }
+    Ok(())
+}
+
+fn proxy_config(config: &NodeConfig) -> ProxyConfig {
+    let mut proxy = ProxyConfig::new(
+        host_of(&config.advertise),
+        Bytes::from(format!("<sip:{};lr>", config.advertise)),
+        cookie_key(),
+    );
+    // The node answers to its bare host as well as to host:port, because a client that resolved a
+    // port differently is still talking to this node.
+    proxy
+        .identities
+        .push(sipx_clstr_proxy::EdgeIdentity::host(&config.advertise));
+    proxy
+}
+
+fn host_of(advertised: &str) -> &str {
+    advertised.split(':').next().unwrap_or(advertised)
+}
+
+/// The loop-detection cookie key.
+///
+/// Per-process for now. `AF-6` owns distribution and rotation, and until it exists a key that
+/// changes when the process restarts is honest about what it protects: loops *through this node*,
+/// for as long as this node has been up.
+fn cookie_key() -> CookieKey {
+    let seed = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|since| since.as_nanos())
+        .unwrap_or_default();
+    CookieKey::new(Bytes::from(format!("sipx-clstr/{seed}")))
+}
+
+async fn serve(
+    handle: &Handle,
+    store: &InMemoryStore,
+    policy: &TenantPolicy,
+    config: &NodeConfig,
+    proxy: &ProxyConfig,
+    arrival: Incoming,
+) -> Result<(), sipx_transport::Error> {
+    match arrival.request.method {
+        Method::Register => {
+            let response = register(store, policy, config, &arrival);
+            handle.respond(&arrival.key, response).await
+        }
+        // An ACK for a 2xx is a separate transaction end to end: forwarded, never answered.
+        Method::Ack => forward_statelessly(handle, store, config, &arrival).await,
+        _ => proxy_request(handle, store, config, proxy, arrival).await,
+    }
+}
+
+// ---------------------------------------------------------------------------------- registrar ---
+
+fn register(
+    store: &InMemoryStore,
+    policy: &TenantPolicy,
+    config: &NodeConfig,
+    arrival: &Incoming,
+) -> Response {
+    let edge = EdgeContext {
+        tenant: config.tenant.clone(),
+        received: Some(sipx_clstr_registrar::SourceAddr {
+            transport: arrival.transport.as_str().to_owned(),
+            ip: arrival.source.ip(),
+            port: arrival.source.port(),
+        }),
+        ..EdgeContext::default()
+    };
+
+    let cmd = match register_command(&arrival.request, &edge, now()) {
+        Ok(cmd) => cmd,
+        Err(rejection) => {
+            return answer(&arrival.request, rejection.status(), "Bad Request");
+        }
+    };
+
+    let applied = apply(store, &cmd, policy, sipx_clstr_registrar::store::DEFAULT_CAS_RETRIES);
+    let status = applied.outcome.status();
+    let mut response = answer(&arrival.request, status, reason_for(status));
+
+    // §5.6 — the `200` enumerates the **complete** active set, with what each binding was granted.
+    // A response that listed only what changed would leave a UA guessing about its other devices.
+    if let Some(accepted) = applied.outcome.accepted() {
+        for contact in &accepted.contacts {
+            let value = format!(
+                "<{}>;expires={}",
+                String::from_utf8_lossy(&contact.contact),
+                contact.expires
+            );
+            if let Ok(header) = sipx_sip::Header::build(HeaderName::Contact, value) {
+                response.headers.push(header);
+            }
+        }
+    }
+    response
+}
+
+// -------------------------------------------------------------------------------------- proxy ---
+
+async fn proxy_request(
+    handle: &Handle,
+    store: &InMemoryStore,
+    config: &NodeConfig,
+    proxy: &ProxyConfig,
+    arrival: Incoming,
+) -> Result<(), sipx_transport::Error> {
+    let mut context = ResponseContext::new(proxy.clone());
+    let key = arrival.key.clone();
+    let effects = context.on_input(ProxyInput::Upstream(Box::new(arrival.request.clone())));
+
+    let mut branches: HashMap<BranchId, ()> = HashMap::new();
+    let mut pending = Vec::new();
+    perform(
+        handle,
+        store,
+        config,
+        &key,
+        &mut context,
+        effects,
+        &mut branches,
+        &mut pending,
+    )
+    .await?;
+
+    // Drive the branches. One `select` over their streams would be the shape at scale; with M1's
+    // single fork group, awaiting them in order is the same thing and considerably easier to read.
+    while let Some((branch, mut responses)) = pending.pop() {
+        while let Some(event) = responses.next().await {
+            let input = match event {
+                sipx_sip::TuEvent::Response(response) => {
+                    ProxyInput::BranchResponse(response, branch.clone())
+                }
+                sipx_sip::TuEvent::Timeout => {
+                    // The driver design's mapping: a kernel timeout is a `408` from that branch.
+                    match ResponseBuilder::to_request(
+                        &arrival.request,
+                        ok_status(408),
+                        "Request Timeout",
+                    ) {
+                        Ok(builder) => ProxyInput::BranchResponse(
+                            Box::new(builder.build()),
+                            branch.clone(),
+                        ),
+                        Err(_) => ProxyInput::BranchTransportError(branch.clone()),
+                    }
+                }
+                sipx_sip::TuEvent::TransportError => {
+                    ProxyInput::BranchTransportError(branch.clone())
+                }
+                // An ACK on a client transaction is not ours; counted by being ignored explicitly
+                // rather than by falling through a wildcard.
+                sipx_sip::TuEvent::Ack(_) | sipx_sip::TuEvent::Request(_) => continue,
+            };
+            let effects = context.on_input(input);
+            let mut more = Vec::new();
+            perform(
+                handle,
+                store,
+                config,
+                &key,
+                &mut context,
+                effects,
+                &mut branches,
+                &mut more,
+            )
+            .await?;
+            pending.extend(more);
+            if context.is_finished() {
+                return Ok(());
+            }
+        }
+        // The stream ended with no final. A branch that vanishes is a branch that failed, and
+        // leaving the context waiting on it forever is the failure mode this arm exists to prevent.
+        if !context.is_finished() {
+            let effects = context.on_input(ProxyInput::BranchTransportError(branch));
+            let mut more = Vec::new();
+            perform(
+                handle,
+                store,
+                config,
+                &key,
+                &mut context,
+                effects,
+                &mut branches,
+                &mut more,
+            )
+            .await?;
+            pending.extend(more);
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn perform(
+    handle: &Handle,
+    store: &InMemoryStore,
+    config: &NodeConfig,
+    key: &TransactionKey,
+    context: &mut ResponseContext,
+    effects: Vec<ProxyEffect>,
+    branches: &mut HashMap<BranchId, ()>,
+    pending: &mut Vec<(BranchId, sipx_transport::Responses)>,
+) -> Result<(), sipx_transport::Error> {
+    for effect in effects {
+        match effect {
+            ProxyEffect::ResolveTargets(query) => {
+                let found = match CanonicalAor::parse(query.uri.clone()) {
+                    Ok(aor) => store.lookup(&config.tenant, &aor, now()),
+                    Err(_) => Vec::new(),
+                };
+                let targets = targets_from_lookup(&found);
+                let more = context.on_input(ProxyInput::TargetsResolved(targets));
+                Box::pin(perform(
+                    handle, store, config, key, context, more, branches, pending,
+                ))
+                .await?;
+            }
+            ProxyEffect::Forward {
+                branch,
+                request,
+                target,
+            } => {
+                let Some(destination) = destination_of(&target.uri) else {
+                    tracing::warn!(target = %String::from_utf8_lossy(&target.uri), "unroutable");
+                    continue;
+                };
+                branches.insert(branch.clone(), ());
+                let responses = handle.send(*request, destination).await?;
+                pending.push((branch, responses));
+            }
+            ProxyEffect::Respond(response) => {
+                handle.respond(key, *response).await?;
+            }
+            ProxyEffect::CancelBranch(branch) => {
+                // `PX-6` mints the CANCEL; the kernel retransmits it. Recorded rather than
+                // performed in M1, where nothing cancels: a silent gap here would be a call that
+                // rings forever on the losing branch.
+                tracing::info!(%branch, "branch cancellation is PX-6's, not yet wired to a socket");
+            }
+            ProxyEffect::AnswerCancel
+            | ProxyEffect::SetTimer { .. }
+            | ProxyEffect::ClearTimer { .. }
+            | ProxyEffect::Terminate => {}
+        }
+    }
+    Ok(())
+}
+
+/// Forward a request with no transaction of its own — an ACK for a 2xx.
+async fn forward_statelessly(
+    handle: &Handle,
+    store: &InMemoryStore,
+    config: &NodeConfig,
+    arrival: &Incoming,
+) -> Result<(), sipx_transport::Error> {
+    let Ok(aor) = CanonicalAor::from_uri(&arrival.request.uri) else {
+        return Ok(());
+    };
+    let found = store.lookup(&config.tenant, &aor, now());
+    let Some(first) = found.first() else {
+        return Ok(());
+    };
+    let Some(destination) = destination_of(&first.contact) else {
+        return Ok(());
+    };
+    handle
+        .send_directly(arrival.request.clone(), destination)
+        .await
+}
+
+// ------------------------------------------------------------------------------------ helpers ---
+
+/// Where a contact URI actually is.
+fn destination_of(contact: &Bytes) -> Option<Target> {
+    let uri = Uri::parse(contact.clone()).ok()?;
+    let host = uri.host()?;
+    let port = uri.port().unwrap_or(5060);
+    let addr: SocketAddr = match host {
+        sipx_sip::Host::Ip(ip) => SocketAddr::new(*ip, port),
+        // M1 forwards to registered contacts, which are addresses. A name here would need RFC 3263
+        // resolution — `RT-1`'s work, and the story says so rather than pretending otherwise.
+        sipx_sip::Host::Name(_) => return None,
+    };
+    Some(Target::new(addr, TransportKind::Udp))
+}
+
+fn answer(request: &Request, status: u16, reason: &str) -> Response {
+    let code = ok_status(status);
+    ResponseBuilder::to_request(request, code, reason.to_owned())
+        .map(sipx_sip::ResponseBuilder::build)
+        .unwrap_or_else(|_| {
+            // Unreachable for anything the kernel handed us — it only parses respondable requests —
+            // and a bare response beats no response for the case that does not exist.
+            ResponseBuilder::new(code, reason.to_owned())
+                .map(sipx_sip::ResponseBuilder::build)
+                .unwrap_or_else(|_| answer(request, 500, "Server Internal Error"))
+        })
+}
+
+/// A status code, falling back to `500` for a value that is not one.
+///
+/// `500` rather than `200`: a status this code could not construct means the caller asked for
+/// something impossible, and answering "fine" to that would be the worst available lie.
+fn ok_status(status: u16) -> StatusCode {
+    StatusCode::new(status)
+        .or_else(|| StatusCode::new(500))
+        .unwrap_or_else(|| ok_status(500))
+}
+
+fn reason_for(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        400 => "Bad Request",
+        403 => "Forbidden",
+        404 => "Not Found",
+        420 => "Bad Extension",
+        421 => "Extension Required",
+        423 => "Interval Too Brief",
+        500 => "Server Internal Error",
+        503 => "Service Unavailable",
+        _ => "Error",
+    }
+}
+
+/// The wall clock, as the registrar's `Timestamp`.
+///
+/// The **only** clock read in the workspace outside the harness, and it is here rather than in the
+/// registrar precisely because reading a clock is a driver's job (AGENTS.md rule 2).
+fn now() -> Timestamp {
+    let since = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO);
+    Timestamp::from_nanos(u64::try_from(since.as_nanos()).unwrap_or(u64::MAX))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_contact_with_an_address_resolves_to_a_destination() {
+        let target = destination_of(&Bytes::from_static(b"sip:alice@192.0.2.7:5062"))
+            .expect("an address");
+        assert_eq!(target.addr.port(), 5062);
+    }
+
+    #[test]
+    fn a_contact_with_no_port_uses_the_default() {
+        let target = destination_of(&Bytes::from_static(b"sip:alice@192.0.2.7")).expect("an address");
+        assert_eq!(target.addr.port(), 5060);
+    }
+
+    #[test]
+    fn a_contact_naming_a_host_is_not_routable_yet() {
+        // M1 forwards to registered contacts, which are addresses. A name needs RFC 3263 resolution,
+        // which is `RT-1`'s — and returning `None` here is what makes that a visible gap rather than
+        // a call that fails somewhere further along.
+        assert!(destination_of(&Bytes::from_static(b"sip:alice@phone.example")).is_none());
+    }
+
+    #[test]
+    fn the_advertised_host_drops_its_port() {
+        assert_eq!(host_of("192.0.2.1:5060"), "192.0.2.1");
+        assert_eq!(host_of("edge.example"), "edge.example");
+    }
+}
