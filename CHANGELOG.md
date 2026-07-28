@@ -9,6 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **M1's own end-to-end proof** (`CX-3`) — `scripts/e2e-call.sh` brings up one node and two real
+  `sipx` CLI phones, registers both, places a call from one to the other over UDP, answers it and
+  hangs up. Every step asserts on the CLI's `--json` output and its exit code. **Media is proved,
+  not assumed**: alice plays a three-second 440 Hz tone and bob records 24 000 samples — exactly
+  three seconds at 8 kHz — while the script asserts the node holds exactly *one* UDP socket, so the
+  RTP bob heard came from alice and nowhere else. The CLI is deliberately not vendored: the value
+  of the test is that the client side is somebody else's implementation of RFC 3261.
+  - Four defects only a real network found: the node announced its address *before* binding, so a
+    failed bind looked like a successful start; the exit code was swallowed by a pipe; the
+    transaction gauge logged per completed request, so it could never observe the store draining
+    after the last one; and `tracing`'s ANSI codes sat between a field name and its value, defeating
+    the `grep` that read the gauge.
+  - Two things that look like bugs and are not: the store takes ~32 s to drain, because RFC 3261
+    keeps a concluded transaction alive for 64·T1 to absorb retransmissions — asserting "empty
+    immediately" would be asserting a bug — and a contact naming a *host* rather than an address is
+    not routable until `RT-1` brings RFC 3263 resolution.
 - **The constellation's first feed** (`VZ-1`, [design](docs/designs/cluster-viz.md)) — the
   cluster, watchable: a dev adapter (`cargo run -p sipx-clstr-sim --example viz`) paces a seeded
   scenario against the wall clock and streams it live over SSE, and a canvas page renders the
@@ -182,6 +198,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The upstream ledger grew a state for "written but not released", because that is where `RG-2`
+  is.** The kernel work M1's last story needs now exists — `S-16` (server-side digest: nonce
+  minting, challenge emission, verification, a bounded replay window) and `X-20` (which makes those
+  primitives reachable from a crate with no async runtime, since `sipx-ua` pulled `tokio`
+  unconditionally and a sans-IO registrar cannot). Both are commits on a **local** `main` — sipx's
+  `origin/main` is behind them and no tag contains them. This workspace pins a git revision from
+  the public URL so that "which kernel version is this claim true of?" has an answer, and a commit
+  no remote has is not a revision it can name. `RG-2`
+  therefore stays `blocked` and M1's fifth exit criterion stays unproven — recorded rather than
+  worked around, because the two available workarounds were writing digest a second time (the thing
+  `S-16` exists to prevent) and `[patch]`ing to a local checkout (an unreproducible build that
+  hides the dependency from the ledger tracking it).
 - **The proxy driver is built on the kernel's endpoint, not beside it.** The epic design argued
   that `sipx_transport`'s API was "UA-shaped: one transaction, one target" and that a forking
   proxy therefore needed its own socket loop. Reading the released kernel rather than remembering

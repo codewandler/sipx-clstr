@@ -32,11 +32,11 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Next (ready — take the top one unless the user named a story)
-- [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · the exit proof — two sipx CLI phones, one node, a real call
+_None._
 
 ## Blocked
 - [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · BLOCKED on sipx X-14 — delete the harness's local copies when it lands
-- [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · BLOCKED on sipx S-16 — digest primitives are kernel logic
+- [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · BLOCKED on a sipx release carrying S-16 + X-20 — both are written, neither is tagged
 
 ## Backlog
 
@@ -133,6 +133,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
+- [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
 - [ET-1 — Specify the e2e-tester role and the probe contract](ET-1-specify-the-e2e-tester-role-and-probe-contract.md) · Platform · M1 #11 · docs/specs/e2e-probe.md — verdict taxonomy, blast radius, 19 vectors; gates ET-2/ET-3
 - [ET-2 — Implement the sans-IO probe engine](ET-2-implement-the-sans-io-probe-engine.md) · Platform · M1 #12 · the probe engine and scheduler; every EP-* vector proved
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · M1 #13 · the echo endpoint; end to end through the real proxy, registrar and probe

@@ -14,7 +14,8 @@ The sipx transport driver stays UA-shaped; only generic primitives move upstream
 |---|---|---|---|---|
 | Header surgery API | `Headers` exposes `push`/`push_front`/`remove_all` but no `remove_first`, `insert_at` or `retain`; sipx-transport privately rebuilds the collection to rewrite the top Via (`nat.rs:149`) | [S-15](https://github.com/codewandler/sipx/blob/main/docs/stories/S-15-header-editing-operations.md) | PX-3, PX-4 | filed |
 | `Path` and `Service-Route` headers | Not in the `HeaderName` enum; fall through to `Other`. Typed accessors and compact handling missing | [T-14](https://github.com/codewandler/sipx/blob/main/docs/stories/T-14-register-a-path-header.md) (Path, pre-existing), [T-16](https://github.com/codewandler/sipx/blob/main/docs/stories/T-16-service-route-header.md) (Service-Route) | AF-5, RG-1, M3 Path work | filed |
-| Server-side digest primitives | Hash formulas and challenge parsing exist client-side (`sipx-ua/src/auth.rs`); nonce minting, replay window, challenge emission and verification are absent | [S-16](https://github.com/codewandler/sipx/blob/main/docs/stories/S-16-server-side-digest.md) | RG-2 | filed |
+| Server-side digest primitives | Hash formulas and challenge parsing exist client-side (`sipx-ua/src/auth.rs`); nonce minting, replay window, challenge emission and verification are absent | [S-16](https://github.com/codewandler/sipx/blob/main/docs/stories/S-16-server-side-digest.md) | RG-2 | **implemented upstream, unreleased** — `sipx-ua::challenge::{Authenticator, Presented, Verdict}`. Not in `v0.3.0`, so this workspace cannot pin it yet |
+| Digest primitives reachable without an async runtime | `sipx-ua` depends on `tokio` and `sipx-transport` unconditionally, though only `agent`, `flows` and `error` need either. A sans-IO registrar cannot take S-16's authenticator without linking a runtime into its decision core — and its alternative is to write digest a second time, which is what S-16 exists to prevent | [X-20](https://github.com/codewandler/sipx/blob/main/docs/stories/X-20-digest-without-a-runtime.md) | RG-2 | **implemented upstream, unreleased** — a default-on `runtime` feature; `default-features = false` leaves `auth`, `challenge`, `outbound`, `registrar` and no `tokio` in the resolved graph |
 | Async / shared-cache resolver option | `Resolver` trait is sync with per-URI prefetch; fine for a UA, insufficient at proxy throughput; `_sip._ws`/`_sips._wss` SRV prefixes not prefetched | [T-17](https://github.com/codewandler/sipx/blob/main/docs/stories/T-17-resolution-at-proxy-throughput.md) | RT-1 | filed — upstream-vs-local still open, and that story exists to settle it |
 | Deterministic timer queue + seeded loopback link (`sipx-testkit`) | `sipx-transport`'s `TimerQueue` reads `Instant::now()` inside `set` and is keyed to `(TransactionKey, Timer)`; the testkit's crate doc promises a loopback transport and ships none — its modules are `certs`, `load`, `rfc4475`, `soak`. CF-1's asks: generalize the queue (generic key, `now` passed in) and add a seeded in-process byte link with loss/duplication/latency knobs | [X-14](https://github.com/codewandler/sipx/blob/main/docs/stories/X-14-testkit-timer-queue-and-loopback-link.md) | CF-4, CF-5 | filed |
 | Multi-node simulation runtime (virtual clock, simulated network + LB stickiness, fault schedules, scenario runner, load model) | Nothing — and per CF-1, nothing should: no kernel `Clock` trait either, since sans-IO layers take fired timers by contract and the clock is the harness scheduler's loop variable | — | CF-5 | decided: stays here (CF-1) |
@@ -25,8 +26,14 @@ The sipx transport driver stays UA-shaped; only generic primitives move upstream
 
 Rules of the ledger:
 
-- A row is **open** until the sipx story is filed, **filed** once it exists (link it), **landed**
-  once released in a sipx version this workspace can pin.
+- A row is **open** until the sipx story is filed, **filed** once it exists (link it), **implemented
+  upstream, unreleased** once the kernel code exists but no tag this workspace can pin carries it,
+  and **landed** once released in a sipx version this workspace can pin.
+- *Unreleased* is a real state and not a formality. Code on someone's `main` is not a dependency:
+  `Cargo.toml` pins a **tag** from the GitHub URL precisely so "which kernel is this claim true of?"
+  has an answer, and a story that consumes unreleased kernel code is still blocked. The remedy is a
+  release, not a `[patch]` — patching to a local checkout makes the build unreproducible and hides
+  the dependency from exactly the ledger that exists to track it.
 - Blocked sipx-clstr stories carry the marker in their `note:` field and name this file.
 - If a gap turns out to be clstr-specific after all, the row records that decision instead of
   silently disappearing.

@@ -69,7 +69,7 @@ than half of M2.
 | 6 | `PX-6` | CANCEL and Timer C | `PB-C-*` |
 | 7 | `RG-6` | forking target sets built from location lookups | `PB-F-2` fed by `LS-L-*` |
 | 8 | `PX-7` | the proxy torture vectors, run in the harness | the whole `PB-*` table, as a report |
-| 9 | `RG-2` | server-side digest — challenge, verify, replay window | RFC 7616 vectors + a replayed `nc` |
+| 9 | `RG-2` | server-side digest — challenge, verify, replay window | RFC 7616 vectors + a replayed `nc` — **blocked**, see below |
 | 10 | `RG-4` | the PostgreSQL `LocationStore` | the `LS-*` tables again, unchanged, on a second backend |
 | 11 | `ET-1` | the e2e-tester role and the probe contract | spec accepted with a verdict taxonomy |
 | 12 | `ET-2` | the sans-IO probe engine | failure scenarios as seeded harness tests |
@@ -107,12 +107,20 @@ else can run:
 | `DP-1` config schema, `DP-2` topology, all `KO-*` | the deployment surface is a cluster surface. M1's node takes a **provisional** minimal config — listeners, the registrar realm, the store URL — which `DP-1` replaces rather than extends. Said out loud so nobody mistakes it for the schema. |
 | `RG-5` sharding | one node is one shard. |
 
-**M1 does not block on the kernel.** Three of the four filed sipx stories would make M1 code
-nicer, not possible: without `S-15` the proxy rebuilds a header collection to pop a `Via`
-(correct, just O(n) clones); without `X-14` the harness carries its own timer queue. `S-16` is
-the one real dependency — digest verification is protocol-generic and this repo does not
-shadow-implement kernel logic (AGENTS.md rule 6) — so `RG-2` sits at position 9, late enough
-that the kernel work has room, and M1's other thirteen stories do not wait for it.
+**M1 does not block on the kernel — except in one place, and that is where it stands.** Three of
+the four filed sipx stories would make M1 code nicer, not possible: without `S-15` the proxy
+rebuilds a header collection to pop a `Via` (correct, just O(n) clones); without `X-14` the harness
+carries its own timer queue. `S-16` is the one real dependency — digest verification is
+protocol-generic and this repo does not shadow-implement kernel logic (AGENTS.md rule 6) — so
+`RG-2` sits at position 9, late enough that the kernel work has room, and M1's other thirteen
+stories do not wait for it.
+
+**Where that leaves M1: thirteen of fourteen, and the fourteenth is upstream's to release.** The
+kernel work `RG-2` needs is *written* — `S-16` (the authenticator) and `X-20` (which makes it
+reachable from a crate that has no async runtime) both exist on sipx's `main`. Neither is in a tag,
+and this workspace pins tags rather than branches on purpose, so `RG-2` stays `blocked` and exit
+criterion 5 stays unproven. See the [upstream ledger](upstream.md); the remedy is a sipx release,
+not a workaround here.
 
 ## Delivered
 
