@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-28
+
 ### Added
 
 - **The M0 load-bearing specs land** — written concurrently and cross-reconciled. The proxy
@@ -23,6 +25,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   code over declarative schedule values, a per-component sipx-testkit upstream split, and the
   conformance registry as a requirement-grain local extension of the kernel's per-RFC registry,
   kernel rows inherited by reference. (PX-1, RG-1, AF-1, EX-1, CF-1)
+- **The operator epic starts moving and the backlog deepens.** The Helm chart scaffold under
+  `deploy/helm/` (KO-2, in progress), the active-drain story (KO-9), and fifteen new stories
+  across routing (egress allowlist, number normalisation, asserted identity, source-IP
+  admission, scoped routes), deployment (split listeners, CDRs, capture), extensions (async
+  external routing hook, carrier quirk profiles), media (per-trunk codec/SRTP policy), and the
+  operator (naming contract, anti-affinity, OCI chart).
 
 ## [0.1.0] — 2026-07-28
 
