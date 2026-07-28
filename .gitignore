@@ -15,3 +15,7 @@
 /website/.cache-loader/
 npm-debug.log*
 yarn-error.log*
+
+# Local agent/tool configuration and e2e-run artefacts — machine state, not project content.
+/.flux/
+/tone.wav

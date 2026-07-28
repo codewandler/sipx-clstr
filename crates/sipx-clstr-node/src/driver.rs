@@ -9,7 +9,6 @@
 //! Everything that decides anything lives below, in the sans-IO crates. What is here is the part
 //! that cannot be tested without a network, which is why it is small enough to read in one sitting.
 
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -65,11 +64,17 @@ impl NodeConfig {
 /// that silently listened nowhere would look healthy and answer nothing.
 pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
     let (handle, mut incoming) = sipx_transport::bind(Config::new(config.listen)).await?;
+
+    // Announced on stdout **after** the bind, so a script can wait for this line instead of sleeping
+    // and hoping. Printing it before would make a failed bind look like a successful start — which
+    // it did, until a test of the failure path noticed the node saying "listening" and then dying.
+    println!("listening on {}", handle.local_addr());
     tracing::info!(listen = %handle.local_addr(), tenant = %config.tenant, "node listening");
 
     let store = Arc::new(InMemoryStore::new());
     let policy = TenantPolicy::default();
     let proxy = proxy_config(&config);
+    report_transactions_in_flight(handle.clone());
 
     while let Some(arrival) = incoming.recv().await {
         let handle = handle.clone();
@@ -87,6 +92,34 @@ pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
         });
     }
     Ok(())
+}
+
+/// Report how many transactions the kernel is holding, whenever that number changes.
+///
+/// A proxy that leaks one transaction per call is a slow, quiet outage: nothing looks wrong until
+/// the process does. This is the cheapest instrument that would notice, and it is `DP-3`'s gauge in
+/// embryo.
+///
+/// **On change, not on a schedule.** A number logged every second is noise nobody reads; a number
+/// logged when it moves is a record of what the node did. It also has to be sampled rather than
+/// emitted per request: the count that matters is the one *after* the last request, and a per-request
+/// line can never show that, which is exactly how the first version of this failed to observe the
+/// store draining at all.
+fn report_transactions_in_flight(handle: Handle) {
+    tokio::spawn(async move {
+        let mut previous = usize::MAX;
+        loop {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let Ok(outstanding) = handle.outstanding().await else {
+                // The endpoint is gone, and so is the reason to keep counting.
+                return;
+            };
+            if outstanding != previous {
+                previous = outstanding;
+                tracing::info!(outstanding, "transactions in flight");
+            }
+        }
+    });
 }
 
 fn proxy_config(config: &NodeConfig) -> ProxyConfig {
@@ -164,7 +197,12 @@ fn register(
         }
     };
 
-    let applied = apply(store, &cmd, policy, sipx_clstr_registrar::store::DEFAULT_CAS_RETRIES);
+    let applied = apply(
+        store,
+        &cmd,
+        policy,
+        sipx_clstr_registrar::store::DEFAULT_CAS_RETRIES,
+    );
     let status = applied.outcome.status();
     let mut response = answer(&arrival.request, status, reason_for(status));
 
@@ -198,7 +236,6 @@ async fn proxy_request(
     let key = arrival.key.clone();
     let effects = context.on_input(ProxyInput::Upstream(Box::new(arrival.request.clone())));
 
-    let mut branches: HashMap<BranchId, ()> = HashMap::new();
     let mut pending = Vec::new();
     perform(
         handle,
@@ -207,7 +244,6 @@ async fn proxy_request(
         &key,
         &mut context,
         effects,
-        &mut branches,
         &mut pending,
     )
     .await?;
@@ -227,10 +263,9 @@ async fn proxy_request(
                         ok_status(408),
                         "Request Timeout",
                     ) {
-                        Ok(builder) => ProxyInput::BranchResponse(
-                            Box::new(builder.build()),
-                            branch.clone(),
-                        ),
+                        Ok(builder) => {
+                            ProxyInput::BranchResponse(Box::new(builder.build()), branch.clone())
+                        }
                         Err(_) => ProxyInput::BranchTransportError(branch.clone()),
                     }
                 }
@@ -250,7 +285,6 @@ async fn proxy_request(
                 &key,
                 &mut context,
                 effects,
-                &mut branches,
                 &mut more,
             )
             .await?;
@@ -271,7 +305,6 @@ async fn proxy_request(
                 &key,
                 &mut context,
                 effects,
-                &mut branches,
                 &mut more,
             )
             .await?;
@@ -281,7 +314,6 @@ async fn proxy_request(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn perform(
     handle: &Handle,
     store: &InMemoryStore,
@@ -289,7 +321,6 @@ async fn perform(
     key: &TransactionKey,
     context: &mut ResponseContext,
     effects: Vec<ProxyEffect>,
-    branches: &mut HashMap<BranchId, ()>,
     pending: &mut Vec<(BranchId, sipx_transport::Responses)>,
 ) -> Result<(), sipx_transport::Error> {
     for effect in effects {
@@ -301,10 +332,7 @@ async fn perform(
                 };
                 let targets = targets_from_lookup(&found);
                 let more = context.on_input(ProxyInput::TargetsResolved(targets));
-                Box::pin(perform(
-                    handle, store, config, key, context, more, branches, pending,
-                ))
-                .await?;
+                Box::pin(perform(handle, store, config, key, context, more, pending)).await?;
             }
             ProxyEffect::Forward {
                 branch,
@@ -315,7 +343,6 @@ async fn perform(
                     tracing::warn!(target = %String::from_utf8_lossy(&target.uri), "unroutable");
                     continue;
                 };
-                branches.insert(branch.clone(), ());
                 let responses = handle.send(*request, destination).await?;
                 pending.push((branch, responses));
             }
@@ -377,15 +404,25 @@ fn destination_of(contact: &Bytes) -> Option<Target> {
 
 fn answer(request: &Request, status: u16, reason: &str) -> Response {
     let code = ok_status(status);
-    ResponseBuilder::to_request(request, code, reason.to_owned())
-        .map(sipx_sip::ResponseBuilder::build)
-        .unwrap_or_else(|_| {
-            // Unreachable for anything the kernel handed us — it only parses respondable requests —
-            // and a bare response beats no response for the case that does not exist.
+    ResponseBuilder::to_request(request, code, reason.to_owned()).map_or_else(
+        // Unreachable for anything the kernel handed us — it only delivers respondable requests —
+        // and a bare response beats no response for the case that does not exist.
+        |_| {
             ResponseBuilder::new(code, reason.to_owned())
-                .map(sipx_sip::ResponseBuilder::build)
-                .unwrap_or_else(|_| answer(request, 500, "Server Internal Error"))
-        })
+                .map_or_else(|_| bare_error(), sipx_sip::ResponseBuilder::build)
+        },
+        sipx_sip::ResponseBuilder::build,
+    )
+}
+
+/// The last resort: a `500` with nothing echoed.
+///
+/// Reachable only if the kernel cannot build a response from a status and a reason, which it always
+/// can. Written without recursion so that an impossible case cannot become an infinite one.
+fn bare_error() -> Response {
+    let mut response = Response::new(ok_status(500), "Server Internal Error");
+    response.set_body(Bytes::new());
+    response
 }
 
 /// A status code, falling back to `500` for a value that is not one.
@@ -431,14 +468,15 @@ mod tests {
 
     #[test]
     fn a_contact_with_an_address_resolves_to_a_destination() {
-        let target = destination_of(&Bytes::from_static(b"sip:alice@192.0.2.7:5062"))
-            .expect("an address");
+        let target =
+            destination_of(&Bytes::from_static(b"sip:alice@192.0.2.7:5062")).expect("an address");
         assert_eq!(target.addr.port(), 5062);
     }
 
     #[test]
     fn a_contact_with_no_port_uses_the_default() {
-        let target = destination_of(&Bytes::from_static(b"sip:alice@192.0.2.7")).expect("an address");
+        let target =
+            destination_of(&Bytes::from_static(b"sip:alice@192.0.2.7")).expect("an address");
         assert_eq!(target.addr.port(), 5060);
     }
 

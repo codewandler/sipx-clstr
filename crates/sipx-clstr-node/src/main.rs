@@ -35,7 +35,9 @@ fn main() -> ExitCode {
             );
             println!();
             println!("  run --listen <addr>   run a node: registrar and proxy on one listener");
-            println!("  --version             print the version and the kernel it is built against");
+            println!(
+                "  --version             print the version and the kernel it is built against"
+            );
             ExitCode::SUCCESS
         }
         Some(other) => {
@@ -60,8 +62,8 @@ fn run_node(args: &[String]) -> ExitCode {
             return ExitCode::from(2);
         };
         match flag.as_str() {
-            "--listen" => listen = value.clone(),
-            "--tenant" => tenant = value.clone(),
+            "--listen" => listen.clone_from(value),
+            "--tenant" => tenant.clone_from(value),
             "--advertise" => advertise = Some(value.clone()),
             other => {
                 eprintln!("sipx-clstr: unknown option `{other}`");
@@ -86,8 +88,6 @@ fn run_node(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    // Report the bound address on stdout before serving, so a script can wait for the line rather
-    // than sleeping and hoping.
     match runtime.block_on(async {
         tracing_subscriber::fmt()
             .with_env_filter(
@@ -95,9 +95,12 @@ fn run_node(args: &[String]) -> ExitCode {
                     .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
             )
             .with_writer(std::io::stderr)
+            // No colour: this log is read by scripts as often as by people, and escape codes
+            // between a field name and its value defeat an honest `grep`.
+            .with_ansi(false)
             .try_init()
             .ok();
-        println!("listening on {}", config.listen);
+        // The driver announces the address once it is actually bound.
         sipx_clstr_node::driver::run(config).await
     }) {
         Ok(()) => ExitCode::SUCCESS,
