@@ -28,10 +28,16 @@ A clustered, proxy-first SIP platform in Rust, built on the [sipx](../sipx) prot
    that requires a global dialog lookup on the signalling hot path is wrong by definition here,
    not merely slow. Durable state (registrations, configuration, credentials) lives in owned
    stores off the hot path.
-6. **Upstream first.** Protocol-generic behavior — header syntax, parsing, transaction semantics,
-   resolver capabilities — is a sipx change, tracked in [docs/upstream.md](docs/upstream.md).
-   sipx-clstr never forks or shadow-implements protocol logic that belongs in the kernel; it adds
-   orchestration: proxying, location, affinity, media control, deployment.
+6. **Upstream first — always ask "does this belong in the kernel?"** Whenever you design,
+   plan a story, or implement — before writing, not after — explicitly consider whether the
+   thing at hand is protocol-generic (header syntax, parsing, transaction and dialog semantics,
+   resolver capabilities, auth primitives, testkit machinery) or platform orchestration.
+   Protocol-generic work is a sipx change, tracked in [docs/upstream.md](docs/upstream.md),
+   even when building it here would be faster today; sipx-clstr never forks or
+   shadow-implements kernel logic. Record the answer either way: a design doc or story that
+   touches the boundary says where the work lands and why (one line — "considered for
+   upstream: no, cluster-specific because …" — is enough). What stays here is orchestration:
+   proxying, location, affinity, media control, deployment.
 7. **Never commit without an explicit instruction from the user.**
 
 ## The gate
