@@ -1,0 +1,8 @@
+# Build output (workspace arrives with CX-2)
+/target
+
+# Local research and scratch material — must never be committed
+/notes/
+/research/
+/scratch/
+*.local.md
