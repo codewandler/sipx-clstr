@@ -5,6 +5,8 @@
 
 ## Why
 
+The deferred home for features that must terminate dialogs — opt-in per feature, never default.
+
 Some features structurally require terminating one dialog and creating another: call queues, IVR,
 conference focus, application-generated call legs, strict topology separation, protocol
 normalization that cannot preserve dialogs. The platform is proxy-first precisely so that this

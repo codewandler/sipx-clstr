@@ -10,8 +10,8 @@ A clustered, proxy-first SIP platform in Rust, built on the [sipx](../sipx) prot
    comments, docs, stories, designs, commit messages. Rationale cites RFCs, sipx specs, or our own
    specs in `docs/specs/`. Named **integration and interop targets** are the carve-out: systems
    this platform talks to or is tested against (rtpengine, Kubernetes, PostgreSQL, SIPp, interop
-   peers) may be named in integration specs, configs and test harnesses — as targets, never as
-   behavioral precedent.
+   peers) may be named anywhere in the repo — specs, designs, configs, test harnesses — as
+   targets, never as behavioral precedent.
 2. **Decision logic is sans-IO.** Proxy forwarding decisions, location-service semantics, token
    mint/verify, and route planning are pure functions or state machines: time enters as a
    fired-timer input, bytes enter as data, randomness enters as an injected source. Sockets,
@@ -67,6 +67,6 @@ This project tracks work with the **track** framework: every unit of work is a m
    context.
 
 The board's status lists are generated — after any change to a story's `status`/`priority`/`title`/
-`epic`, run `/track:board`. Use optional `areas: [subsystem]` tags for query-only subsystem selection
-without changing board rows. Story frontmatter is the single source of truth.
+`epic`/`note`, run `/track:board`. Use optional `areas: [subsystem]` tags for query-only subsystem
+selection without changing board rows. Story frontmatter is the single source of truth.
 <!-- END track:agents -->

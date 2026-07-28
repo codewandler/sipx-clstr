@@ -5,6 +5,8 @@
 
 ## Why
 
+One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time.
+
 The deployment goal is one file: an operator installs from a Helm chart, reads a single
 `values.yaml`, and stands up a working clustered environment — first on a local k3s cluster so the
 loop from "edit config" to "clustered platform running" closes in minutes, later on real

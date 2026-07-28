@@ -13,12 +13,15 @@ note:
 # Design SDP rewrite in the proxy path
 
 ## Goal
-Design media anchoring as an extension module: which hook phases see offers and answers, the latching stance, and how ICE material passes through untouched.
+Design media anchoring as an extension module: which hook phases see offers and answers, the latching stance, and the ICE stance — anchored calls cannot leave ICE untouched (see the design); pass-through is only for media-direct calls.
 
 ## Acceptance
 - [ ] The hook phases for offer/answer interception are chosen against EX-1's spec.
-- [ ] The latching and ICE pass-through stance is decided with rationale.
-- [ ] Media-direct calls bypass the module entirely — asserted in a harness scenario.
+- [ ] The ICE stance is decided per call class: anchored calls have the relay participate in 
+ICE or strip it; untouched pass-through only for media-direct calls. Latching decided with 
+rationale.
+- [ ] Media-direct calls bypass the module entirely — stated here as a requirement; ME-5's 
+harness scenario asserts it.
 
 ## Progress
 - (not started)

@@ -7,7 +7,7 @@ priority:
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing]
-note: 
+note: blocked by RT-1, AF-1
 ---
 
 # Implement the trunk model with breakers and CPS limits
@@ -18,7 +18,8 @@ Implement trunks as stateful objects: circuit breakers fed by real transaction o
 ## Acceptance
 - [ ] Breaker transitions are driven by response-code/timeout history and are observable as metrics (DP-3).
 - [ ] CPS and concurrency enforcement rejects with the specified responses under load in the harness.
-- [ ] Trunk configuration versions are visible to the token's policy-version field.
+- [ ] Trunk configuration carries a version; its interaction with the token's policy-version 
+field is settled against AF-1 before this story closes.
 
 ## Progress
 - (not started)

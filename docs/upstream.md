@@ -16,7 +16,8 @@ The sipx transport driver stays UA-shaped; only generic primitives move upstream
 | `Path` and `Service-Route` headers | Not in the `HeaderName` enum; fall through to `Other`. Typed accessors and compact handling missing | _to file (CX-1)_ | AF-5, RG-1, M3 Path work | open |
 | Server-side digest primitives | Hash formulas and challenge parsing exist client-side (`sipx-ua/src/auth.rs`); nonce minting, replay window, challenge emission and verification are absent | _to file (CX-1)_ | RG-2 | open |
 | Async / shared-cache resolver option | `Resolver` trait is sync with per-URI prefetch; fine for a UA, insufficient at proxy throughput; `_sip._ws`/`_sips._wss` SRV prefixes not prefetched | _to file (CX-1)_ | RT-1 | open |
-| Virtual-time / loopback harness split | No `Clock` trait, no in-memory transport, no multi-node harness anywhere; `sipx-testkit` holds the RFC 4475 corpus and a fixture CA only | _to file (CX-1)_ | CF-1, CF-4 | open |
+| Virtual-time / loopback harness split | No `Clock` trait, no in-memory transport, no multi-node harness anywhere; `sipx-testkit` holds the RFC 4475 corpus, a fixture CA, and load/soak harnesses — none of which is a deterministic simulation | _to file (CX-1)_ | CF-1, CF-4, CF-5 | open |
+| Released TLS/WS/WSS transports | Implementations exist on sipx main with interop tests, but they are unreleased M5 work; 0.1.0 shipped UDP/TCP only | _to file (CX-1)_ | M2 TLS edges (DP-2), M3 WSS clients | open |
 
 Rules of the ledger:
 

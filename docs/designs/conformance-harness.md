@@ -1,9 +1,11 @@
 # Design: Conformance & deterministic harness
 
 **Status:** proposed · **Pillar:** Platform · **Epic:** `conformance-harness` ·
-**Stories:** CF-1 … CF-4
+**Stories:** CF-1 … CF-6
 
 ## Why
+
+The north star made executable: seeded multi-node simulation, and coverage that is measured.
 
 The north star — a cluster indistinguishable from one correct proxy — is a claim about behavior
 under adversarial timing and partial failure, and such claims are only worth making if they are
@@ -57,13 +59,14 @@ model matches reality.
 - Fidelity gap between simulated and real transports (TLS handshake behavior, socket-level
   backpressure) — bounded by CF-4's comparison runs.
 - Requirement extraction effort: seeding the registry with §16 and §10 requirements is real work;
-  scope it to the RFCs the profiles actually claim.
+  scope it to the RFCs the profiles actually claim. Owned by CF-6, so it cannot silently land
+  inside CF-2's or EX-2's scope.
 - Whether harness scenarios live as code or as declarative scripts; decided in CF-1.
 
 ## Acceptance / done
 
-The union of CF-1 … CF-4: harness design accepted (M0) and implemented early in M1 so the proxy
-core's first vectors run under it; the M2 cluster assertions (node kill, partition, zero
-cross-node lookups) expressed as seeded scenarios; the conformance report generated for the M1
-profile with all four coverage kinds; SIPp + CLI interop green in CI against the reference
-deployment.
+The union of CF-1 … CF-6: harness design accepted (M0, CF-1) and implemented early in M1 (CF-5)
+so the proxy core's first vectors run under it; the M2 cluster assertions (node kill, partition,
+zero cross-node lookups) expressed as seeded scenarios; the registry seeded with the M1
+profile's normative requirements (CF-6) and the conformance report generated from it with all
+four coverage kinds (CF-2); SIPp + CLI interop green in CI against the reference deployment.

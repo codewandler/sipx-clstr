@@ -7,7 +7,7 @@ priority:
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
 areas: [proxy, harness]
-note: blocked by PX-5, CF-1
+note: blocked by PX-5, CF-5
 ---
 
 # Run proxy torture vectors in the harness

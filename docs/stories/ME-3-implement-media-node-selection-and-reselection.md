@@ -7,7 +7,7 @@ priority:
 design: docs/designs/media-control.md
 epic: media-control
 areas: [media, affinity]
-note: 
+note: blocked by ME-1, AF-1, AF-4 — the node id rides in the token
 ---
 
 # Implement media-node selection and reselection

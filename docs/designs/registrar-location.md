@@ -5,6 +5,8 @@
 
 ## Why
 
+The one place the platform is allowed durable state — so its updates must serialize.
+
 A registrar is the one place the platform is *allowed* durable state, and the correctness of the
 whole cluster rests on it: RFC 3261 §10 REGISTER processing writes AoR→Contact bindings that
 every later call reads. The sipx kernel implements only the client side (registration as a lease,
@@ -67,7 +69,10 @@ client-initiated connection.
   outage): needs a load model in RG-4 and possibly write coalescing for pure refreshes.
 - The change-stream contract: LISTEN/NOTIFY delivery is best-effort; cache invalidation must
   tolerate missed notifications (TTL-bounded staleness on the read path).
-- `Min-Expires`/423 policy and per-tenant binding quotas: policy shape decided in RG-1.
+- `Min-Expires`/423 policy and per-tenant binding quotas: policy shape decided in RG-1 (named in
+  its acceptance).
+- Digest nonce-store scope across edges: per-node nonces lean on transaction affinity for the
+  challenge/response round-trip; a shared store reintroduces coupling. Decided in RG-2.
 
 ## Acceptance / done
 

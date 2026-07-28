@@ -7,7 +7,7 @@ priority:
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
 areas: [proxy, transport]
-note: decided: lives here, not upstream
+note: blocked by PX-1; decided: lives here, not upstream
 ---
 
 # Design the proxy transaction driver

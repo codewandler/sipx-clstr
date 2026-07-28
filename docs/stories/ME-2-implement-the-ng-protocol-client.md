@@ -7,7 +7,7 @@ priority:
 design: docs/designs/media-control.md
 epic: media-control
 areas: [media]
-note: blocked by ME-1
+note: blocked by ME-1, CF-3
 ---
 
 # Implement the NG-protocol client

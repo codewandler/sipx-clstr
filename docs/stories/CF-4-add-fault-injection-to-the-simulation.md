@@ -7,7 +7,7 @@ priority:
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: blocked by CF-1
+note: blocked by CF-5; UPSTREAM testkit split — see docs/upstream.md
 ---
 
 # Add fault injection to the simulation

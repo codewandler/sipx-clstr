@@ -11,10 +11,12 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 
 **M0 — foundation on paper — is in flight.** The repository holds the design layer only: vision,
 roadmap, epic design docs and the seeded backlog. There is no Rust code yet; the Cargo workspace
-arrives with `CX-2` as the first act of M1. The ready queue is the M0 spec work: the three
-load-bearing specs (proxy behavior, location service, affinity token), the deterministic-harness
-design, and the hook-framework spec — in that order, because the proxy API cannot harden before
-the hook phases exist, and nothing can be tested before the harness is designed.
+arrives with `CX-2` as the first act of M1. The ready queue, **in priority order**: `PX-1` proxy
+spec → `RG-1` location spec → `AF-1` token spec → `CF-1` harness design → `EX-1` hook spec →
+`CX-1` file the upstream stories — specs first because the proxy API cannot harden before the
+hook phases exist, and CX-1 last because the filings record decisions the specs make. **The
+generated lists below group by epic and do not order by priority** — `/track:next` reports the
+true top; do not take the first rendered row.
 
 **ID prefixes** — `PX` proxy engine · `RG` registrar/location · `AF` cluster affinity · `RT`
 routing/trunks · `ME` media control · `EX` extension framework · `CF` conformance/harness · `DP`
@@ -31,24 +33,24 @@ _None._
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 
 ### Cluster affinity & connection ownership
-_This is the subsystem that makes sipx-clstr a cluster rather than N independent proxies, and it_
+_What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
 - [AF-1 — Specify the affinity token](AF-1-specify-the-affinity-token.md) · Cluster
 
 ### Conformance & deterministic harness
-_The north star — a cluster indistinguishable from one correct proxy — is a claim about behavior_
+_The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-1 — Design the deterministic cluster harness](CF-1-design-the-deterministic-cluster-harness.md) · Platform · UPSTREAM — sipx-testkit split; see docs/upstream.md
 
 ### Extension framework & RFC registry
-_The stated goal of the platform is to make the marginal cost of SIP extensions very low — while_
+_Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-1 — Specify hook phases and the module manifest](EX-1-specify-hook-phases-and-the-module-manifest.md) · Platform · must land before the proxy API hardens
 
 ### Proxy engine
-_The platform is proxy-first: dialogs stay end-to-end between endpoints, and the cluster forwards._
+_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
 
 ### Registrar & location service
-_A registrar is the one place the platform is *allowed* durable state, and the correctness of the_
-- [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling
+_The one place the platform is allowed durable state — so its updates must serialize._
+- [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header — see docs/upstream.md
 
 ## Blocked
 _None._
@@ -57,28 +59,31 @@ _None._
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · first act of M1; updates the AGENTS.md gate
 
 ### Cluster affinity & connection ownership
-_This is the subsystem that makes sipx-clstr a cluster rather than N independent proxies, and it_
+_What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
 - [AF-2 — Specify flow references and connection ownership](AF-2-specify-flow-references-and-connection-ownership.md) · Cluster
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
 - [AF-4 — Implement the token mint/verify library](AF-4-implement-the-token-mint-verify-library.md) · Cluster · blocked by AF-1
-- [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · UPSTREAM: Path header — see docs/upstream.md
-- [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster
+- [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4, PX-5; UPSTREAM: Path header — see docs/upstream.md
+- [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster · feeds DP-1 — this story owns the membership/key schema sections
+- [AF-7 — Implement connection ownership and the owner RPC](AF-7-implement-connection-ownership-and-the-owner-rpc.md) · Cluster · blocked by AF-2, AF-3 — implements both
 
 ### Conformance & deterministic harness
-_The north star — a cluster indistinguishable from one correct proxy — is a claim about behavior_
+_The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-2 — Generate the conformance report from the registry](CF-2-generate-the-conformance-report-from-the-registry.md) · Platform · blocked by EX-2
 - [CF-3 — Build the real-network interop harness](CF-3-build-the-real-network-interop-harness.md) · Platform · SIPp + sipx CLI + rtpengine
-- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · blocked by CF-1
+- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · blocked by CF-5; UPSTREAM testkit split — see docs/upstream.md
+- [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · blocked by CF-1 — early M1; PX-4/PX-7/RG-3 vector runs depend on it
+- [CF-6 — Seed the conformance registry with the M1 profile](CF-6-seed-the-conformance-registry-with-the-m1-profile.md) · Platform · blocked by EX-2 — the extraction work CF-2's report needs
 
 ### Roles, topology & operations
-_A clustered platform that cannot be deployed honestly is a demo. This epic owns the operational_
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
 - [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
 - [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
 
 ### End-to-end call probe (`e2e-tester` role)
-_Every other epic proves the platform from the inside — spec vectors, seeded simulation, invariant_
+_The outside view: can a real call be placed through this deployment, right now?_
 - [ET-1 — Specify the e2e-tester role and the probe contract](ET-1-specify-the-e2e-tester-role-and-probe-contract.md) · Platform · gates ET-2 … ET-6
 - [ET-2 — Implement the sans-IO probe engine](ET-2-implement-the-sans-io-probe-engine.md) · Platform · blocked by ET-1, CF-1
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · blocked by ET-1; signalling echo only, no in-process RTP
@@ -87,14 +92,14 @@ _Every other epic proves the platform from the inside — spec vectors, seeded s
 - [ET-6 — Run continuous probes against the reference deployment](ET-6-run-continuous-probes-against-the-reference-deployment.md) · Platform · blocked by ET-3, ET-4, DP-2
 
 ### Extension framework & RFC registry
-_The stated goal of the platform is to make the marginal cost of SIP extensions very low — while_
+_Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-2 — Specify the RFC registry](EX-2-specify-the-rfc-registry.md) · Platform
 - [EX-3 — Implement the hook runtime](EX-3-implement-the-hook-runtime.md) · Platform · blocked by EX-1
 - [EX-4 — Implement registry codegen for syntax artifacts](EX-4-implement-registry-codegen-for-syntax-artifacts.md) · Platform · UPSTREAM decision per artifact
 - [EX-5 — Implement deployment profiles with compatibility checking](EX-5-implement-deployment-profiles-with-compatibility-checking.md) · Platform
 
 ### Kubernetes operator, Helm packaging & autoscaling
-_The deployment goal is one file: an operator installs from a Helm chart, reads a single_
+_One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-1 — Specify the SipxCluster CRD and the values.yaml contract](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) · Cluster · blocked by DP-1; the CR spec *is* the config schema
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 - [KO-3 — Implement the operator reconcile loop](KO-3-implement-the-operator-reconcile-loop.md) · Cluster · blocked by KO-1
@@ -105,33 +110,34 @@ _The deployment goal is one file: an operator installs from a Helm chart, reads 
 - [KO-8 — Apply live config changes as a staged, health-gated rollout](KO-8-apply-live-config-changes-as-a-staged-rollout.md) · Cluster · blocked by KO-3, KO-4; re-deploy any time, roll out gracefully
 
 ### Media control
-_The vision's fourth principle: media is another cluster. Anchoring RTP in the signalling process_
+_The SIP process controls media over a network protocol; it never touches a media packet._
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
-- [ME-2 — Implement the NG-protocol client](ME-2-implement-the-ng-protocol-client.md) · Media · blocked by ME-1
-- [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media
+- [ME-2 — Implement the NG-protocol client](ME-2-implement-the-ng-protocol-client.md) · Media · blocked by ME-1, CF-3
+- [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media · blocked by ME-1, AF-1, AF-4 — the node id rides in the token
 - [ME-4 — Design SDP rewrite in the proxy path](ME-4-design-sdp-rewrite-in-the-proxy-path.md) · Media
+- [ME-5 — Implement the media-anchoring module](ME-5-implement-the-media-anchoring-module.md) · Media · blocked by ME-4, ME-2, EX-3
 
 ### Proxy engine
-_The platform is proxy-first: dialogs stay end-to-end between endpoints, and the cluster forwards._
-- [PX-2 — Design the proxy transaction driver](PX-2-design-the-proxy-transaction-driver.md) · Signalling · decided: lives here, not upstream
+_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
+- [PX-2 — Design the proxy transaction driver](PX-2-design-the-proxy-transaction-driver.md) · Signalling · blocked by PX-1; decided: lives here, not upstream
 - [PX-3 — Header surgery API in sipx](PX-3-header-surgery-api-in-sipx.md) · Signalling · UPSTREAM — see docs/upstream.md
-- [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · blocked by PX-1, PX-3
+- [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; blocked by PX-1, PX-3; UPSTREAM — see docs/upstream.md
 - [PX-5 — Implement stateful forwarding with forking](PX-5-implement-stateful-forwarding-with-forking.md) · Signalling · blocked by PX-2
 - [PX-6 — Implement CANCEL and Timer C](PX-6-implement-cancel-and-timer-c.md) · Signalling · blocked by PX-5
-- [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · blocked by PX-5, CF-1
+- [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · blocked by PX-5, CF-5
 
 ### Registrar & location service
-_A registrar is the one place the platform is *allowed* durable state, and the correctness of the_
+_The one place the platform is allowed durable state — so its updates must serialize._
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · UPSTREAM primitives — see docs/upstream.md
-- [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · blocked by RG-1
+- [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · blocked by RG-1, CF-5
 - [RG-4 — Implement the PostgreSQL LocationStore backend](RG-4-implement-the-postgresql-locationstore-backend.md) · Signalling · blocked by RG-3
 - [RG-5 — Implement rendezvous sharding and shard handoff](RG-5-implement-rendezvous-sharding-and-shard-handoff.md) · Signalling
 - [RG-6 — Build forking target sets from location lookups](RG-6-build-forking-target-sets-from-location-lookups.md) · Signalling · blocked by RG-3, PX-5
 
 ### Outbound routing & trunks
-_Outbound routing is not "resolve an A record and send UDP." Getting a request off the cluster_
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · UPSTREAM option — see docs/upstream.md
-- [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling
+- [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
 - [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415
 - [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
 

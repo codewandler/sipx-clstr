@@ -17,7 +17,7 @@ Implement AF-1 as a pure library: mint, encode, parse, verify — with key rotat
 
 ## Acceptance
 - [ ] AF-1's byte-level vectors pass exactly.
-- [ ] Tampered tags, expired tokens, unknown key ids and replayed nonces are rejected, each with a test.
+- [ ] Tampered tags, expired tokens and unknown key ids are rejected, each with a test; verification is stateless — legitimate re-presentation of the same token on every mid-dialog request verifies every time, and no replay store exists (per AF-1's replay semantics).
 - [ ] Rotation works with overlapping key validity; old-key verification ends at the specified boundary.
 
 ## Progress

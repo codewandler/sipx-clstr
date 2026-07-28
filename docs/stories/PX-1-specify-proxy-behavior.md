@@ -21,6 +21,9 @@ Write `docs/specs/proxy-behavior.md`: the normative contract for the proxy engin
 - [ ] Every normative rule carries a numbered vector or state-table row, executable as message-in / effects-out by the harness (CF-1).
 - [ ] House decisions are marked as `[sipx-clstr]` rules with rationale, citing RFCs only.
 - [ ] The Record-Route insertion rules are reviewed against AF-1's token byte budget.
+- [ ] Transaction-affinity behavior is specified: which messages must reach the edge holding 
+the transaction (retransmissions, CANCEL, ACK to a non-2xx), and the degraded behavior when the 
+dataplane delivers one elsewhere (stateless CANCEL forwarding, retransmission handling).
 
 ## Progress
 - (not started)

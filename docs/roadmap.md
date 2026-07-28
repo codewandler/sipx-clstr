@@ -8,8 +8,10 @@ document is the hand-written narrative around it.
 
 _As of 2026-07-28:_ the repository is the **design layer only** — vision, roadmap, epic designs
 and the seeded backlog. M0 is in flight; there is no code and no Cargo workspace yet. The sipx
-kernel this platform builds on has shipped its own M0–M4 (sans-IO core, transactions, all five
-transports, DNS, digest client, media, CLI phone) with M5 (depth) in progress.
+kernel this platform builds on has shipped its own M0–M4 (sans-IO core, transactions, UDP/TCP
+transports, DNS, digest client, media, CLI phone); TLS, WS and WSS exist on its main branch as
+in-progress, unreleased M5 work — a tracked row in the [upstream ledger](upstream.md), since M2
+TLS edges and M3 WSS clients depend on a release that contains them.
 
 ## Milestones
 
@@ -19,7 +21,8 @@ transports, DNS, digest client, media, CLI phone) with M5 (depth) in progress.
   deterministic-harness and hook-framework designs are accepted; every required sipx change is
   recorded in [upstream.md](upstream.md) with a filed sipx story. No code.
 - **M1 — One node that proxies and registers.** The Cargo workspace; a sans-IO proxy engine
-  (stateless and transaction-stateful, with forking); a registrar with server-side digest and a
+  (transaction-stateful with forking — stateless mode is specified in PX-1 but implemented in
+  M2, when the token path gives it a consumer); a registrar with server-side digest and a
   `LocationStore` behind a trait (in-memory and PostgreSQL). *Done means:* two `sipx` CLI phones
   register through one sipx-clstr node and call each other via it with media flowing direct;
   CANCEL, forking and loop detection pass their spec vectors in the deterministic harness; the
@@ -61,8 +64,8 @@ Use `/track:epic` to start one.
 The heart of the platform: RFC 3261 §16 as a sans-IO engine — validation, Via handling,
 Record-Route, forking, response aggregation, CANCEL, Timer C, loop detection per RFC 5393 — in
 stateless and transaction-stateful modes, driven by a proxy-shaped driver over the sipx
-transaction layer. Done when a node forwards, forks and recovers per the
-[spec](specs/proxy-behavior.md) vectors. [Design](designs/proxy-engine.md).
+transaction layer. Done when a node forwards, forks and recovers per the vectors of
+`docs/specs/proxy-behavior.md` (PX-1's deliverable). [Design](designs/proxy-engine.md).
 
 ### Registrar & location service
 

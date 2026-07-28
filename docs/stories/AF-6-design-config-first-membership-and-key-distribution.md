@@ -7,7 +7,7 @@ priority:
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity, deploy]
-note: 
+note: feeds DP-1 — this story owns the membership/key schema sections
 ---
 
 # Design config-first membership and key distribution
@@ -16,7 +16,8 @@ note:
 Keep v1 free of consensus: the node set, shard map and token keys come from validated, reloadable configuration.
 
 ## Acceptance
-- [ ] The membership/key config schema is part of DP-1's schema and validated at startup.
+- [ ] This story owns the membership/key schema sections; DP-1 integrates them unchanged into 
+the full config schema (AF-6 first, DP-1 second — the circular reference is resolved this way).
 - [ ] Reload without restart is specified and tested; the key-rotation runbook (overlap window, cutover) is documented.
 - [ ] The design records what a future dynamic membership service would replace, so nothing here paints it out.
 

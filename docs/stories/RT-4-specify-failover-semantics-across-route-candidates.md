@@ -13,7 +13,7 @@ note:
 # Specify failover semantics across route candidates
 
 ## Goal
-Specify exactly which failures advance to the next RFC 3263 candidate, which terminate the plan, and how the element becomes stateful after first failover (§4.3).
+Specify exactly which failures advance to the next RFC 3263 candidate, which terminate the plan, and how the element becomes stateful after first failover (RFC 3263 §4.4).
 
 ## Acceptance
 - [ ] The advance/terminate taxonomy is normative with vectors, including mid-transaction DNS failover.

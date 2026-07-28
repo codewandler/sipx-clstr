@@ -5,6 +5,8 @@
 
 ## Why
 
+Extensions become declared modules over typed hook phases, never edits to the core.
+
 The stated goal of the platform is to make the marginal cost of SIP extensions very low — while
 being honest that literal zero-cost, 100%-coverage of every SIP RFC is impossible (RFCs update
 and contradict each other; behavior cannot be generated from ABNF). The achievable target: syntax
@@ -64,6 +66,10 @@ IMS-restricted mechanisms only in profiles that assert the trust domain).
   dynamic loading.
 - Registry format (likely declarative data checked into the repo, versioned with the code);
   how registry versions pin against sipx kernel versions.
+- Where a module's dialog-adjacent state may live: the manifest lets a module declare state
+  needs, but invariant 5 (state rides the message) bounds what that can mean on the hot path —
+  EX-1 must constrain declared state to off-hot-path stores or token-carried facts, or the
+  invariant leaks.
 
 ## Acceptance / done
 

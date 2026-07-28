@@ -7,7 +7,7 @@ priority:
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
 areas: [proxy]
-note: blocked by PX-1, PX-3
+note: M2 — implementation deferred until the token path gives it a consumer; blocked by PX-1, PX-3; UPSTREAM — see docs/upstream.md
 ---
 
 # Implement the stateless forwarding core

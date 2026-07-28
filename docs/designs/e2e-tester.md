@@ -5,6 +5,8 @@
 
 ## Why
 
+The outside view: can a real call be placed through this deployment, right now?
+
 Every other epic proves the platform from the inside — spec vectors, seeded simulation, invariant
 metrics — and none of that answers the operator's actual question: *can a real call be placed
 through this deployment, right now?* Internal telemetry is structurally blind to the failures that

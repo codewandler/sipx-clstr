@@ -1,9 +1,11 @@
 # Design: Media control
 
 **Status:** proposed · **Pillar:** Media · **Epic:** `media-control` ·
-**Stories:** ME-1 … ME-4
+**Stories:** ME-1 … ME-5
 
 ## Why
+
+The SIP process controls media over a network protocol; it never touches a media packet.
 
 The vision's fourth principle: media is another cluster. Anchoring RTP in the signalling process
 couples two workloads with opposite scaling laws (packets-per-second versus transactions-per-
@@ -35,9 +37,14 @@ design is honest about the consequence: moving mid-call media is re-anchoring, n
 failover.
 
 **SDP rewrite is a hook.** The proxy pipeline stays body-agnostic; a media-anchoring extension
-module registers at the offer/answer-bearing phases (ME-4 decides the exact phases, latching
-stance, and how ICE attributes pass through untouched). Media-direct calls skip the module
-entirely — the platform must never *require* anchoring.
+module registers at the offer/answer-bearing phases (ME-4 decides the exact phases and the
+latching stance; ME-5 implements the module). The ICE stance is a per-call-class decision, not
+pass-through: an anchored call **cannot** leave ICE untouched — per RFC 8445, endpoints send
+media to the nominated candidate pair, not to rewritten `c=`/`m=` addresses, so untouched
+candidates let ICE-capable endpoints negotiate around the relay. For anchored calls the module
+must have the relay participate in ICE or strip it (capabilities rtpengine provides); untouched
+pass-through applies only to media-direct calls, which skip the module entirely — the platform
+must never *require* anchoring.
 
 **Deployment posture** (with the `deployment` epic): media nodes are dedicated Linux hosts —
 host networking, explicit UDP port ranges, private control interface, separate scaling from
@@ -62,10 +69,15 @@ signalling — never general-purpose service pods.
   with the vision's HA non-goal).
 - Whether relay state persistence/restore on the media node is relied upon at all in v1, or
   treated purely as operator convenience.
+- Reselection propagation: tokens already minted carry the failed node's id, and there is no
+  token-free path to announce the replacement. Re-anchoring therefore implies a token refresh
+  carried by the next Record-Route opportunity (target refresh); AF-1 and ME-3 must state this
+  jointly.
 
 ## Acceptance / done
 
-The union of ME-1 … ME-4: the trait with `NullMediaRelay` under harness tests; the NG adapter
+The union of ME-1 … ME-5: the trait with `NullMediaRelay` under harness tests; the NG adapter
 verified against a real rtpengine in the interop harness; rendezvous selection with the node id
-round-tripping through the affinity token; and the M2 exit criterion — a cross-edge call in the
-3-zone deployment with relayed media surviving re-INVITE from either side.
+round-tripping through the affinity token; the media-anchoring module implemented (ME-5) with
+media-direct bypass asserted in the harness; and the M2 exit criterion — a cross-edge call in
+the 3-zone deployment with relayed media surviving re-INVITE from either side.

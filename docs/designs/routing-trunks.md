@@ -5,6 +5,8 @@
 
 ## Why
 
+Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects.
+
 Outbound routing is not "resolve an A record and send UDP." Getting a request off the cluster
 means an ordered plan of attempts (RFC 3263: NAPTR → SRV → A/AAAA, priorities, weights, TTLs),
 operational state above DNS (a carrier that answers `503` to every third INVITE is *up* in DNS
@@ -20,7 +22,7 @@ stop."
 address, discovery source, priority, weight), consumed attempt-by-attempt by the proxy driver.
 Failover rules are explicit and normative-to-be: which failures advance to the next candidate
 (transport error, timeout, 503) versus which terminate the plan (definitive final responses), and
-the RFC 3263 §4.3 rule that after first failover the element becomes transaction-stateful so
+the RFC 3263 §4.4 rule that after first failover the element becomes transaction-stateful so
 retransmissions follow the selected destination.
 
 **Resolver at proxy throughput.** A proxy resolves orders of magnitude more URIs than a UA and
@@ -53,8 +55,13 @@ work lands with M2/M3 when the trunk model is real.
 
 - Upstream vs local for the async resolver (RT-1's headline decision).
 - Circuit-breaker state scope: per-node or shared? Inclination: per-node with observability,
-  since shared breaker state reintroduces cluster coupling for a heuristic.
-- How trunk configuration versions interact with the affinity token's `policy version` field.
+  since shared breaker state reintroduces cluster coupling for a heuristic. The concurrent-call
+  cap has the same scope question — a per-node cap divided by node count drifts as the cluster
+  scales — and must be answered alongside it (RT-2).
+- How trunk configuration versions interact with the affinity token's `policy version` field —
+  settled against AF-1 before RT-2 closes.
+- The overload-collapse scenario (RT-3) needs load modeling the harness's current transport
+  model does not express; CF-1 must take this as an input.
 
 ## Acceptance / done
 

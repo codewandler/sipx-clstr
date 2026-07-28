@@ -17,7 +17,7 @@ Shard AoRs by rendezvous hashing over `tenant || canonical AoR` and make shard-m
 
 ## Acceptance
 - [ ] A distribution test shows acceptable balance across shard counts.
-- [ ] Shard-map reload follows drain-then-switch; in-flight REGISTER writes are never split across two owners (harness scenario).
+- [ ] Shard-map reload follows drain-then-switch; in-flight REGISTER writes are never split across two owners — including the rolling-reload window where nodes hold old and new maps concurrently (harness scenario).
 
 ## Progress
 - (not started)

@@ -17,7 +17,8 @@ Implement transaction-stateful forwarding (§16.2): one server transaction, N br
 
 ## Acceptance
 - [ ] Parallel and serial forking vectors pass, including best-response selection (§16.7) and provisional forwarding.
-- [ ] Record-Route insertion round-trips the affinity token (with AF-4's library).
+- [ ] Record-Route insertion is implemented with the token as an opaque placeholder value; 
+AF-5 swaps in the real mint/verify library in M2 (no dependency on AF-4 here).
 - [ ] Branch failure (transport error, timeout) advances or concludes the context per the spec.
 
 ## Progress

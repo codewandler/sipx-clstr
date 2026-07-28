@@ -5,6 +5,8 @@
 
 ## Why
 
+The operational contract: roles by config, a reference topology, and an honest HA statement.
+
 A clustered platform that cannot be deployed honestly is a demo. This epic owns the operational
 contract: how roles map onto processes, what the reference topology looks like, which metrics
 prove the architectural invariants rather than merely decorating dashboards, and exactly what HA
@@ -24,7 +26,10 @@ store in HA, 2+ routing/policy instances, 2+ media nodes per media network, DNS 
 discovery, an L4 VIP or per-transport addresses. Exposure: UDP/TCP 5060 where required, TLS 5061,
 WS/WSS on explicit endpoints, media on dedicated UDP ranges, management strictly private. The
 Kubernetes expression is explicit about SIP's constraints: host networking or a source-preserving
-L4 dataplane for public UDP, no NAT/conntrack layers in the media or signalling path, long-lived
+L4 dataplane for public UDP with same-flow affinity — transaction-scoped messages
+(retransmissions, CANCEL, ACK to a non-2xx) must keep landing on the edge that holds the
+transaction; a correctness requirement, not tuning (see cluster-affinity) — no NAT/conntrack
+layers in the media or signalling path, long-lived
 TCP/TLS/WS flows pinned to their owning edge (`externalTrafficPolicy: Local`-class routing),
 PodDisruptionBudgets with graceful connection draining, media nodes on dedicated host-network
 nodes or outside the cluster entirely.

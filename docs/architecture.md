@@ -37,8 +37,8 @@ rendezvous(tenant‖AoR)         trunks · breakers               (test tenant A
    |                           RoutePlan · overload            answers probes)
 PostgreSQL (HA)                                                (later: B2BUA
 serializable per-AoR txns                                      session services)
-   |
-   +---------------------- media allocator / MediaRelay ---------------+
+
+           edges drive media through the media allocator / MediaRelay
                                      |
                     rendezvous(tenant ‖ Call-ID ‖ from-tag)
                                      |
@@ -122,7 +122,8 @@ sequenceDiagram
     E1->>E1: mint affinity token → Record-Route<br/>(tenant · shard · media node · expiry · tag)
     E1->>E2: connection-owner RPC (Bob's flow_ref → Edge B)
     E2->>B: INVITE over Bob's owned connection
-    B-->>E1: 200 OK (answer)
+    B-->>E2: 200 OK (answer)
+    E2-->>E1: 200 OK — back over the internal path
     E1->>M: answer(SDP)
     E1-->>A: 200 OK (Record-Route with token)
     A->>B: ACK — dialog is end-to-end; route set carries the token
@@ -179,6 +180,7 @@ on the offer/answer-bearing phases.
        → before target resolution → targets resolved
        → before forward  ──►  branches out
        ◄──  response received → before response forward
+       + dialog-forming events (created / terminated)
 
  module manifest: hooks · deps · conflicts · headers/tags owned · state needs · timers
  startup: framework computes the extension graph — invalid set fails boot, not a call

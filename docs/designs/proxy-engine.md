@@ -5,6 +5,8 @@
 
 ## Why
 
+The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine.
+
 The platform is proxy-first: dialogs stay end-to-end between endpoints, and the cluster forwards.
 That keeps the state the cluster must hold — and therefore replicate — to a minimum, and it is
 what makes the affinity-token model possible at all. The sipx kernel supplies everything below
@@ -36,8 +38,8 @@ routing, or the Request-URI) → forward to each target (§16.6: copy, decrement
 push Via with a new branch, optionally insert Record-Route carrying the affinity token, apply
 Route) → response processing (§16.7: pop own Via, aggregate, pick best final response, forward
 provisionals) → CANCEL propagation on a better final response or upstream CANCEL, with `487`
-generation for answered-then-cancelled branches. Timer C guards INVITE branches that stop
-receiving provisionals.
+generation for branches cancelled before a final response. Timer C guards INVITE branches that
+stop receiving provisionals.
 
 **The proxy driver lives here, not in sipx.** The sipx transport `Driver`/`Handle` API is
 UA-shaped: one transaction, one target. A forking proxy needs one server transaction fanning out
@@ -61,7 +63,7 @@ or terminate calls. A dialog-terminating feature belongs in `services-b2bua`.
   (two dialogs, two offer/answer machines, CSeq translation per call) and forfeits end-to-end
   transparency for the common case.
 - **Stateless-only edge.** Rejected: forking, authentication challenges, CANCEL and Timer C all
-  require transaction state; RFC 3263 §4.3 failover itself recommends becoming stateful after the
+  require transaction state; RFC 3263 §4.4 failover itself recommends becoming stateful after the
   first failed attempt.
 
 ## Risks & open questions
@@ -70,8 +72,9 @@ or terminate calls. A dialog-terminating feature belongs in `services-b2bua`.
   importable versus needing extraction upstream. Settled during PX-2.
 - Record-Route token size: RFC 3261 puts no hard limit on URI length, but UDP fragmentation is
   real; the affinity token spec (AF-1) must budget bytes with this epic in the review.
-- Whether stateless mode ships in M1 at all, or is deferred until the token path (M2) gives it a
-  real consumer. Current inclination: define it in the spec, implement stateful first.
+- ~~Whether stateless mode ships in M1 at all.~~ **Decided:** stateless mode is defined in the
+  spec (PX-1) but implemented only in M2, when the token path gives it a real consumer; M1 ships
+  transaction-stateful forwarding only. The roadmap's M1 entry says the same.
 
 ## Acceptance / done
 

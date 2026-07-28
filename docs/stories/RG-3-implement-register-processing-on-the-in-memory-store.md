@@ -7,7 +7,7 @@ priority:
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, location]
-note: blocked by RG-1
+note: blocked by RG-1, CF-5
 ---
 
 # Implement REGISTER processing on the in-memory store
