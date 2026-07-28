@@ -25,5 +25,5 @@ Emit call detail records whose field set is configuration, because the fields ar
 - (not started)
 
 ## Notes
-- babelforce's current CDR fields are a contract with billing and must survive the migration unchanged: call id, reply code, from/to numbers, carrier, direction, source user-agent, customer identifier and RTP statistics.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-9** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- One deployment's current CDR fields are a contract with billing and must survive the migration unchanged: call id, reply code, from/to numbers, carrier, direction, source user-agent, customer identifier and RTP statistics.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-9**). The evidence sits in that deployment's own reference material.

@@ -26,6 +26,6 @@ Let the set of source addresses permitted to send traffic be expressed as review
 - (not started)
 
 ## Notes
-- In the babelforce estate admission is *entirely* IP-based — no user is ever authenticated — so this table is the whole security boundary. It holds ~117 carrier entries plus a small internal zone.
+- In one deployment's estate admission is *entirely* IP-based — no user is ever authenticated — so this table is the whole security boundary. It holds ~117 carrier entries plus a small internal zone.
 - Today it is rows in a database with a free-text tag, which nothing reviews or diffs.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-13** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-13**). The evidence sits in that deployment's own reference material.

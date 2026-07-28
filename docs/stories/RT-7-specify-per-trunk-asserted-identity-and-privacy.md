@@ -25,5 +25,5 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
 - (not started)
 
 ## Notes
-- babelforce synthesises PAI on egress, adds `Privacy: id` for anonymous callers, and falls back to a fixed number when no identity is available.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-7** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- One deployment synthesises PAI on egress, adds `Privacy: id` for anonymous callers, and falls back to a fixed number when no identity is available.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-7**). The evidence sits in that deployment's own reference material.

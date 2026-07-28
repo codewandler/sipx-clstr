@@ -61,7 +61,7 @@ _The operational contract: roles by config, a reference topology, and an honest 
 - [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
 - [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
 - [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
-- [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks babelforce M1
+- [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
 - [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
 
@@ -80,7 +80,7 @@ _Extensions become declared modules over typed hook phases, never edits to the c
 - [EX-3 — Implement the hook runtime](EX-3-implement-the-hook-runtime.md) · Platform · blocked by EX-1
 - [EX-4 — Implement registry codegen for syntax artifacts](EX-4-implement-registry-codegen-for-syntax-artifacts.md) · Platform · UPSTREAM decision per artifact
 - [EX-5 — Implement deployment profiles with compatibility checking](EX-5-implement-deployment-profiles-with-compatibility-checking.md) · Platform
-- [EX-6 — Design an async external routing hook](EX-6-design-an-async-external-routing-hook.md) · Platform · blocks babelforce M2; a blocking HTTP call on the INVITE path today
+- [EX-6 — Design an async external routing hook](EX-6-design-an-async-external-routing-hook.md) · Platform · blocks a downstream deployment's parity milestone; a blocking HTTP call on the INVITE path today
 - [EX-7 — Specify carrier quirk profiles](EX-7-specify-carrier-quirk-profiles.md) · Platform
 
 ### Kubernetes operator, Helm packaging & autoscaling
@@ -114,7 +114,7 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 - [PX-5 — Implement stateful forwarding with forking](PX-5-implement-stateful-forwarding-with-forking.md) · Signalling · blocked by PX-2
 - [PX-6 — Implement CANCEL and Timer C](PX-6-implement-cancel-and-timer-c.md) · Signalling · blocked by PX-5
 - [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · blocked by PX-5, CF-5
-- [PX-8 — Decide whether topology hiding is in scope, and how it survives a node change](PX-8-decide-whether-topology-hiding-is-in-scope.md) · Signalling · babelforce's current implementation is the defect the cluster design exists to fix
+- [PX-8 — Decide whether topology hiding is in scope, and how it survives a node change](PX-8-decide-whether-topology-hiding-is-in-scope.md) · Signalling · a real deployment's current implementation is the defect the cluster design exists to fix
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
@@ -123,7 +123,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-4 — Implement the PostgreSQL LocationStore backend](RG-4-implement-the-postgresql-locationstore-backend.md) · Signalling · blocked by RG-3
 - [RG-5 — Implement rendezvous sharding and shard handoff](RG-5-implement-rendezvous-sharding-and-shard-handoff.md) · Signalling
 - [RG-6 — Build forking target sets from location lookups](RG-6-build-forking-target-sets-from-location-lookups.md) · Signalling · blocked by RG-3, PX-5
-- [RG-7 — Support migrating an existing credential store](RG-7-support-migrating-an-existing-credential-store.md) · Signalling · gates the babelforce registrar cutover
+- [RG-7 — Support migrating an existing credential store](RG-7-support-migrating-an-existing-credential-store.md) · Signalling · gates a downstream registrar cutover
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
@@ -131,7 +131,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
 - [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415
 - [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
-- [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks babelforce M2
+- [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling
 - [RT-8 — Express source-IP admission as reviewable config](RT-8-express-source-ip-admission-as-config.md) · Signalling · admission is the whole security boundary when no user is authenticated

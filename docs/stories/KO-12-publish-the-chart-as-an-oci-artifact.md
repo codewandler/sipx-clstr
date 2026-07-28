@@ -27,4 +27,4 @@ Publish the chart as a versioned OCI artifact so a deployment can install it by 
 
 ## Notes
 - Blocked by KO-2. Until this lands, a consuming deployment must point at a checkout path, which makes the chart version implicit and unpinnable.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), which currently resolves the chart via a `SIPX_CHART` path variable for exactly this reason; requirement **U-17** in that repo's `docs/upstream.md`.
+- Filed from a downstream deployment of this platform, which resolves the chart via a path variable for exactly this reason (its ledger entry **U-17**).

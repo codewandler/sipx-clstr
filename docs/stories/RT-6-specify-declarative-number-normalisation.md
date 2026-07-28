@@ -25,6 +25,6 @@ Express number normalisation — stripping and prefixing on From, To, Request-UR
 - (not started)
 
 ## Notes
-- babelforce strips a leading `+` and leading zeros from four fields, then falls back to the To user when the Request-URI user is not 3..20 digits.
+- One deployment strips a leading `+` and leading zeros from four fields, then falls back to the To user when the Request-URI user is not 3..20 digits.
 - Today these are regexes inside route blocks, so they cannot be reviewed or tested independently.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-6** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-6**). The evidence sits in that deployment's own reference material.

@@ -25,6 +25,6 @@ Make codec handling and SRTP selection a declared per-trunk policy rather than a
 - (not started)
 
 ## Notes
-- babelforce transcodes to a specific codec on one branch of a NAT test and not the other — the policy is an accident of control flow. SRTP is selected by a global domain regex.
+- One deployment transcodes to a specific codec on one branch of a NAT test and not the other — the policy is an accident of control flow. SRTP is selected by a global domain regex.
 - Neither is reviewable, and neither can be changed per carrier without editing routing logic.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-12** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-12**). The evidence sits in that deployment's own reference material.

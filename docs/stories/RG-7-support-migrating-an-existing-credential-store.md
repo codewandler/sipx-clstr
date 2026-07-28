@@ -7,7 +7,7 @@ priority:
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, auth]
-note: gates the babelforce registrar cutover
+note: gates a downstream registrar cutover
 ---
 
 # Support migrating an existing credential store
@@ -25,6 +25,6 @@ Let the registrar authenticate against credentials that already exist in a deplo
 - (not started)
 
 ## Notes
-- babelforce's agent credentials live in the existing registrar's own database. Re-provisioning every agent endpoint is not an acceptable cutover step.
-- Note: the *proxy's* credential table is empty in every babelforce environment — the requirement is about the registrar's store, not the proxy's.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-11** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- A deployment's agent credentials live in the existing registrar's own database. Re-provisioning every agent endpoint is not an acceptable cutover step.
+- Note: the *proxy's* credential table is empty in every environment of one deployment — the requirement is about the registrar's store, not the proxy's.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-11**). The evidence sits in that deployment's own reference material.

@@ -27,4 +27,4 @@ When a role binds host-global ports, ensure the operator places its replicas on 
 ## Notes
 - Every replica of a host-networked role binds the same node-global port, so two replicas cannot share a node. This bounds a role's replica count by the node count — a capacity fact operators need stated, not discovered.
 - It also bounds what a single-node local environment can demonstrate.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`); requirement **U-16** in that repo's `docs/upstream.md`.
+- Filed from a downstream deployment of this platform (its ledger entry **U-16**).

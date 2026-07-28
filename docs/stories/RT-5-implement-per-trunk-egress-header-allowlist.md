@@ -7,7 +7,7 @@ priority:
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, trunks, security]
-note: confidentiality boundary; blocks babelforce M2
+note: confidentiality boundary; blocks a downstream deployment's parity milestone
 ---
 
 # Implement a per-trunk egress header allowlist
@@ -25,6 +25,6 @@ Let a trunk declare which non-standard headers may leave the platform, so applic
 - (not started)
 
 ## Notes
-- babelforce strips every `X-Babelforce-*` header towards carriers except two, which survive towards one specific carrier. Today that is two hand-written regexes in the routing script.
+- One deployment strips every vendor-prefixed application header towards carriers except two, which survive towards one specific carrier. Today that is two hand-written regexes in the routing script.
 - This is a confidentiality boundary, so it must be enforced by test rather than by review.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-4** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-4**). The evidence sits in that deployment's own reference material.

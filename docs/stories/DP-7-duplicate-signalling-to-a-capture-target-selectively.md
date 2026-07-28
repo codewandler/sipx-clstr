@@ -25,5 +25,5 @@ Duplicate SIP signalling to a capture collector, with the choice of which transp
 - (not started)
 
 ## Notes
-- babelforce captures plaintext with a node-level agent and duplicates only TLS from the proxy, precisely to avoid double entries in the trace store.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-10** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- One deployment captures plaintext with a node-level agent and duplicates only TLS from the proxy, precisely to avoid double entries in the trace store.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-10**). The evidence sits in that deployment's own reference material.

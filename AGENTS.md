@@ -39,10 +39,12 @@ A clustered, proxy-first SIP platform in Rust, built on the [sipx](../sipx) prot
    upstream: no, cluster-specific because …" — is enough). What stays here is orchestration:
    proxying, location, affinity, media control, deployment.
 
-   The boundary continues downstream: **`babelforce-sip-clstr` is reference-only.** The company
-   consumer repo never contains implementation — it pins sipx-clstr releases and holds its own
-   configuration and deployment; its changes are handled from that repo. If work over there
-   starts to look like implementation, it belongs here (or in the kernel).
+   The boundary continues downstream: **a consuming deployment is reference-only.** A deployment
+   repo never contains implementation — it pins sipx-clstr releases and holds its own configuration
+   and values; its changes are handled from that repo. If work over there starts to look like
+   implementation — a chart, a template, an image, protocol code — it belongs here (or in the
+   kernel). Deployment repos are not named here: this platform is not any one company's, and a
+   requirement that only makes sense for a single deployment is a requirement in the wrong place.
 7. **Never commit without an explicit instruction from the user.**
 
 ## The gate

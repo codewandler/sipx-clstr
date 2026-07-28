@@ -27,7 +27,7 @@ note: the headline deliverable — helm install on k3s
 - **Started 2026-07-28.** `deploy/helm/` holds the chart skeleton: `Chart.yaml`, `values.yaml`
   carrying the default deployment set, and `templates/sipxcluster.yaml`, which emits
   `.Values.cluster` verbatim into the SipxCluster spec. `helm lint` and `helm template` pass.
-- Contributed by the babelforce deployment (`~/babelforce/projects/babelforce-sip-clstr`), which had
+- Contributed by a downstream deployment of this platform, which had
   built it downstream before the boundary was corrected: the chart belongs to this story, and a
   consuming deployment carries only its own values.
 - **The API group and version are provisional** (`sipx.dev/v1alpha1`, held in `values.crd`) because

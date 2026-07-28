@@ -7,7 +7,7 @@ priority:
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
 areas: [proxy, topology]
-note: babelforce's current implementation is the defect the cluster design exists to fix
+note: a real deployment's current implementation is the defect the cluster design exists to fix
 ---
 
 # Decide whether topology hiding is in scope, and how it survives a node change
@@ -25,6 +25,6 @@ Decide whether the platform hides internal topology from peers, and if so specif
 - (not started)
 
 ## Notes
-- babelforce hides topology today by storing every dialog in a database keyed by the pod's own name, which makes replicas non-interchangeable and forces a 15-minute drain on every rollout. One production region runs a single replica as a result.
+- One deployment hides topology today by storing every dialog in a database keyed by the pod's own name, which makes replicas non-interchangeable and forces a 15-minute drain on every rollout. One production region runs a single replica as a result.
 - This is the concrete instance of the problem the affinity-token design exists to solve, so the answer here shapes AF.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-3** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-3**). The evidence sits in that deployment's own reference material.

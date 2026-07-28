@@ -7,7 +7,7 @@ priority:
 design: docs/designs/extension-framework.md
 epic: extension-framework
 areas: [hooks, routing]
-note: blocks babelforce M2; a blocking HTTP call on the INVITE path today
+note: blocks a downstream deployment's parity milestone; a blocking HTTP call on the INVITE path today
 ---
 
 # Design an async external routing hook
@@ -26,6 +26,6 @@ Give the hook framework a phase in which an external service can influence routi
 - (not started)
 
 ## Notes
-- babelforce performs a synchronous HTTP lookup on every outbound INVITE to select the carrier pool and caller-ID; a 4xx fails the call and a 5xx is tolerated.
+- One deployment performs a synchronous HTTP lookup on every outbound INVITE to select the carrier pool and caller-ID; a 4xx fails the call and a 5xx is tolerated.
 - For some pools this lookup is the *only* selection mechanism, so it cannot simply be removed.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-2** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-2**). The evidence sits in that deployment's own reference material.

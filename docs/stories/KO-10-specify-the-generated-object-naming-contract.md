@@ -28,4 +28,4 @@ State, as a contract, how the operator names and labels the objects it generates
 ## Notes
 - Without this, anything outside the operator — a dev loop, a port-forward, an alert rule, a runbook — has to guess a workload name, and the guess breaks silently when the operator changes.
 - The consuming deployment addresses roles as `<cr-name>-<role>` and relies on the CR being named after the Helm release.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`); requirement **U-15** in that repo's `docs/upstream.md`.
+- Filed from a downstream deployment of this platform (its ledger entry **U-15**).

@@ -27,4 +27,4 @@ Support route selection scoped by tenant, so that a deployment can express 'the 
 ## Notes
 - Production EU scopes 8 of its 12 carrier pools to a customer UUID, which is why four pools there are simultaneously flagged default.
 - Two further pools have no trigger at all and are selected only by an external lookup.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-14** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-14**). The evidence sits in that deployment's own reference material.

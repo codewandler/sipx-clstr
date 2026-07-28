@@ -26,6 +26,6 @@ Give per-peer protocol quirks — header injection and SDP body rewriting — a 
 - (not started)
 
 ## Notes
-- babelforce has one live example needing `mediasec` headers on REGISTER and INVITE plus an SDP `a=sendrecv` rewrite. It is currently an inline domain test in the routing script.
+- One deployment has a live example needing `mediasec` headers on REGISTER and INVITE plus an SDP `a=sendrecv` rewrite. It is currently an inline domain test in the routing script.
 - The requirement is the mechanism, not that specific carrier — more will follow.
-- Filed from the babelforce-sip-clstr deployment (`~/babelforce/projects/babelforce-sip-clstr`), whose capability inventory records this as `upstream`. Requirement **U-5** in that repo's `docs/upstream.md`; evidence in its `docs/reference/environments.md`.
+- Filed from a downstream deployment of this platform, whose capability inventory records this as `upstream` (its ledger entry **U-5**). The evidence sits in that deployment's own reference material.
