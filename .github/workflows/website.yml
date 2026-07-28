@@ -1,0 +1,63 @@
+name: website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'website/**'
+      - '.github/workflows/website.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: actions/configure-pages@v5
+      - run: npm ci
+        working-directory: website
+      # The site reads ../docs directly, so a broken link or a stray MDX
+      # expression in a spec fails here — which is the point of building on
+      # every docs change, not only on release.
+      - run: npm run build
+        working-directory: website
+      - uses: actions/upload-pages-artifact@v3
+        # `main` and pull requests are build validation only. What the public
+        # reads follows the latest published release, not whatever landed an
+        # hour ago; workflow_dispatch is the recovery hatch.
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        with:
+          path: website/build
+
+  deploy:
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

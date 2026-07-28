@@ -437,13 +437,13 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 
 | # | State / request | Expect |
 |---|---|---|
-| LS-R-1 | Empty set; REGISTER Call-ID `i1`, CSeq 1, `CA;expires=3600` | `200`; set {CA/3600}; revision 1; response lists `CA;expires=3600` |
+| LS-R-1 | Empty set; REGISTER Call-ID `i1`, CSeq 1, `CA;expires=3600` | `200`; set `{CA/3600}`; revision 1; response lists `CA;expires=3600` |
 | LS-R-2 | Refresh: `i1`, CSeq 2, CA | applied (B3); revision 2 |
 | LS-R-3 | Retransmit/retry: `i1`, CSeq 2, CA, identical outcome | Noop (B4): no mutation, `200` with current set, revision still 2 |
 | LS-R-4 | Stale: `i1`, CSeq 1 | abort, `500` (B5); store untouched |
 | LS-R-5 | New Call-ID `i2`, CSeq 1, CA | applied (B2 — the UA restarted) |
-| LS-R-6 | Set {CA, CB}; REGISTER `CA;expires=0` | CA removed; `200` lists only CB — the complete-set rule (§5.6) |
-| LS-R-7 | Set {CA, CB}, distinct Call-IDs; `Contact: *`, `Expires: 0`, fresh Call-ID | all removed (W3); `200` with no Contact values; revision bumped |
+| LS-R-6 | Set `{CA, CB}`; REGISTER `CA;expires=0` | CA removed; `200` lists only CB — the complete-set rule (§5.6) |
+| LS-R-7 | Set `{CA, CB}`, distinct Call-IDs; `Contact: *`, `Expires: 0`, fresh Call-ID | all removed (W3); `200` with no Contact values; revision bumped |
 | LS-R-8 | `Contact: *` plus `Contact: CA` | `400` (W1) |
 | LS-R-9 | `Contact: *`, `Expires: 3600` — or no Expires header | `400` (W2) |
 | LS-R-10 | `Contact: *`, `Expires: 0`, same Call-ID as a stored binding, CSeq not higher | abort, `500` (W3/B5); nothing removed |
@@ -451,7 +451,7 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-R-12 | max 7200: CA, `Expires: 86400` | granted 7200; response `CA;expires=7200` (E5) |
 | LS-R-13 | `Expires: 600` header + `CA;expires=1800` | 1800 — the parameter wins (E1 > E2) |
 | LS-R-14 | CA, no expires anywhere | default 3600 (E3) |
-| LS-R-15 | quota 2, set {CA, CB}; REGISTER new CC | `403`; refresh of CB instead → `200` (§5.5) |
+| LS-R-15 | quota 2, set `{CA, CB}`; REGISTER new CC | `403`; refresh of CB instead → `200` (§5.5) |
 | LS-R-16 | min 300: one REGISTER with `CB;expires=3600` and `CC;expires=60` | `423`; **neither** commits — atomicity (E6, K2) |
 | LS-R-17 | REGISTER with `Path: P2, P1` and `Supported: path` | stored topmost-first [P2, P1]; `200` echoes the Path unmodified in order, `Supported: path` present (§5.6) |
 | LS-R-18 | Path present, no `Supported: path` | `421 Extension Required` naming `path`; nothing committed (§5.6) |

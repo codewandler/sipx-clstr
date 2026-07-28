@@ -1,7 +1,26 @@
 # sipx-clstr — working agreement
 
-A clustered, proxy-first SIP platform in Rust, built on the [sipx](../sipx) protocol kernel. Read
-[docs/vision.md](docs/vision.md) once; it is the tie-breaker when a design choice is unclear.
+A clustered, proxy-first SIP platform in Rust, built on the [sipx](https://github.com/codewandler/sipx)
+protocol kernel. Read [docs/vision.md](docs/vision.md) once; it is the tie-breaker when a design
+choice is unclear. [README.md](README.md) is the same project explained for humans arriving cold.
+
+## Where things are
+
+| Path | What it holds | Generated? |
+|---|---|---|
+| `docs/vision.md` | why the project exists, the seven principles that break ties | hand-written, stable |
+| `docs/roadmap.md` | status, milestones, the epic narratives | hand-written |
+| `docs/specs/` | normative specifications with test-vector tables — the contract code is written against | hand-written |
+| `docs/designs/` | one design record per epic and per non-trivial story | hand-written |
+| `docs/stories/` | one file per unit of work; `README.md` there is the **board** | board is generated |
+| `docs/upstream.md` | the ledger of what belongs in the sipx kernel rather than here | hand-written |
+| `docs/architecture.md` | the charts: request paths, roles, deployment control plane | hand-written |
+| `deploy/helm/` | the chart, its templates and the default deployment set (`KO-2`) | hand-written |
+| `website/` | the published documentation site (Docusaurus), deployed on release | built by CI |
+| `CHANGELOG.md` | closed stories roll up here | hand-written |
+
+**The state of play, in one line:** M0 is all but complete — four specs written, no Rust yet; `CX-2`
+creates the Cargo workspace as the first act of M1. Check the board before assuming that is current.
 
 ## Non-negotiables
 
@@ -55,10 +74,22 @@ then, the gate before marking any story done is documentation consistency:
 - Every story's frontmatter is complete and the board regenerated (`/track:board`).
 - Every `epic:` slug has a matching `docs/designs/<slug>.md`; every `design:` path exists.
 - New specs carry normative references and test-vector tables, not prose alone.
+- Every relative link in `docs/` and the README resolves — CI checks this on every push, because
+  the documentation is published and a broken link there is a broken published page.
+- Anything added under `docs/` that should be readable on the site is reachable from
+  `website/sidebars.js`; the site build fails on a broken link rather than shipping one.
 
 Once `CX-2` lands, the gate becomes the sipx-style command set (fmt, clippy `-D warnings`, tests
 with `--all-features`, a provenance check, and a feature-matrix check) and this section is updated
 by that story.
+
+## Publishing
+
+`docs/` is the source of truth and the website is a view of it: `website/docs/` symlinks or imports
+the same files rather than copying them, so there is one set of words. The site deploys to
+**[codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/)** on every published
+release — not on every push to `main`, so what the public reads matches a tagged version rather than
+whatever landed an hour ago. `workflow_dispatch` is the recovery hatch.
 
 <!-- BEGIN track:agents -->
 ## Start here (every session) — track backlog

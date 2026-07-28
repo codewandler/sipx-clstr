@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img"
+     aria-label="A crab holding a telephone handset, inside a ring of three linked nodes">
+  <title>sipx-clstr</title>
+  <desc>The sipx crab, smaller, standing inside a triangle of three connected nodes — one proxy
+        drawn as many.</desc>
+
+  <!-- Family resemblance is the point: this is sipx's crab, kept deliberately identical so the two
+       projects read as one family, shrunk to make room for what makes this one different — three
+       nodes wired into a triangle around it. The crab sits in front of the wiring and overlaps it,
+       so the cluster is plainly the thing the crab is part of rather than a frame around a picture.
+       At favicon size the shapes that survive are the orange body and the dark triangle, which is
+       exactly the distinction worth keeping: sipx is a phone, sipx-clstr is a cluster of them. -->
+
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F98A3C"/>
+      <stop offset="1" stop-color="#E2622A"/>
+    </linearGradient>
+    <linearGradient id="claw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBA05B"/>
+      <stop offset="1" stop-color="#E76F35"/>
+    </linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#46586A"/>
+      <stop offset="1" stop-color="#2F3A45"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The cluster: three nodes, fully meshed. Drawn first so the crab covers the edges that cross
+       it — the mesh reads as going behind the body rather than being painted on it. -->
+  <g stroke="#2F3A45" stroke-width="16" stroke-linecap="round" opacity="0.9">
+    <path d="M76 118 L436 118"/>
+    <path d="M76 118 L256 452"/>
+    <path d="M436 118 L256 452"/>
+  </g>
+
+  <!-- The crab, at 0.62 scale about the centre. Same drawing as sipx, minus the handset cord and
+       with the legs shortened: at this size the cord became a smudge and the legs became fringe. -->
+  <g transform="translate(256 268) scale(0.62) translate(-256 -256)">
+
+    <!-- Legs: three a side, tucked under the shell. -->
+    <g stroke="#D2551F" stroke-width="17" stroke-linecap="round" fill="none">
+      <path d="M150 322 L104 360 L96 404"/>
+      <path d="M176 336 L142 388 L142 430"/>
+      <path d="M208 344 L192 400 L198 440"/>
+      <path d="M362 322 L408 360 L416 404"/>
+      <path d="M336 336 L370 388 L370 430"/>
+      <path d="M304 344 L320 400 L314 440"/>
+    </g>
+
+    <!-- Left claw: a pincer with an open gap, so it reads as a claw and not a mitten. -->
+    <g fill="url(#claw)" stroke="#C64E1C" stroke-width="9" stroke-linejoin="round"
+       stroke-linecap="round">
+      <path d="M152 262 L112 240 L74 244 L52 226 L74 206 L118 214 L150 232 Z"/>
+      <path d="M74 244 L40 262 L34 232 L52 226 Z"/>
+    </g>
+
+    <!-- The shell. -->
+    <path d="M256 118
+             C 352 118 404 178 404 246
+             C 404 306 344 342 256 342
+             C 168 342 108 306 108 246
+             C 108 178 160 118 256 118 Z"
+          fill="url(#shell)" stroke="#C64E1C" stroke-width="10"/>
+
+    <!-- A highlight, so the shell reads as curved at small sizes. -->
+    <path d="M168 176 C 200 148 312 148 344 176" fill="none"
+          stroke="#FFC48F" stroke-width="14" stroke-linecap="round" opacity="0.65"/>
+
+    <!-- Eye stalks and eyes. -->
+    <g>
+      <rect x="196" y="86" width="20" height="52" rx="9" fill="#E2622A"/>
+      <rect x="296" y="86" width="20" height="52" rx="9" fill="#E2622A"/>
+      <circle cx="206" cy="82" r="30" fill="#FFFFFF" stroke="#C64E1C" stroke-width="8"/>
+      <circle cx="306" cy="82" r="30" fill="#FFFFFF" stroke="#C64E1C" stroke-width="8"/>
+      <circle cx="214" cy="84" r="12" fill="#2B2118"/>
+      <circle cx="314" cy="84" r="12" fill="#2B2118"/>
+    </g>
+
+    <!-- A small mouth, so it is plainly a face. -->
+    <path d="M236 268 Q 256 288 276 268" fill="none" stroke="#C64E1C"
+          stroke-width="10" stroke-linecap="round"/>
+
+    <!-- The handset, held clear of the shell beside the right eye. Kept from sipx: without it this
+         is a crab in a network diagram rather than a telephony logo. -->
+    <g transform="rotate(32 388 122)">
+      <rect x="368" y="58" width="40" height="128" rx="20" fill="#2F3A45"/>
+      <rect x="342" y="34" width="92" height="52" rx="24" fill="#3C4A57"
+            stroke="#26313B" stroke-width="6"/>
+      <rect x="342" y="158" width="92" height="52" rx="24" fill="#3C4A57"
+            stroke="#26313B" stroke-width="6"/>
+      <circle cx="388" cy="60" r="11" fill="#9DB2C6"/>
+      <circle cx="388" cy="184" r="11" fill="#9DB2C6"/>
+    </g>
+
+    <!-- Right claw, in front of the handset so it plainly grips it. -->
+    <g fill="url(#claw)" stroke="#C64E1C" stroke-width="9" stroke-linejoin="round"
+       stroke-linecap="round">
+      <path d="M330 268 L360 218 L378 182 L412 196 L398 240 L368 274 Z"/>
+      <path d="M378 182 L400 154 L426 178 L412 196 Z"/>
+    </g>
+  </g>
+
+  <!-- The nodes themselves, drawn last so they sit on top of both the mesh and any claw that
+       reaches towards them — each one is a peer, not scenery. -->
+  <g stroke="#1F2830" stroke-width="8">
+    <circle cx="76"  cy="118" r="38" fill="url(#node)"/>
+    <circle cx="436" cy="118" r="38" fill="url(#node)"/>
+    <circle cx="256" cy="452" r="38" fill="url(#node)"/>
+  </g>
+  <g fill="#F98A3C">
+    <circle cx="76"  cy="118" r="13"/>
+    <circle cx="436" cy="118" r="13"/>
+    <circle cx="256" cy="452" r="13"/>
+  </g>
+</svg>

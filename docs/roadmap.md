@@ -1,7 +1,7 @@
 # sipx-clstr — roadmap & status
 
 The big picture: what's delivered, what's next, and the epics that group related stories. The
-operational detail lives on the [board](stories/README.md) (generated from story frontmatter); this
+operational detail lives on the [board](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/README.md) (generated from story frontmatter); this
 document is the hand-written narrative around it.
 
 ## Status
@@ -53,7 +53,7 @@ contains them.
   `affinity-token.md`, `hook-framework.md`, and the accepted deterministic-harness design —
   written concurrently, cross-reconciled (token budget 157 B ≤ 200 B end-to-end, hook phases
   aligned to the proxy pipeline, no-mid-dialog-token-refresh propagated to media-control and
-  KO-9). Itemized history in [CHANGELOG.md](../CHANGELOG.md).
+  KO-9). Itemized history in [CHANGELOG.md](https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md).
 - **The design scaffold** (0.1.0): vision, roadmap, eleven epic designs, the reviewed backlog,
   the upstream ledger, the architecture charts.
 

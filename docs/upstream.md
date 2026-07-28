@@ -1,7 +1,7 @@
 # Upstream dependency ledger — what sipx-clstr needs from sipx
 
-sipx-clstr builds on the [sipx](../../sipx) kernel and, per the working agreement
-([AGENTS.md](../AGENTS.md) → *Upstream first*), never shadow-implements protocol logic that
+sipx-clstr builds on the [sipx](https://github.com/codewandler/sipx) kernel and, per the working agreement
+([AGENTS.md](https://github.com/codewandler/sipx-clstr/blob/main/AGENTS.md) → *Upstream first*), never shadow-implements protocol logic that
 belongs there. This ledger tracks every kernel gap this platform depends on: what it is, which
 sipx story covers it (filed by `CX-1`), and which sipx-clstr stories it blocks. Two repos sharing
 a boundary is this project's biggest coordination risk; this table keeps it auditable.

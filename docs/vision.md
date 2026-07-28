@@ -7,7 +7,7 @@ star and the principles below.
 ## What sipx-clstr is
 
 sipx-clstr is a clustered SIP platform in Rust — a proxy-first signalling core, a strongly
-consistent registrar, and external media control — built on the [sipx](../../sipx) protocol
+consistent registrar, and external media control — built on the [sipx](https://github.com/codewandler/sipx) protocol
 kernel. It is for people who operate telephony infrastructure: multi-tenant edges terminating
 untrusted clients, carrier interconnects, and registrars that survive node loss. The defining idea
 is that **the cluster carries no ambient state**: everything a message needs in order to be routed

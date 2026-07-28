@@ -1,6 +1,6 @@
 # sipx-clstr — architecture charts
 
-Companion charts to the [vision](vision.md) and the epic [designs](designs/). Each chart names
+Companion charts to the [vision](vision.md) and the epic [designs](https://github.com/codewandler/sipx-clstr/tree/main/docs/designs). Each chart names
 the design doc that owns its decisions; when a chart and a design disagree, the design wins.
 
 ## 1. Cluster topology
@@ -53,7 +53,7 @@ other. Management interfaces are private-network only.
 
 ## 2. Layering: what sipx provides, what sipx-clstr adds
 
-The kernel boundary follows *upstream first* ([AGENTS.md](../AGENTS.md),
+The kernel boundary follows *upstream first* ([AGENTS.md](https://github.com/codewandler/sipx-clstr/blob/main/AGENTS.md),
 [upstream.md](upstream.md)): protocol logic below the line, orchestration above it.
 
 ```mermaid

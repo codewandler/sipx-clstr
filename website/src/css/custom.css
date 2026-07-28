@@ -1,0 +1,170 @@
+/* The palette is the logo's: the crab's shell orange for accents, slate for structure. */
+
+:root {
+  --ifm-color-primary: #c9531d;
+  --ifm-color-primary-dark: #b54b1a;
+  --ifm-color-primary-darker: #aa4719;
+  --ifm-color-primary-darkest: #8c3a14;
+  --ifm-color-primary-light: #dd5b20;
+  --ifm-color-primary-lighter: #e36328;
+  --ifm-color-primary-lightest: #e97d4b;
+  --ifm-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', sans-serif;
+  --ifm-code-font-size: 92%;
+
+  --clstr-hero-bg: #faf6f3;
+  --clstr-hero-border: #e6ddd6;
+  --clstr-hero-heading: #241a13;
+  --clstr-hero-copy: #4a3b31;
+  --clstr-eyebrow: #8a6b58;
+  --clstr-card-border: #e6ddd6;
+  --clstr-card-copy: #55463c;
+  --clstr-slate: #2f3a45;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #f98a3c;
+  --ifm-color-primary-dark: #f87721;
+  --ifm-color-primary-darker: #f66d13;
+  --ifm-color-primary-darkest: #cf590c;
+  --ifm-color-primary-light: #fa9d57;
+  --ifm-color-primary-lighter: #fba765;
+  --ifm-color-primary-lightest: #fcc192;
+
+  --clstr-hero-bg: #17191c;
+  --clstr-hero-border: #2a2f36;
+  --clstr-hero-heading: #f3eeea;
+  --clstr-hero-copy: #c3bab3;
+  --clstr-eyebrow: #a08d80;
+  --clstr-card-border: #2a2f36;
+  --clstr-card-copy: #ada49d;
+  --clstr-slate: #9db2c6;
+}
+
+/* --- landing hero --- */
+
+.home-hero {
+  background: var(--clstr-hero-bg);
+  border-bottom: 1px solid var(--clstr-hero-border);
+  padding: 4.5rem 0 4rem;
+}
+
+.home-hero-inner {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+@media (max-width: 996px) {
+  .home-hero-inner {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+}
+
+.home-hero .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--clstr-eyebrow);
+  margin-bottom: 0.6rem;
+}
+
+.home-hero h1 {
+  font-size: 3.2rem;
+  line-height: 1.05;
+  margin-bottom: 1rem;
+  color: var(--clstr-hero-heading);
+}
+
+.hero-copy {
+  font-size: 1.12rem;
+  line-height: 1.6;
+  color: var(--clstr-hero-copy);
+  margin-bottom: 1.6rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.hero-art img {
+  width: 100%;
+  max-width: 340px;
+  display: block;
+  margin: 0 auto;
+}
+
+/* --- the honesty banner: this project has no code yet --- */
+
+.status-note {
+  margin: 0 auto 2.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--clstr-card-border);
+  border-left: 4px solid var(--ifm-color-primary);
+  border-radius: 6px;
+  background: var(--clstr-hero-bg);
+  color: var(--clstr-card-copy);
+  font-size: 0.97rem;
+  line-height: 1.55;
+}
+
+.status-note strong {
+  color: var(--clstr-hero-heading);
+}
+
+/* --- cards --- */
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  padding-top: 3rem;
+  padding-bottom: 3.5rem;
+}
+
+.home-card {
+  display: block;
+  border: 1px solid var(--clstr-card-border);
+  border-radius: 8px;
+  padding: 1.4rem 1.5rem;
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.home-card:hover {
+  text-decoration: none;
+  border-color: var(--ifm-color-primary);
+  transform: translateY(-2px);
+}
+
+.home-card h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.home-card p {
+  color: var(--clstr-card-copy);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* --- the topology figure --- */
+
+.topology {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--clstr-slate);
+  background: transparent;
+  border: 1px solid var(--clstr-card-border);
+  border-radius: 8px;
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  white-space: pre;
+}
