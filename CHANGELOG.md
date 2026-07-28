@@ -7,6 +7,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-28
+
+### Added
+
+- **A front door.** `README.md` explains the project to a person arriving cold: the problem (a
+  five-node SIP proxy has behaviour no RFC describes), the answer (no shared call state — a signed
+  token in the message carries what routing needs), and where this actually is. The status is
+  stated in the first screen rather than discovered on the third: four specs written, no Rust yet.
+- **A logo** (`docs/assets/logo.svg`) — the sipx crab, kept identical for family resemblance,
+  shrunk inside a three-node mesh. At favicon size what survives is an orange body in a dark
+  triangle, which is the distinction worth keeping: sipx is a phone, sipx-clstr is a cluster of
+  them.
+- **A published documentation site** at
+  [codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/) — Docusaurus
+  reading `docs/` directly rather than copying it, so there is one set of words. Curated sidebar
+  (the story board and the archive stay working material), offline search, mermaid diagrams, and a
+  palette taken from the logo. It deploys on published releases only, so the public site follows a
+  tag rather than the last hour's work.
+- **CI for the documentation gate** (`.github/workflows/docs.yml`), making executable what
+  AGENTS.md describes: relative links resolve, every `epic:` slug has a design doc, every `design:`
+  path exists. It joins a build job when `CX-2` lands the Cargo workspace rather than being
+  replaced by one.
+- **MIT and Apache-2.0 licenses**, matching sipx.
+
+### Changed
+
+- **AGENTS.md gained a map** — where each kind of document lives, which are generated, and the
+  state of play in one line — plus the publishing rule and two additions to the gate.
+- **The downstream boundary is deployment-agnostic.** The gap stories filed from a consuming
+  deployment carried that deployment's name through their notes and prose; a platform repo that
+  names one consumer invites requirements shaped for that consumer. Traceability is kept by citing
+  the ledger entry rather than the repo.
+
+### Fixed
+
+- **Links that only worked for the author.** `../../sipx` was a path to a sibling checkout;
+  `../AGENTS.md`, `../CHANGELOG.md` and the board pointed outside what gets published. All are now
+  absolute URLs that resolve in the repository and on the site alike.
+- Contact-set notations in the location-service spec are code-spanned, matching the convention
+  already used by their neighbours in the same table.
+
 ## [0.2.0] — 2026-07-28
 
 ### Added
