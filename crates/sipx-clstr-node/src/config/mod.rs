@@ -25,7 +25,7 @@
 //!
 //! The remaining sections of §7's registry are **recognised but not descended into**: naming one is
 //! not an error, and a typo in its name still is. That boundary is deliberate and is reported by
-//! [`Config::deferred`] rather than left for a reader to infer — a section this loader silently
+//! [`Config::unapplied`] rather than left for a reader to infer — a section this loader silently
 //! ignored would be configuration nobody is applying and nothing anywhere saying so, which is the
 //! exact failure V2 exists to prevent, one level up.
 
@@ -195,9 +195,17 @@ pub struct Config {
     pub tenants: Vec<TenantSpec>,
     pub security: SecuritySpec,
     pub timers: TimersSpec,
-    /// Sections of §7's registry that were present and recognised, but whose contents this loader
-    /// does not yet validate. Reported rather than dropped — see the module scope note.
-    pub deferred: BTreeSet<String>,
+    /// Every path this document declared that the build **recognised and did not apply**.
+    ///
+    /// Paths, not section names, because the keys that matter most are not top level:
+    /// `cluster.tenant[0].auth` and `cluster.listener[0].tls` are security-relevant and a set of
+    /// top-level sections cannot name either. An earlier version of this field *was* such a set, and
+    /// a release shipped four silently-discarded security keys with the detector already in the tree.
+    ///
+    /// Reported rather than dropped. A warning is not a fix — configuration a node's roles genuinely
+    /// do not consume is normal (§4 R5), while authentication and transport want a **refusal** — but
+    /// whichever it is, it must not be nobody.
+    pub unapplied: Vec<Path>,
 }
 
 /// One node's view of the cluster (§5 P2).
@@ -716,19 +724,20 @@ fn read_document(
     known.extend_from_slice(DEFERRED_SECTIONS);
     closed_world(cluster, &known, &cluster_path, errors);
 
-    let deferred = DEFERRED_SECTIONS
+    // Recorded where they are recognised, so the list cannot drift from what the walk actually did.
+    let mut unapplied: Vec<Path> = DEFERRED_SECTIONS
         .iter()
         .filter(|section| cluster.contains_key(Value::from(**section)))
-        .map(|section| (*section).to_owned())
+        .map(|section| cluster_path.field(section))
         .collect();
 
     let name = required_str(cluster, "name", &cluster_path, "CC-7", errors);
     let environment = required_str(cluster, "environment", &cluster_path, "CC-7", errors);
     let zones = read_zones(cluster, &cluster_path, errors);
-    let listeners = read_listeners(cluster, &cluster_path, errors);
+    let listeners = read_listeners(cluster, &cluster_path, errors, &mut unapplied);
     let membership = read_membership(cluster, &cluster_path, errors);
     let location_store = read_location_store(cluster, &cluster_path, errors);
-    let tenants = read_tenants(cluster, &cluster_path, errors);
+    let tenants = read_tenants(cluster, &cluster_path, errors, &mut unapplied);
     let security = read_security(cluster, &cluster_path, errors);
     let timers = read_timers(cluster, &cluster_path, errors);
 
@@ -752,7 +761,7 @@ fn read_document(
         tenants,
         security,
         timers,
-        deferred,
+        unapplied,
     })
 }
 
@@ -809,6 +818,7 @@ fn read_listeners(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
     errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
 ) -> Vec<ListenerSpec> {
     let at = path.field("listener");
     let Some(value) = cluster.get(Value::from("listener")) else {
@@ -849,6 +859,13 @@ fn read_listeners(
             &at,
             errors,
         );
+        // `tls` is the one that matters here: a listener declaring it and getting cleartext is the
+        // defect `FC-1` closed for the *transport* field, and the same key exists one level down.
+        for ignored in ["connectionLifetime", "maxConnections", "tls"] {
+            if map.contains_key(Value::from(ignored)) {
+                unapplied.push(at.field(ignored));
+            }
+        }
         let roles = read_roles(map.get(Value::from("roles")), &at.field("roles"), errors);
         let transport = required_str(map, "transport", &at, "CC-7", errors)
             .and_then(|declared| check_transport(&declared, &at.field("transport"), errors));
@@ -1086,6 +1103,7 @@ fn read_tenants(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
     errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
 ) -> Vec<TenantSpec> {
     let at = path.field("tenant");
     let Some(value) = cluster.get(Value::from("tenant")) else {
@@ -1119,6 +1137,13 @@ fn read_tenants(
             &at,
             errors,
         );
+        // `auth` is the reason this story exists: a document declaring it loads clean and the node
+        // runs an open registrar. `FC-3` makes that a refusal; until then it must at least be said.
+        for ignored in ["auth", "expiry", "maxBindingsPerAor"] {
+            if map.contains_key(Value::from(ignored)) {
+                unapplied.push(at.field(ignored));
+            }
+        }
         let name = required_str(map, "name", &at, "CC-I1", errors);
         let id = required_uint(map, "id", &at, "CC-I1", u64::from(u32::MAX), errors);
         let domains = map

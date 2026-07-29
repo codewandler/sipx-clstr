@@ -98,6 +98,25 @@ fn main() -> ExitCode {
 }
 
 fn run_node(path: &str, identity: IdentityArgs) -> ExitCode {
+    // Installed **before** the document is read, not after. It used to be the other way round, and
+    // the consequence was not subtle: the loader's "this build does not apply that" warning was
+    // emitted into a process with no subscriber, so a release shipped four silently-discarded
+    // security keys with the detector already written and correct.
+    //
+    // Refusals stay on `eprintln!` regardless, so a document that cannot be read still reports even
+    // if the subscriber could not be installed at all.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with_writer(std::io::stderr)
+        // No colour: this log is read by scripts as often as by people, and escape codes between a
+        // field name and its value defeat an honest `grep`.
+        .with_ansi(false)
+        .try_init()
+        .ok();
+
     let env = environment();
 
     // The environment fallback lives in `or_env` rather than in a `clap(env = …)` attribute, so
@@ -136,21 +155,8 @@ fn run_node(path: &str, identity: IdentityArgs) -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    match runtime.block_on(async {
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-            )
-            .with_writer(std::io::stderr)
-            // No colour: this log is read by scripts as often as by people, and escape codes
-            // between a field name and its value defeat an honest `grep`.
-            .with_ansi(false)
-            .try_init()
-            .ok();
-        // The driver announces the address once it is actually bound.
-        sipx_clstr_node::driver::run(config).await
-    }) {
+    // The driver announces the address once it is actually bound.
+    match runtime.block_on(sipx_clstr_node::driver::run(config)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("sipx-clstr: {error}");

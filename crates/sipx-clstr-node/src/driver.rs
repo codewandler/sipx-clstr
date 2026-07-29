@@ -261,6 +261,10 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
         %advertised,
         tenant = %config.tenant,
         store = config.store.describe(),
+        // Named for the same reason `RG-12` named the store: an operator reading one line should be
+        // able to tell an open tenant from an authenticated one. Today it is always `open`, which is
+        // exactly why it is worth printing.
+        auth = if config.auth.is_some() { "required" } else { "open" },
         "node listening"
     );
     let policy = TenantPolicy::default();

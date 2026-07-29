@@ -159,17 +159,57 @@ fn cc_v2_an_unknown_key_is_an_error_not_a_warning() {
     );
 }
 
-/// §7 — a deferred section is recognised, reported, and not silently dropped.
+/// §7 — configuration this build accepts and does not apply is reported **by path**.
+///
+/// The property under test is the depth, not the existence of a list. `Config::unapplied` used to be a
+/// set of top-level section names, and the keys that matter are not top level: `tenant[].auth` and
+/// `listener[].tls` are security-relevant and a section-name set cannot name either. A release shipped
+/// four silently-discarded security keys with the detector already written.
 #[test]
-fn deferred_sections_are_recognised_and_reported() {
-    let document = good() + "  observability:\n    metrics: true\n  probe:\n    schedule: 30s\n";
+fn fc2_unapplied_configuration_is_reported_by_path_not_by_section() {
+    let document = good()
+        .replace(
+            "      advertise: 203.0.113.10:5060\n",
+            "      advertise: 203.0.113.10:5060\n      tls: { certRef: some-cert }\n",
+        )
+        .replace(
+            "      domains: [acme.example]\n",
+            "      domains: [acme.example]\n      auth: { realm: acme, secretRef: nonce-key }\n",
+        )
+        + "  registrar:\n    usePath: true\n";
+
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
-    let config = load(document.as_bytes(), &who, &env()).expect("deferred sections are legal");
-    assert!(config.deferred.contains("observability"));
-    assert!(config.deferred.contains("probe"));
+    let config =
+        load(document.as_bytes(), &who, &env()).expect("these keys are accepted, not refused");
+
+    let paths: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
+
+    // The two that matter, named at the depth they live at.
     assert!(
-        !config.deferred.contains("trunk"),
-        "absent sections are not deferred"
+        paths.iter().any(|p| p == "cluster.tenant[0].auth"),
+        "an accepted-and-ignored auth block must be nameable: {paths:?}"
+    );
+    assert!(
+        paths.iter().any(|p| p == "cluster.listener[0].tls"),
+        "an accepted-and-ignored tls block must be nameable: {paths:?}"
+    );
+    // And a top-level section still is.
+    assert!(paths.iter().any(|p| p == "cluster.registrar"), "{paths:?}");
+}
+
+/// A document that asks for nothing this build ignores reports nothing.
+#[test]
+fn fc2_a_fully_applied_document_reports_no_unapplied_paths() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(good().as_bytes(), &who, &env()).expect("loads");
+    assert!(
+        config.unapplied.is_empty(),
+        "nothing in the baseline document is ignored, so nothing should be reported: {:?}",
+        config
+            .unapplied
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
     );
 }
 

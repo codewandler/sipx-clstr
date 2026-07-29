@@ -195,13 +195,36 @@ fn node_config(
 
     config.store = store_choice(projected, env)?;
 
-    // A section this loader recognises but cannot yet validate, on a node that would need it, is
-    // worth saying out loud at startup rather than discovering as behaviour that never happens.
-    if !cluster.deferred.is_empty() {
+    // Said out loud at startup rather than discovered as behaviour that never happens — and said by
+    // **path**, because the keys that matter are not top level. A set of section names could not have
+    // named `cluster.tenant[0].auth`, which is the one an operator most needs to hear about.
+    //
+    // A warning is not a fix. Configuration a node's roles genuinely do not consume is normal
+    // (§4 R5); authentication and transport want a refusal, and `FC-1`/`FC-3` are where that lands.
+    // What must not happen is neither.
+    if !cluster.unapplied.is_empty() {
+        let paths = cluster
+            .unapplied
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
         tracing::warn!(
-            sections = %cluster.deferred.iter().cloned().collect::<Vec<_>>().join(", "),
-            "the document declares sections this build does not yet apply"
+            unapplied = %paths,
+            count = cluster.unapplied.len(),
+            "the document declares configuration this build accepts and does NOT apply"
         );
+        // Security-relevant keys get their own line, because "not applied" reads very differently
+        // for `observability` than it does for the thing standing between a stranger and your
+        // registrar.
+        for path in &cluster.unapplied {
+            if matches!(path.leaf(), "auth" | "tls") {
+                tracing::warn!(
+                    path = %path,
+                    "SECURITY: this key is accepted and ignored — the node does not do what it says"
+                );
+            }
+        }
     }
 
     Ok(config)

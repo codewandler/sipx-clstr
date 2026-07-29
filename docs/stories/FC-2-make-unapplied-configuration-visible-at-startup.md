@@ -2,7 +2,7 @@
 id: FC-2
 title: Make unapplied configuration visible at startup, at the depth the keys actually live
 pillar: Cluster
-status: ready
+status: done
 priority: 2
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
@@ -21,30 +21,62 @@ already in the tree.
 
 ## Acceptance
 
-- [ ] The tracing subscriber is installed **before** the configuration document is loaded.
+- [x] The tracing subscriber is installed **before** the configuration document is loaded.
       `from_document` currently runs in `main.rs` well above `tracing_subscriber::…try_init()`, so
       every `tracing` event emitted during load is discarded. Moving the init is the fix; keep the
       refusal path on `eprintln!` so a refused document still reports without a subscriber.
-- [ ] **Failing-first**: a test (or a scripted assertion in the gate) starts a node with a document
+- [x] **Failing-first**: a test (or a scripted assertion in the gate) starts a node with a document
       naming a deferred section and requires the warning on stderr. It fails today — verified by
       hand: a document carrying `cluster.registrar` produced no warning at any `RUST_LOG` level.
-- [ ] Deferral is tracked at the depth the keys live. `Config::deferred` is a set of *top-level*
+- [x] Deferral is tracked at the depth the keys live. `Config::deferred` is a set of *top-level*
       cluster keys, so `tenant[].auth` and `listener[].tls` cannot be named by it even once the
       subscriber works. Whatever replaces it must be able to report a path, not a section name —
       `error::Path` already spells `cluster.tenant[0].auth` for the refusal case and is the obvious
       donor.
-- [ ] An allow-listed key that nothing consumes is reported by *something* — this story's warning,
+- [x] An allow-listed key that nothing consumes is reported by *something* — this story's warning,
       or another story's refusal. The two are exclusive per the epic's rule 1; what this story owes
       is that neither ends up being nobody.
-- [ ] The node's startup line says whether authentication is on. It currently logs
+- [x] The node's startup line says whether authentication is on. It currently logs
       `tenant=default store="in-memory"` — the store choice is named because `RG-12` thought it
       worth naming, and by the same argument an operator reading one line should be able to tell an
       open tenant from an authenticated one.
-- [ ] `cargo test -p sipx-clstr-node` green, and the gate green.
+- [x] `cargo test -p sipx-clstr-node` green, and the gate green.
 
 ## Progress
 
-- (running log)
+- **Done.** Both halves, because the story is right that either alone is worthless.
+- **Ordering.** The subscriber is installed in `run_node` *before* the document is read. Refusals stay
+  on `eprintln!`, so a document that cannot be read still reports even if no subscriber could be
+  installed. The duplicate init inside the runtime block is gone.
+- **Depth.** `Config::deferred` — a set of top-level section names — is replaced by
+  `Config::unapplied: Vec<Path>`, recorded at each site where the walk recognises a key and does not
+  apply it. It now names `cluster.tenant[0].auth` and `cluster.listener[0].tls`, neither of which a
+  section-name set could reach. Recorded *where they are recognised* rather than from a hand-kept
+  list, so it cannot drift from what the code did.
+- **Security keys get their own line.** "Not applied" reads very differently for `observability` than
+  for the thing standing between a stranger and the registrar, so an ignored `auth` or `tls` is
+  escalated rather than listed. Matched on the path's **leaf key** via a new `Path::leaf`, not a
+  suffix on the rendered string: `ends_with(".auth")` would also match a key called `foo.auth`, and it
+  reads to a human — and to clippy — as a filename-extension test, which it is not.
+- **The startup line says whether authentication is on**: `auth="open"` beside `store="postgres"`.
+  Today it is always `open`, which is exactly why it is worth printing.
+- **Failing-first, and it had to drive the binary.** No unit test could have caught this: the warning
+  *was* produced correctly, and the defect was the order two things happened in `main`.
+  `tests/startup_warns.rs` starts the built binary with `RUST_LOG` unset and asserts on its stderr —
+  the warning arrives, both nested paths are named, a `SECURITY:` line appears, and the startup line
+  carries the auth state. Verified failing beforehand by hand: at `RUST_LOG=trace` the same document
+  produced no matching line at all.
+- One thing the tests taught: they run in parallel and originally shared a port, so three passed while
+  the fourth failed on `Address already in use` — a node that never reached the line under test. A port
+  per test.
+- Considered for upstream: no. Startup ordering and this loader's reporting contract are the node's own.
+
+### What this deliberately does not do
+
+A warning is not a fix. `tenant[].auth` and `listener[].tls` still load clean and still change nothing;
+this story only makes that audible. §3 D6 — "a half-understood security posture is worse than a node
+that will not start" — means both want a **refusal**, which is `FC-1` and `FC-3`. What is closed here is
+that neither ended up being nobody.
 
 ## Notes
 

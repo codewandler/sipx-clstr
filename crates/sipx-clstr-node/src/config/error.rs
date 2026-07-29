@@ -37,6 +37,16 @@ impl Path {
     pub fn index(&self, index: usize) -> Self {
         Self(format!("{}[{index}]", self.0))
     }
+
+    /// The last key in the path — `auth` for `cluster.tenant[0].auth`.
+    ///
+    /// Exists so a caller can ask "is this the auth key?" without a suffix match on the rendered
+    /// string. A `ends_with(".auth")` would also match a key genuinely called `foo.auth`, and it reads
+    /// to both a human and to clippy as a filename-extension test, which it is not.
+    #[must_use]
+    pub fn leaf(&self) -> &str {
+        self.0.rsplit('.').next().unwrap_or(&self.0)
+    }
 }
 
 impl fmt::Display for Path {
