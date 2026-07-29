@@ -184,14 +184,15 @@ fn fc2_unapplied_configuration_is_reported_by_path_not_by_section() {
 
     let paths: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
 
-    // The two that matter, named at the depth they live at.
-    assert!(
-        paths.iter().any(|p| p == "cluster.tenant[0].auth"),
-        "an accepted-and-ignored auth block must be nameable: {paths:?}"
-    );
+    // `auth` is applied since FC-3, so it is NOT here; `tls` is still ignored and must be nameable
+    // at the depth it lives at — the property this field exists for.
     assert!(
         paths.iter().any(|p| p == "cluster.listener[0].tls"),
         "an accepted-and-ignored tls block must be nameable: {paths:?}"
+    );
+    assert!(
+        !paths.iter().any(|p| p == "cluster.tenant[0].auth"),
+        "auth is applied now, so it must NOT be reported as ignored: {paths:?}"
     );
     // And a top-level section still is.
     assert!(paths.iter().any(|p| p == "cluster.registrar"), "{paths:?}");

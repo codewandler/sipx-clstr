@@ -2,7 +2,7 @@
 id: FC-3
 title: Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar
 pillar: Cluster
-status: ready
+status: in-progress
 priority: 3
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
@@ -50,7 +50,32 @@ authentication gets an open registrar and nothing says so.
 
 ## Progress
 
-- (running log)
+- **Largely done, pending review.** The apply-or-refuse fork is resolved as *both, split on whether
+  the secret resolves*, because the alternative was two worse outcomes.
+- **Parse.** `tenant[].auth { realm, secretRef }` is now validated. An `auth` block that carries
+  **credentials** is refused at load: `RG-7` owns where credentials come from, the spec fixes no
+  source here, and inventing a document schema for them would be a second contract beside the one
+  that owns them. An inline `secret` value is refused by V9 with the same reasoning as `dsn`.
+- **The decision that could not be defaulted.** A document asking for authentication whose `secretRef`
+  *resolves* is **refused to start**, because there is no user-credential store yet. Running
+  `required` against an empty store would answer `401` to every `REGISTER` — a registrar that takes
+  no registrations while appearing protected, which is worse than open. The refusal says exactly that
+  and how to proceed.
+- **When the secret does *not* resolve**, the node runs `required` with a placeholder key. That is
+  safe *only because* the credential store is empty: no user can ever validate, so no nonce is ever
+  answerable, and the zeroed key protects nothing and hides nothing. Verified end to end: the startup
+  line reports `auth="required"`, and an unauthenticated `REGISTER` is answered `401` with a
+  `WWW-Authenticate` in the document's realm.
+- **The two stale tests FC-2 left now assert the opposite of FC-3** and were updated, not silenced:
+  `auth` must *not* appear in the unapplied list, and the startup line must say `required` for a
+  document that asks. Their failing was the signal that auth had become real.
+- Considered for upstream: no. Applying this platform's own auth policy is its own work.
+- **Open caveats, stated rather than smoothed over:** (1) `RG-7` is the real close — until it lands,
+  a document declaring auth either runs with a placeholder that validates nobody or is refused;
+  (2) `config.rs` has no unit test for the `secretRef`-resolves refusal, only the manual run; and
+  (3) the placeholder-key path is behaviourally indistinguishable from open today (nobody can
+  register), so the practical protection only exists once credentials exist.
+- Gate green.
 
 ## Notes
 

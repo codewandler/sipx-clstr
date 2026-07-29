@@ -105,12 +105,16 @@ fn fc2_the_unapplied_configuration_warning_reaches_stderr() {
 #[test]
 fn fc2_the_warning_names_the_nested_security_keys() {
     let stderr = stderr_of_a_started_node(DOCUMENT, 15072);
-    for expected in ["cluster.tenant[0].auth", "cluster.listener[0].tls"] {
-        assert!(
-            stderr.contains(expected),
-            "`{expected}` must be named — a set of section names could not. stderr was:\n{stderr}"
-        );
-    }
+    // `auth` is applied since FC-3, so it must NOT appear here — a warning naming it would lie.
+    // `tls` remains unapplied and must be named by path.
+    assert!(
+        stderr.contains("cluster.listener[0].tls"),
+        "an accepted-and-ignored tls block must be nameable. stderr was:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("cluster.tenant[0].auth"),
+        "tenant auth is applied, so it must NOT be warned about. stderr was:\n{stderr}"
+    );
 }
 
 /// A security-relevant key gets a line of its own, because "not applied" reads very differently for
@@ -124,13 +128,14 @@ fn fc2_a_security_key_is_called_out_separately() {
     );
 }
 
-/// The startup line says whether authentication is on. Today it is always `open`, which is precisely
-/// why it is worth printing — an operator reading one line should not have to infer it.
+/// The startup line says whether authentication is on, and it must reflect the *document* — this
+/// fixture declares `tenant[].auth`, so the line must say `required`, not `open`. When FC-3 landed,
+/// this assertion failing was exactly the signal that authentication had become real.
 #[test]
 fn fc2_the_startup_line_says_whether_authentication_is_on() {
     let stderr = stderr_of_a_started_node(DOCUMENT, 15074);
     assert!(
-        stderr.contains(r#"auth="open""#),
-        "the node listening line must report the tenant's auth state. stderr was:\n{stderr}"
+        stderr.contains(r#"auth="required""#),
+        "a document declaring tenant[].auth must produce auth=required. stderr was:\n{stderr}"
     );
 }

@@ -143,6 +143,23 @@ pub struct TenantSpec {
     pub name: String,
     pub id: u32,
     pub domains: Vec<String>,
+    /// The tenant's digest policy, when the document requires authentication (`FC-3`).
+    pub auth: Option<AuthSpec>,
+}
+
+/// A tenant that requires digest authentication.
+///
+/// Only the fields this build can honour. `realm` is the protection space and `secretRef` names the
+/// 32-byte nonce key, **by reference** — §8 V9 forbids the value in the document, and resolving it is
+/// the driver's job because resolution is IO.
+///
+/// User credentials are **not** part of this block, deliberately. `RG-7` owns where they come from,
+/// and the spec does not fix a source here; inventing a schema for them would be a second, wrong
+/// contract beside the one that owns them. A block that carries credentials is refused at load.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthSpec {
+    pub realm: String,
+    pub secret_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1137,15 +1154,16 @@ fn read_tenants(
             &at,
             errors,
         );
-        // `auth` is the reason this story exists: a document declaring it loads clean and the node
-        // runs an open registrar. `FC-3` makes that a refusal; until then it must at least be said.
-        for ignored in ["auth", "expiry", "maxBindingsPerAor"] {
+        // `auth` is now parsed, so it must NOT be reported as ignored — `FC-2`'s warning would then
+        // lie in the other direction. `expiry` and `maxBindingsPerAor` remain unapplied (`FC-4`).
+        for ignored in ["expiry", "maxBindingsPerAor"] {
             if map.contains_key(Value::from(ignored)) {
                 unapplied.push(at.field(ignored));
             }
         }
         let name = required_str(map, "name", &at, "CC-I1", errors);
         let id = required_uint(map, "id", &at, "CC-I1", u64::from(u32::MAX), errors);
+        let auth = read_auth(map, &at, errors);
         let domains = map
             .get(Value::from("domains"))
             .and_then(Value::as_sequence)
@@ -1185,10 +1203,65 @@ fn read_tenants(
                     &format!("a name not already held by id {}", existing.id),
                 ));
             }
-            tenants.push(TenantSpec { name, id, domains });
+            tenants.push(TenantSpec {
+                name,
+                id,
+                domains,
+                auth,
+            });
         }
     }
     tenants
+}
+
+/// Parse a tenant's `auth` block.
+///
+/// A block that carries user credentials is **refused**: `RG-7` owns where credentials come from,
+/// and a document that says "authenticate, against these" cannot be honoured until that lands. Saying
+/// so is better than accepting it and authenticating nobody. The minimal block — `realm` and
+/// `secretRef` — is what this build can apply.
+fn read_auth(
+    map: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> Option<AuthSpec> {
+    let at = path.field("auth");
+    let value = map.get(Value::from("auth"))?;
+    let block = as_mapping(value, &at, errors)?;
+    closed_world(block, &["realm", "secretRef", "algorithm"], &at, errors);
+
+    if block.contains_key(Value::from("credentials")) || block.contains_key(Value::from("users")) {
+        errors.push(ConfigError::new(
+            at.field("credentials"),
+            "CC-V9",
+            Some("credentials declared in the document".into()),
+            "no credentials here — where they come from is RG-7's, and a document that tries to \
+             supply them cannot be honoured yet",
+        ));
+        return None;
+    }
+
+    let realm = required_str(block, "realm", &at, "CC-RA-A3", errors);
+    let secret_ref = required_str(block, "secretRef", &at, "CC-V9", errors);
+
+    // The nonce secret is the one credential the document is allowed to *name*. An inline value is
+    // refused by V9, which forbids any secret in the document — a field named `secret` here would
+    // otherwise be that exact mistake with a plausible spelling.
+    if block.contains_key(Value::from("secret")) {
+        errors.push(ConfigError::new(
+            at.field("secret"),
+            "CC-V9",
+            Some("an inline nonce secret".into()),
+            "secretRef naming a secret the driver resolves; no secret value appears in the document",
+        ));
+        return None;
+    }
+
+    if let (Some(realm), Some(secret_ref)) = (realm, secret_ref) {
+        Some(AuthSpec { realm, secret_ref })
+    } else {
+        None
+    }
 }
 
 fn read_security(

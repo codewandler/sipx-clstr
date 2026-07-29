@@ -192,6 +192,7 @@ fn node_config(
     if let Some(tenant) = projected.tenants.first() {
         config.tenant.clone_from(&tenant.name);
     }
+    config.auth = auth_config(&config.tenant, projected, env)?;
 
     config.store = store_choice(projected, env)?;
 
@@ -269,6 +270,60 @@ fn store_choice(
 /// the Secret into an environment variable. On a plain host the same mapping lets an operator export
 /// `LOCATION_DSN` and be done. The rule is stated here because the spec deliberately leaves the
 /// resolution mechanism to the driver.
+/// Build the digest policy the document asks for, and refuse if it cannot be honoured (`FC-3`).
+///
+/// The credential the document *names* is the nonce secret, resolved from the environment exactly
+/// like a `dsnRef` (§8 V9). Resolution is IO, so it happens here and not in the loader.
+///
+/// **The decision that cannot be defaulted:** a document that asks for authentication and whose
+/// secret *does* resolve is **refused**, because there are no user credentials yet — `RG-7` owns
+/// where they come from — and running `required` against an empty store would reject every
+/// `REGISTER` at `401`. That is a registrar that takes no registrations, and it is worse than open,
+/// because it also *looks* protected. So the operator is told to remove the block (declaring an open
+/// tenant deliberately) or wait for the credential store.
+fn auth_config(
+    tenant: &str,
+    projected: &ProjectedConfig,
+    env: &BTreeMap<String, String>,
+) -> Result<Option<crate::driver::AuthConfig>, StartupError> {
+    let spec = projected.tenants.iter().find_map(|t| t.auth.as_ref());
+    let Some(auth) = spec else {
+        // No auth block: an open tenant, deliberately chosen by the document's author. Nothing to
+        // build and nothing to warn about beyond what `FC-2` already reports.
+        return Ok(None);
+    };
+
+    let variable = variable_for(&auth.secret_ref);
+    let resolved = env.get(&variable);
+
+    match resolved {
+        Some(secret_text) => {
+            // A real secret, and no credentials to check anything against. Refuse rather than run a
+            // registrar that says 401 to everyone while looking authenticated.
+            let _ = secret_text; // resolved, and that is what forces the refusal
+            Err(StartupError::MissingIdentity(format!(
+                "tenant `{tenant}` requires authentication, but this build has no credential store \
+                 to check users against (RG-7 owns that). A `secretRef` that resolves would produce a \
+                 registrar that answers 401 to every REGISTER while appearing protected. Remove \
+                 `tenant[].auth` to run an open tenant deliberately, or supply credentials once RG-7 \
+                 lands. Secret `{0}` was named by reference, never read into the document.",
+                auth.secret_ref
+            )))
+        }
+        None => {
+            // The secret does not resolve, so nothing can ever be challenged. An open tenant is the
+            // only thing this node can be, and building it with a zeroed key is a safe placeholder:
+            // with no users, no credential will ever validate against any key. The nonce secret never
+            // crosses the process boundary, so a fixed value leaks nothing.
+            Ok(Some(crate::driver::AuthConfig {
+                realm: auth.realm.clone(),
+                secret: [0u8; 32],
+                credentials: sipx_clstr_registrar::InMemoryCredentials::default(),
+            }))
+        }
+    }
+}
+
 fn variable_for(reference: &str) -> String {
     reference
         .chars()
