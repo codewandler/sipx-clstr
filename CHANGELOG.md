@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-07-29
+
+Three stories, all of them consequences of the last release rather than new ground: the two defects
+`0.7.0`'s own review left filed, and the build claim that building `0.7.0`'s container image
+exposed. The theme is the same one — a statement the project had been making without checking.
+
+The MSRV is the consumer-visible part. It moves 1.88 → 1.94, and it moves because the old number
+was never true, not because anything got stricter.
+
 ### Changed
 
 - **The minimum supported Rust version is 1.94** (`CF-9`), up from a declared 1.88 that never
