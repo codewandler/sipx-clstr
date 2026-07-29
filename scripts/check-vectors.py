@@ -39,11 +39,12 @@ REPORT = ROOT / "docs" / "reference" / "conformance.md"
 SPECS = {
     "PB": ROOT / "docs" / "specs" / "proxy-behavior.md",
     "EP": ROOT / "docs" / "specs" / "e2e-probe.md",
+    "RA": ROOT / "docs" / "specs" / "registrar-auth.md",
 }
 
-ROW = re.compile(r"\b(PB|EP)-([A-Z])-(\d+)\b")
-TEST_NAME = re.compile(r"\bfn\s+(pb|ep)_([a-z])_(\d+)_")
-COVERS = re.compile(r"//\s*covers:\s*((?:(?:PB|EP)-[A-Z]-\d+[,\s]*)+)")
+ROW = re.compile(r"\b(PB|EP|RA)-([A-Z])-(\d+)\b")
+TEST_NAME = re.compile(r"\bfn\s+(pb|ep|ra)_([a-z])_(\d+)_")
+COVERS = re.compile(r"//\s*covers:\s*((?:(?:PB|EP|RA)-[A-Z]-\d+[,\s]*)+)")
 
 FAMILIES = {
     ("PB", "V"): "Proxy — request validation (§4)",
@@ -57,6 +58,10 @@ FAMILIES = {
     ("EP", "F"): "Probe — one failure per step (§10)",
     ("EP", "I"): "Probe — probe-side faults (§10)",
     ("EP", "C"): "Probe — cleanup (§10)",
+    ("RA", "D"): "Registrar auth — the decision (§3)",
+    ("RA", "A"): "Registrar auth — algorithm selection (§4)",
+    ("RA", "R"): "Registrar auth — replay and retransmission (§3, §6)",
+    ("RA", "T"): "Registrar auth — the tenant boundary (§5)",
 }
 
 

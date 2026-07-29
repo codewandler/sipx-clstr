@@ -30,11 +30,18 @@ sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.3.0" }
 # makes a build reproducible, and what makes "which kernel version is this claim true of?" a
 # question with an answer. Bumping it is a deliberate act with a changelog entry.
 #
-# Pinned at 0.2.1, which contains UDP, TCP, TLS, WebSocket and WSS transports, all four
-# transaction machines, RFC 3263 resolution and the client side of digest.
-sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.2.1" }
-sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.2.1" }
-sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.2.1" }
+# Pinned at 0.4.0, which contains UDP, TCP, TLS, WebSocket and WSS transports, all four
+# transaction machines, RFC 3263 resolution, and **both** sides of digest.
+sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0" }
+sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0" }
+sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0" }
+# `default-features = false` is load-bearing, not tidiness: it drops sipx-ua's `runtime` feature
+# and with it `tokio`, so the sans-IO registrar can use the kernel's digest verification without a
+# runtime in its decision core. Upstream `X-20` created that seam for exactly this dependency; the
+# gate's own rule — no `tokio` outside sipx-clstr-node — is what would otherwise force this repo to
+# write digest a second time, and two implementations of one algorithm eventually disagree about
+# who is authenticated.
+sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0" }
 
 # Core
 bytes = "1"

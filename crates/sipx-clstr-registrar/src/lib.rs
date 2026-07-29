@@ -23,6 +23,7 @@
 #![doc(html_no_source)]
 
 pub mod aor;
+pub mod auth;
 pub mod binding;
 pub mod command;
 #[cfg(feature = "test-suite")]
@@ -33,6 +34,9 @@ pub mod process;
 pub mod store;
 
 pub use aor::{AorError, CanonicalAor, shard_key};
+pub use auth::{
+    Algorithm, ChallengeResponse, CredentialStore, Decision, InMemoryCredentials, TenantAuth,
+};
 pub use binding::{Binding, BindingSet, Revision, SourceAddr, Timestamp};
 pub use command::{
     Accepted, ContactOp, ContactOps, ContactValue, Outcome, RegisterCommand, Rejection,

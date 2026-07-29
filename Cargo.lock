@@ -780,6 +780,16 @@ dependencies = [
 
 [[package]]
 name = "md-5"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+dependencies = [
+ "cfg-if",
+ "digest 0.10.7",
+]
+
+[[package]]
+name = "md-5"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
@@ -965,7 +975,7 @@ dependencies = [
  "bytes",
  "fallible-iterator",
  "hmac 0.13.0",
- "md-5",
+ "md-5 0.11.0",
  "memchr",
  "rand 0.10.2",
  "sha2 0.11.0",
@@ -1435,6 +1445,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "sipx-sip",
+ "sipx-ua",
  "thiserror",
  "tracing",
 ]
@@ -1458,8 +1469,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-sip"
-version = "0.2.1"
-source = "git+https://github.com/codewandler/sipx?tag=v0.2.1#15bcda0d652e313901ae7be1c8209f83af880f2a"
+version = "0.4.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.4.0#19b0ce94ac5d2747e888b057c4d30957375ff502"
 dependencies = [
  "bytes",
  "thiserror",
@@ -1468,8 +1479,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-transport"
-version = "0.2.1"
-source = "git+https://github.com/codewandler/sipx?tag=v0.2.1#15bcda0d652e313901ae7be1c8209f83af880f2a"
+version = "0.4.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.4.0#19b0ce94ac5d2747e888b057c4d30957375ff502"
 dependencies = [
  "bytes",
  "futures-util",
@@ -1483,6 +1494,24 @@ dependencies = [
  "tokio-rustls",
  "tokio-tungstenite",
  "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "sipx-ua"
+version = "0.4.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.4.0#19b0ce94ac5d2747e888b057c4d30957375ff502"
+dependencies = [
+ "bytes",
+ "hmac 0.12.1",
+ "md-5 0.10.6",
+ "rand 0.9.5",
+ "sha2 0.10.9",
+ "sipx-sip",
+ "sipx-transport",
+ "subtle",
+ "thiserror",
+ "tokio",
  "tracing",
 ]
 

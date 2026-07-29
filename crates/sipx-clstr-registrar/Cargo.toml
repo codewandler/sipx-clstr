@@ -26,12 +26,19 @@ serde = ["dep:serde", "bytes/serde"]
 [dependencies]
 serde = { workspace = true, optional = true }
 sipx-sip.workspace = true
+# The digest primitives, and **only** those: the workspace pin sets `default-features = false`, so
+# this does not drag `tokio` or a transport into a sans-IO crate. `tests/sans_io.rs` asserts that
+# against the resolved lockfile rather than against this comment.
+sipx-ua.workspace = true
 bytes.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# The RA vectors answer challenges with the kernel's *client* responder, so the two halves of digest
+# are proved to agree rather than each proved to agree with a fixture written here.
+bytes.workspace = true
 
 [lints]
 workspace = true
