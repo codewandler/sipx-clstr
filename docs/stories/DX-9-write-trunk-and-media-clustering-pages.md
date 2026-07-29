@@ -2,7 +2,7 @@
 id: DX-9
 title: Write the trunk and media clustering pages
 pillar: Foundation
-status: in-progress
+status: done
 priority: 5
 design: docs/designs/docs-site.md
 epic: docs-site

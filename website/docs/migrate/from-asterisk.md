@@ -21,7 +21,7 @@ bridge the two. Two dialogs means two offer/answer state machines, `CSeq` transl
 correlation, and failure translation per leg.
 
 That machinery is deliberately outside this platform. A design record for it exists and is a
-**deferred placeholder with no stories against it** — written down so that the layers underneath
+**deferred placeholder with nothing scheduled against it** — written down so that the layers underneath
 it (hook phases, media control, affinity tokens) are designed with a dialog-terminating consumer
 in mind, and deliberately not scheduled, because building services on an unproven platform is how
 a platform acquires workarounds it can never remove.
@@ -49,7 +49,7 @@ from.
 
 Statuses use the site's closed vocabulary: `today` · `today, partly` · `specified, not shipped` ·
 `designed` · `not planned`. The `not planned` rows are the honest ones — they are non-goals in the
-project's vision, not a backlog nobody has reached.
+project's vision, not a queue nobody has reached.
 
 ## What a proxy-first layer is actually for
 

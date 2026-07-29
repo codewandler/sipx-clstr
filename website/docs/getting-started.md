@@ -26,7 +26,7 @@ Check it built:
 ```
 
 ```text
-sipx-clstr 0.9.0 (sipx kernel 0.7.0)
+sipx-clstr 0.10.0 (sipx kernel 0.7.0)
 ```
 
 The second version is the [sipx](https://github.com/codewandler/sipx) protocol kernel this node

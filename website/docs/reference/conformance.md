@@ -6,7 +6,7 @@ description: "How correctness is measured here: numbered vectors per normative r
 # Conformance
 
 Most projects tell you what they support. This one tells you what it has **proved**, row by row,
-and names a story for everything it has not.
+and names the work that will close everything it has not.
 
 The mechanism is simple enough to audit in an afternoon: every normative rule in a specification
 carries a numbered vector row, every row is either executed by a test or deferred in writing, and
@@ -19,7 +19,7 @@ hand.
 vector tables, and each table row has an ID: `PB-V-8` is the eighth request-validation row of the
 proxy behaviour spec, `RA-D-4` the fourth registrar-auth decision row. Some tables number by
 family and one numbers straight through, so `HF-9` is a row too. **A row ID is a citation** —
-specs, design records, stories and commit messages all quote them, which is why the tables are not
+specs, design records and commit messages all quote them, which is why the tables are not
 renumbered once published.
 
 **2. A test proves it by name.** Coverage is derived from **test function names**:
@@ -42,7 +42,7 @@ coverage that no longer exists, and it would be right often enough that nobody r
 **3. Anything unproved is deferred, in writing, with an owner.** A row that no test covers must
 appear in
 [`docs/reference/vector-scope.toml`](https://github.com/codewandler/sipx-clstr/blob/main/docs/reference/vector-scope.toml)
-carrying **both** a reason and the story ID that will close it. One without the other fails the
+carrying **both** a reason and an owner — the work that will close it. One without the other fails the
 gate. "Not yet" is an acceptable answer here; "not yet" with nobody attached is not.
 
 **4. The report is generated, and staleness is a build failure.**
@@ -55,7 +55,7 @@ agreement with a claim.
 ## Three ways it fails, and the third is the point
 
 1. A row is in a spec, covered by no test, and not deferred.
-2. A deferred row has no reason, or no story.
+2. A deferred row has no reason, or no owner.
 3. **A deferred row is covered.**
 
 The third one looks like good news and is treated as an error. A row marked "not yet" that some
@@ -75,7 +75,7 @@ saying yes takes more work than saying no.
 | Status | What it means |
 |---|---|
 | **proved** | At least one test in the workspace executes this row. The report names the file. |
-| **deferred** | No test covers it. The report names the story that will, and quotes the reason. |
+| **deferred** | No test covers it. The report names the work that will, and quotes the reason. |
 
 There is no third status. A row cannot be partly proved, and there is no "supported" that is not
 one of these two.
@@ -83,7 +83,7 @@ one of these two.
 ## The report itself
 
 **[docs/reference/conformance.md](https://github.com/codewandler/sipx-clstr/blob/main/docs/reference/conformance.md)** —
-every row, its status, and the test file or story that accounts for it.
+every row, its status, and the test file or the open work that accounts for it.
 
 That table is deliberately **not** reproduced on this page. It is regenerated from the code on
 every gate run, and a copy here would be a second set of numbers to keep in sync — which is the
@@ -102,10 +102,8 @@ cited, and no gate has ever read them. The gap grows on its own: a release that 
 specification adds rows the checker cannot see.
 
 That was demonstrated rather than assumed — a fabricated row in an unregistered family passes the
-gate untouched — and the story that closes it is
-[`CF-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/CF-8-bring-every-spec-under-the-vector-gate.md).
-Until it lands, treat the report as complete for the four specs it names and as silent about the
-others.
+gate untouched — and closing it is open work. Until then, treat the report as complete for the four
+specs it names and as silent about the others.
 
 ## What this does not measure
 
@@ -119,7 +117,7 @@ others.
   [`scripts/e2e-call.sh`](https://github.com/codewandler/sipx-clstr/blob/main/scripts/e2e-call.sh),
   which runs real client software against a real node over UDP.
 - **A proved row is not a shipped feature.** Rows exist for behaviour that is specified but has no
-  runtime yet, and those are deferred against the story that will build it. Read
+  runtime yet, and those are deferred against the work that will build it. Read
   [Does this fit?](../guides/does-this-fit.md) for what actually runs.
 
 ## Related

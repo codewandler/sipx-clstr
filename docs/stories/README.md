@@ -54,16 +54,6 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-10 — check-docs must only see the repository, not whatever sits under it](CF-10-check-docs-must-only-see-the-repository.md) · Foundation · the gate's verdict currently depends on whether an agent worktree happens to exist
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
 
-### The public documentation site
-_The site a stranger lands on should say what this does and how to run it, not what we plan next._
-- [DX-5 — Write the CLI and configuration reference](DX-5-write-the-cli-and-configuration-reference.md) · Foundation · the chart's values are NOT the config schema — KO-14 is open against exactly that divergence
-- [DX-6 — Write the conformance and what's-new pages](DX-6-write-the-conformance-and-whats-new-pages.md) · Foundation · publish the methodology and the legend, not a second copy of a generated table
-- [DX-7 — Write the migration pages for people arriving from an existing deployment](DX-7-write-the-migration-pages.md) · Foundation · naming a migration target is permitted; citing its behaviour as rationale is not
-- [DX-8 — Write the affinity-token and registrar-shard clustering pages](DX-8-write-affinity-and-registrar-shard-pages.md) · Foundation · preview pages cite rule IDs — "not shipped" must never read as "not decided"
-- [DX-9 — Write the trunk and media clustering pages](DX-9-write-trunk-and-media-clustering-pages.md) · Foundation · no RTP in the signalling process ever — a vision non-goal, not an implementation detail
-- [DX-10 — Write the deployment and scaling operate pages](DX-10-write-the-deploy-and-scaling-pages.md) · Foundation · HPA on CPU is explicitly rejected — scaling signals are SIP-shaped, and that is the story
-- [DX-11 — Write the observability and high-availability operate pages](DX-11-write-the-observability-and-ha-pages.md) · Foundation · service HA is the guarantee; call survival is never silently promised
-
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
@@ -173,6 +163,13 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [DX-2 — Lay down the site's information architecture, navigation and landing page](DX-2-lay-down-the-information-architecture.md) · Foundation · URLs are stable from the start — stub pages beat stub URLs that move later
 - [DX-3 — Write the entry pair — what sipx-clstr is, and getting started](DX-3-write-the-entry-pair.md) · Foundation · the two facts that bite — open registrar, in-memory bindings — are stated on the first page
 - [DX-4 — Write the guides for what ships today](DX-4-write-the-guides-for-what-ships-today.md) · Foundation · bind-vs-advertise gets its own page — it is the failure every first-time operator hits
+- [DX-5 — Write the CLI and configuration reference](DX-5-write-the-cli-and-configuration-reference.md) · Foundation · the chart's values are NOT the config schema — KO-14 is open against exactly that divergence
+- [DX-6 — Write the conformance and what's-new pages](DX-6-write-the-conformance-and-whats-new-pages.md) · Foundation · publish the methodology and the legend, not a second copy of a generated table
+- [DX-7 — Write the migration pages for people arriving from an existing deployment](DX-7-write-the-migration-pages.md) · Foundation · naming a migration target is permitted; citing its behaviour as rationale is not
+- [DX-8 — Write the affinity-token and registrar-shard clustering pages](DX-8-write-affinity-and-registrar-shard-pages.md) · Foundation · preview pages cite rule IDs — "not shipped" must never read as "not decided"
+- [DX-9 — Write the trunk and media clustering pages](DX-9-write-trunk-and-media-clustering-pages.md) · Foundation · no RTP in the signalling process ever — a vision non-goal, not an implementation detail
+- [DX-10 — Write the deployment and scaling operate pages](DX-10-write-the-deploy-and-scaling-pages.md) · Foundation · HPA on CPU is explicitly rejected — scaling signals are SIP-shaped, and that is the story
+- [DX-11 — Write the observability and high-availability operate pages](DX-11-write-the-observability-and-ha-pages.md) · Foundation · service HA is the guarantee; call survival is never silently promised
 - [ET-1 — Specify the e2e-tester role and the probe contract](ET-1-specify-the-e2e-tester-role-and-probe-contract.md) · Platform · M1 #11 · docs/specs/e2e-probe.md — verdict taxonomy, blast radius, 19 vectors; gates ET-2/ET-3
 - [ET-2 — Implement the sans-IO probe engine](ET-2-implement-the-sans-io-probe-engine.md) · Platform · M1 #12 · the probe engine and scheduler; every EP-* vector proved
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · M1 #13 · the echo endpoint; end to end through the real proxy, registrar and probe

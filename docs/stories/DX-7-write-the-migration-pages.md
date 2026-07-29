@@ -2,7 +2,7 @@
 id: DX-7
 title: Write the migration pages for people arriving from an existing deployment
 pillar: Foundation
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/docs-site.md
 epic: docs-site

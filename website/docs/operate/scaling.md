@@ -11,8 +11,8 @@ single-node k3d/devspace profile — one process, one replica, nothing that scal
 [Docker and k3d](../guides/docker-and-k3d.md); the chart renders a custom resource that nothing
 serves, because there is no operator image and no CRD.
 
-Autoscaling is **phase 2** of the operator epic (`KO-5`, `KO-6`), deliberately after the drain
-machinery (`KO-4`). The reason is on this page.
+Autoscaling comes deliberately *after* the drain machinery, not beside it. The reason is on this
+page.
 :::
 
 ## CPU is not a capacity signal for SIP
@@ -66,7 +66,7 @@ input to the guardrails below, never as a reason to grow: by the time it is non-
 has left the capacity domain.
 
 The mechanism that acts on these — replicas reconciled by the operator, or an HPA fed by a
-custom-metrics adapter — is `KO-5`'s to decide. What is already decided is the input: SIP-shaped
+custom-metrics adapter — is not settled yet. What is already decided is the input: SIP-shaped
 signals, and never CPU.
 
 ## The guardrails, and why they are correctness signals
@@ -131,8 +131,8 @@ the same machinery: stop accepting, wait bounded, hand off, terminate.
 Which is why autoscaling is phase 2. Autoscaling in phase 1 was considered and rejected outright:
 a scale-in without the drain machinery would break connection ownership — it would terminate the
 node holding a client's flow with no window for that client to land elsewhere, and it would rehash
-registrar shards under in-flight writes. The drain path (`KO-4`) has to exist and be trusted before
-anything is allowed to trigger it automatically (`KO-6`). Building them in the other order would
+registrar shards under in-flight writes. The drain path has to exist and be trusted before
+anything is allowed to trigger it automatically. Building them in the other order would
 produce an autoscaler whose safe operating range was "do not scale in".
 
 ## What this costs you today

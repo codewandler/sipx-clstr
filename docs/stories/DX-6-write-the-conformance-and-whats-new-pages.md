@@ -2,7 +2,7 @@
 id: DX-6
 title: Write the conformance and what's-new pages
 pillar: Foundation
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/docs-site.md
 epic: docs-site

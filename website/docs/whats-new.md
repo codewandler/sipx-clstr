@@ -5,7 +5,7 @@ description: "Where sipx-clstr stands, release by release, and what is still mis
 
 # What's new
 
-The current release is **0.9.0**.
+The current release is **0.10.0**.
 
 ## Where this actually is
 
@@ -55,6 +55,27 @@ matters.
 Each entry leads with what changed for someone using this. The full detail — findings, rejected
 alternatives, the reasoning behind each decision — is in
 [CHANGELOG.md](https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md).
+
+### 0.10.0 — documentation you can actually start from
+
+**This site.** Until this release the published documentation was the project's own internal
+material — the roadmap, thirteen design records, ten specifications, a generated coverage report —
+and the landing page still said that nothing forwards a SIP message, which stopped being true five
+releases ago. There was no install page, no quickstart, no configuration guide and no command
+reference.
+
+- **[Getting started](getting-started.md) reaches a forwarded call** with a Rust toolchain and
+  Python, and nothing else. No PBX, no account, no softphone to build.
+- **A [command reference](reference/cli.md)** whose every flag, message and exit code was produced
+  by running the binary rather than read off the source.
+- **A [configuration page](reference/configuration.md)** that states plainly there is no
+  configuration file yet, and what the schema replacing these flags will look like.
+- **[Migration concept maps](migrate/from-kamailio.md)** for people arriving from an existing
+  deployment, including what does not carry over.
+- **Clustering and operations are documented as unshipped**, marked in the navigation and again on
+  every page, so the gap between the design and the software is visible rather than inferred.
+- Also fixed: `--help` claimed no roles were implemented, four releases after they were, and never
+  mentioned `--tenant`.
 
 ### 0.9.0 — three specifications, and a check on whether they say what they mean
 

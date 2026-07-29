@@ -38,7 +38,9 @@ fn main() -> ExitCode {
             println!("      --tenant <name>            the tenant this node serves (default:");
             println!("                                 `default`); registrations are not");
             println!("                                 authenticated — this node is an open");
-            println!("                                 registrar, and bindings are lost on restart");
+            println!(
+                "                                 registrar, and bindings are lost on restart"
+            );
             println!("      --advertise <host[:port]>  what peers reach it on, if that is not the");
             println!(
                 "                                 address it binds — a node behind a NAT or on a"

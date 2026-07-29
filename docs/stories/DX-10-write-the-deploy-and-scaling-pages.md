@@ -2,7 +2,7 @@
 id: DX-10
 title: Write the deployment and scaling operate pages
 pillar: Foundation
-status: in-progress
+status: done
 priority: 6
 design: docs/designs/docs-site.md
 epic: docs-site

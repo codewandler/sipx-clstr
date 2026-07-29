@@ -105,7 +105,7 @@ readable version is [How the cluster works](../clustering/how-it-works.md).
 - **The location table itself.** Bindings here are shaped by this project's own location-service
   rules, with compare-and-swap per binding rather than last-write-wins. There is no import path
   and no migration tool; bringing an existing credential store across is a known requirement with
-  a story filed against it and nothing built.
+  work filed against it and nothing built.
 - **Anything that puts the signalling process in the media path.** RTP never enters it — not
   today, not later. Media flows endpoint to endpoint, or through a relay this platform controls
   over a network protocol.

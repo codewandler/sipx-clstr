@@ -123,7 +123,7 @@ That decision has a scheduling consequence that surprises people:
 So a replica count above the node count is a **placement error, not a capacity decision**. The
 extra pods do not schedule, and no amount of headroom on the existing nodes changes that — adding
 capacity means adding nodes. The operator's job is to say so as a status condition rather than
-leave pods Pending for someone to discover (`KO-11`), and to validate the port arithmetic at
+leave pods Pending for someone to discover, and to validate the port arithmetic at
 admission so two roles on one node cannot claim the same port or overlapping media ranges.
 
 It is also the honest limit of the local profile: a single-node k3d cluster is *clustered but
@@ -165,17 +165,16 @@ and an invalid change is rejected outright with the last good configuration stil
 Stated plainly, because the chart's presence in the repository reads like a deployment story and
 is not one:
 
-- There is **no operator image**. `KO-3` implements the reconcile loop; it is not built.
-- There is **no CRD**. `KO-1` pins the custom resource; until then the resource's group and version
-  are provisional, and applying the rendered object to a cluster fails because the API server has
-  no type for it.
+- There is **no operator image**. The reconcile loop is specified but not built.
+- There is **no CRD**. Until the custom resource is pinned, its group and version are provisional,
+  and applying the rendered object to a cluster fails because the API server has no type for it.
 - The chart's defaults are a *default deployment set* aimed at a single-node local cluster — one
-  node per role, one PostgreSQL, one managed rtpengine, an echo trunk, the probe on. That is
-  `KO-2`'s acceptance target, not a production topology.
+  node per role, one PostgreSQL, one managed rtpengine, an echo trunk, the probe on. That is a
+  local development target, not a production topology.
 
 One more caution: **do not read `deploy/helm/values.yaml` as the configuration schema.** It is a
 real proposal and much of it was adopted, but where it disagreed with a normative spec the spec
-won, and bringing the chart to the schema is open work (`KO-14`). For what the configuration
+won, and bringing the chart to the schema is open work. For what the configuration
 surface actually is today, see [Configuration](../reference/configuration.md).
 
 ## Where this is defined

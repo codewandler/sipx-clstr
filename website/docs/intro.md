@@ -95,8 +95,8 @@ This site is the documentation for people who want to *use* sipx-clstr. The repo
 carries internal contributor material — the
 [normative specifications](https://github.com/codewandler/sipx-clstr/tree/main/docs/specs),
 [design records](https://github.com/codewandler/sipx-clstr/tree/main/docs/designs), the
-[roadmap](https://github.com/codewandler/sipx-clstr/blob/main/docs/roadmap.md) and the story
-board. None of it is published here: it is more detailed, more volatile, and written for people
+[roadmap](https://github.com/codewandler/sipx-clstr/blob/main/docs/roadmap.md). None of it is
+published here: it is more detailed, more volatile, and written for people
 with the repository open.
 
 The specs are worth reading if you are integrating against this platform — they are normative,

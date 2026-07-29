@@ -2,7 +2,7 @@
 id: DX-11
 title: Write the observability and high-availability operate pages
 pillar: Foundation
-status: in-progress
+status: done
 priority: 7
 design: docs/designs/docs-site.md
 epic: docs-site

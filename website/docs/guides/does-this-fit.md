@@ -62,7 +62,7 @@ the binary is an **open registrar with in-memory bindings**. Do not expose it.
 
 Correctness is expressed as numbered vectors inside the normative specs — for example the
 forwarding rules carry a `PB-*` table, the location service an `LS-*` table. A generated report
-says how many are proved by a test and names a story for every one that is not.
+says how many are proved by a test, and names the work that will close every one that is not.
 
 That report is the honest capability statement for this project, and it is deliberately allowed
 to say "no". See [Conformance](../reference/conformance.md), and the specs themselves in
