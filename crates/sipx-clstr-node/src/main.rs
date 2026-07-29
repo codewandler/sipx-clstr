@@ -35,6 +35,14 @@ fn main() -> ExitCode {
             );
             println!();
             println!("  run --listen <addr>   run a node: registrar and proxy on one listener");
+            println!("      --advertise <host[:port]>  what peers reach it on, if that is not the");
+            println!(
+                "                                 address it binds — a node behind a NAT or on a"
+            );
+            println!(
+                "                                 private address must say so, or its Via and"
+            );
+            println!("                                 Record-Route name somewhere unreachable");
             println!(
                 "  --version             print the version and the kernel it is built against"
             );
@@ -77,11 +85,23 @@ fn run_node(args: &[String]) -> ExitCode {
         return ExitCode::from(2);
     };
 
-    let mut config = sipx_clstr_node::driver::NodeConfig::new(addr);
+    // Bind and advertise are declared independently (`DP-5`). Without `--advertise` the node
+    // advertises what it binds, which is refused for `0.0.0.0` — "everywhere" is an answer to where
+    // to listen and not to where to be reached, and a node that put it in a `Record-Route` would
+    // take calls that could never be transferred or hung up.
+    let config = match advertise {
+        Some(advertise) => sipx_clstr_node::driver::NodeConfig::advertising(addr, &advertise),
+        None => sipx_clstr_node::driver::NodeConfig::new(addr),
+    };
+    let mut config = match config {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("sipx-clstr: {error}");
+            eprintln!("Pass --advertise <host[:port]> with the address peers reach this node on.");
+            return ExitCode::from(2);
+        }
+    };
     config.tenant = tenant;
-    if let Some(advertise) = advertise {
-        config.advertise = advertise;
-    }
 
     let Ok(runtime) = tokio::runtime::Runtime::new() else {
         eprintln!("sipx-clstr: could not start the async runtime");
