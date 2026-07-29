@@ -327,11 +327,16 @@ become scenario data, and every one of these runs in virtual time with no wall-c
 **Considered for upstream: no, cluster-specific** — the suspension's declaration surface
 (`QueryDecl`, the outcome taxonomy, the dispositions, G7/G8) is bound to this platform's hook
 manifest and proxy pipeline, and the kernel has no hook phases, no manifest and no notion of a
-routing-policy oracle. The protocol-generic parts this depends on are already upstream and are
-consumed rather than re-made: the INVITE server transaction that emits `100 (Trying)` and absorbs
-retransmissions while we are suspended (`sipx-sip`'s `TransactionLayer`), and the generation-counter
-`TimerQueue` the `QueryDeadline` rides on (ledger row `X-14`, generic over its instant since
-`v0.7.0`). Nothing new is filed against the [ledger](../upstream.md) by this story.
+routing-policy oracle. Two protocol-generic pieces this design leans on are already upstream and
+are consumed rather than re-made. Both were read in the pinned kernel (`v0.7.0`) rather than
+assumed, because this ledger has twice recorded a row that was believed instead of checked:
+
+| What the design leans on | Where it actually is | Ledger standing |
+|---|---|---|
+| The INVITE server transaction emits `100 (Trying)` when the TU is still thinking, and absorbs upstream retransmissions so they never reach us mid-suspension | `sipx-sip`'s sans-IO `ServerTransaction`: `new` arms `Timer::Trying100` for INVITE citing RFC 3261 §17.2.1 (`transaction/server.rs:73`), `on_timer` sends the `100` only if the TU has not answered (`server.rs:200`), and `on_request` swallows a retransmission — resending the last response or nothing at all, but in either case "the TU hears nothing, which is the point of the layer" (`server.rs:100`) | No row, and none is needed: the ledger's standing decision is that the proxy transaction driver is built **here**, directly over this sans-IO `TransactionLayer` |
+| A generation-counter `TimerQueue` generic over its instant, so `QueryDeadline` can be armed from virtual time | Landed in sipx **`v0.7.0`** as `TimerQueue<K, I = Instant>` — the ledger's *timer queue drivable from a virtual clock* row, which carries no sipx story because the kernel closed it directly | That row, not `X-14`. `X-14` is the row that generalized the queue over its **key** and explicitly **did not** close this gap — it left the instant as `tokio::time::Instant`, which a virtual clock cannot construct |
+
+Nothing new is filed against the [ledger](../upstream.md) by this story.
 
 #### What this hands to the spec
 

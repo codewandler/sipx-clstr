@@ -65,9 +65,14 @@ Give the hook framework a phase in which an external service can influence routi
     grain — nothing executes them until the hook runtime exists (EX-3).
   - **Upstream** (rule 6): *considered for upstream: no, cluster-specific* — the declaration
     surface is bound to this platform's manifest and pipeline; the kernel has no hook phases. The
-    generic pieces it needs are already there and are consumed, not re-made (`TransactionLayer`'s
-    `100 Trying` and retransmission absorption; the `X-14` `TimerQueue`). Nothing new is filed
-    against the ledger.
+    generic pieces it needs are already there and are consumed, not re-made. Both read in the
+    pinned kernel (`v0.7.0`) rather than assumed: `ServerTransaction` arms `Timer::Trying100` for
+    INVITE per RFC 3261 §17.2.1 (`transaction/server.rs:73`), sends it only if the TU has not
+    answered (`server.rs:200`), and absorbs retransmissions so the TU hears nothing
+    (`server.rs:100`); and `TimerQueue<K, I = Instant>` landed in `v0.7.0` under the ledger's
+    *timer queue drivable from a virtual clock* row — **not** `X-14`, which is the row that
+    generalized the queue over its key and explicitly failed to close this gap. Nothing new is
+    filed against the ledger.
 - 2026-07-29 — **Handoff: `docs/specs/hook-framework.md` was deliberately NOT edited** (EX-1 is
   closed). The design's *What this hands to the spec* subsection names the exact deltas — §4
   outcome/disposition enums and the `QueryDeadline` timer class, §6 `QueryDecl` fields, §7 G7/G8,
