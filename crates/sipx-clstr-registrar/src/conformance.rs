@@ -23,6 +23,13 @@ use crate::store::{LocationStore, apply};
 
 const RETRIES: usize = 3;
 
+/// The delay LS-R-3 states between a REGISTER and its retransmission.
+///
+/// A number rather than zero because a retry at the originating nanosecond proves nothing: it is
+/// the one case a deadline comparison also accepts, and the one case that never happens on a real
+/// network.
+const RETRANSMIT_DELAY_NANOS: u64 = 500_000_000;
+
 /// What went wrong, and where.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{backend}: {row} — {detail}")]
@@ -205,20 +212,62 @@ fn ls_r_refresh_and_retry(suite: &mut Suite<'_>) {
         "B3: a newer CSeq must apply".to_owned()
     });
 
-    // B4 — the same command again writes nothing and answers with the current set.
-    let again = apply(suite.store, &refresh, &policy(), RETRIES);
+    let deadline = suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .first()
+        .map(|binding| binding.expires_at);
+
+    // B4 — the same request 500 ms later, which is what a lost `200` produces over UDP. The row
+    // states the delay on purpose: comparing deadlines rather than granted durations (§5.3.1 B4.1)
+    // would pass this only at zero latency.
+    let mut again = refresh.clone();
+    again.now = Timestamp::from_nanos(refresh.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
+    let again = apply(suite.store, &again, &policy(), RETRIES);
     suite.check(
         "LS-R-3",
         !again.outcome.commits() && again.revision == first.revision,
         || {
             format!(
-                "an identical retry must not write: commits={} revision {:?} → {:?}",
+                "a retry 500 ms later must not write: commits={} revision {:?} → {:?}",
                 again.outcome.commits(),
                 first.revision,
                 again.revision
             )
         },
     );
+    // B4.2 — no mutation means the deadline does not move either; a retry that extended the
+    // binding would let one ordering token buy a second lifetime.
+    let after = suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .first()
+        .map(|binding| binding.expires_at);
+    suite.check("LS-R-3", after == deadline, || {
+        format!("a retry extended the binding: {deadline:?} → {after:?}")
+    });
+
+    // LS-R-22 — the same token asking for a different granted duration is not a retry.
+    let mut longer = command(
+        &suite.tenant,
+        who,
+        "i1",
+        2,
+        10,
+        vec![contact("sip:a@10.0.0.1", Some(7_200), None)],
+    );
+    longer.now = Timestamp::from_nanos(refresh.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
+    let longer = apply(suite.store, &longer, &policy(), RETRIES);
+    suite.check("LS-R-22", longer.outcome.status() == 500, || {
+        format!(
+            "a different granted duration under a spent token must abort, got {}",
+            longer.outcome.status()
+        )
+    });
 }
 
 fn ls_r_stale_cseq(suite: &mut Suite<'_>) {

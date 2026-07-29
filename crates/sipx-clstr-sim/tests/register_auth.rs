@@ -495,35 +495,15 @@ fn ra_r_1_a_retransmitted_register_authenticates_again() {
 
     // One REGISTER seen twice is one binding, not two — the retransmission wrote nothing.
     assert_eq!(edge.bindings(Timestamp::from_secs(1)), 1);
-}
 
-#[test]
-fn a_retransmission_that_authenticates_is_still_refused_by_the_ordering_rule() {
-    // **A live defect, pinned rather than described**, because a paragraph in a story is not
-    // something a build can fail on.
-    //
-    // The retransmission above authenticates — that is `RG-2`'s half, and it holds. What answers it
-    // is `500`, from location-service §5.3 B5, and the reason is B4's definition of an idempotent
-    // retry: `process::already_holds` reads "same granted expiry base" as the same absolute
-    // deadline, so B4 is true only for a retry arriving at the very nanosecond of the original.
-    // A retransmission never does, so every one of them falls through to B5.
-    //
-    // `RG-3` recorded this as an open question and deferred it to `AF-*`/`RG-5`, framed as a
-    // *cluster* concern: a re-presentation at another node stamps its own `now`. This scenario says
-    // it is not only that. A single node, one phone, no cluster at all, and the plainest event on a
-    // UDP network — a lost `200` — reaches it. RG-3's own two options still stand (compare the
-    // granted **duration** rather than the deadline, or carry the originating `now` with the
-    // command); which one is right is that story's call, not this file's.
-    //
-    // When it is fixed, this test fails and `ra_r_1_...` above gains its `phone.answers` assertion.
-    let mut sim = scenario(0x5247_0206, closed_tenant(), PASSWORD, Encore::Retransmit);
-    sim.run_until_idle().expect("settles");
-
+    // And the phone is told so. location-service §5.3 B4 classifies the retransmission as an
+    // idempotent retry — the granted *duration* is what "same granted expiry base" compares — so
+    // the second `200` is the same answer again, not a `500` from B5.
     let phone = sim.node::<Phone>(ALICE).expect("the phone");
     assert_eq!(
         phone.answers,
-        vec![401, 200, 500],
-        "the retransmission is authenticated and then refused by B5\n{}",
+        vec![401, 200, 200],
+        "a retransmission is a retry, not a second write\n{}",
         sim.trace().render()
     );
 }
