@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A retransmitted REGISTER is a retry again, not a `500`** (`RG-8`) — M1's one known defect, and
+  the plainest event on a UDP network reached it. [location-service](docs/specs/location-service.md)
+  §5.3's B4 tested idempotency against an **absolute deadline**, so it held only for a retry
+  arriving in the same nanosecond as the original; a phone retransmitting half a second later after
+  a lost `200` fell through to B5 and was refused. §5.3.1 now makes the **granted duration** the
+  normative base — `refreshed_at → expires_at` compared against the lifetime this command grants —
+  and `process::already_holds` follows it.
+- The rejected reading is recorded in the spec with its reason, because the next reader will ask:
+  carrying the originating `now` with the command cannot answer the case the story exists for. A UA
+  retransmission arrives as fresh bytes and carries no field of ours, so the edge stamps its own
+  `now` and the two deliveries differ again — the defect would have survived the fix while
+  `RegisterCommand` and every re-presenter changed. Comparing durations also answers the cluster
+  case for free, since a second node computing the same duration agrees.
+- **B4.3 says how far the no-mutation guarantee reaches**, which the first draft of §5.3.1 got wrong
+  by over-promising. B1–B5 are decided **per contact against the binding it matches**, so a request
+  that replays a spent token *and* carries a contact matching no stored binding still adds it and
+  commits at a bumped revision. That is not a widening: the same UA can send a request carrying only
+  the new contact, which B1 accepts identically, so the ordering token never gated an addition —
+  what bounds additions is the authenticated principal (§5.1 S3/S4) and the per-tenant quota (§5.5).
+  Vector `LS-R-23` pins it, and §5.3's "a no-op rather than a second write" is now qualified with
+  *"to the bindings that token wrote"*.
+- A binding is still never **extended** by a retry (B4.2): a retry that refreshed the deadline would
+  make one ordering token spendable more than once. `LS-R-3` now states the 500 ms elapsed between
+  the original and the retry, so "identical outcome" stops being satisfiable only by a zero-latency
+  retry, and `LS-R-22`'s cross-backend check now asserts the revision did not move rather than only
+  the status.
+
 ### Added
 
 - **`MediaRelay` and the rtpengine NG adapter contract are pinned** (`ME-1`,

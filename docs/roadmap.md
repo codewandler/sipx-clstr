@@ -125,9 +125,10 @@ doing so, found that a REGISTER which correctly authenticates as a retransmissio
 `500` by the location service — [location-service](specs/location-service.md) §5.3's B4 tests
 idempotency against an absolute deadline, so it is true only for a retry arriving in the same
 nanosecond. Criterion 5 is about authentication and holds; criterion 4's vectors pass as written.
-But an ordinary lost `200` over UDP reaches this, so it is a defect M1 ships with rather than one it
-is free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) owns it,
-`ready` at priority 1, and it is the first thing after M1 rather than an M2 subject.
+But an ordinary lost `200` over UDP reaches this, so it was a defect M1 shipped with rather than one
+it was free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md)
+**closed it** — B4's base is the granted duration, not the absolute deadline — and it was the first
+thing after M1 rather than an M2 subject.
 
 ## Delivered
 
@@ -135,7 +136,8 @@ is free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/st
   proved. Two `sipx` CLI phones register through one node and call each other with media flowing
   direct (`CX-3`); the proxy torture vectors, the location-service vectors on both backends, and the
   registrar-auth vectors all pass in the deterministic harness; digest runs before REGISTER
-  processing and a retransmission is not mistaken for a replay (`RG-2`). Ships with `RG-8` open.
+  processing and a retransmission is not mistaken for a replay (`RG-2`). Shipped with `RG-8` open;
+  `RG-8` has since closed it.
 - **The M0 specs** (0.2.0): `docs/specs/proxy-behavior.md`, `location-service.md`,
   `affinity-token.md`, `hook-framework.md`, and the accepted deterministic-harness design —
   written concurrently, cross-reconciled (token budget 157 B ≤ 200 B end-to-end, hook phases
@@ -146,10 +148,11 @@ is free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/st
 
 ## Next
 
-- `RG-8` — settle B4's idempotency rule so a retransmitted REGISTER is a retry rather than a `500`.
-  Priority 1 and the only `ready` story: it is a spec decision in
-  [location-service](specs/location-service.md) §5.3 before it is a code change, and it supersedes
-  the open question `RG-3` had deferred to the cluster stories.
+- `RG-9` — say what digest actually protects. Priority 1 now that `RG-8` has closed: the response
+  digest covers method and Request-URI only, so a captured `Authorization` reattached to a REGISTER
+  with a different `Contact`, `CSeq` or `Expires` hashes identically and is accepted, where
+  [registrar-auth](specs/registrar-auth.md) `RA-R-2` reads as though it is refused. A spec decision
+  about what the platform accepts, not a patch.
 - Then M2: the affinity token (`AF-*`) is the defining subsystem, and `DP-1`'s config schema
   replaces the node's provisional one. The operator epic advances in parallel (`KO-2` in progress)
   and the kernel stories `CX-1` filed advance on sipx's own schedule.

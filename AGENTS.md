@@ -24,7 +24,8 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
 criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the whole
 [upstream ledger](docs/upstream.md), so nothing here waits on the kernel. The gate is green, and
-M1 ships one known defect: `RG-8`, a retransmitted REGISTER answered `500`, `ready` at priority 1.
+M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
+duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
 Check the board before assuming any of that is current.
 
 ## Non-negotiables

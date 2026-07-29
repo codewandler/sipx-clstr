@@ -21,11 +21,12 @@ principal it yields reaches the binding, and `sipx-clstr-sim/tests/register_auth
 retransmission case end to end. M1's stories and their exit criteria are in the
 [roadmap](../roadmap.md#m1-in-detail); each carries its position as `M1 #n`.
 
-**M1 ships with one known defect, and it is the top of `Next`.** That same scenario found that a
-REGISTER which correctly authenticates as a retransmission is then refused `500`: location-service
-§5.3's B4 tests idempotency against an absolute deadline, so it holds only for a retry arriving in
-the same nanosecond. `RG-8` owns it — a spec decision first, then a one-function change — and it is
-`ready` at priority 1.
+**M1's one known defect is closed.** That same scenario found that a REGISTER which correctly
+authenticates as a retransmission was then refused `500`: location-service §5.3's B4 tested
+idempotency against an absolute deadline, so it held only for a retry arriving in the same
+nanosecond. `RG-8` settled it on the granted **duration** — spec first, then a one-function change —
+and added `B4.3`, which says how far the no-mutation guarantee reaches: it is about the matched
+binding, not the request.
 
 Only the stories with no unmet dependency are `ready` — the rest become ready as the one before
 them lands, so the top of `Next` is always genuinely takeable. **The generated lists below group
@@ -47,7 +48,6 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-8 — Settle B4 idempotency so a retransmission is a retry](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) · Signalling · found by RG-2's harness scenario — an ordinary UDP retransmission is answered 500
 - [RG-9 — Say what digest actually protects, and decide whether that is enough](RG-9-say-what-digest-actually-protects.md) · Signalling · found reviewing RG-8 — RA-R-2 reads stronger than the mechanism delivers
 
 ## Blocked
@@ -165,6 +165,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
 - [RG-4 — Implement the PostgreSQL LocationStore backend](RG-4-implement-the-postgresql-locationstore-backend.md) · Signalling · M1 #10 · the same LS-* vectors on PostgreSQL, unchanged — and two races found
 - [RG-6 — Build forking target sets from location lookups](RG-6-build-forking-target-sets-from-location-lookups.md) · Signalling · M1 #7 · the registrar and the proxy meet; found a dropped Path in PX-5
+- [RG-8 — Settle B4 idempotency so a retransmission is a retry](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) · Signalling · found by RG-2's harness scenario — an ordinary UDP retransmission is answered 500
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [VZ-1 — Implement the SSE replay feed and canvas page](VZ-1-implement-the-sse-replay-feed-and-canvas-page.md) · Platform · the constellation's first feed — a paced sim replay over SSE, one page, zero new runtime deps
 

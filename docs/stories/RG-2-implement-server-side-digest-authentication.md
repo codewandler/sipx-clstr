@@ -88,10 +88,13 @@ network reaches it. Left unchanged here rather than improvised over: reversing a
 the record belongs to the story that owns it, and it is a **spec** decision — §5.3 is normative, so
 the reading changes there before the code does.
 
-**Tracked as [`RG-8`](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md)**, priority 1,
-`ready`. `a_retransmission_that_authenticates_is_still_refused_by_the_ordering_rule` pins the current
-answer meanwhile, so the defect is something a build can fail on rather than a paragraph nobody
-reads.
+**Tracked as [`RG-8`](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md)**, and since
+**closed**: B4's base is the granted duration, not the absolute deadline.
+`a_retransmission_that_authenticates_is_still_refused_by_the_ordering_rule` pinned the defect
+meanwhile — so it was something a build could fail on rather than a paragraph nobody reads — and
+`RG-8` deleted it rather than inverting it, because it existed only to pin the defect.
+`ra_r_1_a_retransmitted_register_authenticates_again` now carries the correct
+`[401, 200, 200]` assertion.
 
 **Kept from the blocked period, because the reasoning still binds:** writing digest here was
 refused (it contradicts the design's primitive/policy split and the `AGENTS.md` upstream-first

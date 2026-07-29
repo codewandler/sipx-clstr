@@ -2,8 +2,8 @@
 id: RG-8
 title: Settle B4 idempotency so a retransmission is a retry
 pillar: Signalling
-status: in-progress
-priority: 1
+status: done
+priority:
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, location]
