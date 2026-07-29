@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12 and
 it, and *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story
 that will.
 
-**76 of 84 rows proved**; 8 deferred.
+**76 of 85 rows proved**; 9 deferred.
 
 ## Proxy — request validation (§4)
 
@@ -159,6 +159,7 @@ that will.
 | `RA-R-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
+| `RA-R-7` | deferred | `RG-11` — RG-10 pins the wildcard/removal variant of RA-R-6 in the spec — the same captured `Authorization` reattached to a `Contact: *`, `Expires: 0` REGISTER with a fresh `Call-ID` takes location-service §W3's removal branch and empties the AoR — but RG-10 is a documentation-only pass with no crate edits and no `cargo` run, so unlike RA-R-6 it ships with no test proving it end to end. The two halves exist separately today (`wildcard()`'s W3 ordering tests, and `RA-R-6`'s replayed-credential tests) but nothing yet drives them together. `RG-11` — a replayed credential empties the AoR through the wildcard path, the direct end-to-end sibling of `RA-R-6`'s test — is not yet filed; this deferral names it ahead of that so the row is not silently unaccounted for. File it with `/track:story` before treating this deferral as fully conventional. |
 
 ## Registrar auth — the tenant boundary (§5)
 

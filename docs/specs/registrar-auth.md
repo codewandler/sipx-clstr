@@ -174,34 +174,61 @@ whose `Contact`, `CSeq` and `Expires` all differ hashes to the identical value. 
 pass verification: it takes the **retransmission** branch of the replay window — the branch that
 accepts a repeated `(nc, response)` pair on purpose, because that is what makes `RA-R-1` hold. To
 the window the two events are the same event. `RA-R-6` pins this end to end, and pins what it
-writes: the AoR then resolves to the original contact **and** the attacker's, because RFC 3261
-§10.3 step 7 adds a contact rather than replacing the set. The phone that owns the AoR keeps
-ringing, so nothing about the victim's experience says this happened.
+writes when the replayed REGISTER carries a single explicit `Contact`: the AoR then resolves to the
+original contact **and** the attacker's, because RFC 3261 §10.3 step 7 adds a contact rather than
+replacing the set. The phone that owns the AoR keeps ringing, so nothing about the victim's
+experience says this happened — **for that variant.**
+
+**The removal variant.** The same replayed `Authorization` is not limited to an explicit `Contact`.
+Nothing in §7.1's bound-column covers `Contact`, `Expires` or `Call-ID`, so it hashes identically
+when reattached to a REGISTER carrying `Contact: *`, `Expires: 0`, and a fresh `Call-ID` instead.
+That request takes the wildcard path, not the additive one, and this registrar implements wildcard
+removal as [location-service](location-service.md) §W3: *"`Call-ID` differs → remove"*, for every
+stored binding at once, with no ordering check when the `Call-ID` is fresh — implemented at
+`crates/sipx-clstr-registrar/src/process.rs:56-76`. A fresh `Call-ID` differs from every binding on
+the AoR by construction, so W3's removal branch applies to all of them and none of B2/B3/B5's
+ordering guard applies to any of them. The result is not a quiet fork: **every** binding on the AoR
+is removed in one request, and the phone that owns the AoR stops ringing. RFC 3261 §26.1.1 names
+exactly this as the point of registration hijacking — an attacker "could, for example, de-register
+all existing contacts for a URI and then register their own device."
 
 What is *not* weakened, and should not be re-derived by the next reader:
 
 - the **method** comes from the request, so a credential captured from a REGISTER authenticates only
   a REGISTER (§3);
-- the AoR a REGISTER writes comes from `To` and is gated by `S4` of
+- the AoR a REGISTER writes to, or removes bindings from, comes from `To` and is gated by `S4` of
   [location-service](location-service.md) §5.1 — *is this principal authorized for this AoR* — so a
-  substituted `To` is refused there, not here;
+  substituted `To` is refused there, not here, for a wildcard REGISTER exactly as for an explicit
+  one;
 - the principal recorded on the binding (§5) is the one the digest proved, so the audit trail names
   the account whose credential was replayed rather than naming nobody.
 
 ### 7.3 The decision: accept, bounded by the nonce lifetime
 
-**Accepted.** This edge does not narrow what `qop=auth` covers, and this specification will not
-describe digest as an integrity mechanism. RFC 3261 §22: it *"provides message authentication and
-replay protection only, without message integrity or confidentiality. Protective measures above and
-beyond those provided by Digest need to be taken to prevent active attackers from modifying SIP
-requests and responses."* That is the property offered here, and the bound on it is the nonce
-lifetime (§3 A7, §6) — nothing else shortens the window.
+**Accepted, re-affirmed against the corrected impact.** This edge does not narrow what `qop=auth`
+covers, and this specification will not describe digest as an integrity mechanism. RFC 3261 §22: it
+*"provides message authentication and replay protection only, without message integrity or
+confidentiality. Protective measures above and beyond those provided by Digest need to be taken to
+prevent active attackers from modifying SIP requests and responses."* That is the property offered
+here, and the bound on it is the nonce lifetime (§3 A7, §6) — nothing else shortens the window.
+Accepting a quiet fork and accepting that the same replay can empty an AoR outright (§7.2) are not
+the same decision, so this is re-argued rather than carried over: nothing about `qop=auth` treats a
+REGISTER that adds a contact differently from one that removes every contact, because both replay
+the identical unmodified header over the same unbound fields (§7.1), and both are bounded by the
+same nonce lifetime and the same mitigations below. There is no cheaper decision available that
+keeps the additive case open while closing the removal one — the rejected options in the table below
+were evaluated against "close the exposure `qop=auth` leaves," not against one variant of it, and
+every reason they fail applies to the removal variant exactly as it does to the additive one.
 
 **Residual risk, in the form an operator can act on:** anyone who can read a REGISTER off the wire
-can, for as long as that nonce lives, replay its `Authorization` on a REGISTER carrying their own
-`Contact` and have the AoR fork to them — RFC 3261 §26.1.1's registration hijacking — so **carry
-signalling over TLS** (RFC 3261 §26.2.1, §26.2.2) and **keep the nonce lifetime short**; on a
-cleartext hop, digest authenticates the account and protects nothing else about the message.
+can, for as long as that nonce lives, replay its `Authorization` on a REGISTER of their own
+choosing — one carrying their own `Contact` forks the AoR to them, and one carrying `Contact: *`,
+`Expires: 0` and a fresh `Call-ID` removes **every** binding on the AoR instead (§7.2). Both are RFC
+3261 §26.1.1's registration hijacking, and an operator should weigh the second, not the first: it is
+loss of service, not merely unwanted company on the AoR. So **carry signalling over TLS** (RFC 3261
+§26.2.1, §26.2.2) and **keep the nonce lifetime short**; on a cleartext hop, digest authenticates
+the account and protects nothing else about the message, including whether the AoR keeps working
+at all.
 
 Rejected, each with the reason it was rejected:
 
@@ -254,6 +281,7 @@ Normative. `RG-2`'s tests derive from these.
 | RA-R-4 | `nc` goes backwards | Refused (A6) |
 | RA-R-5 | Many distinct nonces, more than the window holds | The window's memory does not grow with traffic. An evicted nonce loses its replay history and its counts start over — see §6, and note that it is *bounded by the nonce lifetime*, not unbounded |
 | RA-R-6 | A captured `Authorization` reattached to a REGISTER whose `Contact`, `CSeq` and `Expires` differ, with the method and the signed `uri` unchanged | **Authenticates, under the captured principal, and the binding is written.** The digest is byte-identical, so this takes RA-R-1's branch and not RA-R-2's, and the AoR ends up forking to both contacts. Accepted deliberately, bounded by the nonce lifetime — §7.3 |
+| RA-R-7 | The same captured `Authorization` reattached instead to a REGISTER carrying `Contact: *`, `Expires: 0` and a fresh `Call-ID`, with the method and the signed `uri` unchanged | **Authenticates, under the captured principal, and every binding on the AoR is removed.** The digest is byte-identical, so this takes RA-R-1's branch exactly as RA-R-6 does; [location-service](location-service.md) §W3 then removes every stored binding because the fresh `Call-ID` differs from all of them, with no ordering check. Loss of service, not a fork — RFC 3261 §26.1.1. Accepted deliberately, bounded by the nonce lifetime — §7.3 |
 
 **The tenant boundary (RA-T).**
 

@@ -431,7 +431,7 @@ pub enum SdpOp       { EnsureExplicit, Set(ValueLeaf) }
 pub enum CatalogHeader   { SecurityClient, SecurityServer, SecurityVerify,
                            PEarlyMedia, PChargingVector, PChargingFunctionAddresses }
 pub enum CatalogSdpField { Direction, SessionName }
-pub enum MediaAssertion  { Srtp(SrtpMode) }   // SrtpMode is ME-6's enum, read — never written
+pub enum MediaAssertion  { Srtp }   // satisfied by any SrtpPolicy but Disabled — media-relay §13.1
 ```
 
 `CatalogHeader` is deliberately **not** `HeaderName` and `CatalogSdpField` is deliberately not a
@@ -646,31 +646,59 @@ here; it is handed to EX-8 below with the rest.
 
 Acceptance asks what happens when a quirk implies SRTP: a profile that injects a security-mechanism
 header is saying something on the wire about media security, and if the media plane does not do it,
-the platform is lying to a peer that may act on it.
+the platform is lying to a peer that may act on it. MP11
+([media-relay](../specs/media-relay.md) §13.6) is the rule this section restates on EX-7's side of
+the seam: **a quirk profile may require an SRTP mode; it may never assign one.**
 
 **[sipx-clstr] rules:**
 
 - **A quirk cannot configure media, structurally.** There is no op for it: `m=` proto, `a=crypto`,
   ICE candidates and transport addresses are not catalogue rows and cannot become rule targets. SRTP
-  mode, codecs and transcoding are the **trunk's**, declared per trunk by
+  mode, codecs and transcoding are the **trunk's** —
   [ME-6](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/ME-6-specify-per-trunk-codec-and-srtp-policy.md)
-  in [media-control](media-control.md). One owner, and it is not this one.
-- **A quirk may assert a precondition on that policy.** `requires_media: &[MediaAssertion]` is a
-  closed set of claims — v1 is `Srtp(SrtpMode)` — checked at **startup** against the bound trunk's
-  declared policy. A profile asserting `Srtp(Required)` bound to a trunk whose policy does not
-  satisfy it **fails the boot**, naming the profile, the trunk, the assertion and the actual value
-  (G11, vector QP-G-6). It is never coerced at runtime and never silently ignored.
+  landed them as `TrunkMediaPolicy`, a per-trunk, startup-readable declared value
+  ([media-relay](../specs/media-relay.md) §13.1) — never a value computed per call. One owner, and
+  it is not this one.
+- **The assertion vocabulary maps onto `SrtpPolicy`, which has no required/optional axis of its
+  own.** `SrtpPolicy` (media-relay §13.1) is `Disabled`, `Sdes { suites }` or `DtlsSrtp { role }` —
+  three keying mechanisms, not a required/optional pair. `Srtp` is therefore satisfied by **any
+  variant but `Disabled`**: the assertion is "this leg runs some SRTP mode", not "this leg runs
+  `Sdes`" or any other specific mechanism. Asserting a specific mechanism would let a profile pick
+  the keying method by which profile matched — the per-call pattern MP6 forbids, wearing a
+  better-typed hat, and exactly the reasoning media-relay §13.6 gives for MP11 being
+  constrain-not-assign in the first place (two profiles requiring SRTP must be able to agree without
+  a precedence rule, and only an unparametrised constraint agrees with itself for free — MR-C-4). A
+  boolean-shaped constraint is also all `requires_srtp` — media-relay §13.6's own name for the field
+  it leaves to EX-7 to spell — ever needed: a suite or role preference is a property of the
+  mechanism, not of whether one runs.
+- **A quirk may assert this precondition on the trunk's policy.** `requires_media: &[MediaAssertion]`
+  is a closed set of claims — v1 is the single variant `Srtp` — checked at **startup** against the
+  bound trunk's declared `SrtpPolicy`. A profile asserting `Srtp` bound to a trunk declaring
+  `SrtpPolicy::Disabled` **fails the boot** (G11, media-relay's G-M5, vector QP-G-6). It is never
+  coerced at runtime and never silently ignored.
 - **The assertion is read-only and one-directional.** EX-7 never writes a media policy value, and
   ME-6 never emits a header — signalling the mechanism is the quirk's, doing the media is the
   trunk's. A deployment whose peer needs both writes both, and the boot check is what stops the two
   from drifting apart.
+- **The assertion binds to a trunk only.** `MediaAssertion` is checked against a `TrunkMediaPolicy`,
+  and only a trunk has one — a domain is the registering side and carries no media policy for §13 to
+  read. A profile carrying a non-empty `requires_media` bound to a domain therefore **fails the
+  boot**, naming the profile and the domain (G12, vector QP-G-11), rather than skipping the check
+  silently or reading through to a trunk the binding does not name. `HeaderRule` and `SdpRule` carry
+  no such restriction — only `requires_media` does, because only it needs a trunk to check against.
 
-**The boundary, named.** EX-7 owns the assertion vocabulary and the G11 check. ME-6 owns the policy
-value that check reads. The single thing EX-7 needs from ME-6 — and the only coupling either story
-has to the other — is that **per-trunk SRTP mode is a declared enum readable at startup**, not a
-value computed per call. If ME-6 lands it as anything else, G11 becomes a runtime check and this
-section is wrong; the ME-6 story should be read against that sentence before it closes. Nothing here
-is written into `media-control.md`.
+**The boundary, named.** EX-7 owns the assertion vocabulary and the G11 check; media-relay states the
+same check from its own side as G-M5, vector `MR-C-3` — one rule, checked once, described from both
+specs because each stands independently, not two checks. **The error content is G-M5's**: naming the
+trunk and the profile. G11 does not add the assertion or the actual policy to that content — with
+`MediaAssertion` one variant wide, "the assertion" is invariant across every violation and tells a
+reader nothing G-M5's two names do not already imply, and "the actual policy" is exactly the trunk
+configuration the error already points at. ME-6 owns the policy value the check reads: **per-trunk
+SRTP mode is a declared enum, a field of `TrunkMediaPolicy`, readable at startup**
+([media-relay](../specs/media-relay.md) §13.1, and exported per trunk by §13.5's effective-policy
+record) — not a value computed per call. That is the one coupling either story has to the other, and
+it is settled, not conditional: ME-6 landed exactly this shape, so G11 is a startup check now, not
+something that becomes one. Nothing here is written into `media-relay.md`.
 
 #### The shipped catalogue, and its vectors
 
@@ -680,7 +708,7 @@ composed on one trunk — so the shipped set demonstrates composition rather tha
 
 | Profile | Rules | Vectors |
 |---|---|---|
-| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp(Required)]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7 |
+| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7 |
 | `sdp-direction-explicit` | `EnsureExplicit(Direction)` at `Session` and `Media(Audio)`, on requests and responses carrying a body | QP-A-5 … QP-A-9, QP-C-1, QP-C-3 |
 
 Rows use the `QP` prefix in the three-part `QP-X-n` shape, so registering them in the vector gate is
@@ -720,11 +748,12 @@ re-serializes verbatim (hook-framework §1, PX-3).
 | QP-G-3 | Same, with the trunk-bound profile declaring `overrides` for that target | Boots; the trunk value applies and the trace records the override |
 | QP-G-4 | A configured value that does not parse against the row's ABNF | Startup error (G10) naming the profile, the key and the parse failure |
 | QP-G-5 | A binding naming a trunk that does not exist | Startup error (G10) |
-| QP-G-6 | `sec-agree-headers` (asserting `Srtp(Required)`) bound to a trunk whose ME-6 policy does not offer SRTP | Startup error (G11) naming the profile, the trunk, the assertion and the actual policy |
-| QP-G-7 | Same profile on a trunk whose declared policy satisfies the assertion | Boots |
+| QP-G-6 | `sec-agree-headers` (asserting `Srtp`) bound to a trunk declaring `SrtpPolicy::Disabled` | Startup error (G11, media-relay's G-M5/MR-C-3) naming the trunk and the profile |
+| QP-G-7 | Same profile on a trunk declaring `SrtpPolicy::Sdes { .. }` or `SrtpPolicy::DtlsSrtp { .. }` | Boots |
 | QP-G-8 | A second module declaring `Replace("application/sdp")` at `BeforeForward` alongside `media-anchor` | Startup error (G9) naming both modules and the claim |
 | QP-G-9 | Two modules declaring `Field("application/sdp", Direction)` at the same phase | Startup error (G9) naming both and the field |
 | QP-G-10 | A catalogue row for a header a selected module owns (`Session-Expires`, `session-timer`) | Startup error as an ordinary G2 exclusive-claim conflict, naming `carrier-quirks` and `session-timer` — the catalogue invariant, enforced by machinery that already exists |
+| QP-G-11 | `sec-agree-headers` (asserting `Srtp`) bound to a domain rather than a trunk | Startup error (G12) naming the profile and the domain: no `TrunkMediaPolicy` exists for a domain to check the assertion against |
 
 B1–B4 get no vector, and should not: they are properties of the type, not of a run. Their test is
 that the grammar has no recursive constructor, no environment and no conditional — visible in a
@@ -771,7 +800,8 @@ got wrong:
 |---|---|---|
 | G9 | **Body claims are kind-scoped and ordered.** `Replace(t)` is exclusive per `(t, phase)`; `Field(t, f)` is exclusive per `(t, f, phase)`; a `Replace` and a `Field` on the same media type coexist, and every `Field` writer is ordered after every `Replace` writer at that phase by the framework | Startup error naming both modules and the contested claim (QP-G-8, QP-G-9) |
 | G10 | **Bindings resolve and compose disjointly.** Every bound profile id, trunk, domain and `ConfigKey` exists and type-checks; every literal parses against its row's ABNF; every rule names a catalogue row; every field's op is in that row's op set; the composed rule set at one attachment point is disjoint on targets unless a trunk-bound profile declares `overrides` for the named target | Startup error naming the profile, the rule and the offending id, value or contested target (QP-G-1 … QP-G-5) |
-| G11 | **Media assertions hold.** Every `MediaAssertion` on a bound profile is satisfied by the bound trunk's declared ME-6 policy | Startup error naming the profile, the trunk, the assertion and the actual policy (QP-G-6) |
+| G11 | **Media assertions hold.** Every `MediaAssertion` on a trunk-bound profile is satisfied by the bound trunk's declared `SrtpPolicy` — `Srtp` holds for any variant but `Disabled`. The same check as media-relay's G-M5; the error content is G-M5's, not restated richer here | Startup error naming the trunk and the profile (QP-G-6, = media-relay's MR-C-3) |
+| G12 | **Media assertions need a trunk.** A profile carrying a non-empty `requires_media` bound to a domain is rejected: only a trunk binding has a `TrunkMediaPolicy` to check it against | Startup error naming the profile and the domain (QP-G-11) |
 
 Same discipline as G1–G8: an invalid combination fails deployment, never a call.
 
@@ -810,11 +840,11 @@ does not have to rediscover them, all belong to
   is the one **structural** change EX-7 needs, and the one worth reviewing hardest, because it edits
   a claim other modules already declare.
 - **§7** — G9 (body-claim kinds and their computed ordering), G10 (bindings resolve and compose
-  disjointly), G11 (media assertions hold). G2 is unchanged and does the catalogue invariant for
-  free.
+  disjointly), G11 (media assertions hold — the same check media-relay states as G-M5), G12 (media
+  assertions need a trunk binding). G2 is unchanged and does the catalogue invariant for free.
 - **§8** — the shipped profile catalogue is a profile-level value, so EX-5's catalogue carries the
   bindings alongside `hook_budget`.
-- **§9** — vectors `QP-A-1` … `QP-G-10` above, and the `QP` prefix registered in the vector gate
+- **§9** — vectors `QP-A-1` … `QP-G-11` above, and the `QP` prefix registered in the vector gate
   (CF-8's `SPECS`/`FAMILIES`, fenced from this story).
 
 ## Alternatives considered
@@ -933,10 +963,11 @@ does not have to rediscover them, all belong to
   value" are clear for `a=sendrecv` and `s=`, and progressively less clear for `a=ptime` and `b=AS`,
   which is exactly why neither is catalogued yet. Each future row owes the argument, and a row that
   cannot make it is a module.
-- **`requires_media` is one enum wide (EX-7)** — `Srtp(SrtpMode)`, and it presumes ME-6 lands SRTP
-  mode as a per-trunk value readable at startup. If ME-6 makes it per-call, G11 becomes a runtime
-  check and the interaction has to be re-specified. Codec and transcoding assertions are not in v1
-  and should not be added until a peer needs one.
+- **`requires_media` is one variant wide (EX-7)** — `Srtp`, satisfied by any `SrtpPolicy` but
+  `Disabled` (media-relay §13.1; reconciled against the type ME-6 actually landed by EX-9). Codec
+  and transcoding assertions are not in v1 and should not be added until a peer needs one; each would
+  owe the same required/optional-axis argument `Srtp` just settled, made fresh against
+  `CodecPolicy`/`Transcode` rather than assumed from this one.
 - **Bindings are per trunk and per domain, and a large deployment has many (EX-7).** Nothing here
   bounds how many profiles one binding may carry or how many bindings a node validates at startup.
   Startup cost is the only exposure — evaluation is O(rules) per message — but a config surface that
