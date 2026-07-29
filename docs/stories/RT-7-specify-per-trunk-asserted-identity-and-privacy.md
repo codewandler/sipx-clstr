@@ -27,14 +27,18 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
       and never fabricating. *Anonymous caller*: §9, and `A25` in particular. Vectors `AI-S-1…12`,
       `AI-T-13`, `AI-T-14`.
 - [x] `Privacy` handling for anonymous callers is declared, including a fallback identity when none
-      is available. → `PrivacyEgress { when_absent, anonymous_from, announce_id, on_unperformable }`
-      (§4), with the gate `A20`–`A24` and `AI-T-1…15` exhaustive over trust × privacy. The fallback
-      identity is `IdentitySource::Literal`, and `A17` names what it actually is — the platform's
-      own identity, not the caller's, satisfying RFC 3324 §2.2's requirement that the asserted
-      domain be inside the trust domain, and flagged per branch in §12's record because a
-      regulatory trace built on it traces here rather than to a subscriber. `A18`'s `on_none`
-      covers a deployment that declared no literal. `G-A2` refuses a policy that omits
-      `when_absent`, which is RFC 3325 §1 `Spec(T)` item 5.
+      is available. → `PrivacyEgress { when_unspecified, user_privacy, announce_id,
+      on_unperformable }` (§4), with the gate `A20`–`A24` and `A34`, `AI-T-1…11` exhaustive over
+      `PeerTrust` × `PaiRequest` and `AI-D-1…7` proving that derivation total over the raw header.
+      The fallback identity is `IdentitySource::Literal`, and `A17` names what it actually is — the
+      platform's own identity, not the caller's. RFC 3324 §2.2's requirement on it is an **operator
+      obligation**, not a startup check: `G-A6` checks only RFC 3325 §9.1's shape, because nothing
+      at load can distinguish a deployment's own presentation number from a guess (§12). That is
+      why every `Literal` is reproduced verbatim in §12's effective-policy record and flagged per
+      branch — a regulatory trace built on it traces here rather than to a subscriber. `A18`'s
+      `on_none` covers a deployment that declared no literal. `G-A2` refuses a policy that omits
+      `when_unspecified`, which is RFC 3325 §1 `Spec(T)` item 5 — read wider than §7 words it, and
+      `A23` says why.
 - [x] Interaction with the anonymous-From rule (RFC 5379 §5.1.4) is specified, not left to
       ordering. → §9.1. RFC 5379 §4.1 Table 1 is the argument: `From` is `anonymize` under `user`
       only, `P-Asserted-Identity` is `delete` under `header` and `id` only, so the two rows share
@@ -43,10 +47,11 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
       construction in `A10` (every source reads ingress facts, so a `From` about to be anonymised
       can never feed the identity asserted on that branch). Separately, `A9` fixes the order
       against *normalisation*, where order genuinely is observable: `AI-N-6`.
-- [x] Test vectors per policy combination. → §13, 87 rows in eight families: `AI-D` (7, the
-      `PaiRequest` derivation), `AI-T` (15, the emission gate), `AI-S` (12, selection), `AI-A`
-      (16, anonymous callers and `From`), `AI-N` (7, the normalisation seam), `AI-C` (12,
-      `critical`), `AI-P` (11, pipeline and binding), `AI-X` (7, byte-exact). §13's preamble
+- [x] Test vectors per policy combination. → §13, 97 rows in eight families: `AI-D` (7, the
+      `PaiRequest` derivation), `AI-T` (17, the emission gate), `AI-S` (12, selection), `AI-A`
+      (24, anonymous callers, the `From`, and the response direction), `AI-N` (7, the
+      normalisation seam), `AI-C` (12, `critical`), `AI-P` (11, pipeline and binding),
+      `AI-X` (7, byte-exact). §13's preamble
       states what is proved instead of a raw cross product: the privacy axis is enumerated as
       `PaiRequest` (3 values, total derivation) rather than as header text, so `AI-T` walking all
       `2 × 3` cells plus `AI-D` proving the derivation total *is* exhaustiveness over every
@@ -55,8 +60,8 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
       *Progress*.
 
 ## Progress
-- **Spec written: [asserted-identity](../specs/asserted-identity.md)**, new and normative — 32
-  rules `A1`–`A34`, 8 startup checks `G-A1`–`G-A8`, 87 vectors. AGENTS.md rule 4's test: normative
+- **Spec written: [asserted-identity](../specs/asserted-identity.md)**, new and normative — 35
+  rules `A1`–`A35`, 8 startup checks `G-A1`–`G-A8`, 97 vectors. AGENTS.md rule 4's test: normative
   references, types, state rules and a test-vector table, not prose.
 - **Where creation sits, and why it is a rule rather than an implementation detail.** `A8` fixes
   three egress steps inside the window `N23` already reserves between F2 and F5 — **E1** identity,
@@ -80,8 +85,11 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
   privacy service — RFC 3323 §5.1 puts that in a B2BUA and `PX-8` declined it for v1 — so
   RFC 3323 §5's `MUST` does not literally bind it. Declining on that technicality was rejected: a
   caller who wrote `critical` asked to be rejected rather than exposed, and forwarding is the one
-  outcome they ruled out. The performable set is `{ id }` plus `{ user }` on a trunk declaring
-  `anonymous_from: rfc5379`; `header` and `session` are never claimed, and `session` in particular
+  outcome they ruled out. The performable set is `{ id }` — unconditionally, and `A29` gives the
+  RFC 3325 §9.3 scoping reason rather than asserting it — plus `{ user }` on a trunk declaring
+  `user_privacy: perform`, which `A33` and `A35` define over **all eleven** of RFC 5379 §4.1
+  Table 1's `user` entries: nine performed across both directions, two declined with a reason.
+  `header` and `session` are never claimed, and `session` in particular
   because a privacy claim conditioned on whether a call was anchored is a claim that is sometimes
   false. Anything outside the set with `critical` present is `500` per RFC 3323 §5 with the
   enumerating reason phrase §5 asks for. RFC 5379 §4.3's stronger no-`critical` recommendation is
@@ -166,6 +174,44 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
     caller's `Privacy: id` is not a licence to suppress the callee's, which also means the response
     path needs no state to travel (`AI-P-8`, `AI-P-11`). `A11`: BYE is **not** reachable, and now
     says so.
+- **Round-2 review found the first rework incomplete in three places and self-contradictory in a
+  fourth. All four closed, and the two open questions are now settled in the spec text.**
+  - **`user` was still under-performed — `A33` enumerated nine of Table 1's eleven entries.** I
+    fetched RFC 5379 §4.1 rather than trust recall: the `user` column also carries `Server`
+    (`r`, delete) and `Warning` (`r`, anonymize), and marks `Call-Info`, `Organization` and
+    `Reply-To` `Rr` rather than `R`. Five entries are therefore reachable on a **response** and the
+    spec named none, while `A29` declared `user` performable — the same defect the first round was
+    raised on. Closed by performing them, not scoping them away: new `A35` deletes `Server`
+    (§5.1.12), strips the hostname from `Warning` (§5.1.16), and deletes the three `Rr` headers on
+    a response carrying `Privacy: user`. `A33` now enumerates the column explicitly — **nine
+    performed, two declined with reasons** — so a reader can count it against the RFC.
+  - **`A19` named a mechanism that cannot fire.** RT-5's allowlist is default-deny over the
+    platform's *application-header prefix*; `P-Asserted-Identity` carries no such prefix, so an
+    allowlist omitting it removes nothing. The first half of `A19` was right and is kept; the
+    second half was one false statement traded for another. It now says plainly that **nothing in
+    the platform provides that guarantee today** and §14 files the gap. Two further instances of
+    the same wrong claim, not in the brief: `A33`'s "seam with RT-5" (the six §5.3 headers are
+    standard SIP headers — the field sets are disjoint, there is no seam) and `AI-A-16`, which
+    tested RT-5 dropping `User-Agent`, which it also cannot do.
+  - **`A5` and `A17` still asserted a `G-A6` check the first rework deleted.** Both told the reader
+    that config load enforces RFC 3324 §2.2 on a literal. It does not. `A5` now gives the reason
+    the assertable set satisfies §2.2 anyway — RG-1's store holds identities the deployment issued,
+    so membership comes from the source, which is exactly why `Literal` is the exception — and
+    `A17` says nothing at load can tell a presentation number from a guess.
+  - **The acceptance record above described the design it replaced**, citing `when_absent` and
+    `anonymous_from`, neither of which appears in the spec. Corrected to the shipped types.
+  - **Open question 1 — how `A12`'s token fact reaches the gate.** Once, at `A4`'s ingress step,
+    which reconciles the fact and the message's own header into `IdentityFacts.privacy`; §8 and §9
+    read that plain value and neither knows the token exists. Stated on the field itself. `AI-T-16`
+    pins the mid-dialog re-INVITE (`Withhold`, `when_unspecified` never consulted); `AI-T-17` pins
+    the un-Record-Routed dialog that genuinely has no fact.
+  - **Open question 2 — whether user-level privacy reaches responses.** Yes, and `A35` says how:
+    gated by the **response's own** `Privacy` header, which is `A13`'s rule with the subject
+    changed. §5.1.12's own first sentence is "information about the software used by the UAS", so
+    these five name the *responding* party; reading the caller's request here would let one party's
+    privacy request strip another party's headers. Same payoff as `A13` — no dialog state on the
+    response path, so invariant 5 holds without a store. `critical` is untouched: RFC 3323 §4.2
+    says criticality cannot be managed for responses, so a response is never rejected (`AI-A-24`).
 - **Deferred, and tracked — do not re-file:** the `AI` rows are **not** registered in
   `scripts/check-vectors.py`, and `docs/reference/vector-scope.toml` /
   `docs/reference/conformance.md` carry no `AI` rows. Those three files were fenced to another
