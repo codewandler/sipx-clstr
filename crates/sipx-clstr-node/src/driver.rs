@@ -25,7 +25,9 @@ use sipx_clstr_registrar::{
 use sipx_sip::{
     HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
 };
-use sipx_transport::{Config, Handle, Incoming, Target, TransportKind};
+use sipx_transport::{Handle, Incoming, Target, TransportKind};
+
+use crate::listen::{Advertised, Listener, ListenerError, Listeners};
 
 /// How the node is configured.
 ///
@@ -33,15 +35,13 @@ use sipx_transport::{Config, Handle, Incoming, Target, TransportKind};
 /// than extending it, so nothing should grow to depend on its shape.
 #[derive(Debug, Clone)]
 pub struct NodeConfig {
-    /// Where to listen.
-    pub listen: SocketAddr,
-    /// The tenant every registration on this listener belongs to.
+    /// What this node binds, and what it advertises on each of them (`DP-5`).
+    pub listeners: Listeners,
+    /// The tenant every registration on this node belongs to.
     ///
-    /// One tenant per listener is the M1 simplification. The tenant never comes from the message —
+    /// One tenant per node is the M1 simplification. The tenant never comes from the message —
     /// a registrar that read its tenant from a URI would let a caller choose whose bindings to write.
     pub tenant: String,
-    /// The host this node puts in its `Via` and `Record-Route`.
-    pub advertise: String,
     /// How the tenant authenticates, or `None` for an open tenant (`RG-2`, registrar-auth §3 A1).
     ///
     /// Open by default. A default that quietly required credentials would make a node that answers
@@ -66,15 +66,44 @@ pub struct AuthConfig {
 }
 
 impl NodeConfig {
-    /// A node listening on `listen`, advertising itself as that address.
+    /// A node with a declared set of listeners.
     #[must_use]
-    pub fn new(listen: SocketAddr) -> Self {
+    pub fn listening(listeners: Listeners) -> Self {
         Self {
-            listen,
+            listeners,
             tenant: "default".to_owned(),
-            advertise: listen.to_string(),
             auth: None,
         }
+    }
+
+    /// A node on one address, over UDP and TCP, advertising the address it binds.
+    ///
+    /// # Errors
+    ///
+    /// An unspecified bind address (`0.0.0.0`, `::`) has nothing to advertise, and a node that
+    /// advertised it would put "everywhere" in its `Record-Route` — a dialog whose second request
+    /// goes nowhere. Such a node must be told what it is reached on: [`Self::advertising`].
+    pub fn new(listen: SocketAddr) -> Result<Self, ListenerError> {
+        Ok(Self::listening(Listeners::new([
+            Listener::bound(TransportKind::Udp, listen)?,
+            Listener::bound(TransportKind::Tcp, listen)?,
+        ])?))
+    }
+
+    /// A node on one address, over UDP and TCP, reached at `advertise`.
+    ///
+    /// The listen-private/advertise-public shape (`DP-5`): the two are declared independently and
+    /// neither is derived from the other.
+    ///
+    /// # Errors
+    ///
+    /// Whatever is wrong with the advertised address ([`Advertised::parse`]).
+    pub fn advertising(listen: SocketAddr, advertise: &str) -> Result<Self, ListenerError> {
+        let advertise = Advertised::parse(advertise)?;
+        Ok(Self::listening(Listeners::new([
+            Listener::new(TransportKind::Udp, listen, advertise.clone())?,
+            Listener::new(TransportKind::Tcp, listen, advertise)?,
+        ])?))
     }
 
     /// The tenant policy this configuration describes, ready to decide with.
@@ -93,24 +122,57 @@ impl NodeConfig {
     }
 }
 
+/// What stops a node from starting.
+#[derive(Debug, thiserror::Error)]
+pub enum NodeError {
+    /// The listener could not be bound.
+    #[error(transparent)]
+    Transport(#[from] sipx_transport::Error),
+    /// A listener was declared that cannot be served as declared.
+    #[error(transparent)]
+    Listener(#[from] ListenerError),
+    /// Only a TLS listener was declared, and TLS needs a server identity this node cannot yet be
+    /// given (`DP-1` owns certificate configuration).
+    #[error("no UDP or TCP listener is declared, and a TLS-only node cannot be served yet")]
+    NoCleartextListener,
+}
+
 /// Run the node until the process is asked to stop.
 ///
 /// # Errors
 ///
 /// Fails if the listener cannot be bound — the one error worth refusing to start over, since a node
-/// that silently listened nowhere would look healthy and answer nothing.
-pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
-    let (handle, mut incoming) = sipx_transport::bind(Config::new(config.listen)).await?;
+/// that silently listened nowhere would look healthy and answer nothing — and if the declared
+/// listeners cannot be served as declared.
+pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
+    let advertised = config
+        .listeners
+        .cleartext()
+        .ok_or(NodeError::NoCleartextListener)?
+        .sent_by();
+    let endpoint = config
+        .listeners
+        .endpoint_config()
+        .ok_or(NodeError::NoCleartextListener)?;
+    let (handle, mut incoming) = sipx_transport::bind(endpoint).await?;
 
     // Announced on stdout **after** the bind, so a script can wait for this line instead of sleeping
     // and hoping. Printing it before would make a failed bind look like a successful start — which
     // it did, until a test of the failure path noticed the node saying "listening" and then dying.
+    //
+    // Both addresses, because they are allowed to differ (`DP-5`) and an operator debugging "the
+    // phone registers but nothing rings" needs to see which one went into the messages.
     println!("listening on {}", handle.local_addr());
-    tracing::info!(listen = %handle.local_addr(), tenant = %config.tenant, "node listening");
+    println!("advertising {advertised}");
+    tracing::info!(
+        listen = %handle.local_addr(),
+        %advertised,
+        tenant = %config.tenant,
+        "node listening"
+    );
 
     let store = Arc::new(InMemoryStore::new());
     let policy = TenantPolicy::default();
-    let proxy = proxy_config(&config);
     // One authenticator for the node, because it holds the replay window: a per-request one would
     // forget every nonce-count the moment it was created, which is a replay window that never says
     // no. `std::sync::Mutex` rather than tokio's — `decide` is a hash and a lookup, and it is never
@@ -119,18 +181,36 @@ pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
     let credentials = Arc::new(config.credentials());
     report_transactions_in_flight(handle.clone());
 
+    // The cookie key is the node's, not the request's: it must be the same for every message this
+    // process forwards, or a loop through this node would not be detectable across two of them.
+    let cookie_key = cookie_key();
+
     while let Some(arrival) = incoming.recv().await {
         let handle = handle.clone();
         let store = Arc::clone(&store);
         let config = config.clone();
-        let proxy = proxy.clone();
         let auth = Arc::clone(&auth);
         let credentials = Arc::clone(&credentials);
+        let cookie_key = cookie_key.clone();
 
         // One task per arrival. The accept loop must never do work inline: it is the single consumer
         // of the incoming channel, and the kernel delivers into that channel with `try_send`, so a
         // blocked loop drops requests silently (sipx `T-19`).
         tokio::spawn(async move {
+            // Which listener it arrived on decides which address goes back into it (`DP-5`). Built
+            // per arrival because that answer is per arrival: a node that advertises one address on
+            // UDP and another on TLS has to answer each on its own terms.
+            let receiving = config.listeners.receiving(arrival.transport);
+            if receiving.is_none() {
+                // Only reachable if sipx delivered on a transport nobody declared. The request is
+                // still served — from the cleartext listener — because an answer from the wrong
+                // address beats no answer at all.
+                tracing::warn!(
+                    transport = arrival.transport.as_str(),
+                    "a request arrived on an undeclared transport"
+                );
+            }
+            let proxy = proxy_config_keyed(&config, receiving, cookie_key);
             let edge = Edge {
                 store: &store,
                 policy: &policy,
@@ -175,22 +255,50 @@ fn report_transactions_in_flight(handle: Handle) {
     });
 }
 
-fn proxy_config(config: &NodeConfig) -> ProxyConfig {
-    let mut proxy = ProxyConfig::new(
-        host_of(&config.advertise),
-        Bytes::from(format!("<sip:{};lr>", config.advertise)),
-        cookie_key(),
-    );
-    // The node answers to its bare host as well as to host:port, because a client that resolved a
-    // port differently is still talking to this node.
-    proxy
-        .identities
-        .push(sipx_clstr_proxy::EdgeIdentity::host(&config.advertise));
-    proxy
+/// The proxy this node runs for a request that arrived on `receiving`.
+///
+/// The one place the advertised address becomes protocol (`DP-5`). `Record-Route` is the receiving
+/// listener's, because that is the address the peer just reached us on and the one its mid-dialog
+/// requests must come back to — and the proxy engine derives its own `Via` sent-by from the same
+/// URI, so the two agree by construction rather than by discipline.
+///
+/// The identity **set** is every listener's, not only the receiving one: any edge recognizes any
+/// edge's `Route` (proxy-behavior §5), and a node that only knew the address a request came in on
+/// would forward its own `Record-Route` straight back out again.
+///
+/// Public because it is a decision and decisions are testable without a socket (AGENTS.md #2).
+#[must_use]
+pub fn proxy_config(config: &NodeConfig, receiving: Option<&Listener>) -> ProxyConfig {
+    proxy_config_keyed(config, receiving, cookie_key())
 }
 
-fn host_of(advertised: &str) -> &str {
-    advertised.split(':').next().unwrap_or(advertised)
+fn proxy_config_keyed(
+    config: &NodeConfig,
+    receiving: Option<&Listener>,
+    cookie_key: CookieKey,
+) -> ProxyConfig {
+    // A validated set is never empty, so `speaking_for` is only ever `None` for a set that could
+    // not exist — expressed as a fallback rather than an `unwrap`, because this is on the path a
+    // network message reaches (AGENTS.md #3).
+    let speaking_for = receiving
+        .or_else(|| config.listeners.cleartext())
+        .or_else(|| config.listeners.iter().next());
+    let record_route = speaking_for
+        .map(Listener::record_route_uri)
+        .unwrap_or_default();
+    let host = speaking_for.map_or("", Listener::advertised_host);
+
+    let mut proxy = ProxyConfig::new(host, record_route, cookie_key);
+    // The node answers to every address it advertises, on any port: a client that resolved a port
+    // differently, or reached us over another transport, is still talking to this node.
+    proxy.identities.clear();
+    for listener in config.listeners.iter() {
+        let identity = sipx_clstr_proxy::EdgeIdentity::host(listener.advertised_host());
+        if !proxy.identities.contains(&identity) {
+            proxy.identities.push(identity);
+        }
+    }
+    proxy
 }
 
 /// The loop-detection cookie key.
@@ -575,8 +683,34 @@ mod tests {
     }
 
     #[test]
-    fn the_advertised_host_drops_its_port() {
-        assert_eq!(host_of("192.0.2.1:5060"), "192.0.2.1");
-        assert_eq!(host_of("edge.example"), "edge.example");
+    fn the_node_answers_to_every_address_it_advertises() {
+        // proxy-behavior §5: any edge recognizes any edge's `Route`. Here that starts at home — a
+        // node that advertised one address on UDP and another on TLS must recognize both, or a
+        // mid-dialog request that came back on the other one would be forwarded straight out again.
+        let config = NodeConfig::listening(
+            Listeners::new([
+                Listener::new(
+                    TransportKind::Udp,
+                    "10.0.0.7:5060".parse().unwrap(),
+                    Advertised::parse("203.0.113.9:5060").unwrap(),
+                )
+                .unwrap(),
+                Listener::new(
+                    TransportKind::Tls,
+                    "10.0.0.7:5061".parse().unwrap(),
+                    Advertised::parse("edge-1.example:5061").unwrap(),
+                )
+                .unwrap(),
+            ])
+            .unwrap(),
+        );
+        let proxy = proxy_config(&config, None);
+        let uri = |text: &str| Uri::parse(Bytes::copy_from_slice(text.as_bytes())).unwrap();
+        assert!(proxy.is_ours(&uri("sip:203.0.113.9:5060;lr")));
+        assert!(proxy.is_ours(&uri("sip:edge-1.example:5061;transport=tls;lr")));
+        assert!(
+            !proxy.is_ours(&uri("sip:10.0.0.7:5060;lr")),
+            "the bound address is not an identity"
+        );
     }
 }

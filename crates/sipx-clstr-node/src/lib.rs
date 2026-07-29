@@ -19,6 +19,9 @@
 
 pub mod driver;
 
+/// What the node binds, and what it advertises (`DP-5`) — decisions, with no socket in sight.
+pub mod listen;
+
 /// The `PostgreSQL` location store (`RG-4`), behind the `postgres` feature.
 #[cfg(feature = "postgres")]
 pub mod postgres_store;
