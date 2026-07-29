@@ -2,7 +2,7 @@
 id: CF-9
 title: Make the declared rust-version true, and gate on it
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 epic: conformance-harness
 areas: [ci, build]

@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The minimum supported Rust version is 1.94** (`CF-9`), up from a declared 1.88 that never
+  worked. This is a corrected claim rather than a new restriction: on 1.88 the workspace did not
+  compile at all, so nothing that previously built stops building. The floor was established by
+  bisecting — 1.88, 1.92 and 1.93 fail; 1.94 and 1.95 pass — rather than by reasoning about it.
+  The constraint is the kernel's, not ours: `sipx-transport`'s `impl<K, I> Default for
+  TimerQueue<K, I>` calls `BinaryHeap::new()` on an unbounded type parameter, and rustc relaxed
+  `BinaryHeap::<T>::new`'s `T: Ord` bound in 1.94 — so every consumer inherits 1.94 for the sake
+  of a `Default` impl. Filed as a row in [upstream](docs/upstream.md); bounding it there would let
+  both projects go back down.
+- `scripts/check-msrv.sh` now builds the workspace on the declared floor, and both `gate.sh` and a
+  parallel CI job run it, so the number and the truth cannot drift apart again silently. It reads
+  the floor out of `Cargo.toml`, so the version is never written twice. A warm run costs 0.08s.
+- Raising the floor un-gated 23 `duration_suboptimal_units` lints — clippy reads `rust-version` as
+  its MSRV and suppresses lints whose suggested API is newer. Three sites became `from_hours(1)`;
+  twenty carry a **targeted** allow with a one-line reason, because SIP measures time in seconds
+  and these values are checked against specs and vectors that state seconds — `proxy-behavior`
+  §F11 says "Default 180 s", so `Timer C` stays `from_secs(180)`. The lint is deliberately **not**
+  allowed workspace-wide: that would blind the same check at every future floor raise, which is
+  the inverse of this story's purpose.
+
 ### Fixed
 
 - **A contested target is resolved where the contest is** (`EX-10`). `overrides` — the only
