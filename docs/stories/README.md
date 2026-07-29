@@ -51,7 +51,6 @@ site.
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · proved at wave 4 — a fabricated AI row passes the gate, so 145 rows are unenforced prose
-- [CF-10 — check-docs must only see the repository, not whatever sits under it](CF-10-check-docs-must-only-see-the-repository.md) · Foundation · the gate's verdict currently depends on whether an agent worktree happens to exist
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
 
 ### Roles, topology & operations
@@ -160,6 +159,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
 - [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · the queue converged on sipx v0.7.0; the link is decided local per CF-1's per-component split
 - [CF-9 — Make the declared rust-version true, and gate on it](CF-9-make-the-declared-rust-version-true.md) · Foundation · found building the container image — the workspace does not build on its own declared floor
+- [CF-10 — check-docs must only see the repository, not whatever sits under it](CF-10-check-docs-must-only-see-the-repository.md) · Foundation · the gate's verdict currently depends on whether an agent worktree happens to exist
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio

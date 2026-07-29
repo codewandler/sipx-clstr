@@ -23,6 +23,12 @@ Three checks:
    check silently return `[]` — a gate that passes because it stopped looking is worse than no
    gate, so the rule is restated against the new arrangement rather than deleted.
 
+Two rules about *what* gets read, both learned the hard way:
+
+- **The file set comes from git, not from a directory walk.** See `markdown_files`.
+- **Code is not prose.** Fenced blocks and inline spans are stripped before links are looked for,
+  so a story can quote a real error message without the checker treating the quote as a defect.
+
 Exit 0 when clean, 1 otherwise. Run from the repository root, or anywhere — paths are resolved
 against this file's parent.
 """
@@ -31,10 +37,10 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SKIP_DIRS = {".git", "node_modules", "build", "target", ".docusaurus"}
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 DOCS = ROOT / "docs"
 SITE_DOCS = ROOT / "website" / "docs"
@@ -42,17 +48,65 @@ GITHUB_TREE = "https://github.com/codewandler/sipx-clstr/blob/main"
 
 
 def markdown_files() -> list[pathlib.Path]:
-    return sorted(
-        md
-        for md in ROOT.rglob("*.md")
-        if not SKIP_DIRS.intersection(md.relative_to(ROOT).parts)
+    """Every markdown file **this repository tracks**, and nothing else.
+
+    Asked git rather than walked, deliberately. Walking the tree needs a skip-list, and a skip-list
+    is a denylist that has to grow an entry every time a tool invents a directory — which is exactly
+    how this went wrong: agent worktrees under `.claude/worktrees/` are full checkouts of this
+    repository, so the walk found 3109 markdown files beside the 169 real ones. The count stopped
+    meaning anything, and worse, **the verdict depended on whether a sibling worktree happened to
+    exist**: another agent's in-flight, half-written doc could turn this gate red on a diff that
+    never touched it, and a second copy of a file could resolve a link that was broken in the one
+    that mattered.
+
+    `git ls-files` also excludes untracked scratch, which matches the provenance gate's rule that
+    untracked files are ignored by design.
+    """
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-z", "--", "*.md"],
+            capture_output=True,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        # Loudly, never silently. A gate that checks nothing because it could not work out what to
+        # check is the failure mode this file has already been bitten by once.
+        raise SystemExit(
+            f"docs: FAIL — cannot list tracked files ({error}).\n"
+            "  This check needs the repository's file list from git. Run it inside a git\n"
+            "  checkout; it deliberately does not fall back to walking the directory tree."
+        ) from error
+
+    names = [name for name in listed.decode("utf-8").split("\0") if name]
+    # A tracked path can still be absent from the working tree (a sparse checkout, a deleted-but-
+    # unstaged file). Reading one would crash the checks below, so skip what is not there.
+    return sorted(path for name in names if (path := ROOT / name).is_file())
+
+
+def prose(text: str) -> str:
+    """`text` with fenced blocks and inline code spans removed.
+
+    A link checker that reads a code sample as a link cannot be used to *write about* link defects:
+    quoting a real "broken link ..." error message inside a story file made this gate fail on the
+    story that documented the failure. Code is not prose and its brackets are not links.
+
+    Newlines are preserved so nothing downstream shifts; only the code itself goes.
+    """
+    without_fences = re.sub(
+        r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[ \t]*$",
+        lambda m: "\n" * m.group(0).count("\n"),
+        text,
+        flags=re.S | re.M,
     )
+    # Indented code blocks are not stripped: four-space indentation is also how this repository
+    # wraps continuation lines in frontmatter and list items, and those do carry real links.
+    return re.sub(r"`+[^`\n]*`+", "", without_fences)
 
 
 def check_links() -> list[str]:
     problems = []
     for md in markdown_files():
-        for match in LINK.finditer(md.read_text(encoding="utf-8")):
+        for match in LINK.finditer(prose(md.read_text(encoding="utf-8"))):
             target = match.group(2)
             if target.startswith(("http://", "https://", "#", "mailto:")):
                 continue
@@ -94,7 +148,7 @@ def check_site_links() -> list[str]:
     for md in markdown_files():
         if not md.is_relative_to(SITE_DOCS):
             continue  # Only the published tree carries a routing constraint.
-        for match in LINK.finditer(md.read_text(encoding="utf-8")):
+        for match in LINK.finditer(prose(md.read_text(encoding="utf-8"))):
             target = match.group(2)
             if target.startswith(("http://", "https://", "#", "mailto:")):
                 continue

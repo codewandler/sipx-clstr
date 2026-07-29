@@ -7,6 +7,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The doc gate no longer depends on what happens to be sitting under the repository** (`CF-10`).
+  `check-docs.py` chose its files with `ROOT.rglob("*.md")`, so it descended into
+  `.claude/worktrees/agent-*/` — full checkouts of this repository. It saw **1331** markdown files
+  against **169** tracked. The count was meaningless, and worse, the verdict depended on transient
+  state: a sibling agent's half-written doc could turn the gate red on a diff that never touched it,
+  and a second copy of a file could resolve a link that was broken in the one that mattered. The
+  file set now comes from `git ls-files`, because the walk needed a skip-list and a skip-list is a
+  denylist that grows an entry every time a tool invents a directory. If git cannot run it exits
+  loudly rather than falling back — a gate that checks nothing because it could not decide what to
+  check is a failure this file has already shipped once.
+- **The link checker no longer reads code samples as links** (`CF-10`). Fenced blocks and inline
+  spans are stripped before links are looked for. This was found the only way it could be: quoting
+  a real "broken link …" error message inside the story documenting the defect made the gate fail on
+  that story. Indented blocks are deliberately left alone, since four-space indentation is also how
+  this repository wraps continuation lines that do carry real links.
+
 ## [0.10.0] — 2026-07-29
 
 One change, and it is about who the documentation is for. Until now the published site was a

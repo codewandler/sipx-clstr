@@ -2,7 +2,7 @@
 id: CF-10
 title: check-docs must only see the repository, not whatever sits under it
 pillar: Foundation
-status: ready
+status: done
 priority: 1
 epic: conformance-harness
 areas: [ci, build]
@@ -18,22 +18,48 @@ nothing to do with the commit being gated — which is the same class of defect 
 green locally and red in CI.
 
 ## Acceptance
-- [ ] The set of files checked is derived from what git tracks, not from a filesystem walk.
+- [x] The set of files checked is derived from what git tracks, not from a filesystem walk.
       `scripts/check-docs.py:44` is `ROOT.rglob("*.md")`.
-- [ ] The reported file count is stable for a given commit. Today it has ranged from **122** to
+- [x] The reported file count is stable for a given commit. Today it has ranged from **122** to
       **249** across runs of the same gate on the same tree, purely because worktrees came and went.
-- [ ] A broken link in an untracked directory does not fail the gate; a broken link in a tracked
+- [x] A broken link in an untracked directory does not fail the gate; a broken link in a tracked
       file still does. Both directions get a check.
-- [ ] Fenced code blocks and inline code spans are not scanned for links. A link checker that reads
+- [x] Fenced code blocks and inline code spans are not scanned for links. A link checker that reads
       a code sample as a link cannot be used to write about link defects — quoting a real error
       message in a story file currently fails the gate, which is how this item was found.
-- [ ] The same question is asked of the other gate scripts — `check-provenance.sh`,
+- [x] The same question is asked of the other gate scripts — `check-provenance.sh`,
       `check-vectors.py` — and each either already scopes itself to tracked files or is fixed to.
       `check-provenance` scanning an untracked directory would be the more serious version of this
       bug, since it is the script enforcing non-negotiable #1.
 
 ## Progress
-- (not started)
+
+- **Done.** Two defects in one script, both closed.
+- **The file set now comes from `git ls-files`, not `rglob`.** The walk needed a skip-list, and a
+  skip-list is a denylist that grows an entry every time a tool invents a directory — which is how
+  this happened. Measured before the change: **1331** markdown files seen against **169** tracked,
+  because `.claude/worktrees/agent-*/` holds full checkouts contributing 3109 `*.md` files.
+- **Failing-first, both directions.** A fabricated `.claude/worktrees/fake-agent/docs/poison.md`
+  with a broken relative link turned the gate red before the change (`docs: FAIL — 1 problem(s)`)
+  and is ignored after (`docs: clean (169 …)`). Then, to prove it had not simply gone blind, all
+  three checks were re-provoked in tracked files and each still fails: a broken relative link in
+  `docs/vision.md`, a site page relative-linking into `docs/specs/`, and a story naming an epic
+  with no design doc.
+- **Code blocks are no longer scanned for links.** This story could not previously quote the error
+  message that produced it without failing the gate on itself. Fenced blocks and inline spans are
+  stripped first. Verified both ways: a broken link inside a fence and inside backticks is ignored,
+  while a broken link in prose in the same file still fails.
+- Indented blocks are deliberately *not* stripped — four-space indentation is also how this
+  repository wraps continuation lines in list items and frontmatter, and those carry real links.
+- **The sibling gates were audited and both are already correct**, for different reasons.
+  `check-provenance.sh` uses `git grep`, which only sees tracked files; its non-git fallback walks
+  the tree, but that path only runs where there is no git repository and therefore no worktrees.
+  `check-vectors.py` scopes its walk to `crates/`, which agent worktrees fall outside. Neither
+  needed changing, which is worth recording so the question is not re-asked.
+- Failure is loud: if `git ls-files` cannot run, the script exits with a message saying so rather
+  than falling back to a walk. A gate that checks nothing because it could not decide what to check
+  is the exact failure this file has already shipped once.
+- Considered for upstream: no. This is this repository's own gate.
 
 ## Notes
 - **Found during wave 4.** `scripts/gate.sh` went red on the integration branch with:
