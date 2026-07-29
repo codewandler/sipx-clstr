@@ -850,7 +850,8 @@ fn read_listeners(
             errors,
         );
         let roles = read_roles(map.get(Value::from("roles")), &at.field("roles"), errors);
-        let transport = required_str(map, "transport", &at, "CC-7", errors);
+        let transport = required_str(map, "transport", &at, "CC-7", errors)
+            .and_then(|declared| check_transport(&declared, &at.field("transport"), errors));
         let bind = required_str(map, "bind", &at, "CC-7", errors);
         let advertise = map
             .get(Value::from("advertise"))
@@ -866,6 +867,43 @@ fn read_listeners(
         }
     }
     listeners
+}
+
+/// Accept only a transport this build can actually serve, and refuse the rest **loudly**.
+///
+/// This existed as `_ => Udp` for one commit, and it was a fail-open on a security-relevant field: a
+/// document declaring `transport: tls` bound plaintext UDP and answered `200 OK`, so a deployment
+/// asking for encrypted signalling got none and nothing said so. That is the shape of defect §8 V10
+/// exists to prevent — refusing to start is the only failure mode — and it is worse here than
+/// elsewhere, because the operator's *intent* was recorded in the document and then discarded.
+///
+/// `tls`, `ws` and `wss` are named in the refusal rather than treated as unknown, because "this
+/// build cannot serve it yet" and "there is no such transport" are different problems and lead an
+/// operator to different actions. This follows media-relay §13.2 MP12's precedent: refuse a policy
+/// the implementation cannot honour, rather than honour a different one.
+fn check_transport(declared: &str, path: &Path, errors: &mut Vec<ConfigError>) -> Option<String> {
+    match declared {
+        "udp" | "tcp" => Some(declared.to_owned()),
+        "tls" | "ws" | "wss" => {
+            errors.push(ConfigError::new(
+                path.clone(),
+                "CC-V10",
+                Some(declared.to_owned()),
+                "udp or tcp; this build cannot serve tls, ws or wss, and will not silently \
+                 substitute cleartext for a transport that was asked for",
+            ));
+            None
+        }
+        _ => {
+            errors.push(ConfigError::new(
+                path.clone(),
+                "CC-V2",
+                Some(declared.to_owned()),
+                "one of: udp, tcp, tls, ws, wss",
+            ));
+            None
+        }
+    }
 }
 
 fn read_membership(

@@ -67,8 +67,34 @@ step "build"
 cargo build --quiet --bin sipx-clstr || fail "the node does not build"
 
 step "start the node on 127.0.0.1:$port"
-setsid ./target/debug/sipx-clstr run \
-    --listen "127.0.0.1:$port" --advertise "127.0.0.1:$port" \
+# Configured by a document, not by flags: `DP-10` made the schema the only configuration surface, and
+# a proof script still passing `--listen` would be testing an interface that no longer exists.
+cat > "$work/cluster.yaml" <<YAML
+apiVersion: sipx.dev/v1alpha1
+version: 1
+cluster:
+  name: e2e
+  environment: dev
+  zones: [a]
+  listener:
+    - roles: [edge, registrar]
+      transport: udp
+      bind: 127.0.0.1:$port
+      advertise: 127.0.0.1:$port
+  membership:
+    - node: 1
+      name: node-a
+      zone: a
+      roles: [edge, registrar]
+  locationStore:
+    backend: memory
+  tenant:
+    - name: default
+      id: 1
+      domains: [127.0.0.1]
+YAML
+setsid ./target/debug/sipx-clstr run --config "$work/cluster.yaml" \
+    --node 1 --zone a --roles edge,registrar \
     >"$work/node.log" 2>&1 </dev/null &
 node_pid=$!
 

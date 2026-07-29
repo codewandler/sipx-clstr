@@ -164,9 +164,18 @@ fn node_config(
             .bind
             .parse()
             .map_err(|_| StartupError::Listener(crate::listen::ListenerError::EmptyHost))?;
+        // The loader has already refused anything but these two — `tls`/`ws`/`wss` are rejected by
+        // name rather than downgraded, so this cannot silently pick cleartext for a transport that
+        // was asked for. Kept as an explicit refusal rather than a `_ =>` default so that adding a
+        // transport to the loader without wiring it here is a startup error, not a substitution.
         let transport = match declared.transport.as_str() {
+            "udp" => TransportKind::Udp,
             "tcp" => TransportKind::Tcp,
-            _ => TransportKind::Udp,
+            other => {
+                return Err(StartupError::MissingIdentity(format!(
+                    "cluster.listener declares transport `{other}`, which this build cannot serve"
+                )));
+            }
         };
         let listener = match &declared.advertise {
             Some(advertise) => Listener::new(transport, bind, Advertised::parse(advertise)?)?,

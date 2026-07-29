@@ -560,3 +560,40 @@ fn cc_d3_something_that_is_neither_encoding_is_refused() {
         "{errors:#?}"
     );
 }
+
+/// §8 V10 — a transport this build cannot serve is **refused**, never downgraded.
+///
+/// The regression this pins: `transport: tls` used to fall through a `_ => Udp` default, so a document
+/// asking for encrypted signalling produced a node answering `200 OK` in plaintext, with nothing
+/// anywhere saying so. The operator's intent was in the document and was discarded.
+#[test]
+fn cc_v10_a_tls_listener_is_refused_not_downgraded_to_cleartext() {
+    let document = good().replace("transport: udp", "transport: tls");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    let error = errors
+        .iter()
+        .find(|e| e.path.to_string() == "cluster.listener[0].transport")
+        .expect("a transport error");
+    assert_eq!(error.found.as_deref(), Some("tls"));
+    assert!(
+        error.expected.contains("substitute cleartext"),
+        "the refusal must say it will not downgrade: {error}"
+    );
+}
+
+/// A transport that does not exist at all is a different problem, and says so.
+#[test]
+fn cc_v2_an_unknown_transport_names_the_closed_set() {
+    let document = good().replace("transport: udp", "transport: sctp");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    let error = errors
+        .iter()
+        .find(|e| e.path.to_string() == "cluster.listener[0].transport")
+        .expect("a transport error");
+    assert!(
+        error.expected.contains("wss"),
+        "must spell the set: {error}"
+    );
+}
