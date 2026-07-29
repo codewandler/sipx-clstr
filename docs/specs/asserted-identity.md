@@ -323,7 +323,7 @@ pub enum Emission {
     Withhold(WithholdReason),
 }
 
-pub enum WithholdReason { AssertNever, NoIdentity, PrivacyId, PrivacyHeader, PolicyWhenAbsent }
+pub enum WithholdReason { AssertNever, NoIdentity, PrivacyId, PrivacyHeader, PolicyWhenUnspecified }
 
 pub enum FromDecision { AsReceived, Anonymise }
 
@@ -422,7 +422,7 @@ Six cells. Every `(PeerTrust, PaiRequest)` pair appears exactly once, which is w
 total — and because `PaiRequest` is derived by a total function (§4), a `Privacy` header carrying
 values this spec has never heard of still lands in a determined cell.
 
-| | `Withhold` (`id` or `header`) | `Preserve` (`none`, alone) | `Unspecified` (nothing about this header) |
+| | `Withhold` (a withholding value present) | `Preserve` (`none`, no withholding value) | `Unspecified` (nothing about this header) |
 |---|---|---|---|
 | **`Trusted`** | Emit — A20 | Emit — A20, A22 | Emit — A20 |
 | **`Untrusted`** | Withhold — A21 | Emit — A22 | `when_unspecified` — A23 |
@@ -491,7 +491,7 @@ it can perform.
 | # | Rule |
 |---|---|
 | A29 | **The performable set is `{ id }`, plus `{ user }` on a trunk declaring `user_privacy: perform`, and nothing else.** <br>**`id` is performable unconditionally, and that is not an inconsistency with `user`.** RFC 3325 §9.3 scopes the token to keeping the identity "private with respect to SIP entities **outside** the Trust Domain with which the user authenticated". Toward an untrusted peer the platform withholds (A21); toward a trusted one the identity has not left the trust domain, so forwarding it (A20) is *also* an honouring of `id`. Both cells of §8.1's `Withhold` column are performances, so nothing about the trunk can make `id` unperformable. `user` is different in kind: a trunk may simply not do what it asks, which is a capability question rather than a scoping one. <br>**`user` is performable iff `user_privacy: perform`**, and A33 fixes what that means over **all eleven** of Table 1's `user` entries — nine performed across both directions (A35 carries the response half), two declined with a reason. A trunk that anonymised the `From` and forwarded `Subject`, `Call-Info`, `Organization`, `User-Agent`, `Reply-To` and `In-Reply-To` would be claiming a level of privacy it did not provide, which under A30 means forwarding a request the caller asked to have rejected. The `critical` contract is satisfied by the **request-direction** treatment being complete, and that is not a convenience: RFC 3323 §4.2 declines to extend criticality to responses at all ("Criticality cannot be managed appropriately for responses"), so a request is the only thing `user;critical` can be a contract about (A35). <br>**`header` is never performable**: Via, Contact and Record-Route obscuring (RFC 3323 §4.2), out of scope for v1 by PX-8 and pointed at a B2BUA by RFC 3323 §5.1. **`session` is never performable**: media anonymisation would depend on whether a call was anchored through a relay at all, and a privacy claim conditioned on another subsystem's runtime choice is a claim that is sometimes false. **An unregistered `token` (RFC 3323 §4.2) is never performable**, because the platform cannot know what it was asked to do. |
-| A30 | **`critical` present and any requested priv-value outside A29's set ⇒ `500 (Server Error)`.** RFC 3323 §5: "if the privacy service is incapable of performing all of the levels of privacy specified in the Privacy header then it MUST fail the request with a 500 (Server Error) response code", restated by RFC 5379 §4.3. The reason phrase enumerates the priv-values that were not performed, which §5 says it SHOULD do. `Privacy: none;critical` is **not** a rejection: `none` requests no privacy functions, so the set of unperformable requested functions is empty and A30's condition is not met — a derivation from this rule rather than a special case, for a header RFC 3323 §4.2 tells user agents not to construct in the first place. |
+| A30 | **`critical` present and any requested *privacy function* outside A29's set ⇒ `500 (Server Error)`.** RFC 3323 §4.2's ABNF makes `critical` and `none` priv-values, but neither names a function to perform — `critical` is the indicator that the others are mandatory and `none` is a request for no function at all — so neither can be unperformable and A30 is read over the rest. RFC 3323 §5: "if the privacy service is incapable of performing all of the levels of privacy specified in the Privacy header then it MUST fail the request with a 500 (Server Error) response code", restated by RFC 5379 §4.3. The reason phrase enumerates the priv-values that were not performed, which §5 says it SHOULD do. `Privacy: none;critical` is **not** a rejection: `none` requests no privacy functions, so the set of unperformable requested functions is empty and A30's condition is not met — a derivation from this rule rather than a special case, for a header RFC 3323 §4.2 tells user agents not to construct in the first place. |
 | A31 | **Without `critical`, `on_unperformable` decides, and the default is `Forward`.** RFC 5379 §4.3 recommends rejecting with `500` even absent `critical`. This platform declines that by default and makes the recommendation available as one declared word, because taking it turns every optional privacy hint into a call failure at an element that never claimed to be a privacy service — and `critical` is the token a caller has precisely to demand the stricter behaviour. On `Forward`, the un-performed priv-value stays in the forwarded `Privacy` header (A28) for an element downstream that can honour it. `on_unperformable: reject` takes §4.3's recommendation, per trunk. |
 | A32 | **`Proxy-Require: privacy` never reaches this spec.** The platform does not advertise RFC 3323 §4.3's `privacy` option-tag, so [proxy-behavior](proxy-behavior.md) §4 `V6` answers `420 Bad Extension` with `Unsupported: privacy` before any identity decision is made. That is RFC 3261's own mechanism for the case, and §4.3 says a UA sends the tag exactly so that "in the unlikely event that the user agent sends a request to an intermediary that does not support the extensions described in this document, the request will fail". Nothing here overrides it, and A29–A31 never see such a request. |
 
@@ -643,14 +643,14 @@ references are to §8.1.
 | AI-T-4 | trusted, `Withhold` (`Privacy: header`) | `Emit`, same cell and same reasoning (A20) |
 | AI-T-5 | trusted, `Unspecified` (`Privacy: user`) | `Emit` — Table 1 gives this header no treatment under `user` (A20, A25) |
 | AI-T-6 | untrusted, `Unspecified` (no `Privacy`), `when_unspecified: include` | `Emit` (A23; RFC 3325 §7's RECOMMENDED, taken by declaration) |
-| AI-T-7 | untrusted, `Unspecified` (no `Privacy`), `when_unspecified: remove` | `Withhold(PolicyWhenAbsent)` (A23) |
+| AI-T-7 | untrusted, `Unspecified` (no `Privacy`), `when_unspecified: remove` | `Withhold(PolicyWhenUnspecified)` (A23) |
 | AI-T-8 | untrusted, `Preserve`, `when_unspecified: remove` | `Emit` — `none` out-votes the policy, never the reverse. **The row A19 defers to**: this is why no configuration here guarantees the header never reaches a peer (A22) |
 | AI-T-9 | untrusted, `Withhold` (`Privacy: id`) | `Withhold(PrivacyId)` (A21) |
 | AI-T-10 | untrusted, `Withhold` (`Privacy: header`) | `Withhold(PrivacyHeader)` (A21, RFC 5379 §5.1.8) |
-| AI-T-11 | untrusted, `Unspecified` (`Privacy: user`), `when_unspecified: remove` | `Withhold(PolicyWhenAbsent)` — **the B3 row**: an unrelated priv-value does not bypass a declared fail-closed posture, and `user`'s own effect is §9's, not this header's (A23, A25) |
+| AI-T-11 | untrusted, `Unspecified` (`Privacy: user`), `when_unspecified: remove` | `Withhold(PolicyWhenUnspecified)` — **the B3 row**: an unrelated priv-value does not bypass a declared fail-closed posture, and `user`'s own effect is §9's, not this header's (A23, A25) |
 | AI-T-12 | untrusted, `Withhold`, two values in hand (`sip` + `tel`) | Both removed — RFC 3325 §7: "all instances of the header field values MUST be removed" (A21) |
 | AI-T-13 | `assert: never`, trusted, PAI received from a trusted sender | Forwarded — `Never` creates nothing and removes nothing (A19) |
-| AI-T-14 | `assert: never`, untrusted, `Unspecified`, `when_unspecified: remove`, PAI in hand | `Withhold(PolicyWhenAbsent)` — the same gate, unaffected by `Never` (A19) |
+| AI-T-14 | `assert: never`, untrusted, `Unspecified`, `when_unspecified: remove`, PAI in hand | `Withhold(PolicyWhenUnspecified)` — the same gate, unaffected by `Never` (A19) |
 | AI-T-15 | untrusted, `Privacy: id;user` | `Withhold(PrivacyId)` **and** the `From` anonymised on a trunk declaring `user_privacy: perform` — both axes fire, neither because of the other (A25) |
 | AI-T-16 | Mid-dialog re-INVITE toward an untrusted trunk, **no `Privacy` header**, dialog-forming INVITE carried `Privacy: id`, `when_unspecified: include` | `Withhold(PrivacyId)` — the token fact is reconciled into `IdentityFacts.privacy` at ingress, so `PaiRequest` derives `Withhold` and `when_unspecified` is never consulted. The row that stops a caller's `id` lapsing mid-dialog (A12, A21) |
 | AI-T-17 | The same re-INVITE on a dialog whose Record-Route pair was never inserted | `Emit` under `when_unspecified: include` — no token verified, no fact, and the message says nothing. The limit of A12, stated in §9 and pinned here rather than left to be discovered |
@@ -743,9 +743,9 @@ references are to §8.1.
 | AI-P-6 | Out-of-dialog `OPTIONS` toward the trunk | Asserted — RFC 3325 §9.1's table marks OPTIONS `o` (A11) |
 | AI-P-7 | `REGISTER` on a scope with an identity policy | No `P-Asserted-Identity` added — §9.1's table marks REGISTER `-`, and the registrar path is not this one (A11) |
 | AI-P-8 | `200 OK` from the callee carrying `P-Asserted-Identity` **and `Privacy: id`**, forwarded toward an untrusted ingress peer | Withheld at `BeforeResponseForward` (H11) — RFC 5379 §4.1 marks the header `Rr` (A13) |
-| AI-P-11 | `200 OK` carrying `P-Asserted-Identity` and **no** `Privacy`, forwarded toward an untrusted ingress peer whose *request* carried `Privacy: id` | **Emitted or withheld by `when_unspecified` alone** — the request's `id` does not reach this decision. It was a statement about the *caller's* identity; the header here carries the *callee's* (A13) |
 | AI-P-9 | The fixture INVITE retransmitted | Byte-identical forwarded message — `egress_identity` is a pure function of `(policy, facts)` (A4, proxy-behavior §10 `S4`) |
 | AI-P-10 | A trunk with **no** identity policy bound | Nothing created; any PAI removed toward the peer; `Privacy` and `From` bytes untouched — A1/A19/A23's fail-closed triple |
+| AI-P-11 | `200 OK` carrying `P-Asserted-Identity` and **no** `Privacy`, forwarded toward an untrusted ingress peer whose *request* carried `Privacy: id` | **Emitted or withheld by `when_unspecified` alone** — the request's `id` does not reach this decision. It was a statement about the *caller's* identity; the header here carries the *callee's* (A13) |
 
 **Byte-exact forms (AI-X).**
 
