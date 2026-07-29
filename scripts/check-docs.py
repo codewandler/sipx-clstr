@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """Documentation consistency: the half of the gate that is not Rust.
 
-`docs/` is published — the website is a view of these exact files — so a broken relative link
-here is a broken page on the site, and a story whose `epic:` names a design that does not exist
-is a board row pointing at nothing. Both are cheap to check and expensive to notice late.
+There are two documentation trees and they are published differently. `website/docs/` is the
+public site, authored for end users. `docs/` is internal contributor material — the story board,
+the roadmap, design records, the normative specs — and **none of it is published**. A broken
+relative link in either is cheap to check and expensive to notice late.
 
 Three checks:
 
 1. **Every relative link resolves.** Absolute URLs and bare anchors are out of scope; anything
-   with a path is resolved against the file that contains it.
+   with a path is resolved against the file that contains it. This covers both trees.
 2. **Every `epic:` slug has `docs/designs/<slug>.md`, and every `design:` path exists.**
-3. **No published doc relative-links into one the site excludes.** The site is a *view* of
-   `docs/`, but a curated one: `docusaurus.config.js` excludes `stories/**` and friends, so a link
-   that resolves perfectly on disk is a **broken link on the published site** — and Docusaurus
-   fails the build on those, which is how the `v0.4.0` site deploy died while this gate stayed
-   green. Published docs reach a story through its absolute GitHub URL instead.
+3. **No page on the site relative-links out of the published tree.** Docusaurus can only route
+   what lives under `website/docs/`, so a link from a site page to `../../docs/specs/foo.md`
+   resolves perfectly on disk and is a **broken link on the published site**. The overwhelmingly
+   common case is a site page reaching for a spec or a design, which is exactly the material that
+   is no longer published; those are reached by absolute GitHub URL instead.
 
-   The exclude patterns are read *from the site config* rather than restated here, because a check
-   that keeps its own copy of the list is a check that eventually disagrees with the thing it is
-   checking.
+   This check is the inverse of the one it replaces. Until the site was split from `docs/`, the
+   rule was "a published doc must not link into an *excluded* one", and the exclude globs were
+   read out of `docusaurus.config.js`. That config key is now gone, which would have made the old
+   check silently return `[]` — a gate that passes because it stopped looking is worse than no
+   gate, so the rule is restated against the new arrangement rather than deleted.
 
 Exit 0 when clean, 1 otherwise. Run from the repository root, or anywhere — paths are resolved
 against this file's parent.
@@ -26,7 +29,6 @@ against this file's parent.
 
 from __future__ import annotations
 
-import fnmatch
 import pathlib
 import re
 import sys
@@ -35,7 +37,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SKIP_DIRS = {".git", "node_modules", "build", "target", ".docusaurus"}
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 DOCS = ROOT / "docs"
-SITE_CONFIG = ROOT / "website" / "docusaurus.config.js"
+SITE_DOCS = ROOT / "website" / "docs"
+GITHUB_TREE = "https://github.com/codewandler/sipx-clstr/blob/main"
 
 
 def markdown_files() -> list[pathlib.Path]:
@@ -82,61 +85,35 @@ def check_stories() -> list[str]:
     return problems
 
 
-def site_excludes() -> list[str]:
-    """The docs plugin's `exclude` globs, read from the site config.
-
-    Returns `[]` if the config or the key is missing, which makes the check below inert rather
-    than wrong — a repo with no website has no published/excluded distinction to enforce.
-    """
-    if not SITE_CONFIG.is_file():
-        return []
-    match = re.search(
-        r"exclude:\s*\[(.*?)\]", SITE_CONFIG.read_text(encoding="utf-8"), re.S
-    )
-    if not match:
-        return []
-    return re.findall(r"['\"]([^'\"]+)['\"]", match.group(1))
-
-
-def is_excluded(rel_to_docs: str, patterns: list[str]) -> bool:
-    # Docusaurus matches these against the doc path relative to the docs root, and `stories/**`
-    # is meant to catch `stories/RG-8-….md`. fnmatch's `*` crosses separators, so `stories/**`
-    # already does; the extra `stories/*` form is here for patterns written without the doubling.
-    return any(
-        fnmatch.fnmatch(rel_to_docs, pattern)
-        or fnmatch.fnmatch(rel_to_docs, pattern.replace("**", "*"))
-        for pattern in patterns
-    )
-
-
 def check_site_links() -> list[str]:
-    """A published doc must not relative-link into an excluded one — see the module docstring."""
-    patterns = site_excludes()
-    if not patterns or not DOCS.is_dir():
+    """A site page must not relative-link out of the published tree — see the module docstring."""
+    if not SITE_DOCS.is_dir():
         return []
 
     problems = []
     for md in markdown_files():
-        if not md.is_relative_to(DOCS):
-            continue  # README.md, AGENTS.md and friends are read on GitHub, not on the site.
-        source = md.relative_to(DOCS).as_posix()
-        if is_excluded(source, patterns):
-            continue  # An excluded page linking to another excluded page is a GitHub-only path.
+        if not md.is_relative_to(SITE_DOCS):
+            continue  # Only the published tree carries a routing constraint.
         for match in LINK.finditer(md.read_text(encoding="utf-8")):
             target = match.group(2)
             if target.startswith(("http://", "https://", "#", "mailto:")):
                 continue
             path = target.split("#")[0]
-            if not path:
-                continue
+            if not path or path.startswith("/"):
+                continue  # Site-root-relative; Docusaurus resolves it against baseUrl.
             resolved = (md.parent / path).resolve()
-            if not resolved.is_relative_to(DOCS):
-                continue  # Out of the docs tree entirely; the site never had a page for it.
-            if is_excluded(resolved.relative_to(DOCS).as_posix(), patterns):
-                problems.append(
-                    f"site link  {md.relative_to(ROOT)}: [{match.group(1)}]({target}) "
-                    f"— the site excludes that page; link its GitHub URL instead"
-                )
+            if resolved.is_relative_to(SITE_DOCS):
+                continue
+            if resolved.is_relative_to(DOCS):
+                # The common case, and the reason this check exists: reaching for a spec, a
+                # design record or the roadmap, none of which the site publishes.
+                where = resolved.relative_to(ROOT).as_posix()
+                why = f"docs/ is not published — link {GITHUB_TREE}/{where} instead"
+            else:
+                why = "that path is outside website/docs/, so the site has no page for it"
+            problems.append(
+                f"site link  {md.relative_to(ROOT)}: [{match.group(1)}]({target}) — {why}"
+            )
     return problems
 
 

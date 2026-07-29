@@ -18,7 +18,7 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `crates/` | the Rust workspace — `-proxy` and `-registrar` are sans-IO, `-node` is the driver layer, `-sim` the harness, `-probe` the e2e-tester | hand-written |
 | `scripts/` | the gate: `gate.sh` and the checks it runs | hand-written |
 | `deploy/helm/` | the chart, its templates and the default deployment set (`KO-2`) | hand-written |
-| `website/` | the published documentation site (Docusaurus), deployed on release | built by CI |
+| `website/docs/` | the **public** end-user documentation site (Docusaurus), deployed on release | hand-written |
 | `CHANGELOG.md` | closed stories roll up here | hand-written |
 
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
@@ -104,26 +104,34 @@ line. Adding a line is a deliberate act, and "we looked at it" is not a reason.
 that does not compile with an optional feature turned *off* is invisible until a consumer turns it
 off, and by then it is in a release.
 
-Documentation consistency is part of the gate rather than a separate practice, because `docs/` is
-published:
+Documentation consistency is part of the gate rather than a separate practice, because there are
+two trees and they are published differently:
 
 - Every story's frontmatter is complete and the board regenerated (`/track:board`).
 - New specs carry normative references and test-vector tables, not prose alone.
-- Anything added under `docs/` that should be readable on the site is reachable from
-  `website/sidebars.js`; the site build fails on a broken link rather than shipping one.
-- **A published doc never relative-links into an excluded one.** `docusaurus.config.js` excludes
-  `stories/**`, so `](stories/RG-8-….md)` resolves on disk and 404s on the site — link the story's
-  **GitHub URL** instead. `check-docs.py` enforces this, reading the exclude list from the site
-  config rather than keeping its own copy. It exists because the `v0.4.0` site deploy failed on
-  exactly this while the gate stayed green.
+- Every page under `website/docs/` is reachable from `website/sidebars.js`; the site build fails
+  on a broken link rather than shipping one.
+- **A site page never relative-links into `docs/`.** Nothing under `docs/` is published, so
+  `](../../docs/specs/proxy-behavior.md)` resolves on disk and 404s on the site — link the
+  **GitHub URL** instead. `check-docs.py` enforces this. It is the inverse of the rule it
+  replaced, which existed because the `v0.4.0` site deploy failed on exactly this class of link
+  while the gate stayed green; when the site was split from `docs/`, the old form would have gone
+  silently inert rather than red, so it was restated rather than dropped.
 
 ## Publishing
 
-`docs/` is the source of truth and the website is a view of it: `website/docs/` symlinks or imports
-the same files rather than copying them, so there is one set of words. The site deploys to
-**[codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/)** on every published
-release — not on every push to `main`, so what the public reads matches a tagged version rather than
-whatever landed an hour ago. `workflow_dispatch` is the recovery hatch.
+**Two trees, one published.** `docs/` is internal contributor material — vision, roadmap, story
+board, design records, normative specs — and none of it is published. `website/docs/` is the
+public, hand-authored end-user site: what this does, how to run it, and what it deliberately does
+not do yet. They are separate sets of words on purpose, because they have different readers and
+rot at different rates. A site page reaches internal material by **absolute GitHub URL**.
+
+When the two disagree, the code and its tests win, and both trees say so.
+
+The site deploys to
+**[codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/)** on every
+published release — not on every push to `main`, so what the public reads matches a tagged version
+rather than whatever landed an hour ago. `workflow_dispatch` is the recovery hatch.
 
 <!-- BEGIN track:agents -->
 ## Start here (every session) — track backlog

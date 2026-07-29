@@ -28,13 +28,17 @@ fn main() -> ExitCode {
             );
             println!();
             println!(
-                "No roles are implemented yet. This binary exists so that the workspace has a"
+                "One node registers users and proxies calls between them. The cluster — affinity"
             );
             println!(
-                "release target from the start; see the roadmap's M1 scope for what fills it."
+                "tokens, trunks, media control — is specified but not implemented; see the docs."
             );
             println!();
             println!("  run --listen <addr>   run a node: registrar and proxy on one listener");
+            println!("      --tenant <name>            the tenant this node serves (default:");
+            println!("                                 `default`); registrations are not");
+            println!("                                 authenticated — this node is an open");
+            println!("                                 registrar, and bindings are lost on restart");
             println!("      --advertise <host[:port]>  what peers reach it on, if that is not the");
             println!(
                 "                                 address it binds — a node behind a NAT or on a"

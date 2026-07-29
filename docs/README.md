@@ -1,7 +1,10 @@
 # sipx-clstr docs
 
-Start here to find anything inside the repository. These are the internal contributor docs: vision,
-roadmap, story status, design records, specs and notes. Work is tracked with the **track**
+Start here to find anything inside the repository. These are the **internal contributor docs**:
+vision, roadmap, story status, design records, specs and notes. The public user documentation
+lives in [`../website`](../website) and is deployed to
+[codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/) — **nothing under
+`docs/` is published there.** Work is tracked with the **track**
 framework — see [AGENTS.md](https://github.com/codewandler/sipx-clstr/blob/main/AGENTS.md) → **"Start here"** for the working loop.
 
 ## Map

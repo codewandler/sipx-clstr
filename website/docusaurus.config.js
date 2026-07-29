@@ -1,8 +1,12 @@
 // @ts-check
 
-// The site is a *view* of `docs/`, not a copy of it: the docs plugin reads `../docs` directly so
-// there is one set of words. Anything not meant for the public — the story board, the archive — is
-// excluded here rather than duplicated elsewhere.
+// The public documentation site. This is the end-user view of sipx-clstr: what it does, how to
+// run it, and what it deliberately does not do yet. The internal contributor material — the story
+// board, the roadmap, design records and the normative specs under ../docs — is *not* published
+// here, and pages link into GitHub to reach it. See ../docs/README.md for the split, and
+// scripts/check-docs.py, which fails the gate if a page on this site relative-links into ../docs.
+//
+// Built on every push and pull request; deployed to GitHub Pages from a published release.
 
 const config = {
   title: 'sipx-clstr',
@@ -19,12 +23,14 @@ const config = {
   onBrokenLinks: 'throw',
   markdown: {
     // Full MDX, so mermaid fences render as diagrams. That costs discipline in the docs: a brace
-    // or angle bracket in prose is a JSX expression to MDX. The only four in the corpus were set
-    // notations in a spec table whose neighbours were already code-spanned, so code-spanning them
-    // matched the file's own convention rather than bending it for the renderer.
+    // or angle bracket in prose is a JSX expression to MDX, and a bare <br> is an unclosed JSX
+    // tag rather than HTML.
     mermaid: true,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      // Same standard as onBrokenLinks. A page that points at a doc which does not exist is the
+      // failure this site is most likely to ship, because the pages it wants to cite mostly live
+      // in ../docs and are not published.
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 
@@ -38,13 +44,11 @@ const config = {
       'classic',
       {
         docs: {
-          path: '../docs',
+          // Authored for this site, in this directory. Not a view of ../docs.
+          path: 'docs',
           routeBasePath: 'docs',
           sidebarPath: require.resolve('./sidebars.js'),
-          // The board and the archive are working material: generated, churny, and meaningless
-          // without the repo around them.
-          exclude: ['stories/**', 'archive/**', 'README.md'],
-          editUrl: 'https://github.com/codewandler/sipx-clstr/tree/main/',
+          editUrl: 'https://github.com/codewandler/sipx-clstr/tree/main/website/',
         },
         blog: false,
         theme: {
@@ -55,8 +59,8 @@ const config = {
   ],
 
   themes: [
-    // architecture.md carries six mermaid charts; without this they render as code blocks on the
-    // one page whose whole job is to be looked at.
+    // The clustering pages explain topology with mermaid charts; without this they render as
+    // code blocks on the pages whose whole job is to be looked at.
     '@docusaurus/theme-mermaid',
     [
       require.resolve('@easyops-cn/docusaurus-search-local'),
@@ -64,9 +68,7 @@ const config = {
         // Offline, index-based search — no external service to depend on or pay for.
         hashed: true,
         indexBlog: false,
-        // The docs live outside the website directory; without this the indexer looks for
-        // `website/docs`, finds nothing, and ships a search box that returns no results.
-        docsDir: '../docs',
+        docsDir: 'docs',
         docsRouteBasePath: 'docs',
         highlightSearchTermsOnTargetPage: true,
       },
@@ -86,9 +88,9 @@ const config = {
       },
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
-        { to: '/docs/vision', label: 'Vision', position: 'left' },
-        { to: '/docs/specs/proxy-behavior', label: 'Specs', position: 'left' },
-        { to: '/docs/roadmap', label: 'Roadmap', position: 'left' },
+        { to: '/docs/getting-started', label: 'Getting started', position: 'left' },
+        { to: '/docs/migrate/from-kamailio', label: 'Migrate', position: 'left' },
+        { to: '/docs/reference/cli', label: 'Reference', position: 'left' },
         {
           href: 'https://github.com/codewandler/sipx-clstr',
           label: 'GitHub',
@@ -102,26 +104,32 @@ const config = {
         {
           title: 'Start here',
           items: [
-            { label: 'Vision', to: '/docs/vision' },
-            { label: 'Architecture', to: '/docs/architecture' },
-            { label: 'Roadmap', to: '/docs/roadmap' },
+            { label: 'What sipx-clstr is', to: '/docs/' },
+            { label: 'Getting started', to: '/docs/getting-started' },
+            { label: 'Does this fit?', to: '/docs/guides/does-this-fit' },
           ],
         },
         {
-          title: 'Specifications',
+          title: 'Reference',
           items: [
-            { label: 'Proxy behaviour', to: '/docs/specs/proxy-behavior' },
-            { label: 'Location service', to: '/docs/specs/location-service' },
-            { label: 'Affinity token', to: '/docs/specs/affinity-token' },
-            { label: 'Hook framework', to: '/docs/specs/hook-framework' },
+            { label: 'CLI', to: '/docs/reference/cli' },
+            { label: 'Configuration', to: '/docs/reference/configuration' },
+            { label: 'Conformance', to: '/docs/reference/conformance' },
           ],
         },
         {
-          title: 'More',
+          title: 'Project',
           items: [
             { label: 'GitHub', href: 'https://github.com/codewandler/sipx-clstr' },
             { label: 'sipx (the kernel)', href: 'https://github.com/codewandler/sipx' },
-            { label: 'Upstream ledger', to: '/docs/upstream' },
+            {
+              label: 'Specifications',
+              href: 'https://github.com/codewandler/sipx-clstr/tree/main/docs/specs',
+            },
+            {
+              label: 'Changelog',
+              href: 'https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md',
+            },
           ],
         },
       ],

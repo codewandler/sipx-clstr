@@ -266,3 +266,17 @@ real deployment. A dev tool, never part of the deployment surface.
 Deferred placeholder, recorded so the layers below are designed with it in mind: call queues,
 IVR, conference focus and other dialog-terminating features, as a separate service consuming the
 platform. Not scheduled before M3 nears completion. [Design](designs/services-b2bua.md).
+
+### The public documentation site
+
+Two documentation trees, one published. `docs/` — this file, the board, the design records and
+the normative specs — is internal contributor material and is no longer published anywhere.
+`website/docs/` is a hand-authored end-user site: what the platform does, how to run it, and what
+it deliberately does not do yet. Site pages reach internal material by absolute GitHub URL.
+
+Until `DX-1` the site was a verbatim view of `docs/`, which meant a stranger evaluating the
+project was handed milestone tables, thirteen design records — nine of them `proposed` — and a
+landing page still claiming nothing forwards a SIP message. The ladder now runs from a first
+forwarded call to autoscaling, with unshipped sections marked in the sidebar and again in their
+own words, because the shape of the platform is the reason to evaluate it and the gap is the
+thing most easily misread. [Design](designs/docs-site.md).
