@@ -58,17 +58,7 @@ id = "PB-A-3"
 story = "AF-5"
 reason = "Transaction affinity — a 2xx ACK routed by token at a foreign edge. Multi-node, M2."
 
-[[deferred]]
-id = "RA-R-7"
-story = "RG-11"
-reason = """
-RG-10 pins the wildcard/removal variant of RA-R-6 in the spec — the same captured `Authorization`
-reattached to a `Contact: *`, `Expires: 0` REGISTER with a fresh `Call-ID` takes location-service
-§W3's removal branch and empties the AoR — but RG-10 is a documentation-only pass with no crate
-edits and no `cargo` run, so unlike RA-R-6 it ships with no test proving it end to end. The two
-halves exist separately today (`wildcard()`'s W3 ordering tests, and `RA-R-6`'s replayed-credential
-tests) but nothing yet drives them together. `RG-11` — a replayed credential empties the AoR through
-the wildcard path, the direct end-to-end sibling of `RA-R-6`'s test — is not yet filed; this
-deferral names it ahead of that so the row is not silently unaccounted for. File it with
-`/track:story` before treating this deferral as fully conventional.
-"""
+# `RA-R-7` was deferred here by `RG-10` — a documentation-only pass that added the row without a
+# test — and is now proved by `RG-11`:
+# `crates/sipx-clstr-sim/tests/register_auth.rs::ra_r_7_…`. Removed rather than left in place,
+# because a deferral that names a covered row is the stale entry this file's header calls out.
