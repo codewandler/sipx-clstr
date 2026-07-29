@@ -54,3 +54,38 @@ the same tree a node reads"; `DP-1` has now written that schema, and the two do 
 - `nat:` has no owning spec at all. `DP-1` gave it a home and a reload class and nothing more, and
   its field names came from somewhere other than an RFC. That wants its own story rather than being
   smuggled in here.
+- **The divergence is now measurable rather than asserted, because `DP-8` shipped the loader.** A
+  review diffed the chart's `cluster:` tree against `config::load`'s allow-lists and counted roughly
+  eighteen hard load errors, which is worth having as a starting work list:
+  - Six unknown `cluster.*` keys → `CC-V2`: `numbering`, `routingHook`, `quirkProfile`, `media`,
+    `limit`, `limits`. Three of them are the registry's own concepts under a different spelling —
+    `normalisation`, `mediaPool`, `rateLimit` — so they are typos against the schema rather than
+    deferred sections.
+  - Four in `cluster.security`, whose allow-list is `unknownSource`, `sanityCheck`,
+    `userAgentDenyList`, `internalZone`: `maxForwards` hits the dedicated `CC-V6` refusal (which is
+    the acceptance item above, now with a rule id), plus `rejectUserAgents`,
+    `answerOptionsKeepalive`, `anonymousCalls` → `CC-V2`.
+  - Eight across `listener[]`: all four entries spell it `role:` where the allow-list is `roles`, so
+    each yields `CC-V2` for the unknown key **and** `CC-R2` for the missing one. `listener[3]` also
+    names `role: management` and `transport: http`, and `management` is not in §4 R1's closed role set.
+  - `cluster.membership` and `cluster.tenant` are absent entirely, while `probe.tenant: e2e-test`
+    names a tenant no section declares.
+  - Two role keys in `values.yaml` are not roles: `proxy` (the set is `inbound-proxy` /
+    `outbound-proxy`) and `e2eTester` (§2 D4's spelling is `e2e-tester`). The design doc lists them
+    correctly, so the chart disagrees with its own design record.
+  - `${NODE_IP}` is used in four places and defined nowhere; `substitute` treats an undefined name as
+    `CC-V4` deliberately rather than substituting empty, so it would refuse. The working manifest uses
+    `${POD_IP}` and supplies it from the downward API.
+  - `listener[].connectionLifetime` and `maxConnections` are *on* the allow-list but never read into
+    `ListenerSpec` — accepted and discarded, which is the class
+    [fail-closed-config](../designs/fail-closed-config.md) rule 1 exists to remove. If this story
+    plumbs them, say so; if not, they should be refused rather than ignored.
+- **Nothing mechanically checks any of this**, which is why it accumulated: there is no `helm` or
+  `docker` job in CI, so neither `helm template` nor a load of the rendered tree has ever run. The
+  last acceptance item is therefore the load-bearing one — wire the render through `config::load` in
+  the gate and the list above becomes self-maintaining.
+- Also worth fixing while in `values.yaml`, though neither is a load error: `registrar.authBackend:
+  location_store` reads as "authentication is configured" to anyone editing the file, and `registrar`
+  is a deferred section that nothing descends into (`FC-3` owns making that true or refused); and the
+  default RTP `portRange: 30000-30200` under `rtpengine.hostNetwork: true` overlaps Kubernetes'
+  default NodePort range 30000-32767 on the same host ports.

@@ -219,6 +219,20 @@ One binary, roles by config; the 3-zone reference topology and its Kubernetes ex
 observability whose metrics prove the invariants (the cross-node dialog-lookup counter must read
 zero); and the honest HA statement. [Design](designs/deployment.md).
 
+### Fail-closed configuration
+
+Accepted means applied, or refused — there is no third state. Once the document became the only
+configuration surface, four of the keys it accepts turned out to be security-relevant policy that
+nothing consumed: a node declaring TLS, authentication, a domain allow-list and a binding quota loaded
+clean and ran with none of them. That is not a missing feature but a surface that **fails open**, and
+[cluster-config](specs/cluster-config.md) §3 D6 already forbade it — "a half-understood security
+posture is worse than a node that will not start". The same argument was already applied one seam
+over, where an unreachable location store stops the node rather than falling back to memory; this
+epic finishes applying it. It also owns the reason the gap was invisible: the loader's
+"this build does not apply that" warning was emitted before the log subscriber existed and tracked
+only top-level sections, so it could not have named the keys that mattered.
+[Design](designs/fail-closed-config.md).
+
 ### End-to-end call probe (`e2e-tester` role)
 
 The outside view. Every other epic proves the platform from the inside; this one adds a role that

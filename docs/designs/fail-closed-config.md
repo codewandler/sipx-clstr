@@ -5,6 +5,8 @@
 
 ## Why
 
+Accepted means applied, or refused — there is no third state.
+
 The configuration document is now the *only* configuration surface (`DP-8` wrote the loader, `DP-10`
 replaced the flags with it). Four of the keys it accepts are security-relevant policy, and nothing
 applies any of them. A document that declares TLS, authentication, a domain allow-list and a binding

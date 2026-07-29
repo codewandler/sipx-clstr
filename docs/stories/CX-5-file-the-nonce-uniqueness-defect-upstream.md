@@ -1,0 +1,74 @@
+---
+id: CX-5
+title: File the nonce-uniqueness defect upstream and make nonce uniqueness normative
+pillar: Platform
+status: ready
+priority: 2
+design:
+epic:
+areas: [upstream, registrar, security]
+note: the nonce is a function of the clock alone, so honest users collide in the replay window
+---
+
+# File the nonce-uniqueness defect upstream and make nonce uniqueness normative
+
+## Goal
+
+Get the kernel's nonce to carry per-challenge entropy, and add the rule and the vector row that stop
+the defect coming back. Today two clients challenged in the same second receive the byte-identical
+nonce and share one replay counter, so a correct credential is refused as a replay.
+
+## Acceptance
+
+- [ ] The defect is filed against [sipx](https://github.com/codewandler/sipx) with a reproduction,
+      and recorded in [upstream.md](../upstream.md). `sipx-ua`'s `challenge::mint` builds
+      `<issued-at in hex>.<HMAC of it>` — a pure function of the second, the realm and the secret,
+      with nothing per-challenge. It is kernel surface by
+      [AGENTS.md](../../AGENTS.md) #6: nonce minting is an auth primitive, not platform orchestration.
+- [ ] A normative rule lands in [registrar-auth](../specs/registrar-auth.md) §6 requiring a nonce to
+      be unique per challenge, not merely unforgeable and expiry-checkable. §6 today says only that
+      "a nonce is verifiable from the secret and the realm alone" and analyses cross-*edge* collision,
+      which is the same property one axis away — it misses two clients on one edge.
+- [ ] An `RA-R` row covers it: two clients answer the same nonce at the same `nc`, and the second is
+      **not** refused as a replay. §8's table has no such row, which is exactly why all 24 `RA` rows
+      pass while the defect is live.
+- [ ] **Failing-first**: a harness scenario in `sipx-clstr-sim` challenges two users within one
+      simulated second and requires both to authenticate. It fails today.
+- [ ] `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`'s
+      `assert_eq!(value, same_nonce, "the fixture needs one nonce, not two")` is revisited. It pins
+      nonce *equality* across two separately-constructed authenticators at one timestamp, which only
+      holds because the nonce has no entropy — so the fixture will break when the defect is fixed, and
+      it should break in a way that reads as intended rather than as a regression.
+- [ ] `auth.rs`'s claim of "a **fresh** nonce every time, including on a refusal" is made true or
+      corrected. It calls `challenge_at(stale, now)`, which is identical for the whole second, so a
+      refusal re-offers the nonce it just refused.
+
+## Progress
+
+- (running log)
+
+## Notes
+
+- **The mechanism.** The replay window is keyed on the nonce *string* and tracks one nonce-count per
+  nonce. Alice authenticates at `nc=1` and proceeds; Bob — a different user, correct password,
+  legitimately at `nc=1`, challenged in the same second and therefore holding the same nonce bytes —
+  is refused as a replay. Per [registrar-auth](../specs/registrar-auth.md) §3 A6 that is a `401`
+  *without* `stale=true`, which the spec designs so a client "will stop and ask a human". So a correct
+  credential is refused and the user is sent to change a password that was fine — the failure mode
+  §3 A7 exists to prevent, reached through a different door.
+- **Latent today, immediate on `FC-3`.** No shipped node can enable authentication, so nothing is
+  broken in the field. The moment `tenant[].auth` is wired, any node above roughly one REGISTER per
+  second collides routinely, and Bob has to climb to Alice's nonce-count to get in. Read this story
+  before believing a green auth test at scale.
+- **Why the harness did not catch it.** All 24 `RA` vector rows pass, including RA-R-7. The rows are
+  correct; the property is not among them. This is the shape `CF-8` is about — a spec's table is only
+  as good as its coverage of the properties the spec means, and "unique per challenge" was never
+  written down as one.
+- The crypto around it is sound and should not be disturbed: constant-time comparison on both the
+  response digest and the nonce MAC, keyed HMAC-SHA-256 rather than `H(secret‖msg)`, the realm bound
+  into the MAC so one secret across two realms cannot cross-validate, and the digest verified before
+  the clock so a wrong password on an expired nonce is `Mismatch` rather than `Stale`. The defect is
+  entropy, not construction.
+- Fixing it upstream will change what a nonce looks like, so check whether anything here parses a
+  nonce's shape rather than treating it as opaque before the bump lands. `CX-4` is the pending kernel
+  upgrade and is the natural carrier.

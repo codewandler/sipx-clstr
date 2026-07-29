@@ -21,11 +21,11 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
 
 ## Acceptance
 
-- [ ] `scripts/e2e-call.sh` starts a node with a configuration document. It still passes
-      `--listen`/`--advertise` and therefore fails, which means the artefact `README.md` cites as
-      "a scripted, repeatable proof, not a claim" does not run. It is on `DP-10`'s own blast-radius
-      table as a file that "has to move in the same change"; `deploy/devspace/manifests/node.yaml`
-      and `scripts/two-node-call.sh` did move.
+- [x] `scripts/e2e-call.sh` starts a node with a configuration document. **Done in `2a7aeeb`** — it
+      writes a cluster document and runs from that, and the proof passes again: audio heard, 24000
+      samples, one socket on the node, transaction store drained. It had been on `DP-10`'s own
+      blast-radius table as a file that "has to move in the same change", while
+      `deploy/devspace/manifests/node.yaml` and `scripts/two-node-call.sh` did move.
 - [ ] The README quick start runs as written, end to end, against a clean checkout. It currently
       exits 2 with `error: unexpected argument '--listen' found`, on the first command of
       "Five minutes to a forwarded call".
@@ -66,7 +66,28 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
 
 ## Progress
 
-- (running log)
+- **The proof script is repaired** (`2a7aeeb`), so the one acceptance item that was an outright broken
+  artefact rather than a stale page is closed. The README quick start, the six site pages and the
+  status rows are all still open.
+- **The status rows moved again while this story sat, and in the direction that matters.** `62ba577`
+  closed `DP-9`: two nodes over one PostgreSQL location store, proved twice — `scripts/two-node-call.sh`
+  as two local processes and `scripts/k8s-two-node-call.sh` as two pods in k3d — ending in a completed
+  call with 24000 samples of real audio, alice registered through node-a and bob through node-b, and
+  node-a forwarding to a callee whose REGISTER it never saw. So the pages saying "there is no second
+  node", "a second node cooperating with the first — specified, not shipped" and "there is no
+  clustering in the binary you can build today" are now wrong by a wider margin than when this story
+  was written, and the README's `status-one node · no cluster yet` badge is the headline instance.
+  Re-derive these rows from the scripts rather than editing the sentences.
+- **Do not overcorrect.** A cross-node call proved on one machine and in one k3d cluster is not the
+  HA guarantee, and `operate/high-availability.md` is careful about exactly that distinction — its
+  "Today there is none" section and the "a replica count is not evidence that node loss is survivable"
+  paragraph should survive this story intact. What changed is "no cluster exists" → "a two-node
+  registrar-sharing cluster is proved"; what did not change is affinity tokens, trunks, media control,
+  drain, or anything the `(preview)` pages describe.
+- **`FC-1` narrowed one item.** `operate/deploy.md`'s `TLS 5061 | public` row now advertises a
+  transport the loader *actively refuses* (`CC-V10`), which makes the row unambiguously wrong rather
+  than merely unserviceable — and gives the edit a clear replacement: name it as refused, the way the
+  other unshipped surface is named.
 
 ## Notes
 
