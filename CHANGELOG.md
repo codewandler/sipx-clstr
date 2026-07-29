@@ -7,6 +7,78 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-07-29
+
+One change, and it is about who the documentation is for. Until now the published site was a
+verbatim view of `docs/`: the docs plugin read `../docs` and excluded only the story board and the
+archive. Everything else went out — the roadmap's milestone tables, thirteen design records of
+which nine still said `proposed`, ten normative specs, a generated conformance report — and the
+landing page still told visitors that **nothing forwards a SIP message yet**, which M1 disproved
+three releases ago. There was no install page, no quickstart, no configuration guide and no CLI
+reference. A stranger evaluating this project was handed our planning material and none of the
+answers.
+
+There are now two documentation trees. `docs/` is internal and is published nowhere.
+`website/docs/` is twenty-two hand-authored end-user pages, and the site is only that.
+
+### Added
+
+- **The end-user documentation site** (`DX-1` … `DX-11`), a ladder rather than a pile: what this
+  is, a first forwarded call, guides for what actually ships, then clustering and operations marked
+  `(preview)`, migration concept maps, and reference. Unshipped sections carry their status in the
+  sidebar label *and* restate it in their own words, against a closed five-value vocabulary. The
+  whole ladder was authored up front rather than grown, so no URL has to move when a preview
+  section fills in.
+- **Getting started reaches a forwarded call with no third-party tooling** (`DX-3`) — a Rust
+  toolchain and standard-library Python. The two facts that actually bite a new operator are on the
+  first page rather than in a footnote: the shipped binary is an **open registrar**, and bindings
+  live **in memory only**, both because the configuration surface is three flags.
+- **A CLI reference built by running the binary** (`DX-5`). Every flag, refusal message and exit
+  code on the page was produced and pasted, including the three only a wrong invocation reaches. It
+  found one: `run --version` prints `--version needs a value`, not "unknown option", because `run`
+  parses flag-and-value pairs and checks for the value first.
+- **A conformance page that publishes the method and refuses to copy the table** (`DX-6`). The
+  generated report is linked, not duplicated, so the numbers cannot drift into disagreement with a
+  claim — and the page says outright that six of ten specs are not registered with the vector
+  checker, so the report is silent rather than reassuring about them.
+
+### Changed
+
+- **`docs/` is no longer published**, and both trees say so — `docs/README.md`, `AGENTS.md` and the
+  site's own "public docs vs project docs" section. Site pages reach specs, designs and the roadmap
+  by absolute GitHub URL.
+- **The doc gate was inverted rather than dropped** (`DX-1`). Its third check read the `exclude`
+  globs out of `docusaurus.config.js` and forbade a published doc from linking into an excluded one.
+  With that key gone `site_excludes()` returns `[]` and the check returned `[]` with it — **green
+  because it stopped looking**, which is worse than no gate. The rule now runs the other way: no
+  page under `website/docs/` may relative-link out of the published tree, and the failure names the
+  GitHub URL to use instead. Proved by making that link and watching it go red.
+  `onBrokenMarkdownLinks` was also raised from `warn` to `throw`.
+- The published pages carry **no internal work-tracking identifiers**. They cite RFCs, the
+  normative specs and honest gaps; the backlog is not the reader's problem.
+
+### Fixed
+
+- **The 0.9.0 site deploy is unblocked.** `asserted-identity.md` used bare `<br>` inside table
+  cells; MDX v3 parses HTML as JSX, so an unclosed tag is a hard error — *"Expected a closing tag
+  for `<br>` before the end of `tableData`"*. The `website` workflow failed on both the push to
+  `main` and the `v0.9.0` tag while `ci` and `docs` stayed green, because nothing between the doc
+  gate and the release checked that the site still builds. All 14 are now `<br/>`.
+- **`--help` no longer contradicts the software.** It claimed "No roles are implemented yet",
+  stale since M1, and never documented `--tenant`. Nothing asserted the string, which is why it
+  survived four releases.
+
+### Known gaps
+
+- `check-docs.py` walks whatever sits under the repository root, including agent worktrees — it
+  reported 1328 markdown files during this work instead of 166, so a sibling checkout can turn the
+  gate red for reasons unrelated to the diff. Already filed as `CF-10`.
+- Nothing yet fails when an authored page is absent from `website/sidebars.js`: it builds fine and
+  is reachable by nobody. `DX-12` is filed for that, and it supersedes the site half of `CF-11`,
+  whose two "unreachable specs" are no longer published at all.
+- Preview pages age into lies the day the thing they describe ships. Closing an `AF`, `RT`, `ME` or
+  `KO` story now has to include the page that says it does not exist yet.
+
 ## [0.9.0] — 2026-07-29
 
 Three specifications, and a theme that is really one question: **does the document say what the
