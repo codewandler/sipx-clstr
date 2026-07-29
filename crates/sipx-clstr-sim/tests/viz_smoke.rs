@@ -19,6 +19,17 @@ use std::time::{Duration, Instant};
 /// Generous: at 16× the showcase scenario plays out in a second or two of wall time.
 const DEADLINE: Duration = Duration::from_secs(20);
 
+/// One field of a frame's payload, or a failure that names the field.
+///
+/// `data["field"]` is `clippy::indexing_slicing`, and the lint is right for a reason beyond the
+/// panic it warns about: `Value`'s index yields `Null` for a key that is not there, so a frame
+/// that stopped carrying a field would fail as `Null != 1` — a wrong value — rather than as the
+/// missing field it is. This says which field went away.
+fn field<'a>(data: &'a serde_json::Value, key: &str) -> &'a serde_json::Value {
+    data.get(key)
+        .unwrap_or_else(|| panic!("the frame carries no `{key}` field"))
+}
+
 #[test]
 fn viz_smoke_the_server_serves_the_page_and_streams_the_trace() {
     let port = free_port();
@@ -80,16 +91,16 @@ fn assert_meta(feed: &str) {
         .find(|(event, _, _)| event == "meta")
         .expect("a meta frame");
     assert_eq!(event, "meta");
-    assert_eq!(data["v"], 1, "schema version from day one");
-    assert_eq!(data["scenario"], "register-call");
-    let seed = data["seed"].as_str().unwrap_or_default();
+    assert_eq!(*field(&data, "v"), 1, "schema version from day one");
+    assert_eq!(*field(&data, "scenario"), "register-call");
+    let seed = field(&data, "seed").as_str().unwrap_or_default();
     assert!(
         seed.starts_with("0x"),
         "the master seed is on the wire: {seed}"
     );
-    assert_eq!(data["weather"], "jittery");
+    assert_eq!(*field(&data, "weather"), "jittery");
 
-    let nodes = data["nodes"].as_array().expect("nodes is an array");
+    let nodes = field(&data, "nodes").as_array().expect("nodes is an array");
     assert_eq!(nodes.len(), 4, "edge + alice + two of bob's devices");
     let edge = nodes.iter().filter(|n| n["role"] == "edge").count();
     let wings = nodes.iter().filter(|n| n["role"] == "endpoint").count();
@@ -101,7 +112,7 @@ fn assert_meta(feed: &str) {
         "every node has a name and an id"
     );
 
-    let links = data["links"].as_array().expect("links is an array");
+    let links = field(&data, "links").as_array().expect("links is an array");
     assert_eq!(links.len(), 3, "one link per endpoint");
     assert!(
         links.iter().all(|l| l["kind"] == "datagram"),
@@ -158,7 +169,7 @@ fn assert_trace_frames(feed: &str) {
         .iter()
         .find(|(event, _, _)| event == "sent")
         .expect("a sent frame");
-    let summary = sent.2["summary"].as_str().unwrap_or_default();
+    let summary = field(&sent.2, "summary").as_str().unwrap_or_default();
     assert!(
         summary.contains("REGISTER"),
         "the first send is a REGISTER: {summary}"
@@ -173,15 +184,15 @@ fn assert_tick_and_invariant(feed: &str) {
         .find(|(event, _, _)| event == "tick")
         .map(|(_, _, data)| data)
         .expect("a tick frame");
-    assert!(tick["virtual"].is_number() && tick["wall"].is_number());
-    assert!(tick["ratio"].as_f64().unwrap_or_default() > 0.0);
+    assert!(field(&tick, "virtual").is_number() && field(&tick, "wall").is_number());
+    assert!(field(&tick, "ratio").as_f64().unwrap_or_default() > 0.0);
 
     let invariant = frames(feed)
         .into_iter()
         .find(|(event, _, _)| event == "invariant")
         .map(|(_, _, data)| data)
         .expect("an invariant frame");
-    let counters = invariant["counters"]
+    let counters = field(&invariant, "counters")
         .as_array()
         .expect("counters is an array");
     let by_name = |name: &str| counters.iter().find(|c| c["name"] == name);
