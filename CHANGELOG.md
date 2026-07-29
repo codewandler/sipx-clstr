@@ -7,6 +7,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-07-29
+
+Three specifications, and a theme that is really one question: **does the document say what the
+system does?** Two of the three were returned for rework before they were allowed in, and both
+times the defect was the same shape — a contract that claimed more than it delivered, in prose
+confident enough that only reading it against the RFC caught it.
+
+`RT-7` is the one worth reading. It went two rounds. The first draft declared the `user` privacy
+level *performable*, and performed one of the eleven header treatments RFC 5379 §4.1 Table 1 asks
+for under that level. Nothing was wrong in a way a test would catch — there is no implementation
+yet — but a deployment reading that spec would have advertised a privacy guarantee to a caller and
+delivered a third of it. The fix was not to weaken the claim: `A33` now enumerates the whole column,
+nine performed and two declined **with reasons**, and `A35` performs the response-side deletions
+that Table 1 marks reachable on a response. The second round also removed a false statement the
+*first* round introduced — pointing operators at `RT-5`'s egress allowlist for a guarantee it
+cannot give, since that allowlist is scoped to application-prefixed headers and
+`P-Asserted-Identity` is not one. `§14` now records that gap as a gap, and `RT-11` asks whether the
+platform should close it at all.
+
+`DP-1` replaces four disagreeing config dialects with one schema, reconciled against the Helm chart
+and the node rather than invented beside them — and found, in the process, that the chart's shipped
+defaults declare a media policy the platform would refuse to boot on (`KO-14`). `EX-8` turns the
+async query declaration into normative text and brings the `HF` family under the vector gate.
+
+Nothing here is executable. All three are specifications, and the honest caveat is that the vector
+gate cannot yet see most of what they wrote: `AI` (97 rows) and `CC` (48) join `LS`, `MR`, `NN`,
+`AT` and `FR` as families the checker has no registration for, so roughly 145 normative rows are
+unenforced prose. That was demonstrated rather than assumed — a fabricated row passes the gate
+untouched — and `CF-8` is now `ready` at priority 1 to close it.
+
 ### Added
 
 - **Asserted identity is a per-trunk policy, and privacy is performed or declined** (`RT-7`) —
