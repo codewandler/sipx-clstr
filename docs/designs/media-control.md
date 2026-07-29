@@ -1,7 +1,16 @@
 # Design: Media control
 
 **Status:** proposed · **Pillar:** Media · **Epic:** `media-control` ·
-**Stories:** ME-1 … ME-5
+**Stories:** ME-1 … ME-5 · **Spec:** [media-relay](../specs/media-relay.md) (ME-1, normative)
+
+**Upstream considerations** (AGENTS.md rule 6): considered for upstream — **no**. The `MediaRelay`
+contract and its NG binding stay in sipx-clstr: the trait's vocabulary is cluster orchestration
+(media-node ids, pool membership, tenant call classes) and the NG protocol is one integration
+target's control protocol rather than SIP protocol semantics. The one piece that would be
+protocol-generic — an SDP model — is deliberately not needed, because the trait carries the body
+as opaque bytes end to end ([media-relay](../specs/media-relay.md) §3.2 O3). If `ME-4` ends up
+having to *read* the body, that parser is protocol-generic and becomes an
+[upstream ledger](../upstream.md) row then.
 
 ## Why
 
@@ -28,6 +37,13 @@ future native relay without the platform noticing.
 request/response over UDP with retransmission, cookie-correlated — against a pool of media
 nodes. The integration spec pins: command mapping (offer/answer/delete/query), timeout and
 retransmission budget, error taxonomy (node down vs command rejected), and health signals.
+**ME-1 is written**: [media-relay](../specs/media-relay.md) fixes the five-method port and the
+null relay (§3, §4), the framing, cookie rule and canonical bencode (§6), the command mapping
+(§7), the 150 ms/1.5 s retransmission budget (§8), the taxonomy (§9), the node health machine
+(§10), the tested baseline `mr13.0.1.10` and its drift rules (§11), and 63 vectors under the `MR`
+prefix, with twelve byte-exact datagrams pinned in full (§12). Two of its rulings are worth reading before
+ME-2 starts: the port's `update` has **no** command on the wire — it is an `offer` with both tags
+— and SDP is opaque bytes end to end, so nothing in either repository parses a body.
 
 **Selection is deterministic.** A media node is chosen once per call by rendezvous hashing over
 `tenant || Call-ID || initial From-tag`, and the chosen node id rides in the affinity token
@@ -62,8 +78,12 @@ signalling — never general-purpose service pods.
 
 ## Risks & open questions
 
-- NG protocol version drift and feature detection across rtpengine releases: the integration spec
-  pins a tested baseline; CI needs a containered rtpengine (CF-3).
+- ~~NG protocol version drift and feature detection across rtpengine releases~~ — **answered by
+  ME-1**: [media-relay](../specs/media-relay.md) §11 pins the tested baseline `mr13.0.1.10` and
+  rules out version detection entirely; compatibility is the unknown-key, spelling-tolerance and
+  `supports`/`result` contract, so a newer node needs no adapter change. What remains open is
+  operational: CI still needs a containered rtpengine (CF-3), and raising the baseline is a story
+  that moves the chart, the container and §12's bytes together.
 - Media-node failure semantics: what the platform promises for in-flight calls when a node dies
   (current answer: re-anchor on next offer/answer; no packet-level continuity claim — consistent
   with the vision's HA non-goal).
