@@ -10,6 +10,14 @@ Coverage is derived from **test function names** rather than from a hand-maintai
 the test deletes the claim. Tests that cover a row without wanting the name can say so in a
 `// covers: PB-R-4` comment instead.
 
+Two row shapes are accepted, because the specs have two. Most tables number by family —
+`PB-V-8`, `RA-R-7` — and one table per spec is small enough to number straight through:
+`HF-9`, proved by `fn hf_9_…`. `EX-8` widened the grammar rather than renumbering `hook-framework`
+into families, because a row ID is a citation: `HF-1` … `HF-8` are quoted from other specs, from
+designs and from stories, and renumbering to satisfy a regex would break every one of them to buy
+nothing a spec reader can see. A spec whose table grows past one family's worth of rows should be
+split into families when it is written, not after it is cited.
+
 Three ways to fail, and the third is the one that matters:
 
 1. A spec row is neither covered nor deferred.
@@ -35,16 +43,21 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCOPE = ROOT / "docs" / "reference" / "vector-scope.toml"
 REPORT = ROOT / "docs" / "reference" / "conformance.md"
 
-# Every spec that carries a vector table, with the prefix its rows use.
+# Every spec that carries a vector table, with the prefix its rows use and the section the table
+# lives in — the section is quoted in the generated report, so it cannot drift from this table.
 SPECS = {
-    "PB": ROOT / "docs" / "specs" / "proxy-behavior.md",
-    "EP": ROOT / "docs" / "specs" / "e2e-probe.md",
-    "RA": ROOT / "docs" / "specs" / "registrar-auth.md",
+    "PB": (ROOT / "docs" / "specs" / "proxy-behavior.md", "§12"),
+    "EP": (ROOT / "docs" / "specs" / "e2e-probe.md", "§10"),
+    "RA": (ROOT / "docs" / "specs" / "registrar-auth.md", "§8"),
+    "HF": (ROOT / "docs" / "specs" / "hook-framework.md", "§9"),
 }
 
-ROW = re.compile(r"\b(PB|EP|RA)-([A-Z])-(\d+)\b")
-TEST_NAME = re.compile(r"\bfn\s+(pb|ep|ra)_([a-z])_(\d+)_")
-COVERS = re.compile(r"//\s*covers:\s*((?:(?:PB|EP|RA)-[A-Z]-\d+[,\s]*)+)")
+PREFIXES = "|".join(SPECS)
+# The family letter is optional: `PB-V-8` and `HF-9` are both rows. See the module docstring for
+# why the grammar widened instead of the tables renumbering.
+ROW = re.compile(rf"\b({PREFIXES})-(?:([A-Z])-)?(\d+)\b")
+TEST_NAME = re.compile(rf"\bfn\s+({PREFIXES.lower()})_(?:([a-z])_)?(\d+)_")
+COVERS = re.compile(rf"//\s*covers:\s*((?:(?:{PREFIXES})-(?:[A-Z]-)?\d+[,\s]*)+)")
 
 FAMILIES = {
     ("PB", "V"): "Proxy — request validation (§4)",
@@ -62,18 +75,25 @@ FAMILIES = {
     ("RA", "A"): "Registrar auth — algorithm selection (§4)",
     ("RA", "R"): "Registrar auth — replay and retransmission (§3, §6, §7)",
     ("RA", "T"): "Registrar auth — the tenant boundary (§5)",
+    ("HF", ""): "Hook framework — startup graph validation (§9)",
 }
+
+
+def canonical(prefix: str, letter: str, number: str) -> str:
+    """`("pb", "v", "08")` → `PB-V-8`; `("hf", "", "09")` → `HF-9`."""
+    stem = f"{prefix.upper()}-{letter.upper()}-" if letter else f"{prefix.upper()}-"
+    return f"{stem}{int(number)}"
 
 
 def family_of(row: str) -> tuple[str, str]:
     parts = row.split("-")
-    return (parts[0], parts[1])
+    return (parts[0], parts[1]) if len(parts) == 3 else (parts[0], "")
 
 
 def sort_key(row: str) -> tuple[int, int]:
     family = family_of(row)
     order = list(FAMILIES).index(family) if family in FAMILIES else len(FAMILIES)
-    return (order, int(row.split("-")[2]))
+    return (order, int(row.split("-")[-1]))
 
 
 def spec_rows() -> set[str]:
@@ -83,12 +103,12 @@ def spec_rows() -> set[str]:
     citing `PB-F-1`, this script's own docstring — cannot invent a row nobody has to prove.
     """
     rows: set[str] = set()
-    for prefix, path in SPECS.items():
+    for prefix, (path, _section) in SPECS.items():
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
         rows.update(
-            f"{found}-{letter}-{int(number)}"
+            canonical(found, letter, number)
             for found, letter, number in ROW.findall(text)
             if found == prefix
         )
@@ -109,11 +129,11 @@ def covered() -> dict[str, list[str]]:
     for path in rust_sources():
         text = path.read_text(encoding="utf-8")
         rows = {
-            f"{prefix.upper()}-{letter.upper()}-{int(number)}"
+            canonical(prefix, letter, number)
             for prefix, letter, number in TEST_NAME.findall(text)
         }
         for group in COVERS.findall(text):
-            rows.update(f"{a}-{b}-{int(c)}" for a, b, c in ROW.findall(group))
+            rows.update(canonical(a, b, c) for a, b, c in ROW.findall(group))
         for row in rows:
             found.setdefault(row, []).append(str(path.relative_to(ROOT)))
     return found
@@ -138,16 +158,26 @@ def deferred() -> tuple[dict[str, dict], list[str]]:
     return rows, problems
 
 
+def sources() -> str:
+    """The vector tables this report covers, named from `SPECS` so the sentence cannot go stale."""
+    parts = [
+        f"[{path.stem}](../specs/{path.name}) {section}"
+        for path, section in SPECS.values()
+        if path.is_file()
+    ]
+    return ", ".join(parts[:-1]) + f" and {parts[-1]}" if len(parts) > 1 else parts[0]
+
+
 def render(rows: set[str], proofs: dict[str, list[str]], waived: dict[str, dict]) -> str:
     lines = [
         "# Conformance — every spec vector, and what proves it",
         "",
         "**Generated by `scripts/check-vectors.py`. Do not hand-edit.**",
         "",
-        "One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12 and",
-        "[e2e-probe](../specs/e2e-probe.md) §10. A row is *proved* when a test in the workspace covers",
-        "it, and *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story",
-        "that will.",
+        f"One row per vector in {sources()}.",
+        "",
+        "A row is *proved* when a test in the workspace covers it, and *deferred* when",
+        "[vector-scope.toml](vector-scope.toml) says why and names the story that will.",
         "",
         f"**{len(rows) - len(waived)} of {len(rows)} rows proved**; {len(waived)} deferred.",
         "",
