@@ -66,6 +66,14 @@ impl Cmd {
         })
     }
 
+    /// The same command, delivered `millis` later — a retransmission rather than a replay at the
+    /// originating nanosecond. LS-R-3 states the delay, so "identical outcome" cannot be satisfied
+    /// only by a zero-latency retry.
+    fn delayed_by_millis(mut self, millis: u64) -> Self {
+        self.0.now = Timestamp::from_nanos(self.0.now.as_nanos() + millis * 1_000_000);
+        self
+    }
+
     fn contacts(mut self, ops: Vec<ContactOp>) -> Self {
         self.0.contacts = ContactOps::Explicit(ops);
         self
@@ -168,9 +176,22 @@ fn ls_r_3_an_identical_retry_writes_nothing() {
         .contacts(vec![ca(Some(3_600))])
         .build();
     let (_, after_refresh) = run(&store, &refresh, &policy);
+    let deadline = store
+        .read(TENANT, &aor())
+        .0
+        .all()
+        .first()
+        .expect("the stored binding")
+        .expires_at;
 
-    // The same command again — same token, same `now`, same requested outcome.
-    let (outcome, revision) = run(&store, &refresh, &policy);
+    // The same request again, 500 ms later — the ordinary UDP retransmission. Same token, same
+    // granted *duration*, so B4 holds even though the deadline the second delivery would compute
+    // is half a second further out.
+    let retry = Cmd::new("i1", 2, 10)
+        .delayed_by_millis(500)
+        .contacts(vec![ca(Some(3_600))])
+        .build();
+    let (outcome, revision) = run(&store, &retry, &policy);
     assert!(!outcome.commits(), "B4: an idempotent retry must not write");
     assert_eq!(outcome.status(), 200);
     assert_eq!(revision, after_refresh, "the revision must not move");
@@ -178,6 +199,20 @@ fn ls_r_3_an_identical_retry_writes_nothing() {
         contact_texts(outcome.accepted().expect("a 200")),
         ["sip:alice@10.0.0.1:5060"],
         "and it still answers with the current set"
+    );
+
+    // B4's remedy is *no mutation*, never an extension: a retry that pushed the deadline out would
+    // make one ordering token spendable more than once.
+    assert_eq!(
+        store
+            .read(TENANT, &aor())
+            .0
+            .all()
+            .first()
+            .expect("the stored binding")
+            .expires_at,
+        deadline,
+        "a retry must not extend the binding"
     );
 }
 
@@ -864,28 +899,86 @@ fn commands_for_different_address_of_records_never_serialize_against_each_other(
 // ------------------------------------------------------- an edge the spec leaves sharp ---------
 
 #[test]
-fn a_re_presentation_at_a_later_instant_is_not_a_retry_and_is_refused() {
-    // §5.3 defines a retry as "the same (Call-ID, CSeq) *and* the stored state already equals the
-    // command's requested outcome (same granted expiry base…)". A CAS retry satisfies that, because
-    // the command's `now` is a field of the command and does not move.
-    //
-    // A **cluster-level** re-presentation does not: the second node stamps its own `now`, so the
-    // expiry base differs, the command is not a retry, and B5 refuses it with 500. Asserted here so
-    // the behaviour is a decision on the record rather than a surprise in production — see RG-3's
-    // open question.
+fn ls_r_22_a_re_presentation_asking_for_a_different_duration_is_not_a_retry() {
+    // The edge §5.3.1 keeps sharp. B4.1 makes the *granted duration* the base, so a copy of one
+    // REGISTER arriving later — a retransmission, a CAS re-read, a re-presentation at a second
+    // node — is a retry however long it took (LS-R-3). What is still refused is a spent token
+    // asking for something else: same Call-ID, same CSeq, a different granted lifetime is a second
+    // write, and B5 aborts it. Without this the carve-out would be "the token alone", which is the
+    // one thing RFC 3261 §10.3 step 7 does not allow.
     let store = InMemoryStore::new();
     let policy = policy();
     let first = Cmd::new("i1", 1, 0).contacts(vec![ca(Some(3_600))]).build();
     let (outcome, _) = run(&store, &first, &policy);
     assert!(outcome.commits());
 
-    let later = Cmd::new("i1", 1, 30)
-        .contacts(vec![ca(Some(3_600))])
+    let later = Cmd::new("i1", 1, 0)
+        .delayed_by_millis(500)
+        .contacts(vec![ca(Some(7_200))])
         .build();
     let (outcome, _) = run(&store, &later, &policy);
     assert_eq!(
         outcome.status(),
         500,
-        "same token, different instant: not a retry by §5.3's definition"
+        "same token, a different granted duration: a second write, not a retry"
+    );
+    assert_eq!(
+        store.read(TENANT, &aor()).0.all().len(),
+        1,
+        "and nothing was written"
+    );
+}
+
+#[test]
+fn ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound() {
+    // How far B4's "no mutation" reaches, pinned so nobody reads it as "a spent token can never
+    // commit" (§5.3.1 B4.3). B4 and B5 are decided per *matched* binding; a contact that matches
+    // nothing is B1's, and B1 has no stored `(Call-ID, CSeq)` to compare against. So one request
+    // that replays a spent token for CA and carries a new CB refreshes nothing and adds CB.
+    //
+    // It grants nothing the token was withholding: the same UA can register CB in a request
+    // carrying only CB, which B1 accepts identically. What bounds an addition is authentication
+    // (§5.1 S3/S4) and the quota (§5.5), never the ordering token.
+    let store = InMemoryStore::new();
+    let policy = policy();
+    let first = Cmd::new("i1", 1, 0).contacts(vec![ca(Some(3_600))]).build();
+    let (outcome, revision) = run(&store, &first, &policy);
+    assert!(outcome.commits());
+    assert_eq!(revision, Revision(1));
+    let deadline = store
+        .read(TENANT, &aor())
+        .0
+        .all()
+        .first()
+        .expect("CA is bound")
+        .expires_at;
+
+    let both = Cmd::new("i1", 1, 0)
+        .delayed_by_millis(500)
+        .contacts(vec![ca(Some(3_600)), cb(Some(3_600))])
+        .build();
+    let (outcome, revision) = run(&store, &both, &policy);
+    assert!(outcome.commits(), "B1 adds CB, so the request is a write");
+    assert_eq!(outcome.status(), 200);
+    assert_eq!(revision, Revision(2), "the addition bumps the revision");
+    assert_eq!(
+        contact_texts(outcome.accepted().expect("a 200")),
+        ["sip:alice@10.0.0.1:5060", "sip:alice@10.0.0.2:5060"],
+        "the complete set, both bindings (§5.6)"
+    );
+
+    // And CA — the binding the spent token actually wrote — is untouched: B4 still means no
+    // mutation of the matched binding, which is the guarantee that has to survive.
+    assert_eq!(
+        store
+            .read(TENANT, &aor())
+            .0
+            .all()
+            .iter()
+            .find(|b| b.contact == Bytes::from_static(b"sip:alice@10.0.0.1:5060"))
+            .expect("CA is still bound")
+            .expires_at,
+        deadline,
+        "the replay must not have refreshed CA"
     );
 }

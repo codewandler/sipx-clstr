@@ -58,7 +58,21 @@ refusals carried inside a `Noop`'s response. Here it is `Commit | Noop | Reject`
 write?" is a question the type answers. Equivalent — a `Reject` is a `Noop` whose response is not a
 `200`, and neither commits.
 
-## Open question for RG-1
+## Open question for RG-1 — settled by `RG-8`
+
+**Settled 2026-07-29 by [`RG-8`](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md):
+the first option.** [location-service](../specs/location-service.md) §5.3.1 is now normative and
+says "same granted expiry base" means the granted **duration** — `refreshed_at` to `expires_at`
+against the lifetime the command grants — not the absolute deadline. Carrying the originating `now`
+with the command was considered and rejected in the spec, with its reason: a UA's retransmission
+arrives as fresh bytes and carries no field of ours, so the edge stamps its own `now` and the
+defect would survive the fix. The paragraphs below are the question as it stood; they are kept for
+the record, and the code, the vectors and
+`a_re_presentation_at_a_later_instant_is_not_a_retry_and_is_refused` no longer follow them —
+that test is now `ls_r_22_a_re_presentation_asking_for_a_different_duration_is_not_a_retry`,
+pinning the narrow half of the carve-out that survives.
+
+### The question as it stood
 
 **A cluster-level re-presentation of one REGISTER is refused with `500`.** §5.3 defines an
 idempotent retry as the same `(Call-ID, CSeq)` *and* the stored state already equalling the

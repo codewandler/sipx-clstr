@@ -250,7 +250,7 @@ Per matched binding (RFC 3261 §10.3 steps 6–7):
 | B1 | No stored binding matches | add (or ignore, for a removal of an absent contact) |
 | B2 | `Call-ID` differs | apply — update or remove (the UA restarted; step 7 says update/remove regardless of CSeq) |
 | B3 | Same `Call-ID`, request `CSeq` > stored | apply |
-| B4 | Same `Call-ID`, request `CSeq` = stored, requested state already holds | **idempotent retry**: no mutation, `200` with the current set, revision unchanged — **[sipx-clstr]** |
+| B4 | Same `Call-ID`, request `CSeq` = stored, requested state already holds (§5.3.1) | **idempotent retry**: no mutation, `200` with the current set, revision unchanged — **[sipx-clstr]** |
 | B5 | Same `Call-ID`, request `CSeq` ≤ stored otherwise | abort the **entire** request (step 7 "the update MUST be aborted"); **[sipx-clstr]** the failure code is `500 Server Internal Error` — the RFC names no code; the request is not malformed (400 would mislead diagnostics) and a retry with a fresh CSeq succeeds |
 
 **The idempotency rule, precisely:** a `RegisterCommand` is a retry of an applied command iff
@@ -259,7 +259,66 @@ state already equals the command's requested outcome (same granted expiry base, 
 set effect). A retry returns success with the current set and commits nothing. This is what
 lets the CAS driver loop (§2) and cluster-level retries re-present a command safely: RFC 3261
 §10.3 makes `(Call-ID, CSeq)` the registrar's ordering token, and this spec makes replaying
-the same token a no-op rather than a second write.
+the same token a no-op rather than a second write **to the bindings that token wrote**. It
+does not make the token a lock on the address-of-record: a request that is not a retry by the
+definition above — one that also carries a contact matching no stored binding — is still B1's
+business for that contact (B4.3).
+
+#### 5.3.1 "Same granted expiry base", and how far B4 reaches **[sipx-clstr]**
+
+| # | Rule |
+|---|---|
+| B4.1 | The **granted duration** is the base. A stored binding already holds a command's requested expiry iff the lifetime it was granted — `refreshed_at` to `expires_at` — equals the lifetime this command grants that contact under §5.2. The absolute deadline is deliberately **not** compared |
+| B4.2 | B4's remedy is *no mutation*, never an extension. A retry leaves `expires_at`, `refreshed_at`, `q`, the Path vector and the revision exactly as they are, and answers `200` with the set as it stands — remaining lifetimes computed against the retry's own `now` (§5.6), which is a statement about the response, not a write |
+| B4.3 | B4's guarantee is about the **matched binding**, not about the request. B1–B5 are decided per contact against the binding it matches; a contact matching no stored binding is B1's, and B1 has no stored `(Call-ID, CSeq)` to compare against — §10.3 step 7's abort is written against a binding, and there is none. So one request that replays a spent token for a bound contact *and* carries a contact that is not bound refreshes nothing and commits the addition, at a bumped revision. B5 remains asymmetric with it: a matched binding that fails B5 aborts the **whole** request, additions included |
+
+Why the duration and not the deadline: `now` is stamped when a request is *admitted*, so two
+deliveries of one REGISTER never share one. A UDP retransmission after a lost `200`, a CAS
+re-read (§2), and a re-presentation at a second node all arrive with a later `now` than the
+delivery that wrote the binding. A rule that compared deadlines would therefore classify
+every retry that actually happens as a second write under a spent token and refuse it `500`
+(B5) — which makes B4 unreachable in practice and contradicts this section's own claim that
+the rule is what lets a command be re-presented safely. Comparing durations makes the test
+independent of when the copy arrived, and two nodes computing the same granted duration from
+the same policy agree without exchanging anything.
+
+The carve-out stays narrow, which is the point of comparing anything at all. RFC 3261 §10.3
+step 7 aborts on a CSeq that is not higher; B4 is this platform's exception for
+retransmissions, and it applies only when the stored state *is* the requested state. Same
+token, matching a stored binding, with a different requested duration, a different
+contact-set effect (a removal of a contact that is still bound), or a Path vector that is not
+the stored one is not a retry — it is a second write to that binding, and B5 refuses it.
+
+"Narrow" is about the **matched binding**, and B4.3 is where the boundary actually falls: a
+spent token is not authority over the address-of-record, so a request that also carries an
+unbound contact still adds it (LS-R-23). That is not a widening of anything. A UA that can
+send that request can send one carrying only the new contact, which B1 accepts identically —
+the ordering token never gated an addition, because there is nothing for it to be stale
+against. What bounds additions is the authenticated principal (§5.1 S3/S4) and the per-tenant
+quota (§5.5), and both apply here unchanged. Stated because a reader who took "replaying the
+same token is a no-op" as an invariant of the *request* would be surprised, and the
+CAS-and-cluster claim that rule supports (§2, K1) is about the bindings the token wrote.
+
+Those three are the whole comparison, deliberately: the §4 projections a Contact can also
+carry — `q`, `+sip.instance`, `reg-id`, `pn-*` — are **not** compared. Recorded rather than
+left silent, because it is the one place B4 is broader than "the stored state equals the
+requested outcome": a command that reuses a spent token but asks for a different `q` is
+answered as a retry. It is still not a write — B4 mutates nothing, so no `q` is lost and no
+token is spent twice — and the `200` enumerates the stored `q` (§5.6), so the UA is told what
+holds rather than what it asked for. Narrowing the comparison to the full projection set is a
+change to this table, and to the vectors under it, not an implementation detail.
+
+**Rejected: comparing an originating `now` carried with the command.** The alternative was to
+add the instant of the first delivery to `RegisterCommand` and have every re-presenter carry
+it forward, which is a more literal reading of "base" and would survive a policy whose granted
+lifetime changed between attempts. It is rejected because it cannot answer the case this rule
+exists for: a UA's retransmission arrives as fresh bytes over the wire and carries no field of
+ours, so the edge stamps its own `now` and the two deliveries differ again — the defect would
+survive the fix. It also makes the ordering decision depend on a value one node accepts from
+another, where the duration is recomputed from local policy and stored state. The policy-drift
+case it would have covered is handled correctly by B4.1 without it: a changed granted lifetime
+makes the durations differ, so the command is not a retry and B5 refuses it, which is the
+conservative answer.
 
 An expired binding is **absent** for every purpose — lookup, matching, and Call-ID/CSeq
 comparison. A late REGISTER carrying an older CSeq after the binding expired therefore adds a
@@ -439,7 +498,7 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 |---|---|---|
 | LS-R-1 | Empty set; REGISTER Call-ID `i1`, CSeq 1, `CA;expires=3600` | `200`; set `{CA/3600}`; revision 1; response lists `CA;expires=3600` |
 | LS-R-2 | Refresh: `i1`, CSeq 2, CA | applied (B3); revision 2 |
-| LS-R-3 | Retransmit/retry: `i1`, CSeq 2, CA, identical outcome | Noop (B4): no mutation, `200` with current set, revision still 2 |
+| LS-R-3 | Retransmit/retry **500 ms after** LS-R-2, i.e. `now` + 0.5 s: `i1`, CSeq 2, CA, same granted duration | Noop (B4/B4.1): no mutation, `200` with current set, revision still 2, `expires_at` unchanged — the delay is stated because a rule that compared deadlines would pass this row only at zero latency (B4.2) |
 | LS-R-4 | Stale: `i1`, CSeq 1 | abort, `500` (B5); store untouched |
 | LS-R-5 | New Call-ID `i2`, CSeq 1, CA | applied (B2 — the UA restarted) |
 | LS-R-6 | Set `{CA, CB}`; REGISTER `CA;expires=0` | CA removed; `200` lists only CB — the complete-set rule (§5.6) |
@@ -458,6 +517,8 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-R-19 | Stored `sip:c@h.example;x=1` (via `i1`/1); REGISTER `sip:c@h.example`, `i1`/2 | refreshes that binding — §19.1.4 match, first-match-in-creation-order rule (§5.3); no second binding |
 | LS-R-20 | `Require: nothing-we-know` | `420` + `Unsupported: nothing-we-know` (S2) |
 | LS-R-21 | CA expired at `now`, stored CSeq 9; REGISTER `i1`, CSeq 3, CA | added fresh (B1) — an expired binding is absent for every purpose (§5.3) |
+| LS-R-22 | LS-R-3's retry 500 ms later, but `CA;expires=7200` | abort, `500` (B5): the carve-out is B4.1's *duration* match, not the token alone; a same-token command asking for something else is a second write. Nothing commits and the revision does not move |
+| LS-R-23 | Set `{CA}` written by `i1`/1; REGISTER `i1`, CSeq 1, `CA` (same granted duration) **and** CB, 500 ms later | `200`, commits: CA untouched (B4 — same deadline, same `refreshed_at`), CB added (B1), revision bumped. B4.3 — the no-mutation guarantee is about the matched binding, not the request |
 
 **Consistency / CAS (LS-K).**
 

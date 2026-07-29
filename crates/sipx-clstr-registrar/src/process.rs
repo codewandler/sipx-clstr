@@ -214,12 +214,18 @@ fn already_holds(stored: &crate::binding::Binding, cmd: &RegisterCommand, grante
         // A removal whose target is still present has not been applied.
         return false;
     }
-    // The same granted lifetime measured from the same `now` gives the same deadline. A retry that
-    // arrives later would extend the binding, and extending it is a write.
-    let expected = cmd
-        .now
-        .saturating_add(Duration::from_secs(u64::from(granted)));
-    stored.expires_at == expected && stored.path == cmd.path
+    // §5.3.1 B4.1 — the base is the granted **duration**, not the absolute deadline. `now` is
+    // stamped when a request is admitted, so two deliveries of one REGISTER never share one: a UDP
+    // retransmission after a lost `200`, a CAS re-read and a re-presentation at a second node all
+    // arrive later than the delivery that wrote the binding. Comparing deadlines would call every
+    // retry that actually happens a second write and refuse it (B5), which is how this rule came to
+    // answer an ordinary retransmission `500`.
+    //
+    // What the caller does with a `true` is `continue` — no mutation at all (B4.2). The deadline is
+    // deliberately *not* pushed out: a retry that refreshed it would let one ordering token buy a
+    // second lifetime.
+    stored.refreshed_at.until(stored.expires_at) == Duration::from_secs(u64::from(granted))
+        && stored.path == cmd.path
 }
 
 /// Whether a set is empty of active bindings at `now` — for the driver's housekeeping decisions.
