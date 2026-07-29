@@ -2,7 +2,7 @@
 id: ME-1
 title: Specify MediaRelay and the NG adapter contract
 pillar: Media
-status: in-progress
+status: done
 priority: 
 design: docs/designs/media-control.md
 epic: media-control

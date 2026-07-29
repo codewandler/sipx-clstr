@@ -68,6 +68,7 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-2 — Generate the conformance report from the registry](CF-2-generate-the-conformance-report-from-the-registry.md) · Platform · blocked by EX-2
 - [CF-3 — Build the real-network interop harness](CF-3-build-the-real-network-interop-harness.md) · Platform · SIPp + sipx CLI + rtpengine
 - [CF-6 — Seed the conformance registry with the M1 profile](CF-6-seed-the-conformance-registry-with-the-m1-profile.md) · Platform · blocked by EX-2 — the extraction work CF-2's report needs
+- [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · found at ME-1/AF-2 integration — the gate proves 3 of 7 specs and is silent about the rest
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
@@ -110,7 +111,6 @@ _One `values.yaml` to a running, healthy, resizable cluster — delivered and ke
 
 ### Media control
 _The SIP process controls media over a network protocol; it never touches a media packet._
-- [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
 - [ME-2 — Implement the NG-protocol client](ME-2-implement-the-ng-protocol-client.md) · Media · blocked by ME-1, CF-3
 - [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media · blocked by ME-1, AF-1, AF-4 — the node id rides in the token
 - [ME-4 — Design SDP rewrite in the proxy path](ME-4-design-sdp-rewrite-in-the-proxy-path.md) · Media
@@ -151,6 +151,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · M1 #13 · the echo endpoint; end to end through the real proxy, registrar and probe
 - [EX-1 — Specify hook phases and the module manifest](EX-1-specify-hook-phases-and-the-module-manifest.md) · Platform · must land before the proxy API hardens
 - [EX-6 — Design an async external routing hook](EX-6-design-an-async-external-routing-hook.md) · Platform · blocks a downstream deployment's parity milestone; a blocking HTTP call on the INVITE path today
+- [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
 - [PX-2 — Design the proxy transaction driver](PX-2-design-the-proxy-transaction-driver.md) · Signalling · M1 #2 · decided: build on sipx_transport::Handle, not on a socket loop of our own
 - [PX-3 — Adopt the upstream header surgery API](PX-3-adopt-the-upstream-header-surgery-api.md) · Signalling · S-15 landed in sipx v0.4.0 — what remains is adopting it here; unblocks PX-4

@@ -9,6 +9,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`MediaRelay` and the rtpengine NG adapter contract are pinned** (`ME-1`,
+  [media-relay](docs/specs/media-relay.md), 573 lines). The platform's only view of media is a
+  trait — offer/answer/update/delete/query with a state table and a `NullMediaRelay` whose
+  pass-through behaviour is specified rather than assumed — and everything version-specific about
+  the integration target sits behind it. **SDP stays opaque bytes end to end**, which is the
+  load-bearing choice: it means neither this repo nor the kernel needs an SDP model to build `ME-2`.
+- **The NG binding is specified to the byte.** Framing, cookie, a canonical bencode encoder whose
+  dictionary keys are emitted in ascending raw-byte order, the command set, a timer budget, the
+  error taxonomy and the health signals — with vector tables covering the trait, the null relay,
+  the encoding, the exchange, faults and health. Sorted keys make the encoding a *function* of the
+  value, which is what lets `ME-2` assert byte equality instead of semantic equivalence.
+- **Version drift is a contract, not a hope.** The decoder must not assume sorted keys, must ignore
+  unknown ones, and accepts both spellings of the `query` timestamp key. A node lacking the
+  `load limit` extension degrades to a rejection rather than breaking. The tested baseline is
+  rtpengine **`mr13.0.1.10`** (series `mr13.0`), matching the series `deploy/helm/values.yaml`
+  already pins, so chart, CI container and vector bytes name one version; "baseline" is defined as
+  *tested*, not *minimum*, and version-string detection is forbidden.
 - **The external routing consult becomes a suspension, not a blocking call** (`EX-6`, design
   accepted in [extension-framework](docs/designs/extension-framework.md)). A deployment currently
   picks the egress pool and asserted caller identity with a synchronous HTTP lookup on the INVITE
