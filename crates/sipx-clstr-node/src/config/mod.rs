@@ -11,9 +11,11 @@
 //! into a generic value tree and walked by hand, accumulating [`ConfigError`]s. The closed-world
 //! rule (V2) needs the same shape — you cannot ask serde which keys it *didn't* recognise.
 //!
-//! **One reader, two encodings.** §2 D3 asks for one data model behind YAML and JSON. JSON is a
-//! subset of YAML, so both go through the same parser rather than through two, and there is no
-//! second code path to disagree with the first.
+//! **One reader, three encodings.** §2 D3 asks for one data model behind more than one encoding.
+//! JSON is a subset of YAML, so those two share a parser outright. TOML cannot — it is a different
+//! grammar — so it is parsed by its own reader and then *converted into the same value tree* before
+//! anything looks at it. That is the whole trick: the encoding is chosen in one function and every
+//! rule below it sees one shape, so there is no second validation path to disagree with the first.
 //!
 //! # Scope
 //!
@@ -277,14 +279,14 @@ pub fn load(
     // written one (§8 V4).
     let substituted = substitute(text, env, &root, &mut errors);
 
-    let document: Value = match serde_yaml_ng::from_str(&substituted) {
+    let document = match parse_document(&substituted) {
         Ok(value) => value,
-        Err(parse) => {
+        Err(why) => {
             errors.push(ConfigError::new(
                 root,
                 "CC-D3",
-                Some(parse.to_string()),
-                "a well-formed YAML 1.2 or JSON document",
+                Some(why),
+                "a well-formed YAML, JSON or TOML document",
             ));
             return Err(ordered(errors));
         }
@@ -340,6 +342,68 @@ pub fn project(config: &Config, identity: &NodeIdentity) -> ProjectedConfig {
         tenants: config.tenants.clone(),
         security: config.security.clone(),
         timers: config.timers.clone(),
+    }
+}
+
+/// Parse one of the three encodings §2 D3 admits, into the one value tree everything else walks.
+///
+/// The encoding is **sniffed, not configured and not taken from the file extension**. A document is
+/// the same document whatever it is called, and an operator who renames `cluster.yaml` to
+/// `cluster.conf` has not changed the configuration. TOML is tried first only when the text cannot be
+/// YAML: YAML is the broader grammar and would happily accept a TOML file as a single scalar, which
+/// would then fail much later with a confusing message about a mapping.
+fn parse_document(text: &str) -> Result<Value, String> {
+    // A TOML document's first meaningful line is `key = value` or `[table]`. YAML uses `:` and `-`,
+    // and JSON starts `{`. This is a cheap discriminator, and being wrong about it costs only which
+    // error message appears — both parsers are tried before anything is refused.
+    let looks_like_toml = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with('#'))
+        .is_some_and(|line| {
+            line.starts_with('[') || (line.contains(" = ") && !line.contains(": "))
+        });
+
+    if looks_like_toml {
+        match toml::from_str::<toml::Value>(text) {
+            Ok(value) => return Ok(toml_to_value(value)),
+            Err(toml_error) => {
+                // Fall through: it only *looked* like TOML. Report the YAML failure if that fails
+                // too, since that is the encoding the document more probably meant to be.
+                return serde_yaml_ng::from_str(text).map_err(|_| {
+                    format!("not valid TOML ({toml_error}) and not valid YAML either")
+                });
+            }
+        }
+    }
+    serde_yaml_ng::from_str(text).map_err(|yaml_error| match toml::from_str::<toml::Value>(text) {
+        Ok(_) => "valid TOML that did not sniff as TOML; please report this".to_owned(),
+        Err(_) => yaml_error.to_string(),
+    })
+}
+
+/// Convert a TOML value into the tree the rules walk.
+///
+/// Total, and deliberately lossy in exactly one direction: TOML's datetimes become strings, because
+/// this schema has no datetime-typed field and inventing one here would be a second place where the
+/// document's types are decided.
+fn toml_to_value(value: toml::Value) -> Value {
+    match value {
+        toml::Value::String(s) => Value::String(s),
+        toml::Value::Integer(i) => Value::Number(i.into()),
+        toml::Value::Float(f) => Value::Number(f.into()),
+        toml::Value::Boolean(b) => Value::Bool(b),
+        toml::Value::Datetime(d) => Value::String(d.to_string()),
+        toml::Value::Array(items) => {
+            Value::Sequence(items.into_iter().map(toml_to_value).collect())
+        }
+        toml::Value::Table(table) => {
+            let mut mapping = serde_yaml_ng::Mapping::new();
+            for (key, item) in table {
+                mapping.insert(Value::String(key), toml_to_value(item));
+            }
+            Value::Mapping(mapping)
+        }
     }
 }
 

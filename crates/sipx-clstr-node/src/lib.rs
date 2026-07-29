@@ -19,9 +19,16 @@
 
 /// The cluster configuration document, read (`DP-8`) — a pure function over bytes, an identity and
 /// an environment, per `DP-1`'s schema. Not yet wired to the driver; `RG-12` does that.
+/// Driving a blocking location store from an async node (`RG-12`).
+#[cfg(feature = "postgres")]
+pub mod blocking_store;
+
 pub mod config;
 
 pub mod driver;
+
+/// From a cluster document to a running node (`DP-10`) — the seam where IO is allowed.
+pub mod startup;
 
 /// What the node binds, and what it advertises (`DP-5`) — decisions, with no socket in sight.
 pub mod listen;

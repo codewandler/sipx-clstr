@@ -24,10 +24,13 @@ FROM rust:${RUST_VERSION}-bookworm AS builder
 
 WORKDIR /src
 
-# `--all-features` is deliberately NOT used: the `postgres` feature pulls a database driver into a
-# node that, in the devspace profile, uses the in-memory location store. KO-2's chart is where the
-# PostgreSQL-backed variant belongs.
+# `--all-features` is still deliberately NOT used — it would pull in test-only surface. But the
+# `postgres` feature IS built now, because it is no longer optional in practice: a cluster of more
+# than one node needs a shared location service, and without this feature the binary refuses to start
+# on a document that asks for one. That refusal is correct and it is also, for a container, useless —
+# the image would only ever be able to run a single node.
 ARG CARGO_PROFILE=dev
+ARG CARGO_FEATURES=postgres
 
 COPY Cargo.toml Cargo.lock clippy.toml ./
 COPY crates/ crates/
@@ -39,10 +42,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/target,sharing=locked \
     set -eux; \
     if [ "$CARGO_PROFILE" = "release" ]; then \
-        cargo build --release --locked -p sipx-clstr-node --bin sipx-clstr; \
+        cargo build --release --locked -p sipx-clstr-node --bin sipx-clstr --features "$CARGO_FEATURES"; \
         install -D /src/target/release/sipx-clstr /out/sipx-clstr; \
     else \
-        cargo build --locked -p sipx-clstr-node --bin sipx-clstr; \
+        cargo build --locked -p sipx-clstr-node --bin sipx-clstr --features "$CARGO_FEATURES"; \
         install -D /src/target/debug/sipx-clstr /out/sipx-clstr; \
     fi; \
     strip /out/sipx-clstr || true

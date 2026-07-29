@@ -70,6 +70,21 @@ pub enum StoreChoice {
     Postgres { dsn: String },
 }
 
+impl StoreChoice {
+    /// The backend's name, and never its DSN.
+    ///
+    /// `cluster-config` §8 V9 keeps credentials out of the document by reference; a log line that
+    /// debug-printed the *resolved* value would put them straight back, into the one artefact most
+    /// likely to be copied into an issue.
+    #[must_use]
+    pub fn describe(&self) -> &'static str {
+        match self {
+            StoreChoice::InMemory => "in-memory",
+            StoreChoice::Postgres { .. } => "postgres",
+        }
+    }
+}
+
 /// A tenant's digest policy: the realm it challenges in, its nonce key, and its credentials.
 ///
 /// Provisional alongside [`NodeConfig`] — `DP-1` owns the real schema, and `RG-7` owns arriving at
@@ -181,9 +196,23 @@ pub fn open_store(choice: &StoreChoice) -> Result<Arc<dyn LocationStore + Send +
             // Connect here, at startup, rather than lazily on the first REGISTER. A registrar that
             // discovers its store is gone while answering a request has already told the client it
             // was up.
-            let store = crate::postgres_store::PostgresStore::connect(dsn)
-                .map_err(|error| NodeError::LocationStoreUnreachable(error.to_string()))?;
-            Ok(Arc::new(store))
+            // Connected on a **plain thread with no tokio context at all**, not merely inside
+            // `block_in_place`. The synchronous `postgres` client builds its own runtime to drive the
+            // connection, and building one while tokio's context is visible does not fail loudly —
+            // it produced `error communicating with the server`, a connection that never got driven.
+            // Handing the work to a thread tokio has never touched is the only arrangement that both
+            // connects and keeps the client's runtime its own.
+            let dsn = dsn.clone();
+            let store =
+                std::thread::spawn(move || crate::postgres_store::PostgresStore::connect(&dsn))
+                    .join()
+                    .map_err(|_| {
+                        NodeError::LocationStoreUnreachable(
+                            "the connecting thread panicked".to_owned(),
+                        )
+                    })?
+                    .map_err(|error| NodeError::LocationStoreUnreachable(error.to_string()))?;
+            Ok(Arc::new(crate::blocking_store::BlockingStore::new(store)))
         }
         #[cfg(not(feature = "postgres"))]
         StoreChoice::Postgres { .. } => Err(NodeError::LocationStoreUnreachable(
@@ -211,9 +240,17 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
         .ok_or(NodeError::NoCleartextListener)?;
     let (handle, mut incoming) = sipx_transport::bind(endpoint).await?;
 
-    // Announced on stdout **after** the bind, so a script can wait for this line instead of sleeping
-    // and hoping. Printing it before would make a failed bind look like a successful start — which
-    // it did, until a test of the failure path noticed the node saying "listening" and then dying.
+    // Opened **before** the announcement, for the same reason the announcement comes after the bind.
+    // It was the other way round for one commit, and the failure was instructive: the node printed
+    // `listening on`, a script waiting for that line proceeded, and the node then exited because the
+    // store was unreachable. Everything that can refuse to start must refuse before anything says
+    // the node started.
+    let store: Arc<dyn LocationStore + Send + Sync> = open_store(&config.store)?;
+
+    // Announced on stdout **after** the bind and after every other startup refusal, so a script can
+    // wait for this line instead of sleeping and hoping. Printing it before would make a failed
+    // start look like a successful one — which it did, until a test of the failure path noticed the
+    // node saying "listening" and then dying.
     //
     // Both addresses, because they are allowed to differ (`DP-5`) and an operator debugging "the
     // phone registers but nothing rings" needs to see which one went into the messages.
@@ -223,10 +260,9 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
         listen = %handle.local_addr(),
         %advertised,
         tenant = %config.tenant,
+        store = config.store.describe(),
         "node listening"
     );
-
-    let store: Arc<dyn LocationStore + Send + Sync> = open_store(&config.store)?;
     let policy = TenantPolicy::default();
     // One authenticator for the node, because it holds the replay window: a per-request one would
     // forget every nonce-count the moment it was created, which is a replay window that never says

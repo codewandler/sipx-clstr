@@ -468,3 +468,95 @@ fn cc_d1_load_is_deterministic_in_its_inputs() {
     let second = load(good().as_bytes(), &who, &env());
     assert_eq!(first, second);
 }
+
+/// §2 D3 — **TOML is the third encoding, and it must produce the identical `Config`.**
+///
+/// The rule is about the typed tree, not the spelling, so the assertion is equality of the whole
+/// value rather than a spot check on one field. A converter that dropped or retyped anything would
+/// show up here and nowhere else.
+#[test]
+fn cc_d3_toml_produces_the_same_config_as_yaml() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let from_yaml = load(good().as_bytes(), &who, &env()).expect("yaml loads");
+
+    let toml_document = r#"
+apiVersion = "sipx.dev/v1alpha1"
+version = 42
+
+[cluster]
+name = "acme"
+environment = "dev"
+zones = ["a", "b", "c"]
+
+[[cluster.listener]]
+roles = ["edge", "registrar"]
+transport = "udp"
+bind = "0.0.0.0:5060"
+advertise = "203.0.113.10:5060"
+
+[[cluster.membership]]
+node = 1
+name = "node-a"
+zone = "a"
+roles = ["edge", "registrar"]
+
+[cluster.locationStore]
+backend = "postgres"
+dsnRef = "location-dsn"
+
+[[cluster.tenant]]
+name = "default"
+id = 1
+domains = ["acme.example"]
+"#;
+    let from_toml = load(toml_document.as_bytes(), &who, &env()).expect("toml loads");
+    assert_eq!(
+        from_yaml, from_toml,
+        "the encoding must not change the config"
+    );
+}
+
+/// The encoding is detected from the bytes, so the closed world still closes in TOML.
+#[test]
+fn cc_v2_a_typo_in_a_toml_document_is_still_an_error() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let document = r#"
+apiVersion = "sipx.dev/v1alpha1"
+version = 1
+
+[cluster]
+name = "acme"
+environment = "dev"
+zones = ["a"]
+maxContact = 3
+
+[[cluster.listener]]
+roles = ["edge", "registrar"]
+transport = "udp"
+bind = "0.0.0.0:5060"
+advertise = "203.0.113.10:5060"
+"#;
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    let error = errors
+        .iter()
+        .find(|e| e.rule.to_string() == "CC-V2")
+        .expect("a closed-world error");
+    assert_eq!(error.path.to_string(), "cluster.maxContact");
+}
+
+/// Neither valid TOML nor valid YAML is refused as a document, not as a mystery.
+#[test]
+fn cc_d3_something_that_is_neither_encoding_is_refused() {
+    let who = identity(1, "a", &[Role::Edge]);
+    let errors = load(
+        b"[unterminated
+  = = =",
+        &who,
+        &env(),
+    )
+    .expect_err("must refuse");
+    assert!(
+        errors.iter().any(|e| e.rule.to_string() == "CC-D3"),
+        "{errors:#?}"
+    );
+}

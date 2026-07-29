@@ -1,28 +1,136 @@
-# A single node — registrar and forwarding core in one process — running against a local cluster.
+# Two nodes, one location store, one configuration document — against a local cluster.
 #
 # This is deliberately NOT the operator path. `KO-1` has not pinned the SipxCluster custom resource
 # and `KO-3` has not implemented the reconcile loop, so the chart in `deploy/helm/` renders a
 # resource nothing serves. These manifests run the `sipx-clstr` binary directly, which is the part
 # that exists. When the operator lands, this profile's job is to be deleted, not extended.
+#
+# **Two Deployments of one replica each, rather than one Deployment of two.** A node's identity — id,
+# zone, role set — comes from outside the document (cluster-config §5 P1), and a Deployment cannot
+# give its replicas distinct ids. Assigning them is precisely the operator's job (`KO-1`, `KO-3`);
+# faking it here with a StatefulSet ordinal and a shell wrapper would put identity logic in the
+# container that the real answer removes again. Two workloads, two ids, no pretence.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sipx-clstr-cluster
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+data:
+  # One document, read identically by both nodes. `${POD_IP}` resolves per node from the environment
+  # (cluster-config §8 V4) — the schema's own mechanism, and the reason there is no per-node file.
+  cluster.yaml: |
+    apiVersion: sipx.dev/v1alpha1
+    version: 1
+    cluster:
+      name: devspace
+      environment: dev
+      zones: [a]
+      listener:
+        - roles: [edge, registrar]
+          transport: udp
+          bind: 0.0.0.0:5060
+          # What goes in Via and Record-Route. It must be an address the *client* can reach, which
+          # inside the cluster is the pod's own IP — a Service ClusterIP would be wrong, because a
+          # response routed back to a virtual IP has no pod to answer it.
+          advertise: ${POD_IP}:5060
+      membership:
+        - node: 1
+          name: node-a
+          zone: a
+          roles: [edge, registrar]
+        - node: 2
+          name: node-b
+          zone: a
+          roles: [edge, registrar]
+      locationStore:
+        backend: postgres
+        # A reference, never a value (cluster-config §8 V9). Resolved from LOCATION_DSN.
+        dsnRef: location-dsn
+      tenant:
+        - name: default
+          id: 1
+          domains: [cluster.local]
+---
+# The shared location service. Ephemeral on purpose: a database that survived `devspace purge` would
+# make a stale binding look like a bug in the registrar.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sipx-clstr-node
+  name: sipx-clstr-postgres
   labels:
     app.kubernetes.io/name: sipx-clstr
-    app.kubernetes.io/component: node
-    app.kubernetes.io/managed-by: devspace
+    app.kubernetes.io/component: location-store
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: sipx-clstr
-      app.kubernetes.io/component: node
+      app.kubernetes.io/component: location-store
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sipx-clstr
+        app.kubernetes.io/component: location-store
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_PASSWORD
+              value: sipx
+            - name: POSTGRES_DB
+              value: sipx
+            - name: PGDATA
+              value: /tmp/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "postgres"] }
+            initialDelaySeconds: 2
+            periodSeconds: 2
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 512Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sipx-clstr-postgres
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: location-store
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: location-store
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sipx-clstr-node-a
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: node
+    sipx-clstr/node: node-a
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sipx-clstr
+      sipx-clstr/node: node-a
   template:
     metadata:
       labels:
         app.kubernetes.io/name: sipx-clstr
         app.kubernetes.io/component: node
+        sipx-clstr/node: node-a
     spec:
       # Do NOT add a toleration for `node.kubernetes.io/disk-pressure` here. It was tried and it is
       # actively harmful: the taint and the eviction manager are two separate mechanisms, so
@@ -34,32 +142,38 @@ spec:
       #
       # No hostNetwork here. The default deployment set uses it so UDP 5060 sees the real source
       # address, but inside a single-node k3d cluster pod-to-pod traffic already arrives with the
-      # client pod's own address, and host networking would collide with anything else on 5060.
+      # client pod's own address, and host networking would collide on 5060 between the two nodes.
       containers:
         - name: node
           image: sipx-clstr:dev
           imagePullPolicy: IfNotPresent
-          args:
-            - run
-            - --listen
-            - 0.0.0.0:5060
-            # What the node puts in Via and Record-Route. It must be an address the *client* can
-            # reach, which inside the cluster is the pod's own IP — the Service ClusterIP would be
-            # wrong here, since a response routed back to a virtual IP has no pod to answer it.
-            - --advertise
-            - $(POD_IP):5060
-            - --tenant
-            - default
+          args: [run, --config, /etc/sipx-clstr/cluster.yaml]
           env:
+            # Identity comes from outside the document, because the document is the same on both.
+            - name: SIPX_CLSTR_NODE
+              value: "1"
+            - name: SIPX_CLSTR_ZONE
+              value: a
+            - name: SIPX_CLSTR_ROLES
+              value: edge,registrar
             - name: POD_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            # The resolved side of `dsnRef`. In a real deployment this is a Secret reference; here it
+            # is inline because the credential is `sipx` on a throwaway database in a dev namespace,
+            # and pretending otherwise would teach a pattern this file does not actually follow.
+            - name: LOCATION_DSN
+              value: postgres://postgres:sipx@sipx-clstr-postgres:5432/sipx
             - name: RUST_LOG
               value: info
+          volumeMounts:
+            - name: cluster
+              mountPath: /etc/sipx-clstr
+              readOnly: true
           ports:
-            # UDP only, on purpose: the driver binds UDP today. TCP and TLS listeners are DP-5's
-            # scope, and declaring a port the process does not answer would make `kubectl get` lie.
+            # UDP only, on purpose: the driver binds UDP today. Declaring a port the process does not
+            # answer would make `kubectl get` lie.
             - name: sip-udp
               containerPort: 5060
               protocol: UDP
@@ -71,19 +185,128 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+      volumes:
+        - name: cluster
+          configMap:
+            name: sipx-clstr-cluster
 ---
+# Per-node Services, not one in front of both. A client must be able to address a *specific* node,
+# because each node record-routes its own pod IP; a single Service would spread requests across both
+# and in-dialog requests would land on whichever the kube-proxy picked. That case is what affinity
+# tokens exist for, and they are specified and not implemented.
 apiVersion: v1
 kind: Service
 metadata:
-  name: sipx-clstr-node
+  name: sipx-clstr-node-a
   labels:
     app.kubernetes.io/name: sipx-clstr
-    app.kubernetes.io/component: node
+    sipx-clstr/node: node-a
 spec:
   type: ClusterIP
   selector:
     app.kubernetes.io/name: sipx-clstr
+    sipx-clstr/node: node-a
+  ports:
+    - name: sip-udp
+      port: 5060
+      targetPort: 5060
+      protocol: UDP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sipx-clstr-node-b
+  labels:
+    app.kubernetes.io/name: sipx-clstr
     app.kubernetes.io/component: node
+    sipx-clstr/node: node-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sipx-clstr
+      sipx-clstr/node: node-b
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sipx-clstr
+        app.kubernetes.io/component: node
+        sipx-clstr/node: node-b
+    spec:
+      # Do NOT add a toleration for `node.kubernetes.io/disk-pressure` here. It was tried and it is
+      # actively harmful: the taint and the eviction manager are two separate mechanisms, so
+      # tolerating the taint lets the pod schedule and then kubelet evicts it immediately for the
+      # same underlying condition. The ReplicaSet replaces it, and the result is an eviction loop
+      # that produced over a thousand `Evicted` pod objects in minutes. The pod being stateless and
+      # read-only does not exempt it — eviction under disk pressure is node-scoped, not usage-scoped.
+      # If this pod will not schedule, free space on the host; there is no manifest-level answer.
+      #
+      # No hostNetwork here. The default deployment set uses it so UDP 5060 sees the real source
+      # address, but inside a single-node k3d cluster pod-to-pod traffic already arrives with the
+      # client pod's own address, and host networking would collide on 5060 between the two nodes.
+      containers:
+        - name: node
+          image: sipx-clstr:dev
+          imagePullPolicy: IfNotPresent
+          args: [run, --config, /etc/sipx-clstr/cluster.yaml]
+          env:
+            # Identity comes from outside the document, because the document is the same on both.
+            - name: SIPX_CLSTR_NODE
+              value: "2"
+            - name: SIPX_CLSTR_ZONE
+              value: a
+            - name: SIPX_CLSTR_ROLES
+              value: edge,registrar
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            # The resolved side of `dsnRef`. In a real deployment this is a Secret reference; here it
+            # is inline because the credential is `sipx` on a throwaway database in a dev namespace,
+            # and pretending otherwise would teach a pattern this file does not actually follow.
+            - name: LOCATION_DSN
+              value: postgres://postgres:sipx@sipx-clstr-postgres:5432/sipx
+            - name: RUST_LOG
+              value: info
+          volumeMounts:
+            - name: cluster
+              mountPath: /etc/sipx-clstr
+              readOnly: true
+          ports:
+            # UDP only, on purpose: the driver binds UDP today. Declaring a port the process does not
+            # answer would make `kubectl get` lie.
+            - name: sip-udp
+              containerPort: 5060
+              protocol: UDP
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: cluster
+          configMap:
+            name: sipx-clstr-cluster
+---
+# Per-node Services, not one in front of both. A client must be able to address a *specific* node,
+# because each node record-routes its own pod IP; a single Service would spread requests across both
+# and in-dialog requests would land on whichever the kube-proxy picked. That case is what affinity
+# tokens exist for, and they are specified and not implemented.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sipx-clstr-node-b
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+    sipx-clstr/node: node-b
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sipx-clstr
+    sipx-clstr/node: node-b
   ports:
     - name: sip-udp
       port: 5060

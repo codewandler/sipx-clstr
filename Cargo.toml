@@ -78,6 +78,11 @@ serde_json = "1"
 # YAML for the cluster configuration document (`DP-8`). JSON is parsed by the same reader:
 # the spec asks for one data model behind two encodings, not two parsers.
 serde_yaml_ng = "0.10"
+# TOML as a third encoding of the same document (`DP-8`, cluster-config §2 D3).
+toml = "0.9"
+# The argument surface stopped being "tiny and provisional" once it grew identity semantics, which
+# was the justification for parsing it by hand.
+clap = { version = "4", features = ["derive"] }
 # `with-serde_json-1` is what lets a `jsonb` column round-trip as a `serde_json::Value`; without it
 # the binding set would need a bespoke text encoding, which is a second parser to get wrong.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }

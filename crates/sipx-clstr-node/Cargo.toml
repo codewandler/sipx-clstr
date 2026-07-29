@@ -32,6 +32,8 @@ bytes.workspace = true
 postgres = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 serde_yaml_ng.workspace = true
+toml.workspace = true
+clap.workspace = true
 # The registrar→proxy target bridge is what turns a lookup into a fork (`RG-6`).
 sipx-clstr-proxy = { workspace = true, features = ["registrar-targets"] }
 sipx-clstr-registrar.workspace = true

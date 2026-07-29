@@ -54,10 +54,6 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · proved at wave 4 — a fabricated AI row passes the gate, so 145 rows are unenforced prose
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
 
-### Roles, topology & operations
-_The operational contract: roles by config, a reference topology, and an honest HA statement._
-- [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
-
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
@@ -166,6 +162,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
+- [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
 - [DX-1 — Split the published site from the internal docs tree](DX-1-split-the-site-from-the-internal-docs-tree.md) · Foundation · the old link gate would have gone green by no longer looking — inverted rather than dropped
 - [DX-2 — Lay down the site's information architecture, navigation and landing page](DX-2-lay-down-the-information-architecture.md) · Foundation · URLs are stable from the start — stub pages beat stub URLs that move later
 - [DX-3 — Write the entry pair — what sipx-clstr is, and getting started](DX-3-write-the-entry-pair.md) · Foundation · the two facts that bite — open registrar, in-memory bindings — are stated on the first page
