@@ -2,7 +2,7 @@
 id: EX-6
 title: Design an async external routing hook
 pillar: Platform
-status: in-progress
+status: done
 priority: 
 design: docs/designs/extension-framework.md
 epic: extension-framework

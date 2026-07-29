@@ -9,6 +9,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The external routing consult becomes a suspension, not a blocking call** (`EX-6`, design
+  accepted in [extension-framework](docs/designs/extension-framework.md)). A deployment currently
+  picks the egress pool and asserted caller identity with a synchronous HTTP lookup on the INVITE
+  path, which breaks non-negotiable 2 twice — the forwarding decision reads a socket, and it
+  therefore cannot run under the deterministic harness at all. What replaces it is **nothing new in
+  the pipeline**: `EX-1` already specified `Query` as a suspension, so the consult lands at H7
+  `BeforeTargetResolution` as an ordinary module, and the thing that was special about it — the
+  blocking call — stops existing. H8 and H9 read the answer as a published request-scoped fact and
+  never query, because H9 fires per branch and querying there would multiply external load by the
+  fork width.
+- **Timeout and failure handling become data.** `QueryDecl` gains `timeout`, `retries`, `on`,
+  `defaults`, `cache` and `limits`, where `on` is a **total** map over a closed outcome enum. Two
+  new startup rules carry the decision: G7 (every outcome has an arm; per-query and per-request
+  budgets hold) and G8 (every `Proceed` names a startup-validated default; every `Reject` is in the
+  closed set `{403, 404, 480, 500, 503}`). **6xx is forbidden** — RFC 3261 §21.6 makes it a claim
+  about the user everywhere, and §16.7 makes an upstream forking proxy cancel every other branch on
+  one; a routing-policy failure cannot know that.
+- **Fail-closed by construction, and fail-open only when declared in advance.** A missing outcome
+  arm is a *startup* error, never a runtime fallback — a framework-wide "on error, continue" is the
+  coded policy `EX-6` exists to delete, moved one level up and made invisible. This deliberately
+  tightens the deployment's current behaviour, where a 5xx from the oracle is tolerated: that
+  tolerance stays available, but as `Proceed(fallback_pool)` in a manifest, checked at startup and
+  covered by a vector.
+- **The transaction's timers and capacity are decoupled, testably.** No engine timer's duration or
+  arming point is a function of query latency: the request is promoted to stateful, so the INVITE
+  server transaction emits `100 (Trying)` and absorbs retransmissions while suspended, and Timer C
+  is armed after `Forward` — at `t_forward + 180 s`, never `t_invite + 180 s`. Capacity is bounded
+  by a declared in-flight cap, a queue sized **0** (shed rather than queue), a per-node breaker that
+  costs nothing while open, and a cache that follows RFC 2308 §5's distinction — "no route" is
+  cacheable, "could not ask" never is. Eleven named harness scenarios cover slow, timing-out,
+  failing, flapping, malformed and CANCEL-during-suspension, all in virtual time.
+- Follow-up filed as `EX-8`: the design is accepted, but `docs/specs/hook-framework.md` does not yet
+  say it. *Considered for upstream: no, cluster-specific* — the declaration surface is bound to this
+  platform's manifest and pipeline; the two protocol-generic pieces it leans on are already in the
+  kernel and are consumed rather than re-made.
 - **Topology hiding: decided out of scope for v1** (`PX-8`, decision recorded in
   [proxy-engine](docs/designs/proxy-engine.md)). The finding that settles it is that there is
   nothing of the platform's own topology on the wire to hide: a surface-by-surface reading shows
