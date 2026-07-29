@@ -54,6 +54,10 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-10 — check-docs must only see the repository, not whatever sits under it](CF-10-check-docs-must-only-see-the-repository.md) · Foundation · the gate's verdict currently depends on whether an agent worktree happens to exist
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
 
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
+
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
@@ -88,6 +92,7 @@ _The operational contract: roles by config, a reference topology, and an honest 
 - [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
 - [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
 - [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
+- [DP-9 — Prove registration and a call across two nodes in a local cluster](DP-9-prove-a-call-across-two-nodes-in-devspace.md) · Cluster · the first multi-node proof — register through one node, be called through another
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
@@ -135,6 +140,7 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 _The one place the platform is allowed durable state — so its updates must serialize._
 - [RG-5 — Implement rendezvous sharding and shard handoff](RG-5-implement-rendezvous-sharding-and-shard-handoff.md) · Signalling
 - [RG-7 — Support migrating an existing credential store](RG-7-support-migrating-an-existing-credential-store.md) · Signalling · gates a downstream registrar cutover
+- [RG-12 — Reach a shared location store from a running node](RG-12-reach-a-shared-location-store-from-a-node.md) · Signalling · blocked by DP-8 — RG-4 built the Postgres store and driver.rs still hardcodes InMemoryStore
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
