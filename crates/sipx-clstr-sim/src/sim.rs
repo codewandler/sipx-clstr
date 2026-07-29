@@ -12,9 +12,10 @@ use sipx_sip::{Limits, Message, parse_datagram};
 use crate::fault::{Fault, Schedule};
 use crate::net::{Delivery, Link, LinkKind, LinkPolicy, NodeId};
 use crate::node::{Effect, Input, SimNode, TimerId};
-use crate::queue::{EventQueue, Generations};
+use crate::queue::EventQueue;
 use crate::time::SimTime;
 use crate::trace::{self, Trace};
+use sipx_transport::timers::TimerQueue;
 
 /// Why a run stopped early.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -44,7 +45,9 @@ pub struct Sim {
     default_kind: LinkKind,
     default_policy: LinkPolicy,
     queue: EventQueue<Event>,
-    generations: Generations<(NodeId, TimerId)>,
+    /// Pending timers, in the kernel's queue (`CF-7`). Its cancellation discipline — a generation
+    /// per key, stale entries discarded at pop — is the one this crate used to reimplement.
+    timers: TimerQueue<(NodeId, TimerId), SimTime>,
     trace: Trace,
     budget: u64,
     started: bool,
@@ -63,11 +66,6 @@ enum Event {
         from: NodeId,
         to: NodeId,
         bytes: Bytes,
-    },
-    Timer {
-        node: NodeId,
-        timer: TimerId,
-        generation: u64,
     },
     Break {
         node: NodeId,
@@ -91,7 +89,7 @@ impl Sim {
             default_kind: LinkKind::Datagram,
             default_policy: LinkPolicy::CLEAN,
             queue: EventQueue::new(),
-            generations: Generations::new(),
+            timers: TimerQueue::new(),
             killed: BTreeSet::new(),
             skew: BTreeMap::new(),
             trace: Trace::new(),
@@ -236,10 +234,10 @@ impl Sim {
                     self.set_partitioned(peer, *node, true);
                 }
                 // The timers it was waiting for never fire. This is what separates a kill from an
-                // isolation: an isolated node keeps running and keeps timing out. Dropping the
-                // counter rather than bumping it is what `Generations::retain` is for — a queued
-                // entry then matches nothing and is discarded when it surfaces.
-                self.generations.retain(|(owner, _), _| owner != node);
+                // isolation: an isolated node keeps running and keeps timing out. `forget_matching`
+                // drops the generations outright, so the entries still in the queue match nothing
+                // and are discarded when they surface.
+                self.timers.forget_matching(|(owner, _)| owner == node);
             }
             Fault::Partition { a, b } => self.cut_between(a, b, true),
             Fault::Heal { a, b } => self.cut_between(a, b, false),
@@ -348,22 +346,57 @@ impl Sim {
     pub fn run_until(&mut self, deadline: SimTime) -> Result<(), SimError> {
         self.start()?;
         let mut steps = 0_u64;
-        while let Some(at) = self.queue.next_deadline() {
-            if at > deadline {
+        loop {
+            // Two queues since `CF-7`: the kernel's holds pending timers, this crate's holds the
+            // things it cannot — deliveries, breaks and faults all carry payloads. Whichever is due
+            // first wins; at a tie the precedence below reproduces exactly what the single queue's
+            // insertion-sequence tie-break used to produce, so no seed changed meaning.
+            let next = match (self.timers.next_deadline(), self.queue.next_deadline()) {
+                (None, None) => break,
+                (Some(timer_at), None) => timer_at,
+                (None, Some(event_at)) => event_at,
+                (Some(timer_at), Some(event_at)) => timer_at.min(event_at),
+            };
+            if next > deadline {
                 break;
             }
             steps += 1;
             if steps > self.budget {
                 return Err(SimError::StepBudgetExhausted {
                     budget: self.budget,
-                    at,
+                    at: next,
                 });
             }
-            let Some((at, event)) = self.queue.pop() else {
-                break;
+            self.now = next;
+
+            // A fault due at this instant goes first. Under the single queue it was scheduled
+            // during setup and so carried the lowest insertion sequence of anything at its
+            // deadline; keeping that is what makes "the weather changes the world, then the world
+            // runs" true — a kill at T stops the timer at T, rather than racing it.
+            let fault_first = matches!(self.queue.peek(), Some(Event::Fault(_)))
+                && self.queue.next_deadline() == Some(next);
+
+            let fired = if fault_first {
+                Vec::new()
+            } else {
+                self.timers.take_due(next)
             };
-            self.now = at;
-            self.handle(event);
+
+            if fired.is_empty() {
+                let Some((at, event)) = self.queue.pop() else {
+                    break;
+                };
+                self.now = at;
+                self.handle(event);
+            } else {
+                for (node, timer) in fired {
+                    let name = self.name_of(node).to_owned();
+                    self.trace
+                        .record(self.now, node, &name, trace::Event::TimerFired(timer));
+                    let effects = self.deliver(node, Input::Timer(timer));
+                    self.perform(node, effects);
+                }
+            }
         }
         if self.now < deadline && deadline.as_nanos() != u64::MAX {
             // Nothing is pending, so the clock may jump straight to where the scenario asked to
@@ -382,23 +415,6 @@ impl Sim {
     fn handle(&mut self, event: Event) {
         match event {
             Event::Deliver { from, to, bytes } => self.handle_delivery(from, to, bytes),
-            Event::Timer {
-                node,
-                timer,
-                generation,
-            } => {
-                // A stale entry is one whose timer was reset or cleared after it was queued.
-                // Discarded here rather than removed from the queue when it was cancelled: the
-                // removal would be a linear scan on what is otherwise the cheapest operation.
-                if !self.generations.is_current(&(node, timer), generation) {
-                    return;
-                }
-                let name = self.name_of(node).to_owned();
-                self.trace
-                    .record(self.now, node, &name, trace::Event::TimerFired(timer));
-                let effects = self.deliver(node, Input::Timer(timer));
-                self.perform(node, effects);
-            }
             Event::Fault(fault) => self.apply(&fault),
             Event::Break { node, peer } => {
                 let name = self.name_of(node).to_owned();
@@ -465,22 +481,15 @@ impl Sim {
             match effect {
                 Effect::Send { to, message } => self.send(node, to, message.as_ref()),
                 Effect::SetTimer { timer, after } => {
-                    let generation = self.generations.bump((node, timer));
-                    let at = self.now.saturating_add(self.skewed(node, after));
-                    self.queue.schedule_at(
-                        at,
-                        Event::Timer {
-                            node,
-                            timer,
-                            generation,
-                        },
-                    );
+                    let after = self.skewed(node, after);
+                    let at = self.now.saturating_add(after);
+                    self.timers.set((node, timer), self.now, after);
                     let name = self.name_of(node).to_owned();
                     self.trace
                         .record(self.now, node, &name, trace::Event::TimerSet { timer, at });
                 }
                 Effect::ClearTimer(timer) => {
-                    self.generations.cancel((node, timer));
+                    self.timers.clear(&(node, timer));
                     let name = self.name_of(node).to_owned();
                     self.trace
                         .record(self.now, node, &name, trace::Event::TimerCleared(timer));

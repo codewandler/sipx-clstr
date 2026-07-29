@@ -1462,6 +1462,7 @@ dependencies = [
  "sipx-clstr-proxy",
  "sipx-clstr-registrar",
  "sipx-sip",
+ "sipx-transport",
  "thiserror",
  "tracing",
  "tracing-subscriber",

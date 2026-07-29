@@ -39,10 +39,7 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · unblocked by sipx v0.4.0 — the spec and the decision core are in; the store wiring is not
 
 ## Next (ready — take the top one unless the user named a story)
-
-### Conformance & deterministic harness
-_The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · unblocked by sipx v0.7.0 — the queue is generic over its instant now; the link stays local
+_None._
 
 ## Blocked
 _None._
@@ -138,6 +135,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-1 — Design the deterministic cluster harness](CF-1-design-the-deterministic-cluster-harness.md) · Platform · UPSTREAM: sipx-testkit split filed as sipx X-14; see docs/upstream.md
 - [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · the schedule half; the sim-vs-real fidelity row moved to CF-3, which owns the sockets
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
+- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · the queue converged on sipx v0.7.0; the link is decided local per CF-1's per-component split
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio

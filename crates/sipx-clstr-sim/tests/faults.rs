@@ -323,3 +323,64 @@ fn a_scheduled_run_replays_byte_for_byte_from_its_seed() {
         "a different seed must produce a different run, or the faults are not seeded at all"
     );
 }
+
+// -------------------------------------------------------------------------------------------
+// CF-7: the timer queue is the kernel's
+// -------------------------------------------------------------------------------------------
+
+/// The convergence `CF-7` is for, asserted rather than described.
+///
+/// `sipx-clstr-sim` kept its own generation counters until sipx `v0.7.0` made `TimerQueue` generic
+/// over its instant. This drives the *kernel's* queue with `SimTime` — no runtime, no clock — and
+/// exercises the cancellation discipline that used to be reimplemented here: a reset replaces, a
+/// clear cannot be resurrected, and one node's timers are not another's.
+#[test]
+fn the_kernel_queue_takes_the_harnesss_own_clock() {
+    use sipx_transport::timers::TimerQueue;
+
+    let mut timers: TimerQueue<(NodeId, TimerId), SimTime> = TimerQueue::new();
+    let start = SimTime::START;
+
+    timers.set((PINGER, TimerId(1)), start, Duration::from_secs(3));
+    timers.set((SINK, TimerId(1)), start, Duration::from_secs(1));
+
+    // A reset replaces rather than duplicating: the 3s entry must not also fire.
+    timers.set((PINGER, TimerId(1)), start, Duration::from_secs(5));
+    // A cleared timer stays cleared even though its key is set again below.
+    timers.set((PINGER, TimerId(2)), start, Duration::from_secs(2));
+    timers.clear(&(PINGER, TimerId(2)));
+
+    assert_eq!(timers.next_deadline(), Some(SimTime::from_secs(1)));
+    assert_eq!(
+        timers.take_due(SimTime::from_secs(4)),
+        vec![(SINK, TimerId(1))],
+        "only the sink's timer is due, and the replaced 3s entry is gone"
+    );
+    assert_eq!(
+        timers.take_due(SimTime::from_secs(10)),
+        vec![(PINGER, TimerId(1))],
+        "the reset entry fires at its new deadline; the cleared one never does"
+    );
+}
+
+/// A killed node's timers are forgotten in the kernel's queue too.
+///
+/// The property `Generations::retain` used to provide here, now `TimerQueue::forget_matching`.
+/// Worth its own assertion because it is what separates a kill from an isolation, and the swap
+/// moved it into someone else's code.
+#[test]
+fn forgetting_one_nodes_timers_leaves_another_nodes_alone() {
+    use sipx_transport::timers::TimerQueue;
+
+    let mut timers: TimerQueue<(NodeId, TimerId), SimTime> = TimerQueue::new();
+    timers.set((PINGER, TimerId(1)), SimTime::START, Duration::from_secs(1));
+    timers.set((SINK, TimerId(1)), SimTime::START, Duration::from_secs(1));
+
+    timers.forget_matching(|(node, _)| *node == PINGER);
+
+    assert_eq!(
+        timers.take_due(SimTime::from_secs(9)),
+        vec![(SINK, TimerId(1))],
+        "the killed node's timer never surfaces; its peer's still does"
+    );
+}

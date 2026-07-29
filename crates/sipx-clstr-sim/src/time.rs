@@ -62,6 +62,23 @@ impl SimTime {
     }
 }
 
+/// What the kernel's `TimerQueue` needs of an instant, and the whole of it (`CF-7`).
+///
+/// `sipx_transport::timers::TimerQueue<K, I>` is generic over `I: Ord + Copy + Add<Duration>`, so
+/// satisfying it takes exactly this — no clock, no runtime, no conversion to wall time. That is
+/// the point: the harness hands the kernel its own notion of "now" and keeps every property
+/// [`SimTime`] exists to guarantee.
+impl std::ops::Add<Duration> for SimTime {
+    type Output = Self;
+
+    /// Saturating, for the reason [`SimTime::saturating_add`] gives: a scenario that schedules
+    /// something 600 years out has a bug, and landing at the end of time where an assertion can
+    /// see it beats wrapping into the past.
+    fn add(self, after: Duration) -> Self {
+        self.saturating_add(after)
+    }
+}
+
 impl fmt::Display for SimTime {
     /// Fixed width to the microsecond, so traces from two runs line up column for column when
     /// something diverges and a diff is the fastest way to see where.

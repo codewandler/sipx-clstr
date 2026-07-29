@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The harness keeps the kernel's timer queue instead of its own** (`CF-7`). sipx `v0.7.0` made
+  `TimerQueue` generic over its **instant**, so `impl Add<Duration> for SimTime` is the entire
+  adapter and `sipx-clstr-sim` hands the kernel its own clock — no runtime, no wall time.
+  `queue.rs`'s `Generations<K>` is deleted; `SetTimer`/`ClearTimer`/`KillNode` are now `set`,
+  `clear` and `forget_matching`.
+  - **The tie-break was the part that mattered.** Timers live in the kernel's queue and
+    deliveries, breaks and faults in this crate's, because those carry payloads. At an equal
+    instant the scheduler drains a *fault first*, then timers, then the rest — exactly what the
+    single queue's insertion-sequence rule produced, since faults are scheduled during setup. The
+    first attempt drained timers first and moved two scenarios by one ping each, because a kill at
+    T raced the timer at T instead of stopping it.
+  - **No seed changed meaning and no expectation was edited.** The story's escape hatch for
+    recording deliberate seed changes was not needed.
+  - The loopback link is **decided local** rather than adopted, per `CF-1`'s per-component split:
+    the kernel's is two-party where the harness needs an N-node mesh, has no stream class for
+    §16.9, and owns its own generator — adopting it would change what every seed means.
+  - Cost, stated plainly: `sipx-clstr-sim` now links `tokio` transitively. The harness never
+    builds a runtime, and the decision crates depend on the harness rather than the reverse, so
+    the registrar's sans-IO guard is unaffected.
+
 ## [0.4.0] — 2026-07-29
 
 ### Added

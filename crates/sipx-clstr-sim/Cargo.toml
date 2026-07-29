@@ -18,6 +18,11 @@ sipx-clstr-proxy = { workspace = true, features = ["registrar-targets"] }
 sipx-clstr-probe.workspace = true
 sipx-clstr-registrar.workspace = true
 sipx-sip.workspace = true
+# `CF-7`: the kernel's timer queue, now generic over its instant (sipx v0.7.0), replacing the
+# generation counters this crate used to keep. It brings `tokio` into the harness's graph as a
+# linked crate — the harness never builds a runtime, and the sans-IO rule this workspace enforces
+# is about the *decision* crates, which depend on this one and not the other way round.
+sipx-transport.workspace = true
 bytes.workspace = true
 rand.workspace = true
 thiserror.workspace = true

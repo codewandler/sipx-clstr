@@ -89,6 +89,17 @@ impl<T> EventQueue<T> {
         self.heap.peek().map(|scheduled| scheduled.at)
     }
 
+    /// The earliest event without removing it.
+    ///
+    /// Needed since `CF-7` split timers into the kernel's queue: at an instant where both queues
+    /// have something due, the scheduler has to look at *what* this one holds before deciding which
+    /// to drain, because a fault and a delivery due at the same moment do not have the same
+    /// precedence against a timer.
+    #[must_use]
+    pub fn peek(&self) -> Option<&T> {
+        self.heap.peek().map(|scheduled| &scheduled.payload)
+    }
+
     /// Take the earliest event, with the time it is due at.
     pub fn pop(&mut self) -> Option<(SimTime, T)> {
         self.heap
@@ -106,52 +117,6 @@ impl<T> EventQueue<T> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.heap.is_empty()
-    }
-}
-
-/// Cancellation by generation, for timers that can be reset before they fire.
-///
-/// A cancelled entry is not removed from the queue — finding it would be linear, and a timer that
-/// is set and cleared repeatedly would make that the hot path. Instead every set or clear bumps a
-/// counter for its key, each queued entry carries the counter it was created under, and an entry
-/// whose generation is stale is discarded when it pops. The same discipline the kernel's own
-/// timer queue uses, which is why generalising that one is asked of the kernel as sipx `X-14`
-/// rather than kept here forever.
-#[derive(Debug, Default)]
-pub struct Generations<K> {
-    current: std::collections::HashMap<K, u64>,
-}
-
-impl<K: std::hash::Hash + Eq> Generations<K> {
-    /// An empty set of counters.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            current: std::collections::HashMap::new(),
-        }
-    }
-
-    /// Bump `key`'s counter and return the new value, which the queued entry must carry.
-    pub fn bump(&mut self, key: K) -> u64 {
-        let slot = self.current.entry(key).or_insert(0);
-        *slot += 1;
-        *slot
-    }
-
-    /// Whether an entry created under `generation` is still the live one for `key`.
-    pub fn is_current(&self, key: &K, generation: u64) -> bool {
-        self.current.get(key) == Some(&generation)
-    }
-
-    /// Invalidate everything outstanding for `key`.
-    pub fn cancel(&mut self, key: K) {
-        let slot = self.current.entry(key).or_insert(0);
-        *slot += 1;
-    }
-
-    /// Drop every counter matching a predicate — a node that dies takes its timers with it.
-    pub fn retain(&mut self, keep: impl FnMut(&K, &mut u64) -> bool) {
-        self.current.retain(keep);
     }
 }
 
@@ -197,46 +162,5 @@ mod tests {
         let queue: EventQueue<()> = EventQueue::new();
         assert!(queue.is_empty());
         assert_eq!(queue.next_deadline(), None);
-    }
-
-    #[test]
-    fn a_reset_timer_invalidates_the_entry_it_replaced() {
-        let mut generations = Generations::new();
-        let first = generations.bump("timer-c");
-        let second = generations.bump("timer-c");
-        assert!(!generations.is_current(&"timer-c", first));
-        assert!(generations.is_current(&"timer-c", second));
-    }
-
-    #[test]
-    fn a_cancelled_timer_cannot_be_resurrected_by_a_later_set() {
-        // The generation a cancel consumes must never be handed out again, or the entry it was
-        // meant to kill would come back to life the moment the timer is set once more.
-        let mut generations = Generations::new();
-        let cancelled = generations.bump("timer-c");
-        generations.cancel("timer-c");
-        assert!(!generations.is_current(&"timer-c", cancelled));
-
-        let reset = generations.bump("timer-c");
-        assert_ne!(reset, cancelled);
-        assert!(!generations.is_current(&"timer-c", cancelled));
-        assert!(generations.is_current(&"timer-c", reset));
-    }
-
-    #[test]
-    fn a_dead_nodes_timers_are_forgotten_entirely() {
-        let mut generations = Generations::new();
-        let doomed = generations.bump(("edge-0", "timer-c"));
-        let survivor = generations.bump(("edge-1", "timer-c"));
-        generations.retain(|(node, _), _| *node != "edge-0");
-        assert!(!generations.is_current(&("edge-0", "timer-c"), doomed));
-        assert!(generations.is_current(&("edge-1", "timer-c"), survivor));
-    }
-
-    #[test]
-    fn a_generation_from_another_key_is_not_current_here() {
-        let mut generations = Generations::new();
-        let a = generations.bump("a");
-        assert!(!generations.is_current(&"b", a));
     }
 }
