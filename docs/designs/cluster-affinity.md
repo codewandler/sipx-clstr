@@ -56,6 +56,33 @@ writes to the connection. The generation counter makes references to a dead conn
 the binding as temporarily unavailable — with RFC 5626 semantics arriving in M3, this is the
 `430 Flow Failed` path.
 
+**Settled in AF-2** ([affinity-token](../specs/affinity-token.md) §11–§14 — the flow reference
+lives in the token's spec because the two share one key set, one construction and one parser
+prologue). Three decisions the sketch above left open:
+
+- *The reference is `signed(tenant, node, **incarnation**, connection, generation, transport)`, not
+  the three-field sketch.* `incarnation` — the node's boot second — is what stops a restarted node
+  from re-issuing an identity a live reference already names; without it the generation counter
+  only protects within one run of one process. `transport` lets a caller refuse a `sips` target on
+  a plaintext flow (RFC 3261 §26.2.2) without asking the owner. The whole record is 49 bytes.
+- *No expiry.* The token needs one because a dialog exists nowhere; a reference names a row that
+  either exists or does not, and that is a tighter bound than a clock and needs no clock. So
+  `verify_flow` is the only record verifier in this epic that takes no `now`, and the invariant is
+  stated positively: **a reference resolves to the connection it was minted for, or to nothing.**
+- *The two families are domain-separated cryptographically*, by a version byte inside the
+  authenticated input — not by convention — because they share keys and, in M3, will share
+  carriage.
+
+The reachability question the sketch did not raise: a client that reconnects and *retransmits* the
+same REGISTER leaves a binding pointing at the dead connection until its next refresh. That is a
+latency defect, never a mis-delivery, and closing it means touching the registrar's idempotency
+comparison — flagged to `RG-8` rather than decided in AF-2 (spec §13.3 BI5).
+
+**Considered for upstream: no** — a flow reference names this platform's node set and this node's
+table slots, and RFC 5626 §5.2 leaves flow-token construction to the edge proxy that mints it;
+the connection table is orchestration over the handle the kernel's transport layer already
+returns, not a second transport.
+
 **The connection-owner RPC** (AF-3, implemented by AF-7) is an internal, mutually authenticated
 interface with delivery semantics specified up front: at-most-once delivery, bounded queueing,
 and an explicit failure answer (owner unreachable ≠ flow dead ≠ flow rejected). It is the only
@@ -89,6 +116,14 @@ without restart. A dynamic membership service is a later, separate decision.
   settled in AF-3.
 - Key compromise blast radius and rotation cadence; whether tenant ids in tokens require
   encryption by default.
+- **Node-id uniqueness is now a correctness input, not a convention** (AF-2 §12.2 CT1): two nodes
+  sharing a logical id give two different connections one flow identity, which is the only way to
+  break the reference invariant from outside its spec. AF-6/DP-1 must reject it at config-validation
+  time rather than warn.
+- Key rotation now has to outlast registrations, not only tokens: a reference leaves circulation
+  when the binding holding it is refreshed, so the overlap window is `max(token lifetime,
+  maximum registration expiry)` (AF-2's amendment to the rotation rule). A deployment that raises
+  registration expiry above the token lifetime lengthens every rotation.
 - The stickiness-miss path: how often the L4 dataplane delivers a transaction-scoped message to
   the wrong edge in practice, and whether PX-1's degraded behavior (stateless CANCEL forwarding,
   retransmission absorption) is enough — measured under the harness's fault schedules.
