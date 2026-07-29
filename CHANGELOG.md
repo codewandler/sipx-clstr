@@ -7,6 +7,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The cluster configuration schema is executable** (`DP-8`). `DP-1` specified one cluster-scoped
+  document and nothing read it, so the binary still had the three provisional flags its own source
+  calls placeholders. `load(bytes, identity, env)` is now a pure function returning either a config
+  or **every** error ordered by path, and `project` turns a cluster document into one node's view of
+  it. This is the keystone for a multi-node deployment: roles, listeners, tenants and the location
+  store were all unreachable without it.
+
+  It is deliberately not a `derive(Deserialize)`. §8 V1 wants every error, not the first, and serde
+  stops at the first and reports it as a message rather than a path plus a rule id; V2's closed world
+  needs the same shape, because you cannot ask serde which keys it did *not* recognise. The document
+  is walked by hand over a generic value tree. YAML and JSON go through one parser, so the two
+  encodings cannot drift apart — a test asserts the same cluster loads identically as both.
+
+  Scope is stated rather than implied: ten sections are validated, the other seventeen of §7's
+  registry are *recognised but not descended into* and reported in `Config::deferred`. A section
+  silently ignored would be configuration nobody applies with nothing saying so, which is the
+  failure V2 exists to prevent, one level up.
+
+### Known gaps
+
+- **The config loader pulls `unsafe-libyaml` into the tree**, through `serde_yaml_ng`. Non-negotiable
+  #3 forbids `unsafe`, and the workspace lint enforces it for crates *in* this workspace, so the gate
+  passed without comment. The exposure is an operator-supplied document rather than network input,
+  which is the weaker of the two, but the property is stated about the platform and this weakens it.
+  Undecided on purpose; a pure-safe-Rust parser behind the same value-tree walk is the alternative.
+
 ### Fixed
 
 - **The doc gate no longer depends on what happens to be sitting under the repository** (`CF-10`).

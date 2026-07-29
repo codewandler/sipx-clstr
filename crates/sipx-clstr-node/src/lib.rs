@@ -17,6 +17,10 @@
 
 #![doc(html_no_source)]
 
+/// The cluster configuration document, read (`DP-8`) — a pure function over bytes, an identity and
+/// an environment, per `DP-1`'s schema. Not yet wired to the driver; `RG-12` does that.
+pub mod config;
+
 pub mod driver;
 
 /// What the node binds, and what it advertises (`DP-5`) — decisions, with no socket in sight.

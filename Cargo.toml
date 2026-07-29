@@ -75,6 +75,9 @@ sha2 = "0.10"
 # this shape would be a second parser to get wrong.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# YAML for the cluster configuration document (`DP-8`). JSON is parsed by the same reader:
+# the spec asks for one data model behind two encodings, not two parsers.
+serde_yaml_ng = "0.10"
 # `with-serde_json-1` is what lets a `jsonb` column round-trip as a `serde_json::Value`; without it
 # the binding set would need a bespoke text encoding, which is a second parser to get wrong.
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
