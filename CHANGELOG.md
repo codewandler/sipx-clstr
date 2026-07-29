@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-07-29
+
+M1's one known defect is closed, and M2's two defining subsystems — cluster affinity and media
+control — now have specifications to build against. Five stories, of which one changes behaviour and
+four are the specs and decisions that let the implementation stories start.
+
 ### Fixed
 
 - **A retransmitted REGISTER is a retry again, not a `500`** (`RG-8`) — M1's one known defect, and
