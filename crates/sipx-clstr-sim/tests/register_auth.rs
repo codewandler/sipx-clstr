@@ -49,6 +49,11 @@ const RETRANSMIT: TimerId = TimerId(0);
 /// says it should not be there.
 const HIJACK_CONTACT: &str = "<sip:mallory@10.6.6.6>;expires=600";
 
+/// The `Call-ID` the wildcard replay arrives under — RA-R-7. Any value the AoR has never seen will
+/// do, which is the point: a `Call-ID` is chosen by whoever sends the request (RFC 3261 §8.1.1.4),
+/// so "fresh" costs an attacker nothing.
+const FRESH_CALL_ID: &str = "not-a-call-id-this-aor-has-seen";
+
 fn uri(text: &str) -> Uri {
     Uri::parse(Bytes::copy_from_slice(text.as_bytes())).expect("a valid URI")
 }
@@ -233,6 +238,11 @@ enum Encore {
     /// higher `CSeq` and a shorter expiry — RA-R-6. The method and the signed URI are untouched, so
     /// the digest is byte-identical and this is a *retransmission* as far as the window can tell.
     Reattach,
+    /// Reattach the same credential to a REGISTER carrying `Contact: *`, `Expires: 0` and a fresh
+    /// `Call-ID` — RA-R-7, the removal variant. Method and signed URI are untouched here too, so
+    /// the digest is the same one again; what differs is which branch of location-service §5.4 the
+    /// resulting command takes.
+    Deregister,
 }
 
 impl SimNode for Phone {
@@ -330,13 +340,7 @@ impl Phone {
                 ]
             }
             Encore::Reattach => {
-                // The credential the edge has already accepted, taken off the wire and put back
-                // unmodified. `A2 = Method ":" request-uri` (RFC 7616 §3.4.3), and neither changed.
-                let Some(captured) = sent
-                    .headers
-                    .value(&HeaderName::Authorization)
-                    .map(|value| String::from_utf8_lossy(&value).into_owned())
-                else {
+                let Some(captured) = captured(&sent) else {
                     return Vec::new();
                 };
                 // `register` advances the CSeq; the Contact and its expiry are somebody else's.
@@ -348,6 +352,34 @@ impl Phone {
                 );
                 vec![
                     Effect::Note(format!("{} reattached a captured credential", self.name)),
+                    send(self.edge, Message::Request(request)),
+                ]
+            }
+            Encore::Deregister => {
+                let Some(captured) = captured(&sent) else {
+                    return Vec::new();
+                };
+                let mut request = self.register(Some(captured));
+                // `Contact: *` with an explicit `Expires: 0` — location-service §5.4 W1 and W2.
+                // Anything else is a `400` that never reaches W3, so the fixture has to get this
+                // pair right or it would prove the rejection instead of the removal.
+                request.headers.remove_all(&HeaderName::Contact);
+                request
+                    .headers
+                    .push(sipx_sip::Header::build(HeaderName::Contact, "*").expect("a wildcard"));
+                request.headers.remove_all(&HeaderName::Expires);
+                request.headers.push(
+                    sipx_sip::Header::build(HeaderName::Expires, "0").expect("an Expires header"),
+                );
+                // The fresh `Call-ID`. W3 compares the ordering only against a binding whose
+                // `Call-ID` matches, so a value no stored binding carries exempts every binding
+                // from the check at once — and a `Call-ID` is chosen by the sender.
+                request.headers.remove_all(&HeaderName::CallId);
+                request.headers.push(
+                    sipx_sip::Header::build(HeaderName::CallId, FRESH_CALL_ID).expect("a Call-ID"),
+                );
+                vec![
+                    Effect::Note(format!("{} replayed it over a wildcard", self.name)),
                     send(self.edge, Message::Request(request)),
                 ]
             }
@@ -396,6 +428,16 @@ impl Phone {
         }
         builder.build()
     }
+}
+
+/// The credential the edge has already accepted, taken off the wire and put back unmodified.
+///
+/// `A2 = Method ":" request-uri` (RFC 7616 §3.4.3), so every reattachment below leaves the two
+/// fields the digest actually binds untouched and changes only fields it does not.
+fn captured(sent: &Request) -> Option<String> {
+    sent.headers
+        .value(&HeaderName::Authorization)
+        .map(|value| String::from_utf8_lossy(&value).into_owned())
 }
 
 fn reply_message(request: &Request, status: u16, reason: &str) -> Response {
@@ -611,6 +653,74 @@ fn ra_r_6_a_reattached_credential_writes_a_contact_it_never_signed() {
         edge.stored_principal(now),
         Some("t1:alice".to_owned()),
         "recorded under the replayed principal, not under nobody"
+    );
+}
+
+#[test]
+fn ra_r_7_a_reattached_credential_empties_the_aor_through_the_wildcard_path() {
+    // RA-R-6's removal variant, driven as one request. Everything RA-R-6 relies on holds unchanged
+    // — the `Authorization` is byte-identical, so the replay window sees RA-R-1's retransmission —
+    // and what differs is only which branch of location-service §5.4 the admitted command reaches:
+    // `Contact: *` with `Expires: 0` is a wildcard, and §W3 removes a binding whose `Call-ID`
+    // differs. A `Call-ID` the AoR has never seen differs from every stored binding at once, so
+    // W3's removal applies to all of them and its ordering check fires for none.
+    //
+    // registrar-auth §7.3 **accepts** this, so this test pins an exposure the specification argues
+    // for on purpose — it is not a regression test guarding a defect. Narrowing it means refusing
+    // RA-R-1, which M1's fifth exit criterion forbids; the bound is the nonce lifetime and the
+    // mitigation is TLS (RFC 3261 §26.2.1). RFC 3261 §26.1.1 names the result: an attacker "could,
+    // for example, de-register all existing contacts for a URI".
+    let mut sim = scenario(0x5247_0209, closed_tenant(), PASSWORD, Encore::Deregister);
+    sim.run_until_idle().expect("settles");
+
+    let edge = sim.node::<Edge>(EDGE_NODE).expect("the edge");
+    assert_eq!(
+        edge.admissions,
+        vec![
+            Verdict::Challenged { stale: false },
+            Verdict::Admitted(Some("t1:alice".to_owned())),
+            Verdict::Admitted(Some("t1:alice".to_owned())),
+        ],
+        "the wildcard replay authenticates under the captured principal — §7.2\n{}",
+        sim.trace().render()
+    );
+
+    // The assertion the row is actually about. A `200` here would be equally true of W2's `400`
+    // path and of a no-op, so the claim is the *set*: the binding the honest REGISTER wrote is
+    // gone, and nothing replaced it. The phone that owns the AoR stops ringing.
+    let now = Timestamp::from_secs(1);
+    assert_eq!(
+        edge.contacts(now),
+        Vec::<String>::new(),
+        "every binding on the AoR is removed, not merely one — §W3\n{}",
+        sim.trace().render()
+    );
+    assert_eq!(
+        edge.bindings(now),
+        0,
+        "and the AoR resolves to nothing, so a call to it forks nowhere\n{}",
+        sim.trace().render()
+    );
+
+    // Two commits, not one — which is what separates "every binding was removed" from "there was
+    // never anything to remove". A wildcard against an already-empty AoR is a `Noop` that writes
+    // nothing (§W3), so an empty contact set on its own would also be true of a test whose honest
+    // REGISTER never landed.
+    assert_eq!(
+        edge.store.changes().len(),
+        2,
+        "the honest write and the replayed removal are both commits\n{}",
+        sim.trace().render()
+    );
+
+    // Loss of service rather than a refusal: the edge answered both REGISTERs, so nothing on the
+    // wire told anyone this happened. That is what distinguishes RA-R-7 from LS-R-10's `500`.
+    let phone = sim.node::<Phone>(ALICE).expect("the phone");
+    assert_eq!(
+        phone.answers,
+        vec![401, 200, 200],
+        "the removal is accepted, not aborted by an ordering guard\n{}",
+        sim.trace().render()
     );
 }
 
