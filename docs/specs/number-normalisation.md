@@ -18,16 +18,18 @@
   inside a dialog (N23).
 - RFC 3261 §9.1 (a CANCEL's Request-URI, `To`, `From` and Call-ID MUST be identical to the
   request it cancels) and §17.1.1.3 (an ACK for a non-2xx repeats the INVITE's Request-URI,
-  `To`, `From` and Call-ID) — N24: neither method is ever normalised.
+  `From` and Call-ID, but its `To` MUST equal the `To` of the **response being acknowledged**,
+  not of the request) — N24: neither method is ever normalised.
 - RFC 3261 §21.4.5 (`404 Not Found`) — the single rejection status of N20.
 - **RFC 3966** §3 (the `tel` URI ABNF: `telephone-subscriber`, global numbers carrying a leading
   `+`, `visual-separator`, and the requirement that a local number carry `phone-context`) and §4
   (comparison, consumed via the kernel's `Uri::equivalent`).
 - **RFC 3325** §4 (`P-Asserted-Identity`: a `sip`, `sips` or `tel` URI; one or two values, and
   when there are two, one of each scheme) — N4.
-- **ITU-T Recommendation E.164** (11/2010) §6.2.1 — an international public telecommunication
-  number carries at most 15 digits and its country code does not begin with `0`. This is the
-  whole content of the `e164: global` guard condition (N15).
+- **ITU-T Recommendation E.164** (11/2010) §6.1 (international number length — at most 15
+  digits) and §6.3 (assignment of country codes, drawn from zones `1`–`9`; no country code
+  begins with `0`). Together these two clauses, not one, are the whole content of the
+  `e164: global` guard condition (N15).
 - **RFC 8174** — MUST/SHOULD/MAY in this document carry RFC 2119 meanings.
 - sipx kernel contracts consumed: the URI parser and its escape handling (`Uri::user`,
   `Uri::decoded_user`), `Uri::equivalent`, and the lossless message model — every byte this spec
@@ -115,6 +117,7 @@ enum Outcome {
 enum Applied {
     Rule { field: Field, index: usize, rule: RuleKind, before: DigitForm, after: DigitForm },
     Skipped { field: Field, reason: SkipReason },   // NotANumber (N6) | TelLocalWithoutContext (N7)
+                                                     // | GuardedFieldAbsent (N32)
 }
 
 struct Profile {
@@ -139,8 +142,11 @@ enum Condition { Digits { min: u8, max: u8 }, E164Global }
 enum Fallback  { Field(Field), Reject }
 ```
 
-`Literal` is 1–8 bytes drawn from `+` and DIGIT, with `+` permitted only in first position
-(N22). `Profile` is the entire language: a value with no free-form string in it anywhere.
+`Literal` is 0–8 bytes drawn from `+` and DIGIT, with `+` permitted only in first position (N22).
+The empty `Literal` is legal only as a `replace_prefix` **value** (T1, a strip — already used by
+`carrier-e164` in §9 and `trim` in §10) or as the sole content of `add_prefix`/`ensure_prefix` (a
+declared no-op, §5); a `replace_prefix` **key** is never empty (N22), and neither is a `Field`
+name. `Profile` is the entire language: a value with no free-form string in it anywhere.
 
 ## 4. Fields and extraction
 
@@ -161,12 +167,18 @@ enum Fallback  { Field(Field), Reject }
 Four kinds. Each operates on one field's digit form, reads nothing else, and applies **at most
 once**; a kind may appear at most once in a field's list (N22).
 
+T2–T4 below are stated in terms of two projections shared by a digit form and a `Literal` alike
+(both drawn from the same alphabet, §3): `plus(x)` is `true` iff `x` begins with `+`, and
+`digits(x)` is `x` with that leading `+`, if any, removed. RFC 3966 §3 defines a leading `+` as
+the marker of `global-number-digits`, not an ordinary digit (N8); treating it as a marker rather
+than a character `T3`/`T4` prepend to is what keeps them total when the input already carries one.
+
 | # | Transform | Semantics |
 |---|---|---|
-| T1 | `replace_prefix: { <literal>: <literal>, … }` | Longest matching key wins; that one occurrence is replaced by its value; a value may be empty (a strip). No key may be empty (N22) — a "matches everything" arm is written as `add_prefix`, on its own line, where a reviewer sees it. At most 32 entries. |
-| T2 | `strip_leading_zeros: { max: <1..8> }` | Deletes up to `max` leading `0`s, stopping early rather than emptying the number: at least one digit always remains. The only bounded repetition in the language, and its bound is declared. |
-| T3 | `add_prefix: <literal>` | Prepends the literal unconditionally. Deliberately **not** idempotent — which is why N24 admits exactly one application point per direction, and why applying a profile twice is observable rather than silent. |
-| T4 | `ensure_prefix: <literal>` | Prepends the literal iff the digit form does not already start with it. Idempotent. `ensure_prefix: "+"` is the E.164 forcing rule of §9. |
+| T1 | `replace_prefix: { <literal>: <literal>, … }` | Longest matching key wins; that one occurrence is replaced by its value; a value may be empty (a strip). No key may be empty (N22) — a "matches everything" arm is written as `add_prefix`, on its own line, where a reviewer sees it. At most 32 entries. Matching is ordinary string-prefix matching over the whole literal, `+` included, so a key beginning `+` (legal per §3) already handles a `+`-carrying input without a special case. |
+| T2 | `strip_leading_zeros: { max: <1..8> }` | Deletes up to `max` leading `0`s from `digits(input)`, stopping early rather than emptying the number: at least one digit always remains. A leading `+`, if present, is skipped first and is never itself counted, deleted, or moved — leading zeros are counted in the digit run only. The only bounded repetition in the language, and its bound is declared. |
+| T3 | `add_prefix: <literal>` | The result carries a leading `+` iff `plus(literal)` or `plus(input)`; its digit run is `digits(literal)` followed by `digits(input)`. Prepending therefore always targets the digit run — a `+` already present, in the literal or the input, is never duplicated or displaced into the middle of the result. Deliberately **not** idempotent whenever `digits(literal)` is non-empty — which is why N24 admits exactly one application point per direction, and why applying a profile twice is observable rather than silent. |
+| T4 | `ensure_prefix: <literal>` | A no-op iff `digits(input)` already starts with `digits(literal)` and, whenever `plus(literal)` holds, `plus(input)` holds too; otherwise, the T3 result for the same literal and input. Idempotent by construction. `ensure_prefix: "+"` is the E.164 forcing rule of §9. |
 
 | # | Rule |
 |---|---|
@@ -174,6 +186,7 @@ once**; a kind may appear at most once in a field's list (N22).
 | N11 | A transform never changes a field other than its own, never reads another field, and never reads the request. |
 | N12 | Every transform is total: for every digit form there is exactly one output, and it is again a digit form (`["+"] 1*DIGIT`) or the input unchanged. |
 | N13 | Within a field, transforms apply in **declared order**. Order is observable — `[strip_leading_zeros, replace_prefix]` and its reverse differ on `0049…` (NN-T-7) — so the list is the order, and there is no second ordering knob anywhere. |
+| N30 | N12 holds for a digit form carrying a leading `+`: T1 already matches `+` as an ordinary leading byte of the literal (§3 permits it only there), and T2–T4 above are defined via `plus`/`digits` for exactly this reason. Every output of every transform is `["+"] 1*DIGIT` or the input unchanged, regardless of whether the input itself carried a `+`. |
 
 ## 6. The guard, and the fallback field
 
@@ -186,12 +199,14 @@ guard: { digits: { min: 3, max: 20 }, fallback: to }
 | # | Rule |
 |---|---|
 | N14 | `digits: { min, max }` holds iff the DIGIT count of the guarded field's provisional value (§7 phase 1), excluding a leading `+`, is within `[min, max]` inclusive. `0 ≤ min ≤ max ≤ 32`. |
-| N15 | `e164: global` holds iff the provisional value is `+` followed by 1–15 DIGIT whose first digit is `1`–`9` (ITU-T E.164 §6.2.1). |
-| N16 | A guard that holds changes nothing. A guard that fails substitutes the **provisional value of the fallback field**, or rejects (N17, N18). |
+| N15 | `e164: global` holds iff the provisional value is `+` followed by 1–15 DIGIT whose first digit is `1`–`9` (ITU-T E.164 §6.1, §6.3). |
+| N16 | A guard that holds changes nothing. A guard that fails substitutes the **provisional value of the fallback field**, or rejects (N17, N18) — N31 settles when a guard fails because it cannot hold, N32 when there is no field to substitute into. |
 | N17 | Substitution replaces the guarded field's **number only**. The URI keeps its own scheme, host, port and parameters — a fallback that carried the `To` header's host into the Request-URI would send the request somewhere the route plan never chose (NN-G-2). |
 | N18 | The outcome is `Reject` (N20) when the fallback is `reject`; when the fallback field is `Absent` or `NotANumber`; or when the fallback field's provisional value fails the **same** condition. |
 | N19 | Guards do not chain and are not ordered. A guard reads the fallback field's phase-1 value, never that field's own guard result, so evaluating all guards from one snapshot gives the same answer in any order (NN-G-6). Two guards on one field, or a guard whose fallback names the field it guards, are configuration errors (N22). |
 | N20 | The rejection status is `404 Not Found` (RFC 3261 §21.4.5) and is not configurable. A number the profile cannot make acceptable is a number this platform has no target for; statuses that describe *routing* outcomes belong to RT-2/RT-9, not to a normaliser. |
+| N31 | A guard's condition (N14, N15) is defined only over a digit form. When the guarded field's phase-1 value is `Absent` or `NotANumber`, neither condition is evaluable, so the guard is defined to **never hold** — the guard's counterpart to N10, which makes the same choice for transforms. N16's failure branch then applies, subject to N32 (NN-E-5, NN-G-9). |
+| N32 | Substitution (N17) rewrites the number inside the guarded field's **existing** URI; it never creates a field. When the guarded field's phase-1 value is `Absent` — for `PAssertedIdentity` this is N4's "if there is none" case, zero values rather than one `Absent` entry — there is no URI to rewrite, and creating one is out of scope of this spec (§2): whether and how `PAssertedIdentity` is created belongs to `RT-7`. The field is therefore left exactly as extracted and the result traced `Skipped { reason: GuardedFieldAbsent }`, regardless of the guard's fallback — including `fallback: reject`: N18 rejects when a *fallback* cannot supply a value, not when the guarded field has nothing to write into (NN-G-10, NN-G-11). |
 
 ## 7. Evaluation — three phases, one pass
 
@@ -206,7 +221,7 @@ phase 3  apply      write each changed number back into its field           (§8
 
 | # | Rule |
 |---|---|
-| N21 | **Termination and determinism.** Every phase reads the snapshot the previous phase produced; nothing reads its own output. A profile therefore terminates in at most `4 fields × (4 transforms + 1 guard)` steps, and the result is a function of `(profile, subject)` alone — independent of field order, of guard declaration order, and of anything outside the request. |
+| N21 | **Termination and determinism.** Every phase reads the snapshot the previous phase produced; nothing reads its own output. A profile therefore terminates in at most `5 field-instances × (4 transforms + 1 guard)` = 25 steps — `RequestUri`, `To` and `From` contribute one field-instance each and `PAssertedIdentity` up to two (N4), five in total, not four — and the result is a function of `(profile, subject)` alone — independent of field order, of guard declaration order, and of anything outside the request. |
 | N22 | **Configuration errors, all detected at load.** Unknown field/transform/guard/condition name · a transform kind twice in one field's list · more than one guard on a field · a guard whose fallback names its own field · an empty `replace_prefix` key · more than 32 `replace_prefix` entries · a literal outside `+`/DIGIT, longer than 8 bytes, or with `+` anywhere but first · `min > max`, `max > 32`, `strip_leading_zeros.max` outside `1..8` · a profile with no fields · a binding naming a profile that does not exist. Each fails the configuration load, naming the profile, the field and the rule. An invalid profile fails a deployment, never a call. |
 
 ## 8. Binding — where a profile attaches, and where it runs
@@ -327,6 +342,10 @@ the named field unless stated otherwise.
 | NN-T-6 | `ensure_prefix: "+"` on `4930` / `+4930` | `+4930` / `+4930` — idempotent (T4) |
 | NN-T-7 | `[strip_leading_zeros{max:2}, replace_prefix{"49":"+49"}]` vs the reverse order, on `0049301` | `+49301` vs `49301` — reversed, nothing starts with `49` when the prefix map runs, so it matches nothing and the `+` is never added: declared order is the applied order (N13) |
 | NN-T-8 | Any transform on an `Absent` or `NotANumber` field | Unchanged, no trace entry beyond the extraction verdict (N10) |
+| NN-T-9 | `strip_leading_zeros: { max: 8 }` on `+0049301` | `+49301` — the leading `+` is skipped, never counted or deleted, and the zeros are counted in the digit run only (T2, N30) |
+| NN-T-10 | `add_prefix: "0"` on `+4930` | `+04930`, **not** `0+4930` — prepending targets the digit run, so the `+` is neither duplicated nor displaced into the middle (T3, N30) |
+| NN-T-11 | `add_prefix: "+"` on `+4930` | `+4930`, **not** `++4930` — the result carries one leading `+` iff either operand does (T3, N30) |
+| NN-T-12 | `ensure_prefix: "+49"` on `49301` / `+49301` | `+49301` / `+49301` — the first is not a no-op because `plus(literal)` holds and `plus(input)` does not; the second is (T4, N30) |
 
 **Guards and fallback (NN-G)** — profile: `request_uri` guarded `digits {min:3,max:20}`,
 `fallback: to`; both fields transformed with `[{ replace_prefix: { "+": "" } }]`.
@@ -341,6 +360,9 @@ the named field unless stated otherwise.
 | NN-G-6 | As NN-G-5, plus a guard on `to` that fails with `fallback: reject` | R-URI still `4930999`: guards read phase-1 values, so `To`'s guard does not feed the Request-URI's (N19) |
 | NN-G-7 | R-URI with 21 digits, `max: 20`, To `4930999` | R-URI `4930999` (N14) |
 | NN-G-8 | R-URI `12`, guard `fallback: reject` | `Reject` → `404` (N18) |
+| NN-G-9 | R-URI `sip:alice@edge.example` (so the guarded field is `NotANumber`), To `+4930999` | R-URI `sip:4930999@edge.example` — the guard cannot hold on a value that is not a digit form, so it never holds and N16's failure branch substitutes the fallback (N31) |
+| NN-G-10 | Profile guards `p_asserted_identity` with `fallback: to`; the request carries **no** PAI. To `+4930999` | No `P-Asserted-Identity` is created; the field is left exactly as extracted and traced `Skipped { reason: GuardedFieldAbsent }`. Substitution rewrites an existing URI and never makes one — whether PAI is asserted at all belongs to `RT-7` (N32, §2) |
+| NN-G-11 | As NN-G-10, but the guard declares `fallback: reject` | Still `Skipped { reason: GuardedFieldAbsent }`, **not** `Reject`. N18 rejects when a *fallback* cannot supply a value, not when the guarded field has nothing to write into (N32) |
 
 **E.164 egress (NN-E)** — `[{ ensure_prefix: "+" }]` with `guard: { e164: global, fallback: reject }`.
 
@@ -349,7 +371,7 @@ the named field unless stated otherwise.
 | NN-E-1 | `4930123456` | `+4930123456`, accepted (N15, N28) |
 | NN-E-2 | `+4930123456` | `+4930123456`, byte-identical — idempotent (T4) |
 | NN-E-3 | `049301` → `+049301` | `Reject` → `404`: a country code does not begin with `0` (N15) |
-| NN-E-4 | 16 digits | `Reject` → `404`: E.164 §6.2.1 caps at 15 (N15) |
+| NN-E-4 | 16 digits | `Reject` → `404`: E.164 §6.1 caps an international number at 15 digits (N15) |
 | NN-E-5 | `sip:alice@example.com` | `Reject` → `404`: `NotANumber` with `fallback: reject` (N6, N18) |
 
 **Composition (NN-C)** — ingress profile `trim` and egress profile `carrier-e164` exactly as

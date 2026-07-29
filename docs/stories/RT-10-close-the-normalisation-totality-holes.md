@@ -2,7 +2,7 @@
 id: RT-10
 title: Close the transform-totality holes before RT-2 implements
 pillar: Routing
-status: ready
+status: done
 priority: 1
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
@@ -19,25 +19,57 @@ This is the spec's central promise — a total, pure function — and an impleme
 unspecified case will invent an answer, which is exactly what `RT-6` exists to prevent.
 
 ## Acceptance
-- [ ] `T2`, `T3` and `T4` state their behaviour when the input carries a leading `+`. Today
-      `add_prefix: "0"` on `+4930` yields `0+4930`, which N12 says cannot happen — it is neither a
-      digit form nor the input unchanged. `add_prefix: "+"` on `+4930` yields `++4930`.
-- [ ] `T2` states whether "leading zeros" is evaluated before or after a leading `+`, so
-      `strip_leading_zeros` on `+0049301` has one defined answer.
-- [ ] `Literal` (§3) admits the empty value, or §10's own `carrier-e164` and `trim` profiles stop
-      using it. Today `Literal` is "1–8 bytes drawn from `+` and DIGIT" while both shipped profiles
-      write `replace_prefix: { "+": "" }`, and `N22` implies only an empty *key* is a load error.
-- [ ] Guard evaluation against an `Absent` or `NotANumber` **guarded** field has a rule, not just a
-      vector. `NN-E-5` asserts an outcome that no rule in §6 produces; §5's `N10` handles the
-      symmetric case for transforms explicitly, so the omission reads as an oversight.
-- [ ] The `PAssertedIdentity`-absent branch is settled: under `N16` a guard on an absent PAI with a
-      field fallback would have the normaliser **create** a `P-Asserted-Identity`, which §2 puts out
-      of scope and gives to `RT-7`.
-- [ ] A vector covers each newly-defined case, including at least one `+`-carrying input per
-      transform.
+- [x] `T2`, `T3` and `T4` state their behaviour when the input carries a leading `+`. → §5 now
+      defines two projections shared by a digit form and a `Literal`: `plus(x)` is true iff `x`
+      begins with `+`, and `digits(x)` is `x` with that `+` removed. `T3`'s result carries a leading
+      `+` iff either operand does, and its digit run is `digits(literal)` then `digits(input)` — so
+      `add_prefix: "0"` on `+4930` is `+04930`, not `0+4930`, and `add_prefix: "+"` on `+4930` is
+      `+4930`, not `++4930`. `NN-T-10` and `NN-T-11` pin exactly those two.
+- [x] `T2` states whether "leading zeros" is evaluated before or after a leading `+`. → The `+` is
+      skipped first and is never counted, deleted or moved; zeros are counted in the digit run only.
+      `strip_leading_zeros{max:8}` on `+0049301` is `+49301` (`NN-T-9`).
+- [x] `Literal` (§3) admits the empty value. → Now "0–8 bytes drawn from `+` and DIGIT, with `+`
+      permitted only in first position", with the empty literal legal **only** as a `replace_prefix`
+      value (a strip, which is what §9's `carrier-e164` and §10's `trim` already write) or as the
+      whole of `add_prefix`/`ensure_prefix`, where it is a declared no-op. An empty `replace_prefix`
+      key stays a load error (`N22`), so "matches everything" still has to be written as
+      `add_prefix`, on its own line, where a reviewer sees it.
+- [x] Guard evaluation against an `Absent` or `NotANumber` **guarded** field has a rule. → `N31`:
+      a guard's condition is defined only over a digit form, so on `Absent`/`NotANumber` it is
+      defined to **never hold** — the guard's counterpart to `N10`, which makes the same choice for
+      transforms. `NN-E-5` now has a rule behind it, and `NN-G-9` pins the substitution case.
+- [x] The `PAssertedIdentity`-absent branch is settled. → `N32`: substitution rewrites the number
+      inside an **existing** URI and never creates a field. With no PAI there is no URI to rewrite,
+      so the field is left as extracted and traced `Skipped { reason: GuardedFieldAbsent }` — and
+      that holds even for `fallback: reject`, because `N18` rejects when a *fallback* cannot supply
+      a value, not when the guarded field has nothing to write into. Whether PAI is asserted at all
+      stays `RT-7`'s. `NN-G-10` and `NN-G-11` pin both halves.
+- [x] A vector covers each newly-defined case, including at least one `+`-carrying input per
+      transform. → `NN-T-9` (T2), `NN-T-10` and `NN-T-11` (T3), `NN-T-12` (T4), plus `NN-G-9`,
+      `NN-G-10`, `NN-G-11` for the guard rules.
 
 ## Progress
-- (not started)
+- **Closed 2026-07-29.** `N30` now states the totality claim in the form that is actually true:
+  every output of every transform is `["+"] 1*DIGIT` or the input unchanged, *regardless of whether
+  the input carried a `+`* — and `T1` needs no special case, because §3 permits `+` only in first
+  position, so ordinary string-prefix matching already handles it.
+- **The termination bound was wrong and is corrected.** `N21` said
+  `4 fields × (4 transforms + 1 guard)`. `N4` lets `P-Asserted-Identity` carry two values, each
+  transformed and guarded independently, so it is **five** field-instances — 25 steps, not 20. Still
+  finite and constant; the sentence carrying the claim was simply miscounted.
+- **Two citations were repaired rather than trusted.** RFC 3261 §17.1.1.3 requires the ACK's
+  Request-URI, `From` and `Call-ID` to match the original but takes its `To` from the **response
+  being acknowledged** — which normally differs by the added tag — so `To` was wrong in that list.
+  The same misstatement was copied into
+  [routing-trunks](../designs/routing-trunks.md) and is fixed there too. And the E.164 citation now
+  points at §6.1 (an international number is at most 15 digits) *and* §6.3 (country codes are drawn
+  from zones 1–9, so none begins with `0`) — two clauses, where a single §6.2.1 reference had been
+  carrying both claims and covering only geographic numbers.
+- **Finished by the coordinator, not by one agent.** The implementing agent's process was killed
+  before it added the vectors its own new rules cite, leaving `N31` and `N32` referring to
+  `NN-G-9`, `NN-G-10` and `NN-G-11`, which did not exist. `check-docs.sh` does not validate
+  internal vector references, so that would have shipped green. The rows were added and every
+  `NN-*` reference in the file was then checked to resolve to a real row.
 
 ## Notes
 - Every malformed value named above **serialises**: `+` is `user-unreserved`, so `0+4930` goes into

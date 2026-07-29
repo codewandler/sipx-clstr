@@ -111,7 +111,9 @@ The two application points exist because `add_prefix` is deliberately not idempo
 double-applied profile is *visible* rather than silent, which is what makes "at most one profile
 per direction, never chained" enforceable instead of aspirational. And normalisation never runs
 on a request inside a dialog, on CANCEL, on an ACK for a non-2xx, or on REGISTER — RFC 3261 §9.1
-and §17.1.1.3 require those to repeat the original Request-URI, `To` and `From` byte for byte, and
+and §17.1.1.3 require those to repeat the original Request-URI, `From` and `Call-ID` byte for byte
+(§17.1.1.3 takes the ACK's `To` from the **response being acknowledged**, which normally differs
+from the request's by the added tag, so `To` is not in that list), and
 the address-of-record key belongs to [location-service](../specs/location-service.md) §3.
 
 Where the work lands (rule 6): the **policy** is orchestration and stays here; two **syntax**
