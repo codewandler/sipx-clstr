@@ -7,9 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-Five stories, of which one changes behaviour and four are specifications. The behaviour change is
-the one that matters for anyone trying to run this: until now a node advertised the address it
-bound, so a container or a cloud host binding `0.0.0.0` told every peer to answer `0.0.0.0`.
+## [0.7.0] — 2026-07-29
+
+Nine stories: one behaviour change, four specifications, three corrections that independent review
+found in those specifications, and the first tooling that runs any of it outside a test.
+
+The behaviour change is the one that matters for anyone trying to run this. Until now a node
+advertised the address it **bound**, so a container or a cloud host binding `0.0.0.0` told every
+peer to answer `0.0.0.0`. That is also why the tooling and the fix arrive together: the container
+image exists in this release because `DP-5` made a containerised node reachable, and building that
+image is what proved the platform does not compile on its own declared `rust-version`.
+
+The three corrections are worth reading as a group. Each specification was reviewed after merge by
+a context that had not written it, and each review found the same *kind* of defect — a claim
+stronger than the mechanism behind it. A digest section that called an exposure additive when it
+can empty an address of record; a totality rule that did not hold for a leading `+`; a seam
+written against a type its counterpart never landed. None was caught by the gate, because a gate
+checks that references resolve, not that sentences are true.
 
 ### Added
 
@@ -47,16 +61,78 @@ bound, so a container or a cloud host binding `0.0.0.0` told every peer to answe
   was never wrong, only the description of it. `RA-R-6` pins the behaviour twice, including what
   ends up in the location store.
 
+### Fixed
+
+Every defect independent review found in the four specifications above was fixed before this
+release rather than shipped documented — the specs and the corrections land together.
+
+- **Registrar auth §7 stated its own exposure too weakly** (`RG-10`). §7.2 described the accepted
+  digest replay as strictly *additive* — the attacker's contact joins the victim's, "the phone that
+  owns the AoR keeps ringing". That is false for one variant. The digest binds neither `Contact`
+  nor `Expires` nor `Call-ID`, so the same captured `Authorization`, reattached to a REGISTER
+  carrying `Contact: *`, `Expires: 0` and a fresh `Call-ID`, takes
+  [location-service](docs/specs/location-service.md) §W3's **removal** branch instead:
+  `wildcard()` rejects only when the `Call-ID` matches and the `CSeq` does not advance, which a
+  fresh `Call-ID` makes false for every stored binding. Every binding on the AoR goes in one
+  request — loss of service, not unwanted company, and RFC 3261 §26.1.1's registration hijacking
+  exactly. §7.2 now names it, §7.3 re-argues the accept decision against the corrected impact
+  rather than carrying the fork-only argument over, and the operator-facing sentence says the thing
+  an operator can act on. `RA-R-7` pins it, registered **deferred** rather than claimed proved —
+  this was a documentation pass and no test drives the two halves together; `RG-11` closes that.
+- **Number normalisation was not total, though it said it was** (`RT-10`). `N12` claimed every
+  transform maps a digit form to a digit form or leaves it unchanged; the transforms were undefined
+  for an input carrying a leading `+`, so `add_prefix: "0"` on `+4930` produced `0+4930` and
+  `add_prefix: "+"` produced `++4930` — neither a digit form nor unchanged. `+` is
+  `user-unreserved`, so both serialise into a Request-URI and leave the platform. §5 now defines
+  `plus(x)` and `digits(x)` and states `T2`–`T4` in terms of them: prepending targets the digit run
+  and a leading `+` is never duplicated, displaced or counted as a zero. `N30` restates the totality
+  claim in the form that holds. Also settled, each as a **rule** rather than as a vector asserting
+  an outcome nothing produces: `N31`, a guard on an `Absent` or `NotANumber` field never holds (the
+  counterpart to `N10` for transforms); and `N32`, substitution rewrites an existing URI and never
+  creates a field — so a guard on an absent `P-Asserted-Identity` skips rather than fabricating one,
+  which keeps `RT-7`'s scope out of this spec. `Literal` now admits the empty value its own shipped
+  profiles were already using. Seven new vectors, `NN-T-9`…`12` and `NN-G-9`…`11`.
+- Two citations in that spec were repaired rather than trusted: RFC 3261 §17.1.1.3 takes the ACK's
+  `To` from the **response being acknowledged**, not the request, so `To` did not belong in the
+  byte-for-byte list — corrected here and in [routing-trunks](docs/designs/routing-trunks.md), which
+  had copied it. And the E.164 claims now cite §6.1 and §6.3 separately, where one §6.2.1 reference
+  had been carrying both and covering only geographic numbers. `N21`'s termination bound was
+  miscounted as four field-instances; `N4` allows `P-Asserted-Identity` two, so it is five — 25
+  steps, still finite and constant.
+- **The quirk-profile media seam named a type that does not exist** (`EX-9`). `EX-7` and `ME-6`
+  were written concurrently and agreed on the direction of their seam but not its vocabulary:
+  `MediaAssertion` was declared as `Srtp(SrtpMode)` with a `Required` variant, while `ME-6` landed
+  `SrtpPolicy` — `Disabled`, `Sdes { suites }`, `DtlsSrtp { role }` — with no required/optional
+  axis at all. `MediaAssertion` is now `{ Srtp }`, satisfied by any variant but `Disabled`. A
+  mechanism-specific assertion was considered and **rejected**: it would let a profile select the
+  keying method by which profile matched, which is the defect `ME-6` exists to remove. The
+  duplicated `G-M5`/`G11` startup check collapses to one rule with one error content, `MP11` is
+  cited where the direction is stated, and new rule `G12` (vector `QP-G-11`) forbids a domain-bound
+  media assertion, which had been undefined rather than decided.
+
+### Added — tooling
+
+- **The platform runs outside a test** (`KO-13`) — a `Dockerfile` and a devspace profile that stand
+  a node up and prove it: two users register and the proxy forwards an INVITE between them, scripted
+  in `scripts/sip_demo.py` over raw UDP with nothing but the standard library. Deliberately **not**
+  the operator path — `KO-1` has not pinned the custom resource and `KO-3` has not implemented the
+  reconcile loop, so `deploy/helm/` still renders a `SipxCluster` nothing serves. The `Record-Route`
+  it produces carries the *advertised* address, which is `DP-5` demonstrating itself outside its own
+  tests.
+
 ### Known gaps
 
 - `ME-6`'s fourth acceptance item is **specified, not executed**: the assertion is pinned as vector
   `MR-P-1` against a byte-exact block, but the `MediaRelay` types are a spec contract and `ME-2` is
   the story that lands the Rust. The box is deliberately left unticked.
-- Independent review of `EX-7`, `RT-6` and `RG-9` after merge filed `RT-10`, `EX-9` and `RG-10` —
-  respectively: transform totality does not hold for a leading `+`; the quirk-profile media seam is
-  written against an `SrtpMode` type that `ME-6` did not land (it landed `SrtpPolicy`); and §7.2
-  understates its own exposure, because the same replayed credential on a `Contact: *` REGISTER
-  removes every binding rather than merely adding one.
+- `KO-13`'s fourth acceptance item — the run against a node **scheduled in Kubernetes** — is
+  likewise unticked. The image and manifests are proved in containers; the pod stays `Pending`
+  behind a host disk-pressure taint. Tolerating that taint was tried and reverted: the taint and the
+  eviction manager are separate mechanisms, so it schedules the pod and kubelet evicts it at once.
+  The manifest records that where the toleration would go.
+- The workspace does not build on its own declared `rust-version = "1.88"` (`CF-9`) — the kernel's
+  `sipx-transport` needs a `BinaryHeap` bound relaxed in a later release. Unfixed here because the
+  real floor wants establishing by building rather than by reasoning.
 
 ## [0.6.0] — 2026-07-29
 
