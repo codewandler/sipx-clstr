@@ -444,7 +444,9 @@ profile touch" has a type-level answer rather than a documented convention.
   function of the message — a condition, wearing a data structure. A quirk that genuinely needs a
   message-derived value is a module with a manifest, not a profile.
 - **A profile does not know where it applies.** It carries no selector, no domain pattern, no peer
-  match. Applicability is decided entirely by **binding** (below), before any rule runs. This is
+  match — and, since EX-10, **no `overrides`**: it names no other profile it beats, because which
+  profiles it is composed with is a fact about a binding and not about the profile. Applicability and
+  contest resolution are both decided entirely by **binding** (below), before any rule runs. This is
   what keeps "which transform did this peer get" answerable from configuration alone.
 - **`Remove` reaches catalogue rows only.** Suppressing `P-Early-Media` toward a peer that
   mishandles it is a quirk; deciding which of *our* application headers may leave the platform is
@@ -480,7 +482,9 @@ Three consequences follow, and they are the properties the vectors assert:
 - **Application is order-independent — confluent.** Because the composed rule set is disjoint on
   targets, the result does not depend on the order profiles or rules are applied in. "Several
   profiles may apply" therefore creates no emergent behaviour, which is the whole reason the
-  disjointness check is a startup error rather than a precedence rule.
+  disjointness check is a startup error rather than a precedence rule. The one escape does not
+  weaken this: an override deletes the losing rule at **composition** (G13), so the set that reaches
+  a message is disjoint by construction and nothing at runtime consults a precedence.
 
 **What the vocabulary cannot express, and where the need goes instead.** This table is the design;
 the grammar above is its consequence.
@@ -562,7 +566,20 @@ security_verify = "sdes-srtp;mediasec"
 
 [domains."example.net"]
 quirks    = ["sdp-direction-explicit"]
+
+# A contested target, resolved where the contest is. Illustrative: the v1 catalogue's two profiles
+# write disjoint targets, so a contest needs a third profile before it can arise at all.
+[trunks.trunk-b]
+quirks = ["house-charging-headers", "peer-b-charging"]   # both write P-Charging-Vector
+
+[[trunks.trunk-b.quirk_overrides]]
+target = { header = "P-Charging-Vector", on = "request:INVITE" }
+winner = "peer-b-charging"
 ```
+
+The SDP form of `target` names a scope and a field instead of a header —
+`{ sdp_scope = "media:audio", sdp_field = "Direction", on = "response:INVITE:2xx" }` — and is
+otherwise the same entry.
 
 **[sipx-clstr] rules:**
 
@@ -572,18 +589,53 @@ quirks    = ["sdp-direction-explicit"]
   around it.
 - **Several may apply, and the union is disjoint.** The composed rule set for one attachment is
   every trunk-bound and domain-bound profile's rules together. G10 requires the composition to be
-  **disjoint on targets** — a target being a `(CatalogHeader, MessageClass)` or a
-  `(SdpScope, CatalogSdpField, MessageClass)`. Two applicable profiles writing the same target is a
-  **startup error naming both**, not a precedence rule.
-- **The one escape is explicit and directional.** A trunk-bound profile may declare
-  `overrides = ["<domain-bound-profile-id>"]` for a named contested target; the domain-bound rule is
-  then suppressed for that target and the override is recorded in the trace. Nothing else resolves a
-  contest. Rationale, and it is EX-6's rule 1 restated: an implicit "more specific wins" is a policy
-  nobody wrote down, and the failure mode is a domain profile that silently stops applying to one
-  trunk months after anyone remembers binding it.
+  **disjoint on targets**. Two *distinct* applicable profiles writing the same target is a **startup
+  error naming both**, not a precedence rule. One profile bound at both attachment points — as
+  `sdp-direction-explicit` is above — contributes each of its rules once and contests nothing; a
+  contest needs two profiles.
+- **A target is elementary, so disjointness is overlap and not tuple equality.** A target is one
+  catalogue row at one *elementary* message class: `(CatalogHeader, ElementaryClass)` or
+  `(SdpScope, CatalogSdpField, ElementaryClass)`, where an elementary class is one method for a
+  request and one `(method, status class)` pair for a response. A rule's `MessageClass` ranges over
+  a **set** of those, and two rules contest on every elementary class their sets share. Stated as
+  tuple equality instead, `Request { methods: [INVITE, REGISTER] }` and `Request { methods: [INVITE] }`
+  would be different targets and the disjointness check would be defeated by widening a method set —
+  and an override could not name what it was conceding.
+- **The one escape is a declared override, and it lives in the binding rather than in a profile.**
+  A contest is a property of the *composition at one attachment point*, and only the binding knows
+  the composition. A profile cannot, and must not: "a profile does not know where it applies" is what
+  keeps "which transform did this peer get" answerable from configuration alone, and a shipped,
+  versioned catalogue profile naming one deployment's other profiles is not a thing that can be
+  written down. So the escape is a binding-level entry naming two different things — the contested
+  **target**, and the **winning profile id**. They are not interchangeable: a profile id says who
+  wins, and only a target says what is won. It is also **not directional**: the commonest contest is
+  between two profiles bound to the same trunk, which a trunk-beats-domain escape could not reach at
+  all, and which does not depend on the trunk-bound and domain-bound sets ever intersecting (a
+  question this design asserts more thinly than it states — see *Risks*).
+- **An override deletes the losing rule at composition, before any message is evaluated.** The
+  losing profiles' rules for that one target are dropped from the composed set at **startup**, so the
+  set that reaches H9/H11 is disjoint by construction and the idempotence and confluence claims above
+  keep their premise. This is not a runtime precedence rule; there is still no such thing. The
+  resulting composed set, with the overrides that shaped it named, is exported at startup the way
+  [media-relay](../specs/media-relay.md) §13.5 exports the effective per-trunk policy, so "why did
+  that peer not get that header" is answerable from configuration rather than from a capture.
+- **An override that is not resolving a live contest fails the boot** (G13). Its target must actually
+  be contested at that attachment point, and its winner must be one of the profiles contesting it.
+  That is what answers the failure mode precedence has, and it is EX-6's rule 1 restated: an implicit
+  "more specific wins" is a policy nobody wrote down, and its failure mode is a profile that silently
+  stops applying long after anyone remembers binding it. A declared override that has outlived its
+  contest — because the other profile was unbound, or its rules changed — is exactly that failure
+  arriving quietly, so the node refuses to boot instead.
+- **An override deletes rules; it never touches an assertion.** `requires_media` is not a rule and
+  has no target, so no override can name one — structurally, not by convention. A trunk-bound profile
+  therefore cannot override away a domain-bound profile's G12 violation, and a profile whose every
+  rule an override has deleted is still *bound*, so G11 still checks its assertion against the trunk
+  (QP-G-15). The escape is scoped to the thing it exists for — two writers on one target — and cannot
+  reach a boot check.
 - **Closed world.** Every bound profile id is in the shipped catalogue; every trunk and domain named
-  exists; every `ConfigKey` is declared by the DP-1 schema and type-checks; every literal parses.
-  All at startup — an invalid combination fails deployment, never a call.
+  exists; every `ConfigKey` is declared by the DP-1 schema and type-checks; every literal parses;
+  every override names a target and a winner that exist. All at startup — an invalid combination
+  fails deployment, never a call.
 
 #### Where it runs — one egress point per direction
 
@@ -708,7 +760,7 @@ composed on one trunk — so the shipped set demonstrates composition rather tha
 
 | Profile | Rules | Vectors |
 |---|---|---|
-| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7 |
+| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7, QP-G-11, QP-G-15 |
 | `sdp-direction-explicit` | `EnsureExplicit(Direction)` at `Session` and `Media(Audio)`, on requests and responses carrying a body | QP-A-5 … QP-A-9, QP-C-1, QP-C-3 |
 
 Rows use the `QP` prefix in the three-part `QP-X-n` shape, so registering them in the vector gate is
@@ -744,8 +796,8 @@ re-serializes verbatim (hook-framework §1, PX-3).
 | # | Given | Expect |
 |---|---|---|
 | QP-G-1 | A profile naming a header outside the catalogue | Startup error naming the profile, the rule and the header: not a catalogue row |
-| QP-G-2 | Two applicable profiles both writing `Security-Client` on the same message class, neither declaring `overrides` | Startup error (G10) naming both profiles and the contested target |
-| QP-G-3 | Same, with the trunk-bound profile declaring `overrides` for that target | Boots; the trunk value applies and the trace records the override |
+| QP-G-2 | Two distinct applicable profiles both writing `Security-Client` on an overlapping message class, with no override declared at the binding | Startup error (G10) naming both profiles and the contested target — the elementary class they share, not the classes they do not |
+| QP-G-3 | Same, with the binding declaring an override naming that target and one of the two profiles as `winner` | Boots; the winner's rule is in the composed set and the loser's is not, and the startup composition record names the override |
 | QP-G-4 | A configured value that does not parse against the row's ABNF | Startup error (G10) naming the profile, the key and the parse failure |
 | QP-G-5 | A binding naming a trunk that does not exist | Startup error (G10) |
 | QP-G-6 | `sec-agree-headers` (asserting `Srtp`) bound to a trunk declaring `SrtpPolicy::Disabled` | Startup error (G11, media-relay's G-M5/MR-C-3) naming the trunk and the profile |
@@ -754,6 +806,10 @@ re-serializes verbatim (hook-framework §1, PX-3).
 | QP-G-9 | Two modules declaring `Field("application/sdp", Direction)` at the same phase | Startup error (G9) naming both and the field |
 | QP-G-10 | A catalogue row for a header a selected module owns (`Session-Expires`, `session-timer`) | Startup error as an ordinary G2 exclusive-claim conflict, naming `carrier-quirks` and `session-timer` — the catalogue invariant, enforced by machinery that already exists |
 | QP-G-11 | `sec-agree-headers` (asserting `Srtp`) bound to a domain rather than a trunk | Startup error (G12) naming the profile and the domain: no `TrunkMediaPolicy` exists for a domain to check the assertion against |
+| QP-G-12 | Two profiles bound to the **same trunk** contesting `P-Charging-Vector` on INVITE, resolved by an override at that trunk | Boots. The escape is not trunk-over-domain: the commonest contest is at one attachment point, and a directional rule could not reach it |
+| QP-G-13 | An override whose `target` no two applicable profiles write — the contest was removed, the override was not | Startup error (G13) naming the binding and the target. The override that outlives its contest fails the boot instead of silently doing nothing |
+| QP-G-14 | An override whose `winner` is bound at that attachment point but writes no rule for the named target | Startup error (G13) naming the binding, the target and the winner: naming a profile does not name a target, and the schema does not let one stand in for the other |
+| QP-G-15 | `sec-agree-headers` (asserting `Srtp`) on a trunk declaring `SrtpPolicy::Disabled`, with an override deleting **every** one of its rules at that trunk | Still a startup error (G11). An override deletes rules, never assertions; the profile is still bound, so the assertion is still checked |
 
 B1–B4 get no vector, and should not: they are properties of the type, not of a run. Their test is
 that the grammar has no recursive constructor, no environment and no conditional — visible in a
@@ -794,14 +850,15 @@ got wrong:
    story. A bound that tells you when you have left it is doing more work than a bound that merely
    holds.
 
-#### Startup validation — three new G-rules
+#### Startup validation — five new G-rules
 
 | # | Rule | On violation |
 |---|---|---|
 | G9 | **Body claims are kind-scoped and ordered.** `Replace(t)` is exclusive per `(t, phase)`; `Field(t, f)` is exclusive per `(t, f, phase)`; a `Replace` and a `Field` on the same media type coexist, and every `Field` writer is ordered after every `Replace` writer at that phase by the framework | Startup error naming both modules and the contested claim (QP-G-8, QP-G-9) |
-| G10 | **Bindings resolve and compose disjointly.** Every bound profile id, trunk, domain and `ConfigKey` exists and type-checks; every literal parses against its row's ABNF; every rule names a catalogue row; every field's op is in that row's op set; the composed rule set at one attachment point is disjoint on targets unless a trunk-bound profile declares `overrides` for the named target | Startup error naming the profile, the rule and the offending id, value or contested target (QP-G-1 … QP-G-5) |
+| G10 | **Bindings resolve and compose disjointly.** Every bound profile id, trunk, domain and `ConfigKey` exists and type-checks; every literal parses against its row's ABNF; every rule names a catalogue row; every field's op is in that row's op set; the composed rule set at one attachment point is disjoint on targets — a target being one catalogue row at one *elementary* message class, so two rules contest on every elementary class their classes share — once the overrides declared at that binding (G13) have been applied | Startup error naming the profile, the rule and the offending id, value or contested target (QP-G-1 … QP-G-5) |
 | G11 | **Media assertions hold.** Every `MediaAssertion` on a trunk-bound profile is satisfied by the bound trunk's declared `SrtpPolicy` — `Srtp` holds for any variant but `Disabled`. The same check as media-relay's G-M5; the error content is G-M5's, not restated richer here | Startup error naming the trunk and the profile (QP-G-6, = media-relay's MR-C-3) |
 | G12 | **Media assertions need a trunk.** A profile carrying a non-empty `requires_media` bound to a domain is rejected: only a trunk binding has a `TrunkMediaPolicy` to check it against | Startup error naming the profile and the domain (QP-G-11) |
+| G13 | **An override resolves one live contest, and reaches nothing else.** An override is declared at a **binding**, never in a profile, and names one contested `target` and one `winner` profile id. At startup that target must actually be contested at that attachment point by two or more distinct bound profiles, and the winner must be one of them; the losing rules for that target are then deleted from the composed set before any message is evaluated, so what G10 checks for disjointness is the set after overrides. A `requires_media` assertion has no target, so no override can name one and none suppresses G11 or G12 | Startup error naming the binding, the target, and the winner where the winner is not among the profiles contesting it (QP-G-13 … QP-G-15; the resolving cases are QP-G-3 and QP-G-12) |
 
 Same discipline as G1–G8: an invalid combination fails deployment, never a call.
 
@@ -840,11 +897,13 @@ does not have to rediscover them, all belong to
   is the one **structural** change EX-7 needs, and the one worth reviewing hardest, because it edits
   a claim other modules already declare.
 - **§7** — G9 (body-claim kinds and their computed ordering), G10 (bindings resolve and compose
-  disjointly), G11 (media assertions hold — the same check media-relay states as G-M5), G12 (media
-  assertions need a trunk binding). G2 is unchanged and does the catalogue invariant for free.
+  disjointly, over elementary targets), G11 (media assertions hold — the same check media-relay
+  states as G-M5), G12 (media assertions need a trunk binding), G13 (a binding-level override
+  resolves one contested target, and must be resolving a live one). G2 is unchanged and does the
+  catalogue invariant for free.
 - **§8** — the shipped profile catalogue is a profile-level value, so EX-5's catalogue carries the
-  bindings alongside `hook_budget`.
-- **§9** — vectors `QP-A-1` … `QP-G-11` above, and the `QP` prefix registered in the vector gate
+  bindings — and the overrides declared beside them — alongside `hook_budget`.
+- **§9** — vectors `QP-A-1` … `QP-G-15` above, and the `QP` prefix registered in the vector gate
   (CF-8's `SPECS`/`FAMILIES`, fenced from this story).
 
 ## Alternatives considered
@@ -906,7 +965,19 @@ does not have to rediscover them, all belong to
 - **Precedence instead of disjointness** — "trunk beats domain", last write wins. Rejected: it is a
   policy nobody writes down, and its failure mode is a domain profile that silently stops applying
   to one trunk long after anyone remembers binding it. Contests are startup errors; the one escape
-  is a declared `overrides`, which is data and shows up in review.
+  is a per-target override declared **in the binding**, which is data, names its winner explicitly,
+  and fails the boot once the contest it was written for has gone away (G13).
+- **Put the override on the profile** — a trunk-bound profile declaring
+  `overrides = ["<domain-bound-profile-id>"]`, the shape this design carried until EX-10. Rejected
+  three times over, and it is worth recording because it is the shape the rule reads its way into.
+  It contradicts *a profile does not know where it applies*: a shipped, versioned catalogue profile
+  would have to name one deployment's other profiles, and "which transform did this peer get" would
+  stop being readable from the binding. It also names the wrong thing — a list of profile ids cannot
+  say *which* target is conceded, while both the rule that consumes it (G10) and the vector that
+  asserts it (QP-G-3) require a target; profile ids and targets are not interchangeable. And being
+  trunk-over-domain it could not reach the commonest contest at all, two profiles bound to one
+  trunk, while working only in the case where the trunk-bound and domain-bound sets intersect —
+  which this design has not yet derived.
 - **Let a quirk force an SDP direction** (the live requirement read literally). Rejected: it would
   let a configuration file unhold a held call (RFC 3264 §8.4) or contradict an answer's §6.1
   consistency. `EnsureExplicit` materializes the RFC 8866 §6.7 default, satisfies the same peer, and
@@ -968,6 +1039,15 @@ does not have to rediscover them, all belong to
   and transcoding assertions are not in v1 and should not be added until a peer needs one; each would
   owe the same required/optional-axis argument `Srtp` just settled, made fresh against
   `CodecPolicy`/`Transcode` rather than assumed from this one.
+- **When a trunk-bound and a domain-bound rule set actually intersect is asserted, not derived
+  (EX-7).** The composition rule says the composed set at one attachment point is "every trunk-bound
+  and domain-bound profile's rules together" and `QP-C-2` asserts both apply to one message, but
+  under this design's own definitions — a trunk is the egress peer, a domain is the registering
+  side — nothing says which messages carry both attachments at H9/H11. EX-10 removed the *escape's*
+  dependence on the answer: a per-target override with a named winner resolves a contest between any
+  two profiles at any one attachment point, and holds whether or not the two sets ever meet. The
+  union sentence and `QP-C-2` still owe the derivation, and that is its own story rather than a
+  guess made here.
 - **Bindings are per trunk and per domain, and a large deployment has many (EX-7).** Nothing here
   bounds how many profiles one binding may carry or how many bindings a node validates at startup.
   Startup cost is the only exposure — evaluation is O(rules) per message — but a config surface that
