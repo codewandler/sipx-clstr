@@ -3,12 +3,13 @@
 //! Everything else in this crate is machinery this loop drives. Advancing time is popping the
 //! event queue; performing an effect is scheduling more events; the trace is written as it goes.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
 use bytes::Bytes;
 use sipx_sip::{Limits, Message, parse_datagram};
 
+use crate::fault::{Fault, Schedule};
 use crate::net::{Delivery, Link, LinkKind, LinkPolicy, NodeId};
 use crate::node::{Effect, Input, SimNode, TimerId};
 use crate::queue::{EventQueue, Generations};
@@ -47,6 +48,13 @@ pub struct Sim {
     trace: Trace,
     budget: u64,
     started: bool,
+    /// Nodes a `KillNode` fault has stopped. A killed node performs no effects and receives no
+    /// inputs; its links are cut as well, so this is belt and braces — but the belt is what makes
+    /// "stopped" different from "unreachable", and the two failures behave differently.
+    killed: BTreeSet<NodeId>,
+    /// Per-node timer rate in per-mille, for nodes a `TimerSkew` fault has touched. Absent means
+    /// nominal; the map stays empty in every scenario that never skews a clock.
+    skew: BTreeMap<NodeId, u32>,
 }
 
 #[derive(Debug)]
@@ -65,6 +73,10 @@ enum Event {
         node: NodeId,
         peer: NodeId,
     },
+    /// A scheduled fault comes due. In the queue rather than applied from outside it, so its
+    /// ordering against deliveries and timers is the same insertion-sequence rule as everything
+    /// else and a schedule replays identically from its seed.
+    Fault(Box<Fault>),
 }
 
 impl Sim {
@@ -80,6 +92,8 @@ impl Sim {
             default_policy: LinkPolicy::CLEAN,
             queue: EventQueue::new(),
             generations: Generations::new(),
+            killed: BTreeSet::new(),
+            skew: BTreeMap::new(),
             trace: Trace::new(),
             // Generous, but finite. A correct scenario settles in tens of steps; this exists to
             // turn a livelock into a failing test rather than a hung CI job.
@@ -168,6 +182,107 @@ impl Sim {
             .or_insert_with(|| Link::new(kind, policy, self.seed, &label))
             .policy = policy;
         self
+    }
+
+    /// Queue a fault schedule (`CF-4`).
+    ///
+    /// Entries become queue events at their instants, so they interleave with deliveries and
+    /// timers under the one ordering rule. Calling this more than once is the same as merging the
+    /// schedules: composition is concatenation, and nothing here cares which call an entry came
+    /// from.
+    pub fn schedule(&mut self, schedule: &Schedule) -> &mut Self {
+        for (at, fault) in schedule.entries() {
+            self.queue
+                .schedule_at(*at, Event::Fault(Box::new(fault.clone())));
+        }
+        self
+    }
+
+    /// Whether a `KillNode` fault has stopped this node.
+    #[must_use]
+    pub fn is_killed(&self, node: NodeId) -> bool {
+        self.killed.contains(&node)
+    }
+
+    /// Apply one fault, now.
+    fn apply(&mut self, fault: &Fault) {
+        // Recorded before it takes effect, so the trace reads as cause then consequence.
+        let anchor = match fault {
+            Fault::KillNode(node) | Fault::TimerSkew { node, .. } => *node,
+            Fault::Partition { a, b } | Fault::Heal { a, b } => {
+                *a.first().or_else(|| b.first()).unwrap_or(&NodeId(0))
+            }
+            Fault::SetLinkPolicy { from, .. } => *from,
+        };
+        let name = self.name_of(anchor).to_owned();
+        self.trace.record(
+            self.now,
+            anchor,
+            &name,
+            trace::Event::Fault(fault.summary()),
+        );
+
+        match fault {
+            Fault::KillNode(node) => {
+                self.killed.insert(*node);
+                // Every link, both ways. A node that is down is unreachable from either side, and
+                // cutting only outbound would leave it silently absorbing traffic.
+                let peers: Vec<NodeId> = (0..self.nodes.len()).map(NodeId).collect();
+                for peer in peers {
+                    if peer == *node {
+                        continue;
+                    }
+                    self.set_partitioned(*node, peer, true);
+                    self.set_partitioned(peer, *node, true);
+                }
+                // The timers it was waiting for never fire. This is what separates a kill from an
+                // isolation: an isolated node keeps running and keeps timing out. Dropping the
+                // counter rather than bumping it is what `Generations::retain` is for — a queued
+                // entry then matches nothing and is discarded when it surfaces.
+                self.generations.retain(|(owner, _), _| owner != node);
+            }
+            Fault::Partition { a, b } => self.cut_between(a, b, true),
+            Fault::Heal { a, b } => self.cut_between(a, b, false),
+            Fault::SetLinkPolicy { from, to, policy } => {
+                let label = link_label(self.name_of(*from), self.name_of(*to));
+                let kind = self
+                    .links
+                    .get(&(*from, *to))
+                    .map_or(self.default_kind, |link| link.kind);
+                self.links
+                    .entry((*from, *to))
+                    .or_insert_with(|| Link::new(kind, *policy, self.seed, &label))
+                    .policy = *policy;
+            }
+            Fault::TimerSkew { node, per_mille } => {
+                self.skew.insert(*node, *per_mille);
+            }
+        }
+    }
+
+    /// Cut or reconnect every link crossing between two groups, both directions.
+    fn cut_between(&mut self, a: &[NodeId], b: &[NodeId], partitioned: bool) {
+        for from in a {
+            for to in b {
+                self.set_partitioned(*from, *to, partitioned);
+                self.set_partitioned(*to, *from, partitioned);
+            }
+        }
+    }
+
+    /// A duration as this node's clock measures it.
+    ///
+    /// Skew is applied to what a node *waits for*, not to what it thinks the time is: RFC 3261's
+    /// timers are durations, and the failure worth simulating is two nodes disagreeing about how
+    /// long a second is.
+    fn skewed(&self, node: NodeId, after: Duration) -> Duration {
+        match self.skew.get(&node) {
+            None | Some(1000) => after,
+            Some(per_mille) => {
+                let nanos = after.as_nanos() * u128::from(*per_mille) / 1000;
+                Duration::from_nanos(u64::try_from(nanos).unwrap_or(u64::MAX))
+            }
+        }
     }
 
     /// Everything that has happened.
@@ -284,6 +399,7 @@ impl Sim {
                 let effects = self.deliver(node, Input::Timer(timer));
                 self.perform(node, effects);
             }
+            Event::Fault(fault) => self.apply(&fault),
             Event::Break { node, peer } => {
                 let name = self.name_of(node).to_owned();
                 self.trace
@@ -333,6 +449,11 @@ impl Sim {
     }
 
     fn deliver(&mut self, id: NodeId, input: Input<'_>) -> Vec<Effect> {
+        // A killed node is not merely unreachable: it is not running, so it produces nothing even
+        // for an input that somehow reached it.
+        if self.killed.contains(&id) {
+            return Vec::new();
+        }
         let now = self.now;
         self.nodes
             .get_mut(id.index())
@@ -345,7 +466,7 @@ impl Sim {
                 Effect::Send { to, message } => self.send(node, to, message.as_ref()),
                 Effect::SetTimer { timer, after } => {
                     let generation = self.generations.bump((node, timer));
-                    let at = self.now.saturating_add(after);
+                    let at = self.now.saturating_add(self.skewed(node, after));
                     self.queue.schedule_at(
                         at,
                         Event::Timer {

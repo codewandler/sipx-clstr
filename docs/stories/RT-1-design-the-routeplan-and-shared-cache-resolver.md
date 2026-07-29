@@ -3,7 +3,7 @@ id: RT-1
 title: Design the RoutePlan and shared-cache resolver
 pillar: Signalling
 status: ready
-priority: 3
+priority: 1
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, dns]

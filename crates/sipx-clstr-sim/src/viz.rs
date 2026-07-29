@@ -41,6 +41,9 @@ pub enum FrameKind {
     TimerCleared,
     /// A node's own record — a store lookup, a token verdict, a shed. A HUD log line.
     Note,
+    /// The harness did something to the world: a kill, a cut, a heal, a skew. The weather,
+    /// rendered as weather rather than as an unexplained silence.
+    Fault,
 }
 
 impl FrameKind {
@@ -59,6 +62,7 @@ impl FrameKind {
             Self::TimerFired => "timer_fired",
             Self::TimerCleared => "timer_cleared",
             Self::Note => "note",
+            Self::Fault => "fault",
         }
     }
 }
@@ -139,6 +143,7 @@ impl Frame {
             Event::TimerFired(timer) => (FrameKind::TimerFired, None, None, Some(*timer), None),
             Event::TimerCleared(timer) => (FrameKind::TimerCleared, None, None, Some(*timer), None),
             Event::Note(note) => (FrameKind::Note, None, Some(note.clone()), None, None),
+            Event::Fault(what) => (FrameKind::Fault, None, Some(what.clone()), None, None),
         };
         Self {
             at: entry.at,

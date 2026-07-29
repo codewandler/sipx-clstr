@@ -76,6 +76,13 @@ pub enum Event {
     /// Something the node wanted recorded — the hook a scenario asserts on when what matters is a
     /// decision rather than a message.
     Note(String),
+    /// A scheduled fault was applied (`CF-4`).
+    ///
+    /// Recorded against the node the fault names, so the weather appears in the trace beside the
+    /// behaviour it caused. Without it a partitioned scenario reads as a cluster that inexplicably
+    /// stopped talking, and the first question of any failing seed — *what did the harness do to
+    /// it?* — has no answer in the artifact you are given.
+    Fault(String),
 }
 
 /// One line of the trace.
@@ -189,6 +196,9 @@ fn render_event(event: &Event) -> String {
         Event::TimerFired(timer) => format!("timer {timer} fired"),
         Event::TimerCleared(timer) => format!("timer {timer} cleared"),
         Event::Note(note) => format!("note {note}"),
+        // Marked so it stands out in a rendered trace: the weather is the first thing you look for
+        // when a scenario went somewhere surprising.
+        Event::Fault(what) => format!("** FAULT {what}"),
     }
 }
 

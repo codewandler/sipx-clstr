@@ -196,6 +196,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   responses, timers and an upstream CANCEL become one input at a time, no locks on the signalling
   path, and the three places backpressure actually lives.
 
+- **Failure is a scripted input** (`CF-4`). `sipx-clstr-sim::fault` adds `Fault` — `KillNode`,
+  `Partition`, `Heal`, `SetLinkPolicy`, `TimerSkew` — and `Schedule`, both plain values, so a
+  scenario can generate, mutate or fuzz its weather without touching scenario logic, and composing
+  two schedules is concatenating two lists.
+  - **No third mechanism.** Every fault is an override of what the link layer already models; a
+    partition is `partitioned` on the crossing links and a kill is that on all of a node's. Two
+    mechanisms that can both drop a packet eventually disagree about whether one was dropped.
+  - **Faults are queue entries, not a side channel**, so they interleave with deliveries and timers
+    under the same insertion-sequence tie-break and a scheduled run replays byte for byte from its
+    seed — asserted both ways: same seed gives the same trace, a different seed gives a different
+    one, or the faults would not be seeded at all.
+  - **A kill is not an isolation.** `KillNode` drops the node's timer generations as well as
+    cutting its links, so nothing fires afterwards; a node that keeps timing out while unreachable
+    is a different failure, spelled `Partition` over all of its links.
+  - A fault at time zero lands *after* nodes are started, so a `TimerSkew` there does not affect
+    the timer a node arms in reaction to `Started`. Weather arrives at a running scenario.
+  - The sim-vs-real fidelity criterion moved to `CF-3`, which is the story that builds the sockets
+    to compare against.
+
 ### Changed
 
 - **Via surgery is one upstream call instead of a collection rebuild** (`PX-3`). sipx `S-15`

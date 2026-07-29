@@ -40,10 +40,6 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ## Next (ready — take the top one unless the user named a story)
 
-### Conformance & deterministic harness
-_The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · CF-5 is done; independent of CF-7 — net.rs is what a fault schedule acts on and it is staying local
-
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · T-17 settled it upstream in v0.4.0 — design against the kernel resolver, not around it
@@ -140,6 +136,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 ## Done
 - [AF-1 — Specify the affinity token](AF-1-specify-the-affinity-token.md) · Cluster
 - [CF-1 — Design the deterministic cluster harness](CF-1-design-the-deterministic-cluster-harness.md) · Platform · UPSTREAM: sipx-testkit split filed as sipx X-14; see docs/upstream.md
+- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · the schedule half; the sim-vs-real fidelity row moved to CF-3, which owns the sockets
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate

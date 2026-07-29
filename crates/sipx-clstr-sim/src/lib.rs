@@ -17,6 +17,7 @@
 
 #![doc(html_no_source)]
 
+pub mod fault;
 pub mod net;
 pub mod node;
 pub mod queue;
@@ -26,6 +27,7 @@ pub mod time;
 pub mod trace;
 pub mod viz;
 
+pub use fault::{Fault, Schedule};
 pub use net::{Latency, LinkKind, LinkPolicy, NodeId};
 pub use node::{Effect, Input, SimNode, TimerId};
 pub use sim::{Sim, SimError};
