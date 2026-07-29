@@ -11,12 +11,14 @@
 
 <p align="center">
   <a href="https://codewandler.github.io/sipx-clstr/"><img src="https://img.shields.io/badge/docs-codewandler.github.io%2Fsipx--clstr-E2622A" alt="Documentation"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/status-M1%20complete-2F3A45" alt="Status: M1 complete"></a>
+  <a href="#where-this-actually-is"><img src="https://img.shields.io/badge/status-one%20node%20%C2%B7%20no%20cluster%20yet-2F3A45" alt="Status: one node, no cluster yet"></a>
+  <a href="docs/reference/conformance.md"><img src="https://img.shields.io/badge/vectors-77%2F98%20proved-2F3A45" alt="Conformance: 77 of 98 vector rows proved"></a>
   <a href="https://github.com/codewandler/sipx"><img src="https://img.shields.io/badge/built%20on-sipx-F98A3C" alt="Built on sipx"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F3A45" alt="MIT or Apache 2.0 license"></a>
 </p>
 
 <p align="center">
+  <a href="#five-minutes-to-a-forwarded-call"><strong>Quick start</strong></a> ·
   <a href="#the-problem"><strong>The problem</strong></a> ·
   <a href="#how-it-works"><strong>How it works</strong></a> ·
   <a href="#where-this-actually-is"><strong>Status</strong></a> ·
@@ -25,13 +27,54 @@
 
 ---
 
-> **Read this first.** sipx-clstr is **early, and now real**. M1 is complete: **one node proxies
-> and registers**, and two `sipx` CLI phones register through it and call each other with media
-> flowing directly between them — a scripted, repeatable proof, not a claim
-> ([`scripts/e2e-call.sh`](scripts/e2e-call.sh)). What does *not* exist yet is the cluster: no
-> affinity tokens, no trunks, no media control, no deployment surface. That is M2. If you need a
-> clustered proxy today, this is not it — but one node is a foundation rather than a demo, and
-> every rule it follows is written down first.
+> **Read this first.** sipx-clstr is **early, and now real**. One node proxies and registers, and
+> two `sipx` CLI phones register through it and call each other with media flowing directly between
+> them — a scripted, repeatable proof, not a claim ([`scripts/e2e-call.sh`](scripts/e2e-call.sh)).
+> What does *not* exist yet is the cluster: no affinity tokens, no trunks, no media control, no
+> deployment surface. If you need a clustered proxy today, this is not it — but one node is a
+> foundation rather than a demo, and every rule it follows is written down first.
+
+## Five minutes to a forwarded call
+
+You need a [Rust toolchain](https://rustup.rs) and Python 3. No PBX, no account, no config file —
+there is no config file yet.
+
+```sh
+git clone https://github.com/codewandler/sipx-clstr && cd sipx-clstr
+cargo build --bin sipx-clstr
+./target/debug/sipx-clstr run --listen 127.0.0.1:5060 --advertise 127.0.0.1:5060
+```
+
+```text
+listening on 127.0.0.1:5060
+advertising 127.0.0.1:5060
+```
+
+Then, in a second terminal, register two users and place a call between them — raw SIP over UDP,
+standard library only:
+
+```sh
+python3 scripts/sip_demo.py 127.0.0.1:5060
+```
+
+```text
+[PASS] REGISTER alice -> 200 (contact echoed: <sip:alice@127.0.0.1:44870>;expires=3600)
+[PASS] REGISTER bob   -> 200 (contact echoed: <sip:bob@127.0.0.1:43859>;expires=3600)
+[PASS] INVITE reached bob from 127.0.0.1:5060 (the node)
+       Via headers stacked: 2 (proxy added its own)
+       Record-Route: <sip:127.0.0.1:5060;lr>
+[PASS] 200 OK returned to alice -> 200
+
+RESULT: PASS — registrar stored both bindings and the proxy forwarded between them
+```
+
+> [!WARNING]
+> **The shipped binary is an open registrar and forgets everything on restart.** Digest
+> authentication is implemented and proved against the RFCs' own vectors, but no flag turns it on;
+> bindings live in memory only. Both follow from the configuration surface being three flags. Keep
+> it on loopback or a trusted network.
+
+**→ [Full walkthrough, including a real call with audio](https://codewandler.github.io/sipx-clstr/docs/getting-started)**
 
 ## The problem
 
@@ -85,12 +128,12 @@ multi-node test is treated as a bug in the design, not in the test.
 
 | | |
 |---|---|
-| **Written** | Proxy behaviour, location service, affinity token, hook framework, registrar auth — five specs with normative rules and test-vector tables |
-| **Working** | One node that proxies and registers: RFC 3261 §16 forwarding with forking, CANCEL and Timer C; REGISTER with server-side digest over an in-memory or PostgreSQL location store; the end-to-end call probe |
-| **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) says which vector rows are proved and which are deferred, with a reason for each |
-| **Not yet** | The cluster. Affinity tokens, trunk routing, media control, roles by config, the operator and chart — all M2 and beyond |
-| **Known defect** | A retransmitted REGISTER is answered `500` rather than treated as an idempotent retry (`RG-8`, the top of the backlog) |
-| **Built on** | [sipx](https://github.com/codewandler/sipx) 0.7.0 — the SIP kernel this platform orchestrates, pinned to a tag. Protocol logic belongs there; this repo adds clustering |
+| **Working** | One node that proxies and registers: RFC 3261 §16 forwarding with forking, `CANCEL` and Timer C; `REGISTER` over a compare-and-swap location store; UDP and TCP on one listener; media flowing directly between endpoints |
+| **Written** | **Ten specifications** with normative rules and byte-level test-vector tables — proxy behaviour, location service, registrar auth, affinity token, hook framework, cluster config, asserted identity, number normalisation, media relay, end-to-end probe |
+| **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against independent `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) is generated, not written: **77 of 98 vector rows proved**, 21 deferred, each naming a reason and an owner |
+| **Reachable but not wired** | Digest authentication and the PostgreSQL location store are both implemented and tested, and neither can be switched on from the binary — the configuration surface is three command-line flags |
+| **Not yet** | The cluster. Affinity tokens, trunk routing, media control, roles by config, the operator and chart |
+| **Built on** | [sipx](https://github.com/codewandler/sipx) 0.7.0 — the SIP kernel this platform orchestrates, pinned to a tag rather than a branch. Protocol logic belongs there; this repo adds clustering |
 
 **Milestones.** M0 foundation on paper *(complete)* → M1 one node that proxies and registers
 *(complete)* → **M2 a cluster you can deploy *(next)*** → M3 modern reachability (Outbound, GRUU,
@@ -112,13 +155,23 @@ whose behaviour is whatever the code happened to do, discovered one incident at 
 
 ## Documentation
 
-**📖 [codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/)** — the vision and
-the principles that break ties, the architecture, all four specifications, the epic designs, and the
-roadmap.
+There are two documentation trees, and they have different readers.
 
-In the repository: [vision](docs/vision.md) · [architecture](docs/architecture.md) ·
-[specs](docs/specs/) · [designs](docs/designs/) · [roadmap](docs/roadmap.md) ·
-[board](docs/stories/README.md)
+**📖 [codewandler.github.io/sipx-clstr](https://codewandler.github.io/sipx-clstr/)** — the public
+site: what this does, how to run it, and what it deliberately does not do yet.
+
+| | |
+|---|---|
+| [Getting started](https://codewandler.github.io/sipx-clstr/docs/getting-started) | A node and a forwarded call, from nothing |
+| [Does this fit?](https://codewandler.github.io/sipx-clstr/docs/guides/does-this-fit) | The qualification page — read it before building on this |
+| [Addressing](https://codewandler.github.io/sipx-clstr/docs/guides/addressing) | Bind versus advertise, the one flag that will bite you |
+| [Migrating in](https://codewandler.github.io/sipx-clstr/docs/migrate/from-kamailio) | Concept maps, including what does not carry over |
+| [CLI reference](https://codewandler.github.io/sipx-clstr/docs/reference/cli) | Every flag, exit code and output line |
+
+**In the repository** — the internal material, which is *not* published: [vision](docs/vision.md) ·
+[architecture](docs/architecture.md) · [specs](docs/specs/) · [designs](docs/designs/) ·
+[roadmap](docs/roadmap.md) · [board](docs/stories/README.md). More detailed and more volatile than
+the site. When the two disagree, the code and its tests win.
 
 ## Contributing
 
