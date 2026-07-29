@@ -9,6 +9,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Asserted identity is a per-trunk policy, and privacy is performed or declined** (`RT-7`) —
+  [asserted-identity](docs/specs/asserted-identity.md): `TrunkIdentityPolicy { trust, assert,
+  privacy }`, rules `A1`–`A35`, gates `G-A1`–`G-A8` and 97 `AI-*` vector rows, covering
+  `P-Asserted-Identity` (RFC 3325), `Privacy` (RFC 3323), trust domains (RFC 3324) and the
+  anonymous-`From` form (RFC 5379 §5.1.4). The emission gate is total over trust × privacy: a
+  three-valued `PaiRequest { Withhold, Preserve, Unspecified }` derived from the raw header, so an
+  unregistered priv-value cannot bypass a deployment's declared fail-closed posture.
+  The story took **two rework rounds**, and the finding that drove both is worth stating: the spec
+  declared the `user` privacy level *performable* while performing part of it. RFC 5379 §4.1
+  Table 1's `user` column has eleven entries; the first draft handled one. `A33` now enumerates the
+  column — nine performed, two declined **with reasons** (`Call-ID` is a `MAY` that §5.3 puts behind
+  a B2BUA; `Referred-By` carries Table 1's circumstance asterisk) — and `A35` performs the five
+  response-side deletions, gated on the *response's own* `Privacy` header, because a `Server` or
+  `Warning` header names the answering party rather than the caller. Declining a level is honest;
+  advertising it and performing a third of it is not.
+  Two things are deliberately **not** claimed: `Privacy: header` (`A29` refuses it rather than
+  half-performing it — RFC 3323 §5.1 puts it in a B2BUA), and any guarantee that a carrier never
+  receives a `P-Asserted-Identity`. Nothing in the platform provides the latter today; §14 records
+  it as a known gap and `RT-11` asks whether it should exist at all, since it would mean overriding
+  a caller's explicit `Privacy: none` against RFC 3323 §4.2's `MUST NOT`.
 - **One config schema, not a fourth dialect** (`DP-1`) — [cluster-config](docs/specs/cluster-config.md):
   role selection `R1`–`R7`, the error contract `V1`–`V10` (report *all* errors rather than the
   first; closed world; refusal is the only failure mode), the reloadable subset with drain-then-switch

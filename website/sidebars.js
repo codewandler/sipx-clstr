@@ -16,6 +16,7 @@ const sidebars = {
       items: [
         'specs/cluster-config',
         'specs/proxy-behavior',
+        'specs/asserted-identity',
         'specs/location-service',
         'specs/affinity-token',
         'specs/number-normalisation',

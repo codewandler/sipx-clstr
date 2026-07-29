@@ -2,12 +2,12 @@
 id: RT-7
 title: Specify per-trunk asserted identity and privacy policy
 pillar: Signalling
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, trunks, privacy]
-note: 
+note: two rework rounds — the user privacy level was advertised as performed while a third of it was not
 ---
 
 # Specify per-trunk asserted identity and privacy policy
