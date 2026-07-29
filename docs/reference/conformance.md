@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12 and
 it, and *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story
 that will.
 
-**75 of 83 rows proved**; 8 deferred.
+**76 of 84 rows proved**; 8 deferred.
 
 ## Proxy — request validation (§4)
 
@@ -149,7 +149,7 @@ that will.
 | `RA-A-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-A-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 
-## Registrar auth — replay and retransmission (§3, §6)
+## Registrar auth — replay and retransmission (§3, §6, §7)
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
@@ -158,6 +158,7 @@ that will.
 | `RA-R-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-R-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
 
 ## Registrar auth — the tenant boundary (§5)
 

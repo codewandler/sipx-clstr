@@ -1,5 +1,5 @@
 //! The RA vector tables of
-//! [registrar-auth §7](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md),
+//! [registrar-auth §8](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md),
 //! row by row.
 //!
 //! **The client half is the kernel's own**, not a fixture built here: every answer is computed by
@@ -49,6 +49,29 @@ fn register(authorization: Option<(HeaderName, &str)>) -> Request {
         builder = builder.header(name, value.to_owned()).unwrap();
     }
     builder.build()
+}
+
+/// A REGISTER carrying the header fields a binding is actually made of, each chosen by the caller.
+///
+/// The digest covers none of them (§7), which is the whole of `RA-R-6`: two requests built here
+/// from one `authorization` string are indistinguishable to the verifier, however far apart their
+/// `Contact`, `CSeq` and `Expires` are.
+fn register_binding(authorization: &str, contact: &str, cseq: &str, expires: &str) -> Request {
+    let uri = Uri::parse(Bytes::from_static(b"sip:atlanta.example")).unwrap();
+    RequestBuilder::new(Method::Register, uri)
+        .header(HeaderName::CallId, "i1")
+        .unwrap()
+        .header(HeaderName::CSeq, cseq.to_owned())
+        .unwrap()
+        .header(HeaderName::To, "<sip:alice@atlanta.example>")
+        .unwrap()
+        .header(HeaderName::Contact, contact.to_owned())
+        .unwrap()
+        .header(HeaderName::Expires, expires.to_owned())
+        .unwrap()
+        .header(HeaderName::Authorization, authorization.to_owned())
+        .unwrap()
+        .build()
 }
 
 /// Answer a challenge the way a real client does — with the kernel's client-side responder.
@@ -108,7 +131,7 @@ fn expect_principal(decision: Decision) -> Bytes {
     }
 }
 
-// ------------------------------------------------------------------ §7 the decision (RA-D) -----
+// ------------------------------------------------------------------ §8 the decision (RA-D) -----
 
 #[test]
 fn ra_d_1_an_open_tenant_proceeds_with_no_principal() {
@@ -273,7 +296,7 @@ fn ra_d_10_a_proxy_challenges_with_407_and_reads_the_proxy_header() {
     assert!(challenge.because.is_none());
 }
 
-// -------------------------------------------------------------------- §7 algorithms (RA-A) -----
+// -------------------------------------------------------------------- §8 algorithms (RA-A) -----
 
 /// Every offered algorithm round-trips against the kernel's own client.
 fn round_trip(algorithm: Algorithm) {
@@ -317,7 +340,7 @@ fn ra_a_4_sha_512_256_round_trips() {
     round_trip(Algorithm::Sha512_256);
 }
 
-// ------------------------------------------------- §7 replay and retransmission (RA-R) ---------
+// ------------------------------------------------- §8 replay and retransmission (RA-R) ---------
 
 #[test]
 fn ra_r_1_a_retransmission_is_not_a_replay() {
@@ -419,7 +442,50 @@ fn ra_r_5_the_replay_window_does_not_grow_with_traffic() {
     );
 }
 
-// ------------------------------------------------------------- §7 the tenant boundary (RA-T) ---
+#[test]
+fn ra_r_6_a_reattached_credential_over_different_bindings_is_accepted() {
+    // The row that says what §7 says, in code: `A2 = Method ":" request-uri` (RFC 7616 §3.4.3), so
+    // a REGISTER's `Contact`, `CSeq` and `Expires` are not hashed and cannot be detected as
+    // changed. This is not a defect being pinned as correct — it is the exposure §7.3 accepts,
+    // recorded so the next reader does not have to rediscover it from the kernel.
+    let mut auth = tenant();
+    let value = challenge_value(&mut auth, T0);
+    let captured = answer(&value, USER, PASSWORD, "REGISTER", 3);
+
+    // One REGISTER, authenticated, exactly as the phone that owns the credential sends it.
+    let honest = register_binding(&captured, "<sip:alice@10.0.0.9>", "3 REGISTER", "3600");
+    assert_eq!(
+        expect_principal(auth.decide(&honest, &credentials(), T0)),
+        Bytes::from_static(b"t1:alice")
+    );
+
+    // The same `Authorization`, byte for byte, on a request sharing only its method and its signed
+    // `uri`. Everything a binding is made of differs.
+    let reattached = register_binding(&captured, "<sip:mallory@10.6.6.6>", "9 REGISTER", "60");
+    for name in [HeaderName::Contact, HeaderName::CSeq, HeaderName::Expires] {
+        assert_ne!(
+            honest.headers.value(&name),
+            reattached.headers.value(&name),
+            "the fixture must actually differ in {name:?}"
+        );
+    }
+    assert_eq!(
+        honest.headers.value(&HeaderName::Authorization),
+        reattached.headers.value(&HeaderName::Authorization),
+        "and must reuse the credential unmodified"
+    );
+
+    // Accepted — and note *which* branch accepts it: the digest is identical, so this is RA-R-1's
+    // retransmission path, not RA-R-2's refusal. The two are the same event to the replay window,
+    // which is why narrowing this without breaking RA-R-1 is not available (§7.3).
+    assert_eq!(
+        expect_principal(auth.decide(&reattached, &credentials(), T0)),
+        Bytes::from_static(b"t1:alice"),
+        "the digest binds the method and the signed uri, and nothing else"
+    );
+}
+
+// ------------------------------------------------------------- §8 the tenant boundary (RA-T) ---
 
 #[test]
 fn ra_t_1_one_username_in_two_tenants_is_two_credentials() {

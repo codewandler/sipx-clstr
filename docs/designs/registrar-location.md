@@ -62,6 +62,13 @@ client-initiated connection.
 - **Registrar embedded in every edge with gossip reconciliation.** Rejected: violates "every
   resource has one owner" and makes the binding set eventually consistent exactly where
   correctness is defined by serialization.
+- **Narrowing what digest binds, so a captured `Authorization` cannot be reattached to a REGISTER
+  with a different `Contact`.** Rejected (`RG-9`), and the reasoning is normative in
+  [registrar-auth](../specs/registrar-auth.md) §7.3: `qop=auth-int` covers the body and not the
+  header fields a binding is made of; one-time nonces would work and would break `RA-R-1`, an
+  ordinary UDP retransmission; and folding request state into the nonce is kernel machinery that
+  would also destroy the property that any edge can answer any other edge's challenge. The exposure
+  is accepted, bounded by the nonce lifetime, and mitigated by carrying signalling over TLS.
 
 ## Risks & open questions
 

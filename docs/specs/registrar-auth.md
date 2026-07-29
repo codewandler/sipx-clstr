@@ -6,10 +6,15 @@ Status: accepted (`RG-2`). Prefix `RA`.
 
 ## 1. Normative references
 
-- **RFC 3261** §22 (authentication), §20.44 `WWW-Authenticate`, §20.27 `Proxy-Authenticate`,
-  §20.7 `Authorization`, §20.28 `Proxy-Authorization`, §21.4.2 `401`, §21.4.8 `407`.
-- **RFC 7616** — HTTP digest, which SIP profiles: the `HA1`/`HA2` construction, `qop=auth`,
-  `nc`, `cnonce`, `stale`, the SHA-256 families.
+- **RFC 3261** §22 (authentication, and what digest does *not* provide — §7), §20.44
+  `WWW-Authenticate`, §20.27 `Proxy-Authenticate`, §20.7 `Authorization`, §20.28
+  `Proxy-Authorization`, §21.4.2 `401`, §21.4.8 `407`, §26.1.1 (registration hijacking),
+  §26.2.1–§26.2.2 (TLS and the SIPS scheme).
+- **RFC 7616** — HTTP digest, which SIP profiles: the `HA1`/`HA2` construction (§3.4.1–§3.4.3),
+  `qop=auth`, `nc`, `cnonce`, `stale`, the SHA-256 families; §5.3–§5.5 for the integrity and replay
+  limits §7 turns into a decision.
+- **RFC 2617** — the obsoleted form the deployed base still speaks, cited in §7 for the
+  `request-digest` (§3.2.2.1) and `A2` (§3.2.2.3) constructions.
 - **RFC 8760** — the additional algorithms and the downgrade warning that motivates §4.
 
 ## 2. What is here and what is not
@@ -74,9 +79,12 @@ that the two can legitimately differ — a client may sign a canonicalised form,
 rewritten the Request-URI in flight — so refusing on a mismatch rejects correct clients. What the
 mismatch could otherwise buy an attacker is bounded: the **method** is taken from the request and
 not from the credentials, so a captured REGISTER credential authenticates only a REGISTER, and the
-AoR a REGISTER writes comes from `To` rather than from anything the digest covers. The exposure is
-therefore a credential aimed at a different registrar in the same realm within one nonce lifetime.
-Revisit if realms ever span registrars with different trust.
+AoR a REGISTER writes comes from `To` rather than from anything the digest covers. The exposure *from the
+mismatch* is therefore a credential aimed at a different registrar in the same realm within one
+nonce lifetime. Revisit if realms ever span registrars with different trust.
+
+That bound covers this paragraph's question and no more. **§7 states what the digest binds in
+full**, and it is less than these two paragraphs on their own would suggest.
 
 ## 4. Algorithm selection
 
@@ -124,7 +132,91 @@ rather than of this code:
 An edge that generates its own secret at startup invalidates every outstanding nonce when it
 restarts. Clients recover through `stale=true`, so the cost is one round trip and not a login.
 
-## 7. Test vectors
+## 7. What the digest binds, and what it does not
+
+Normative, and written out rather than left to the reader because §3 and §8's `RA-R` rows are easy
+to read as *"a captured credential cannot be reused"*, which is a stronger claim than the mechanism
+makes.
+
+### 7.1 The construction
+
+With `qop=auth` — the only `qop` this edge offers (§3 A2, `RA-D-9`) — the response is
+`KD(H(A1), nonce ":" nc ":" cnonce ":" qop ":" H(A2))` (RFC 7616 §3.4.1; RFC 2617 §3.2.2.1 is the
+historical form it replaced), where
+
+```
+A2 = Method ":" request-uri
+```
+
+RFC 7616 §3.4.3, and RFC 2617 §3.2.2.3 for the same. `request-uri` here is the `uri` the **client**
+signed and sent in its credentials, not the Request-URI as received — §3 says why the two are not
+compared.
+
+So for a REGISTER the digest binds exactly this, and nothing else:
+
+| Bound | **Not** bound |
+|---|---|
+| the request **method**, taken from the request rather than from the credentials | `Contact`, and every parameter on it (`;expires`, `;q`, `;+sip.instance`) |
+| the signed `uri` | `To`, and therefore the AoR the write lands on |
+| realm, username and password, via `A1` | `Call-ID` and `CSeq` |
+| the server `nonce`, the client `cnonce`, and `nc` | the `Expires` header |
+| | the message body |
+
+`qop=auth-int` would extend `A2` with `H(entity-body)` and change nothing else (RFC 7616 §3.4.3):
+it covers the **body**. Every field in the right-hand column is a header field, and RFC 7616 §5.3 is
+explicit — *"Most header fields and their values could be modified as a part of a man-in-the-middle
+attack."*
+
+### 7.2 The consequence
+
+An `Authorization` captured from an authenticated REGISTER and reattached, unmodified, to a REGISTER
+whose `Contact`, `CSeq` and `Expires` all differ hashes to the identical value. It does not merely
+pass verification: it takes the **retransmission** branch of the replay window — the branch that
+accepts a repeated `(nc, response)` pair on purpose, because that is what makes `RA-R-1` hold. To
+the window the two events are the same event. `RA-R-6` pins this end to end, and pins what it
+writes: the AoR then resolves to the original contact **and** the attacker's, because RFC 3261
+§10.3 step 7 adds a contact rather than replacing the set. The phone that owns the AoR keeps
+ringing, so nothing about the victim's experience says this happened.
+
+What is *not* weakened, and should not be re-derived by the next reader:
+
+- the **method** comes from the request, so a credential captured from a REGISTER authenticates only
+  a REGISTER (§3);
+- the AoR a REGISTER writes comes from `To` and is gated by `S4` of
+  [location-service](location-service.md) §5.1 — *is this principal authorized for this AoR* — so a
+  substituted `To` is refused there, not here;
+- the principal recorded on the binding (§5) is the one the digest proved, so the audit trail names
+  the account whose credential was replayed rather than naming nobody.
+
+### 7.3 The decision: accept, bounded by the nonce lifetime
+
+**Accepted.** This edge does not narrow what `qop=auth` covers, and this specification will not
+describe digest as an integrity mechanism. RFC 3261 §22: it *"provides message authentication and
+replay protection only, without message integrity or confidentiality. Protective measures above and
+beyond those provided by Digest need to be taken to prevent active attackers from modifying SIP
+requests and responses."* That is the property offered here, and the bound on it is the nonce
+lifetime (§3 A7, §6) — nothing else shortens the window.
+
+**Residual risk, in the form an operator can act on:** anyone who can read a REGISTER off the wire
+can, for as long as that nonce lives, replay its `Authorization` on a REGISTER carrying their own
+`Contact` and have the AoR fork to them — RFC 3261 §26.1.1's registration hijacking — so **carry
+signalling over TLS** (RFC 3261 §26.2.1, §26.2.2) and **keep the nonce lifetime short**; on a
+cleartext hop, digest authenticates the account and protects nothing else about the message.
+
+Rejected, each with the reason it was rejected:
+
+| Option | Why not |
+|---|---|
+| `qop=auth-int` | Does not close it. `auth-int` adds `H(entity-body)` to `A2` (RFC 7616 §3.4.3) — the body. A REGISTER's binding set is entirely header fields and its body is normally empty, so this changes nothing here while costing interop with every client that implements `auth` alone. It is the first thing a reader reaches for, which is why it is written down rather than left out. |
+| One-time nonces (RFC 7616 §5.5) | Would close it, and breaks `RA-R-1`. A UDP retransmission *is* the same `(nonce, nc, response)` arriving twice; a nonce honoured once refuses the second copy and drops a phone that did nothing wrong. M1's fifth exit criterion says it must not. |
+| Binding the nonce to more of the request — RFC 7616 §5.4's "request-specific element" | Three reasons, any one sufficient. It is kernel machinery rather than policy: nonce minting and recognition are `sipx-ua`'s (§2), so it is an [upstream](../upstream.md) conversation and not a change this repository may make. It destroys §6's property that a nonce is verifiable from the secret and the realm alone, which is what lets any edge answer another edge's challenge without shared state. And it refuses correct clients — re-registering a *changed* `Contact` against a live nonce is ordinary (RFC 3261 §10.2). |
+| A registrar-side check — remember the `Contact` first seen under a nonce and refuse a change | The same false refusals, plus the memory is per-node exactly as the replay window is (§6): it would hold at the edge that issued the challenge and not at the edge that receives the answer. A check that is a boundary at one edge and not at another is worse than no check, because it reads as a boundary. |
+
+**Revisit when** a deployment needs a guarantee stronger than "TLS plus a short nonce lifetime" on
+a hop that is not TLS-protected, or if `S4` turns out not to gate the AoR after all — that is the
+one assumption above this specification does not itself prove.
+
+## 8. Test vectors
 
 Normative. `RG-2`'s tests derive from these.
 
@@ -157,10 +249,11 @@ Normative. `RG-2`'s tests derive from these.
 | # | Given | Expect |
 |---|---|---|
 | RA-R-1 | The same authenticated REGISTER arrives twice — same nonce, same `nc`, same digest | **Both authenticate.** A retransmission is ordinary over UDP and is not a replay |
-| RA-R-2 | Same nonce and `nc`, **different** digest | The second is refused (A6): a captured credential reused against a different request |
+| RA-R-2 | Same nonce and `nc`, a **different** digest — the same credential answered for another method or another signed `uri` | The second is refused (A6). Note what this is *not*: the window compares the digest, so it catches a reuse only when the reuse changed something the digest covers (§7) |
 | RA-R-3 | `nc` counts up across refreshes on one nonce | Each authenticates |
 | RA-R-4 | `nc` goes backwards | Refused (A6) |
 | RA-R-5 | Many distinct nonces, more than the window holds | The window's memory does not grow with traffic. An evicted nonce loses its replay history and its counts start over — see §6, and note that it is *bounded by the nonce lifetime*, not unbounded |
+| RA-R-6 | A captured `Authorization` reattached to a REGISTER whose `Contact`, `CSeq` and `Expires` differ, with the method and the signed `uri` unchanged | **Authenticates, under the captured principal, and the binding is written.** The digest is byte-identical, so this takes RA-R-1's branch and not RA-R-2's, and the AoR ends up forking to both contacts. Accepted deliberately, bounded by the nonce lifetime — §7.3 |
 
 **The tenant boundary (RA-T).**
 

@@ -60,7 +60,7 @@ FAMILIES = {
     ("EP", "C"): "Probe — cleanup (§10)",
     ("RA", "D"): "Registrar auth — the decision (§3)",
     ("RA", "A"): "Registrar auth — algorithm selection (§4)",
-    ("RA", "R"): "Registrar auth — replay and retransmission (§3, §6)",
+    ("RA", "R"): "Registrar auth — replay and retransmission (§3, §6, §7)",
     ("RA", "T"): "Registrar auth — the tenant boundary (§5)",
 }
 
