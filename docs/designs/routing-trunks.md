@@ -143,12 +143,13 @@ Three decisions in that spec are worth reading even if the rest is skimmed:
   a proxy *creates* an identity; §5 and §7 together govern whether an identity it holds *leaves*
   toward a given next hop. Collapsing the two into one "PAI on/off" switch is what makes "assert
   for regulatory trace, withhold from an untrusted peer" inexpressible — and that combination is
-  the entire reason RFC 3325 §7 has a `Privacy: id` token at all. The spec keeps them apart
-  (`A9`, `A14`), which is also what lets the vector table cover a product of axes rather than a
-  path through a flowchart.
+  the entire reason RFC 3325 §7 has a `Privacy: id` token at all. The spec keeps them apart —
+  `A19` makes `assert: never` a statement about synthesis alone, and the gate of `A20`–`A24` is
+  what decides whether an identity in hand travels — which is also what lets the vector table
+  cover a product of axes rather than a path through a flowchart.
 - **A `Privacy: none` header can never be overridden by trunk configuration.** RFC 3323 §4.2 and
   RFC 3325 §7 both make it a `MUST NOT`, and a per-trunk policy that could out-vote it would turn
-  a compliance control into a suggestion (`A16`). The one thing it does *not* protect is a
+  a compliance control into a suggestion (`A22`). The one thing it does *not* protect is a
   `P-Asserted-Identity` this platform received from a peer it does not trust: RFC 3325 §5 requires
   that one to be replaced or removed regardless, or `Privacy: none` would be a two-word identity
   spoof (`A6`).
@@ -156,7 +157,9 @@ Three decisions in that spec are worth reading even if the rest is skimmed:
   profile if its output is a number whose shape is the trunk's business, and *after* if its output
   is a constant the RFC fixes byte for byte. Identity synthesis is the first kind and runs before;
   the anonymous-`From` form of RFC 5379 §5.1.4 is the second and runs after. One criterion, both
-  placements, and no ordering knob anywhere (`A11`).
+  placements, and no ordering knob anywhere (`A9`). `AI-N-6` is the row that makes it a rule
+  rather than a preference: under the reverse order, an anonymised `From` meeting a guarded
+  normalisation profile picks up the **callee's** number.
 
 **The seam with normalisation, from this side.** [number-normalisation](../specs/number-normalisation.md)
 `N32` says normalisation rewrites the number inside an *existing* URI and never creates a field,
