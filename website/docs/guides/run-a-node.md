@@ -1,6 +1,6 @@
 ---
 title: "Run a node"
-description: "The three flags, the two lines it prints, the exit codes, and how to read its logs — the whole operational surface of a sipx-clstr node today."
+description: "What the command line carries, what the document carries, the two lines it prints, the exit codes, and how to read its logs."
 ---
 
 # Run a node

@@ -75,7 +75,7 @@ What is exposed, and where:
 | Surface | Exposure |
 |---|---|
 | UDP and TCP 5060 | public, where required |
-| TLS 5061 | public |
+| TLS 5061 | public — **designed only**: a `transport: tls` listener is refused at load today, not served |
 | WS / WSS | explicit endpoints only |
 | RTP | dedicated UDP ranges on the media nodes |
 | Management, metrics, RPC | strictly private — never on a public listener |

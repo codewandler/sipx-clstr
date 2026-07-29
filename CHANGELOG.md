@@ -68,10 +68,13 @@ prove, because the thing they do not prove is the next piece of work.
 
 ### Known gaps
 
-- **Nothing reads a cluster document at startup yet** (`DP-10`). The loader parses one and the driver
-  can act on one, and `main.rs` still builds its configuration from the three provisional flags. Until
-  that lands, neither half is reachable from a running node, and the two-node proof (`DP-9`) is
-  blocked behind it.
+- **Authentication is accepted and not applied.** The document's `tenant[].auth` section loads without
+  error and changes nothing, so the node is an open registrar regardless of what the document says.
+  Eighteen sections of the schema are in that state; the node logs which ones at startup. Making it
+  refuse a document it cannot honour, rather than accept it silently, is the `fail-closed-config` epic.
+- **One address in front of the cluster does not work.** Each node record-routes its own advertised
+  address, so in-dialog requests must return to the node that forwarded them. A single Service or VIP
+  will send a `BYE` to whichever node the balancer picks. Affinity tokens are what fix this.
 - **The config loader pulls `unsafe-libyaml` into the tree**, through `serde_yaml_ng`. Non-negotiable
   #3 forbids `unsafe`, and the workspace lint enforces it for crates *in* this workspace, so the gate
   passed without comment. The exposure is an operator-supplied document rather than network input,
