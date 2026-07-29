@@ -18,6 +18,7 @@ const sidebars = {
         'specs/location-service',
         'specs/affinity-token',
         'specs/hook-framework',
+        'specs/media-relay',
         'specs/e2e-probe',
       ],
     },
