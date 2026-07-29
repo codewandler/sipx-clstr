@@ -1,0 +1,9 @@
+# The build context. `target/` alone is ~14G, and shipping it to the daemon would dominate the
+# build; the image builds the binary itself, from source, inside the builder stage.
+target/
+website/node_modules/
+website/build/
+website/.docusaurus/
+.git/
+.claude/
+*.wav

@@ -1,0 +1,63 @@
+version: v2beta1
+name: sipx-clstr-dev
+
+# A development loop for a single node against a local cluster.
+#
+# Scope, stated plainly so nobody reads more into a green run than it proves: this stands up ONE
+# process that is both registrar and forwarding core, on UDP only, with the in-memory location
+# store. It proves that the binary registers a contact and proxies a request to it. It does not
+# prove clustering, zone spread, media, HA of the store, TCP or TLS, or anything the operator does
+# — there is no operator here (see `deploy/devspace/manifests/node.yaml`).
+
+vars:
+  NAMESPACE:
+    value: sipx-clstr-dev
+  IMAGE:
+    value: sipx-clstr
+
+images:
+  node:
+    image: ${IMAGE}
+    dockerfile: ../../Dockerfile
+    context: ../..
+    tags:
+      - dev
+    buildKit: {}
+
+deployments:
+  node:
+    kubectl:
+      manifests:
+        - manifests/node.yaml
+
+dev:
+  node:
+    labelSelector:
+      app.kubernetes.io/name: sipx-clstr
+      app.kubernetes.io/component: node
+    # Stream the driver's log. It writes to stderr with `--with-ansi(false)`, precisely so that a
+    # script reading it and a person reading it see the same bytes.
+    logs:
+      enabled: true
+
+pipelines:
+  # `devspace deploy` — build the image, load it where the cluster can see it, apply the manifests.
+  deploy: |-
+    run_dependencies --all
+    build_images --all
+    create_deployments --all
+
+  # `devspace dev` — the same, then follow the node's log.
+  dev: |-
+    run_dependencies --all
+    build_images --all
+    create_deployments --all
+    start_dev --all
+
+commands:
+  # The acceptance run: register two users and place a call between them, through the node.
+  demo: |-
+    kubectl --namespace ${NAMESPACE} delete pod sipx-demo --ignore-not-found --wait=true
+    kubectl --namespace ${NAMESPACE} run sipx-demo \
+      --image=python:3.12-slim --restart=Never --attach --rm \
+      --command -- python3 -c "$(cat scripts/sip_demo.py)"

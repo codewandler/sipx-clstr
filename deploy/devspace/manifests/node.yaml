@@ -1,0 +1,83 @@
+# A single node — registrar and forwarding core in one process — running against a local cluster.
+#
+# This is deliberately NOT the operator path. `KO-1` has not pinned the SipxCluster custom resource
+# and `KO-3` has not implemented the reconcile loop, so the chart in `deploy/helm/` renders a
+# resource nothing serves. These manifests run the `sipx-clstr` binary directly, which is the part
+# that exists. When the operator lands, this profile's job is to be deleted, not extended.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sipx-clstr-node
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: node
+    app.kubernetes.io/managed-by: devspace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sipx-clstr
+      app.kubernetes.io/component: node
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sipx-clstr
+        app.kubernetes.io/component: node
+    spec:
+      # No hostNetwork here. The default deployment set uses it so UDP 5060 sees the real source
+      # address, but inside a single-node k3d cluster pod-to-pod traffic already arrives with the
+      # client pod's own address, and host networking would collide with anything else on 5060.
+      containers:
+        - name: node
+          image: sipx-clstr:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - --listen
+            - 0.0.0.0:5060
+            # What the node puts in Via and Record-Route. It must be an address the *client* can
+            # reach, which inside the cluster is the pod's own IP — the Service ClusterIP would be
+            # wrong here, since a response routed back to a virtual IP has no pod to answer it.
+            - --advertise
+            - $(POD_IP):5060
+            - --tenant
+            - default
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: RUST_LOG
+              value: info
+          ports:
+            # UDP only, on purpose: the driver binds UDP today. TCP and TLS listeners are DP-5's
+            # scope, and declaring a port the process does not answer would make `kubectl get` lie.
+            - name: sip-udp
+              containerPort: 5060
+              protocol: UDP
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sipx-clstr-node
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: node
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: node
+  ports:
+    - name: sip-udp
+      port: 5060
+      targetPort: 5060
+      protocol: UDP
