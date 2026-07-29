@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-07-30
+
+The release where "cluster" stops being a design document. Two nodes sharing one PostgreSQL location
+service: a user who registers through one node can be called through the other, with audio. Scripted
+both ways — two local processes and two pods on Kubernetes — and both scripts print what they do not
+prove, because the thing they do not prove is the next piece of work.
+
 ### Added
 
 - **A cluster, in the smallest honest sense of the word** (`DP-9`). Two nodes, one configuration
