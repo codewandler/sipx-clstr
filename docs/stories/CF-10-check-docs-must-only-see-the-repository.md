@@ -24,6 +24,9 @@ green locally and red in CI.
       **249** across runs of the same gate on the same tree, purely because worktrees came and went.
 - [ ] A broken link in an untracked directory does not fail the gate; a broken link in a tracked
       file still does. Both directions get a check.
+- [ ] Fenced code blocks and inline code spans are not scanned for links. A link checker that reads
+      a code sample as a link cannot be used to write about link defects — quoting a real error
+      message in a story file currently fails the gate, which is how this item was found.
 - [ ] The same question is asked of the other gate scripts — `check-provenance.sh`,
       `check-vectors.py` — and each either already scopes itself to tracked files or is fixed to.
       `check-provenance` scanning an untracked directory would be the more serious version of this
@@ -36,8 +39,12 @@ green locally and red in CI.
 - **Found during wave 4.** `scripts/gate.sh` went red on the integration branch with:
   ```
   broken link  .claude/worktrees/agent-a128a802637351ec5/docs/designs/routing-trunks.md:
-               [asserted-identity](../specs/asserted-identity.md)
+               a relative link to ../specs/asserted-identity.md
   ```
+  (The target is written out rather than quoted as a link, because the checker does **not** skip
+  fenced code blocks — quoting the original error verbatim in this file made the gate fail a second
+  time, on this story. That is a second defect in the same script and part of this story's scope:
+  a link checker that reads code samples as links cannot be used to document link defects.)
   That path is a **live agent worktree**, mid-story: the link was correct-in-progress, pointing at a
   spec the agent had not written yet. Nothing in the commit under test was wrong, and the tracked
   tree was clean — the gate simply saw work that was not part of the repository.

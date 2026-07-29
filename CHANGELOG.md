@@ -7,6 +7,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **One config schema, not a fourth dialect** (`DP-1`) — [cluster-config](docs/specs/cluster-config.md):
+  role selection `R1`–`R7`, the error contract `V1`–`V10` (report *all* errors rather than the
+  first; closed world; refusal is the only failure mode), the reloadable subset with drain-then-switch
+  for the shard map, and 48 `CC-*` vector rows. Written as a **reconciliation** of the three
+  artefacts that already asserted a schema — the chart's `cluster:` tree, the node's provisional
+  `NodeConfig`, and the specs that fix vocabulary — rather than invented beside them. Where the
+  chart and a spec disagreed the spec won, and the differences are tabulated in
+  [deployment](docs/designs/deployment.md): `numbering` becomes named `normalisation` profiles bound
+  per scope and per trunk, per-tenant registrar values move to `tenant[]`, `shards` becomes a
+  `shardMap` that can express ownership, and a top-level `quirkProfile` contradicts `EX-10`'s rule
+  that bindings bind. `security.maxForwards` becomes **70**: RFC 3261 §16.6 step 3 makes it the
+  value inserted when a request carries none, not a hop budget, so 10 silently shortened every path
+  arriving without the header.
+- **The async query declaration is a contract** (`EX-8`) — carried `EX-6`'s accepted design into
+  [hook-framework](docs/specs/hook-framework.md) as normative text: `QueryOutcome` and `Disposition`
+  closed, `E4a`/`E4b` pinning that `Query` is the last effect of its invocation and that the outcome
+  is decided exactly once, `E7` making `QueryDeadline` engine-owned (because `E6` forbids a *module*
+  timer from altering a transaction's outcome and this one does), and `G7`/`G8` joining the startup
+  rules with `G1`–`G6`'s fails-deployment-never-a-call discipline. Registering the `HF` prefix
+  brought the whole family into the vector gate's view: **77 of 98 rows proved, 21 deferred**, each
+  with its own reason rather than a group waiver.
+
 ## [0.8.0] — 2026-07-29
 
 Three stories, all of them consequences of the last release rather than new ground: the two defects

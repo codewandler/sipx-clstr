@@ -14,6 +14,7 @@ const sidebars = {
       collapsed: false,
       description: 'The normative contracts, each with a test-vector table.',
       items: [
+        'specs/cluster-config',
         'specs/proxy-behavior',
         'specs/location-service',
         'specs/affinity-token',

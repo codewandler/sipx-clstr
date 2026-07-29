@@ -2,7 +2,7 @@
 id: EX-8
 title: Make the async query declaration normative in the hook-framework spec
 pillar: Platform
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/extension-framework.md
 epic: extension-framework
