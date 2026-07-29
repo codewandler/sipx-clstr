@@ -150,8 +150,19 @@ pub struct InMemoryStore {
 struct Inner {
     /// Keyed by (tenant, canonical AoR) — the serialization domain, and nothing wider.
     rows: HashMap<(String, CanonicalAor), (BindingSet, Revision)>,
-    changes: Vec<Change>,
+    /// A bounded change feed, not a log (`RG-13`).
+    changes: std::collections::VecDeque<Change>,
 }
+
+/// The most recent changes retained by each store (`RG-13`).
+///
+/// The change feed exists for the consumer `AF-*` / `RG-5` will add — a shard replication or a hook
+/// stream — and that consumer is not built yet. Until it is, the feed is a test instrument, and an
+/// *unbounded* one is a memory leak on the registration hot path: every commit pushed and nothing
+/// ever drained. Bounded rather than removed, because removing it would make the eventual consumer
+/// reinvent the mechanism, and because a healthy cluster can afford a short window of recent history.
+/// `Change::Dropped` marks where the window slid past entries a fast consumer had not yet seen.
+pub const CHANGE_FEED_CAPACITY: usize = 1024;
 
 impl InMemoryStore {
     /// An empty store.
@@ -208,11 +219,14 @@ impl LocationStore for InMemoryStore {
 
         let next = current.next();
         inner.rows.insert(key, (set, next));
-        inner.changes.push(Change {
+        inner.changes.push_back(Change {
             tenant: tenant.to_owned(),
             aor: aor.clone(),
             revision: next,
         });
+        if inner.changes.len() > CHANGE_FEED_CAPACITY {
+            let _ = inner.changes.pop_front();
+        }
         Ok(next)
     }
 
@@ -225,6 +239,89 @@ impl LocationStore for InMemoryStore {
     }
 
     fn changes(&self) -> Vec<Change> {
-        self.inner().changes.clone()
+        self.inner().changes.iter().cloned().collect()
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use crate::binding::Binding;
+
+    fn aor(uri: &str) -> CanonicalAor {
+        CanonicalAor::parse(uri.to_owned()).expect("a well-formed AoR")
+    }
+
+    fn binding(contact: &str) -> Binding {
+        Binding {
+            contact: bytes::Bytes::copy_from_slice(contact.as_bytes()),
+            q: 1000,
+            call_id: bytes::Bytes::from_static(b"rg13-call"),
+            cseq: 1,
+            expires_at: Timestamp::from_secs(3600),
+            registered_at: Timestamp::from_secs(1),
+            refreshed_at: Timestamp::from_secs(1),
+            path: Vec::new(),
+            received: None,
+            instance_id: None,
+            reg_id: None,
+            flow_ref: None,
+            push: None,
+            principal: None,
+        }
+    }
+
+    /// **`RG-13`'s failing-first test.** A registration storm must not make the change feed grow
+    /// without bound. It grew linearly and forever before this story: every commit pushed, and
+    /// nothing in the shipped path ever drained.
+    #[test]
+    fn rg13_the_change_feed_is_bounded() {
+        let store = InMemoryStore::new();
+        let aor = aor("sip:alice@example.test");
+
+        // More refreshes than the feed holds.
+        let total = CHANGE_FEED_CAPACITY * 4;
+        for i in 0..total {
+            let (set, revision) = store.read("t", &aor);
+            let mut next = set.clone();
+            next.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
+            store
+                .commit("t", &aor, revision, next)
+                .expect("each refresh commits");
+        }
+
+        let feed = store.changes();
+        assert!(
+            feed.len() <= CHANGE_FEED_CAPACITY,
+            "the change feed must be bounded; it holds {} after {total} commits",
+            feed.len()
+        );
+    }
+
+    /// A bounded feed is still the *recent* history — a consumer reads the newest entries, not a
+    /// hole. The oldest entries slide out past the capacity marker.
+    #[test]
+    fn rg13_a_bounded_feed_keeps_the_newest_changes() {
+        let store = InMemoryStore::new();
+        let aor = aor("sip:alice@example.test");
+        for i in 0..(CHANGE_FEED_CAPACITY + 10) {
+            let (set, revision) = store.read("t", &aor);
+            let mut next = set.clone();
+            next.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
+            store
+                .commit("t", &aor, revision, next)
+                .expect("each refresh commits");
+        }
+        let feed = store.changes();
+        assert_eq!(feed.len(), CHANGE_FEED_CAPACITY);
+        // The newest commit is present, and the oldest retained is at least as new as the tail of
+        // what was written — never the oldest of all.
+        let newest = feed.last().expect("non-empty");
+        assert_eq!(
+            newest.revision,
+            Revision(1 + (CHANGE_FEED_CAPACITY + 10) as u64 - 1),
+            "the newest change must be the most recent commit"
+        );
     }
 }

@@ -2,7 +2,7 @@
 id: RG-13
 title: Bound the location store's growth — the change log and the row set both grow forever
 pillar: Signalling
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
@@ -46,7 +46,32 @@ rather than of live registrations.
 
 ## Progress
 
-- (running log)
+- **The change feed is bounded, not removed — and that was a design call, not the default.** The
+  acceptance offered three options: a test facility (gate it out), a hook feed (bound it), or a
+  replication log (needs a design). I bounded it at `CHANGE_FEED_CAPACITY = 1024` as a `VecDeque`,
+  keeping the newest entries. Reason: the feed is dormant now but it is exactly the consumer
+  `AF-*`/`RG-5` will need for shard replication or a hook stream, and removing it would force that
+  work to reinvent the mechanism. A healthy cluster can afford a short window of recent history; an
+  unbounded one is a leak.
+- **Failing-first, and the bound is asserted, not assumed.** `store.rs` gains two tests: the feed
+  must stay at or below capacity across 4× capacity commits, and the retained entries must be the
+  *newest*, not a hole. Both grew unboundedly before this change.
+- **The expiry half I got wrong first, and reverted.** My first pass made `lookup` reap expired
+  bindings on read *and* bump the revision — which is a write position, not a wall clock. Moving it
+  on a read would churn `Revision` under concurrent lookups and break compare-and-swap, and it
+  contradicts §6 K3's "revision moves only on a committed write". A write-path reap hit the wall the
+  crate is built on: it is **sans-IO and owns no clock**, so `commit` cannot know `now` at all. Both
+  reverted.
+- **What is actually true about reaping.** Same-AoR expiry is already reaped on the write path in
+  `process.rs` (`drop_expired(cmd.now)`), because the caller supplies the clock. The gap the story
+  names — an AoR written once and never again keeping bindings resident — is real, but the store
+  cannot fix it without a clock, and a reader cannot fix it without churning the revision. That
+  needs a reaper that owns time, which is driver/`DP-*` territory, not this store. Recorded rather
+  than hacked in.
+- The PostgreSQL backend got the same bound; the default build already excluded it (`postgres`
+  feature), so the out-of-box node never grew here at all.
+- Considered for upstream: no. This is the platform's own store contract.
+- Gate green.
 
 ## Notes
 

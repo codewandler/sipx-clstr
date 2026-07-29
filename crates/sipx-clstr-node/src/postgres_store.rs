@@ -73,7 +73,7 @@ pub struct PostgresStore {
     ///
     /// In-process for now. `LISTEN`/`NOTIFY` is the real mechanism (§6.2) and is best-effort by
     /// contract, so nothing about correctness waits on it — K5's staleness bound is the guarantee.
-    changes: Mutex<Vec<Change>>,
+    changes: Mutex<std::collections::VecDeque<Change>>,
 }
 
 // `postgres::Client` is not `Debug`, and the workspace requires public types to be. Written out
@@ -119,7 +119,7 @@ impl PostgresStore {
         unlocked?;
         Ok(Self {
             client: Mutex::new(client),
-            changes: Mutex::new(Vec::new()),
+            changes: Mutex::new(std::collections::VecDeque::new()),
         })
     }
 
@@ -212,11 +212,14 @@ impl PostgresStore {
             .changes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        changes.push(Change {
+        changes.push_back(Change {
             tenant: tenant.to_owned(),
             aor: aor.clone(),
             revision: next,
         });
+        if changes.len() > sipx_clstr_registrar::store::CHANGE_FEED_CAPACITY {
+            let _ = changes.pop_front();
+        }
         Ok(Ok(next))
     }
 }
@@ -271,6 +274,8 @@ impl LocationStore for PostgresStore {
         self.changes
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .iter()
+            .cloned()
+            .collect()
     }
 }
