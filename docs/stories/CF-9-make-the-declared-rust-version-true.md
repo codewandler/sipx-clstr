@@ -80,33 +80,42 @@ whoever owns that ledger rather than by this branch.
 1.94. This is a corrected claim rather than a new restriction — 1.88 never worked — but it is the
 kind of change a consumer reads the changelog for.
 
-### Open: raising the floor un-gates MSRV-gated clippy lints
+### Raising the floor un-gates MSRV-gated clippy lints — settled
 
-`cargo clippy --workspace --all-targets --all-features -- -D warnings` is **red** on this branch, and
-it is this change that made it so. clippy reads `rust-version` as the MSRV and suppresses lints whose
-suggested API is newer than it. `duration_suboptimal_units` suggests `Duration::from_mins`, which is
-not available on 1.88 and is on 1.94 — so the lint was silent before and fires now, 18 times, in code
-this branch never touched. Verified by flipping the manifest back to 1.88 and re-running: 0 errors on
-1.88, 18 on 1.94. No other gate step regressed; `fmt`, `test`, `features`, `provenance`, `vectors`,
-`docs` and the new `msrv` step are all green.
+clippy reads `rust-version` as the MSRV and suppresses lints whose suggested API is newer than it.
+`duration_suboptimal_units` suggests `Duration::from_mins`/`from_hours`, which do not exist on 1.88
+and do on 1.94 — so the lint was silent before this change and fires after it, in code this story
+never otherwise touched. Confirmed by flipping the manifest back to 1.88 and re-running: **0 errors
+on 1.88, 18 on 1.94**. The count then grew to **23**: the first run aborted compilation before
+reaching `sipx-clstr-sim`, so five sim sites only became visible once the earlier crates were clean.
 
-The remedy is mechanical — `Duration::from_secs(60)` → `Duration::from_mins(1)` and similar, which
-clippy will autofix — but every site is outside this story's write set, and one is inside a crate
-another in-flight story is editing, so this branch deliberately leaves them alone:
+**Twenty of the twenty-three sites keep their seconds**, with a targeted `#[allow]` and a reason at
+each. This is not lint-dodging: SIP measures time in seconds, and every one of these numbers is
+either a spec-stated constant or is read against another second-valued quantity in the same
+expression.
 
-| file | sites |
+| site | why it stays in seconds |
 |---|---|
-| `crates/sipx-clstr-probe/src/schedule.rs` | 187, 214, 232, 244, 253, 274, 277, 304, 321 |
-| `crates/sipx-clstr-proxy/src/config.rs` | 125, 160, 221, 222, 223 |
-| `crates/sipx-clstr-probe/src/echo.rs` | 378 |
-| `crates/sipx-clstr-proxy/src/context.rs` | 745 |
-| `crates/sipx-clstr-proxy/src/from_registrar.rs` | 53 |
-| `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` | 241 |
+| `proxy/src/config.rs` ×5, `proxy/src/context.rs` ×1 | Timer C. [proxy-behavior](../specs/proxy-behavior.md) F11 states it as "Default **180 s**, configurable ≥ 180 s", and vector row PB-F-1 as "Timer C set 180 s". `from_mins(3)` would stop matching the rows it is checked against |
+| `probe/src/schedule.rs` ×9 | Every cadence is `from_secs(60)` read against seconds nearby — the 59/60 due boundary, dues spread at 20 and 40 across the interval, "60 s interval plus the 6 s jitter budget" = 66, and loops stepping one second at a time |
+| `probe/src/echo.rs` ×1 | 1800 s is exactly half of `register_expires`, a SIP `Expires` value in seconds; `from_mins(30)` hides the halving the test exists to check |
+| `registrar/tests/vectors_register_auth.rs` ×1 | The 300 s nonce lifetime is read against `T0 + 3_600`, a raw second count |
+| `sim/tests/proxy_cancel.rs` ×1 | The 60 is a step toward Timer C's 180 s, followed by a 150 that is not a whole minute — converting only the 60 would make the pair look unrelated to the timer they straddle |
+| `sim/tests/probe_run.rs` ×1, `sim/tests/probe_end_to_end.rs` ×1 | One probe interval of virtual time, sized against the scheduler's 60 s cadence |
 
-Whoever picks this up should prefer fixing the call sites over adding
-`duration_suboptimal_units = "allow"` to `[workspace.lints.clippy]`: suppressing the lint would hide
-the same class of finding at every future floor raise, which is the opposite of what this story is
-for.
+**Three sites were converted**, where the value is a genuine whole unit with no second-valued
+neighbour: `proxy/src/from_registrar.rs:53` (`from_secs(3_600)` → `from_hours(1)`, a one-hour
+registration fixture) and the pair in `sim/src/sim.rs:742,745`, which convert together so the
+`advance(x)` / `now == settled + x` assertion keeps reading as a pair.
+
+The allows are per-site or per-test-function, except `probe/src/schedule.rs`, where all nine share
+one reason and the lint joins that module's existing `#[allow]` list — the idiom already used for
+`unwrap_used`/`expect_used`/`panic` there. `duration_suboptimal_units` is deliberately **not**
+allowed workspace-wide: that would hide the same class of finding at every future floor raise, which
+is the opposite of what this story is for.
+
+Incidentally, the `msrv` gate step earned itself immediately — it is what proved `Duration::from_hours`
+is actually available on 1.94 rather than only on the developer's stable.
 
 ## Notes
 - The failure, on `rust:1.88-bookworm`, is in the kernel rather than in this workspace:

@@ -50,7 +50,7 @@ mod tests {
                 .collect(),
             flow_ref: None,
             q,
-            expires_in: Duration::from_secs(3_600),
+            expires_in: Duration::from_hours(1),
         }
     }
 

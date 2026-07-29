@@ -520,6 +520,9 @@ fn a_cancel_for_a_branch_that_never_answered_is_queued_until_it_does() {
 }
 
 #[test]
+// The 60 is a step toward Timer C's 180 s and is followed by a 150 that is not a whole minute:
+// converting only the 60 would make the two steps look unrelated to the timer they straddle.
+#[allow(clippy::duration_suboptimal_units)]
 fn timer_c_reaps_a_branch_that_goes_silent_and_the_call_still_concludes() {
     // C5/C6 in virtual time: neither callee ever answers, so the only thing that can conclude the
     // call is Timer C. 180 s of virtual time costs nothing here, which is the whole argument for a
