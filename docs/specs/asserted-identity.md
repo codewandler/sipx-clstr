@@ -547,7 +547,9 @@ Call-ID: rt7-1@edge.example
 CSeq: 1 INVITE
 ```
 
-Principal `acme:anna`; assertable set `{ sip:+4930111222@acme.example, tel:+4930111222 }`.
+Principal `acme:anna`. The assertable set (A5) holds one `AssertedIdentity` carrying both schemes:
+`{ sip: sip:+4930111222@acme.example, tel: tel:+4930111222 }`. A row that says otherwise varies
+this and says so in its *Given*.
 
 **On "a vector per policy combination".** The declared axes are `trust` (2), the requested privacy
 (RFC 3323 §4.2's five values plus absent and an unregistered token), the source list, and
@@ -592,7 +594,7 @@ product enumerated once and re-enumerated wrongly on the next change.
 | AI-S-8 | `source: [received_pai, literal]`, PAI arrived from an **untrusted** sender | `ReceivedPai` yields nothing — A6 dropped it at ingress; the literal is emitted |
 | AI-S-9 | As AI-S-8 but the sender was **trusted** | That value, display-name byte-identical (A16) |
 | AI-S-10 | `form: sip_and_tel`, principal identity holds both | Two values, `sip` first (A15, §7.1) |
-| AI-S-11 | `form: tel`, principal identity holds only a `sip` URI | `Principal` yields nothing; selection continues to the next source (A15) |
+| AI-S-11 | `form: tel`, the assertable identity varied to hold only the `sip` URI | `Principal` yields nothing; selection continues to the next source rather than sending a `tel`-only carrier a scheme it does not read (A15) |
 | AI-S-12 | `source: [literal]` | The literal; trace `Literal`, and the branch counted as platform-asserted in the effective-policy record (A17, §12) |
 
 **Anonymous callers and `From` (AI-A).**
