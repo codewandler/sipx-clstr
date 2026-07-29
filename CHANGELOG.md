@@ -7,6 +7,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A contested target is resolved where the contest is** (`EX-10`). `overrides` — the only
+  construct that decides which of two quirk profiles wins when both write the same thing — was
+  required by `G10`, asserted by a vector, cited in Alternatives, and present in **no schema**. It
+  is now declared at the **binding**, not in the profile: a profile does not know where it applies,
+  so it cannot know which profiles it composes with, and a semver'd catalogue entry cannot name one
+  deployment's other profiles. `target` and `winner` are separate fields, because a profile id and
+  a target are two things — which is why the old single-list form could not be made coherent in
+  either reading. New rule `G13` makes an override self-invalidating: the target must be contested
+  *now* and the winner must be one of the contesters, so an override that outlives its contest
+  fails the boot instead of silently doing nothing. Overrides apply at composition, at startup, so
+  the set reaching the hook phases really is disjoint and the design's idempotence and confluence
+  claims keep their premise. `QP-G-15` pins that the escape cannot silence a boot check: it deletes
+  rules, never assertions.
+
+### Added
+
+- **`RA-R-7` is proved** (`RG-11`) — 77 of 85 rows, 8 deferred. It shipped in 0.7.0 asserted but
+  unproved, because `RG-10` was a documentation pass. The test drives the replayed-credential
+  admission path and location-service §W3's wildcard removal as **one request**, where each half
+  had a test and nothing drove them together. It asserts the store rather than the status — a `200`
+  would be equally true of the `400` path and of a no-op — and asserts that two commits happened,
+  which is what separates "every binding was removed" from "there was never anything to remove".
+  It pins an exposure `registrar-auth` §7.3 accepts on purpose, and its name says so.
+
 ## [0.7.0] — 2026-07-29
 
 Nine stories: one behaviour change, four specifications, three corrections that independent review

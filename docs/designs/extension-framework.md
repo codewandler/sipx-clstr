@@ -1,7 +1,7 @@
 # Design: Extension framework & RFC registry
 
 **Status:** proposed · **Pillar:** Platform · **Epic:** `extension-framework` ·
-**Stories:** EX-1 … EX-7
+**Stories:** EX-1 … EX-11
 
 ## Why
 

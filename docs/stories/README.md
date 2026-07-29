@@ -53,11 +53,7 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
-- [EX-10 — Give `overrides` a schema, or remove it from the composition rule](EX-10-give-overrides-a-schema-or-remove-it.md) · Extensions · found reviewing EX-7 — the one construct that resolves a contested target is in no schema
-
-### Registrar & location service
-_The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-11 — Prove that a replayed credential empties the AoR through the wildcard path](RG-11-prove-the-wildcard-replay-empties-the-aor.md) · Signalling · RA-R-7 is deferred to this story — it is the only unproved row in the RA family
+- [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
 
 ## Blocked
 _None._
@@ -160,6 +156,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [EX-6 — Design an async external routing hook](EX-6-design-an-async-external-routing-hook.md) · Platform · blocks a downstream deployment's parity milestone; a blocking HTTP call on the INVITE path today
 - [EX-7 — Specify carrier quirk profiles](EX-7-specify-carrier-quirk-profiles.md) · Platform
 - [EX-9 — Reconcile the quirk-profile media seam with the type ME-6 actually landed](EX-9-reconcile-the-quirk-profile-seam-with-ME-6.md) · Extensions · found reviewing EX-7 — it is written against SrtpMode; ME-6 landed SrtpPolicy
+- [EX-10 — Give `overrides` a schema, or remove it from the composition rule](EX-10-give-overrides-a-schema-or-remove-it.md) · Extensions · found reviewing EX-7 — the one construct that resolves a contested target is in no schema
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
 - [ME-6 — Specify per-trunk codec and SRTP policy](ME-6-specify-per-trunk-codec-and-srtp-policy.md) · Media
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
@@ -177,6 +174,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-8 — Settle B4 idempotency so a retransmission is a retry](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) · Signalling · found by RG-2's harness scenario — an ordinary UDP retransmission is answered 500
 - [RG-9 — Say what digest actually protects, and decide whether that is enough](RG-9-say-what-digest-actually-protects.md) · Signalling · found reviewing RG-8 — RA-R-2 reads stronger than the mechanism delivers
 - [RG-10 — Say that a replayed credential can de-register every binding](RG-10-say-that-a-replayed-credential-can-deregister-everything.md) · Signalling · found reviewing RG-9 — §7.2 understates the exposure it exists to state
+- [RG-11 — Prove that a replayed credential empties the AoR through the wildcard path](RG-11-prove-the-wildcard-replay-empties-the-aor.md) · Signalling · RA-R-7 is deferred to this story — it is the only unproved row in the RA family
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-10 — Close the transform-totality holes before RT-2 implements](RT-10-close-the-normalisation-totality-holes.md) · Routing · found reviewing RT-6 — N12's totality claim does not hold as written

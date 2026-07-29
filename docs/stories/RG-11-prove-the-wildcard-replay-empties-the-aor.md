@@ -2,7 +2,7 @@
 id: RG-11
 title: Prove that a replayed credential empties the AoR through the wildcard path
 pillar: Signalling
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location

@@ -2,7 +2,7 @@
 id: EX-10
 title: Give `overrides` a schema, or remove it from the composition rule
 pillar: Extensions
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/extension-framework.md
 epic: extension-framework
