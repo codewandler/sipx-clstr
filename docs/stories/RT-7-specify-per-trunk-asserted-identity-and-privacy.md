@@ -2,8 +2,8 @@
 id: RT-7
 title: Specify per-trunk asserted identity and privacy policy
 pillar: Signalling
-status: backlog
-priority: 
+status: ready
+priority: 2
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, trunks, privacy]

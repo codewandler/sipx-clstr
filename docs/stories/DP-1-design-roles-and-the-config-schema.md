@@ -2,8 +2,8 @@
 id: DP-1
 title: Design roles and the config schema
 pillar: Cluster
-status: backlog
-priority: 
+status: ready
+priority: 1
 design: docs/designs/deployment.md
 epic: deployment
 areas: [deploy]

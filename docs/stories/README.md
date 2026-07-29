@@ -47,9 +47,18 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ## Next (ready — take the top one unless the user named a story)
 
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
+
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
+- [EX-8 — Make the async query declaration normative in the hook-framework spec](EX-8-make-the-async-query-declaration-normative.md) · Platform · filed by EX-6 — the design is accepted, the spec does not yet say it
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
+
+### Outbound routing & trunks
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
+- [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling
 
 ## Blocked
 _None._
@@ -73,7 +82,6 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
-- [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
 - [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
 - [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
@@ -92,7 +100,6 @@ _Extensions become declared modules over typed hook phases, never edits to the c
 - [EX-3 — Implement the hook runtime](EX-3-implement-the-hook-runtime.md) · Platform · blocked by EX-1
 - [EX-4 — Implement registry codegen for syntax artifacts](EX-4-implement-registry-codegen-for-syntax-artifacts.md) · Platform · UPSTREAM decision per artifact
 - [EX-5 — Implement deployment profiles with compatibility checking](EX-5-implement-deployment-profiles-with-compatibility-checking.md) · Platform
-- [EX-8 — Make the async query declaration normative in the hook-framework spec](EX-8-make-the-async-query-declaration-normative.md) · Platform · filed by EX-6 — the design is accepted, the spec does not yet say it
 
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
@@ -130,7 +137,6 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
 - [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
 - [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone
-- [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling
 - [RT-8 — Express source-IP admission as reviewable config](RT-8-express-source-ip-admission-as-config.md) · Signalling · admission is the whole security boundary when no user is authenticated
 - [RT-9 — Specify tenant-scoped route selection](RT-9-specify-scoped-route-selection.md) · Signalling · several pools can be 'default' at once; a single global default cannot express it
 
