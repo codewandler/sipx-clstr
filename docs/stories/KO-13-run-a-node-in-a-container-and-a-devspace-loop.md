@@ -2,7 +2,7 @@
 id: KO-13
 title: Run a node in a container and a devspace loop
 pillar: Cluster
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
@@ -21,7 +21,10 @@ call between them.
 - [x] A `Dockerfile` builds the `sipx-clstr` binary and produces an image that runs it unprivileged.
 - [x] A devspace profile builds that image and deploys a node to a local cluster.
 - [x] A scripted acceptance run registers two users and places a call between them, through the node.
-- [ ] The acceptance run passes against the node **scheduled in Kubernetes**, not only in containers.
+- [x] The acceptance run passes against the node **scheduled in Kubernetes**, not only in containers.
+      Proved by `DP-9`: `scripts/k8s-two-node-call.sh` runs the full register-and-call against two
+      pods in the k3d cluster, ending in a completed call with audio (`heard_audio: true`, 24000
+      samples).
 - [x] What the setup does *not* prove is stated where a reader will hit it, not buried.
 
 ## Progress
