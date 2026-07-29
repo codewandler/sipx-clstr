@@ -9,18 +9,15 @@
 # dependencies; asking for the whole workspace would build the simulator and the test harness into
 # an image that never runs them.
 
-# NOT the workspace's `rust-version = "1.88"`. That floor is wrong today: on 1.88 the kernel's
-# `sipx-transport` fails to compile, because `BinaryHeap::<T>::new`'s `T: Ord` bound was only
-# relaxed in a later rustc —
+# The workspace's `rust-version`, which `CF-9` made true: the floor was 1.88, the workspace did
+# not build on it, and this image pinned 1.97 as a stopgap. The floor is now 1.94 — measured, and
+# re-measured on every gate run and every CI run by `scripts/check-msrv.sh`.
 #
-#   error[E0277]: the trait bound `I: Ord` is not satisfied
-#   note: required for `timers::Entry<K, I>` to implement `Ord`
-#   note: required by a bound in `BinaryHeap::<T>::new`
-#
-# A development machine on current stable never sees it, which is exactly why an image pinned to
-# the declared floor is what caught it. Filed as its own story; this pin is the workaround, not
-# the fix, and it comes back to the declared floor once that story settles.
-ARG RUST_VERSION=1.97
+# Building the image on the declared floor rather than on current stable is deliberate. It is what
+# caught the original defect, and it keeps catching it: a development machine runs stable and
+# stable builds everything, so this pin is one of the few places the claim is actually exercised.
+# Keep it equal to `rust-version` in Cargo.toml.
+ARG RUST_VERSION=1.94
 
 # ---------------------------------------------------------------------------------- builder ---
 FROM rust:${RUST_VERSION}-bookworm AS builder

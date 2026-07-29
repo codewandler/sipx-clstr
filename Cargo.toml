@@ -8,9 +8,24 @@ members = ["crates/*"]
 # number nobody could act on. It starts being meaningful when M1's exit criteria hold.
 version = "0.7.0"
 edition = "2024"
-# Matches the kernel's floor. Raising it above sipx's would make this platform unbuildable on a
-# toolchain that can build what it depends on, which is a strange thing to ask of anyone.
-rust-version = "1.88"
+# Derived by building, not by copying: `scripts/check-msrv.sh` compiles the workspace on this
+# exact toolchain, and the gate and CI both run it. The previous value (1.88) claimed to "match
+# the kernel's floor" and was never checked, so it was simply false — on 1.88 the workspace does
+# not compile at all.
+#
+# 1.94 is the lowest release that works, established by bisecting 1.88 → 1.97: 1.88, 1.92 and
+# 1.93 fail; 1.94 and 1.95 pass. The boundary is in the kernel rather than here. sipx-transport's
+# `impl<K, I> Default for TimerQueue<K, I>` calls `BinaryHeap::new()`, and `BinaryHeap::<T>::new`
+# carried a `T: Ord` bound that rustc only relaxed in 1.94:
+#
+#   error[E0277]: the trait bound `I: Ord` is not satisfied
+#   note: required by a bound in `BinaryHeap::<T>::new`
+#
+# So this floor is a property of the pinned kernel tag, and it must be re-derived — not carried
+# forward — whenever the `sipx-*` pin below moves. Bounding that `Default` impl upstream would let
+# both projects go back down; until then, raising ours is the only honest option, because a floor
+# that names a compiler the code cannot be built with is worth less than no floor at all.
+rust-version = "1.94"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/codewandler/sipx-clstr"
 authors = ["Timo Friedl <timofriedlberlin@gmail.com>"]
