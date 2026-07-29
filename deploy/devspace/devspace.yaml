@@ -1,13 +1,17 @@
 version: v2beta1
 name: sipx-clstr-dev
 
-# A development loop for a single node against a local cluster.
+# A development loop for a two-node cluster against a local Kubernetes cluster.
 #
-# Scope, stated plainly so nobody reads more into a green run than it proves: this stands up ONE
-# process that is both registrar and forwarding core, on UDP only, with the in-memory location
-# store. It proves that the binary registers a contact and proxies a request to it. It does not
-# prove clustering, zone spread, media, HA of the store, TCP or TLS, or anything the operator does
-# — there is no operator here (see `deploy/devspace/manifests/node.yaml`).
+# Scope, stated plainly so nobody reads more into a green run than it proves: this stands up TWO
+# node processes, each both registrar and forwarding core, on UDP only, sharing ONE PostgreSQL
+# location service. It proves that a user registered through one node can be called through the
+# other, with audio — which is the smallest honest use of the word "cluster".
+#
+# It does not prove: mid-dialog routing behind a single Service (each node record-routes its own pod
+# IP, so the route set names a pod — a shared ClusterIP needs affinity tokens, which are specified
+# and not implemented), zone spread, media relaying, HA of the store, TCP or TLS, or anything the
+# operator does — there is no operator here (see `deploy/devspace/manifests/node.yaml`).
 
 vars:
   NAMESPACE:
@@ -55,9 +59,16 @@ pipelines:
     start_dev --all
 
 commands:
-  # The acceptance run: register two users and place a call between them, through the node.
+  # The acceptance run: two `sipx` CLI phones register through *different* nodes, then one calls the
+  # other with audio. The phones run in-cluster because this is the only arrangement whose routing is
+  # unambiguous; see the script's header.
   demo: |-
+    ../../scripts/k8s-two-node-call.sh --namespace ${NAMESPACE}
+
+  # The single-node signalling check, kept because it needs nothing but Python and is the fastest way
+  # to tell whether a node is answering at all.
+  smoke: |-
     kubectl --namespace ${NAMESPACE} delete pod sipx-demo --ignore-not-found --wait=true
     kubectl --namespace ${NAMESPACE} run sipx-demo \
       --image=python:3.12-slim --restart=Never --attach --rm \
-      --command -- python3 -c "$(cat scripts/sip_demo.py)"
+      --command -- python3 -c "$(cat ../../scripts/sip_demo.py)"

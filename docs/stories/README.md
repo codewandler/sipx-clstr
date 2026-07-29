@@ -58,6 +58,13 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 _Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
 
+### Fail-closed configuration
+_The configuration document is now the *only* configuration surface (`DP-8` wrote the loader, `DP-10`_
+- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · a document declaring transport tls binds plaintext UDP and answers 200 OK — measured, not inferred
+- [FC-2 — Make unapplied configuration visible at startup, at the depth the keys actually live](FC-2-make-unapplied-configuration-visible-at-startup.md) · Cluster · the warning exists, is correct, and reaches nobody — it is logged before the subscriber is installed
+- [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
+- [FC-4 — Apply or refuse the per-tenant policy fields — domains, expiry and maxBindingsPerAor](FC-4-apply-or-refuse-the-per-tenant-policy-fields.md) · Cluster · domains parses into a struct field nothing reads — a REGISTER for an undeclared domain is accepted
+
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-14 — Bring the chart's values to the config schema, starting with the media block that cannot boot](KO-14-bring-the-chart-to-the-config-schema.md) · Cluster · DP-1 found the shipped default set declares a media policy G-M6 refuses to start on
@@ -88,7 +95,6 @@ _The operational contract: roles by config, a reference topology, and an honest 
 - [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
 - [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
 - [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
-- [DP-9 — Prove registration and a call across two nodes in a local cluster](DP-9-prove-a-call-across-two-nodes-in-devspace.md) · Cluster · the first multi-node proof — register through one node, be called through another
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
@@ -162,6 +168,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
+- [DP-9 — Prove registration and a call across two nodes in a local cluster](DP-9-prove-a-call-across-two-nodes-in-devspace.md) · Cluster · proved twice — two local processes, and two pods in k3d, both with audio
 - [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
 - [DX-1 — Split the published site from the internal docs tree](DX-1-split-the-site-from-the-internal-docs-tree.md) · Foundation · the old link gate would have gone green by no longer looking — inverted rather than dropped
 - [DX-2 — Lay down the site's information architecture, navigation and landing page](DX-2-lay-down-the-information-architecture.md) · Foundation · URLs are stable from the start — stub pages beat stub URLs that move later

@@ -9,6 +9,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A cluster, in the smallest honest sense of the word** (`DP-9`). Two nodes, one configuration
+  document, one PostgreSQL location service: a user who registers through one node can be called
+  through the other, with audio. Proved twice — `scripts/two-node-call.sh` for two local processes and
+  `scripts/k8s-two-node-call.sh` for two pods in a local Kubernetes cluster.
+
+  The in-cluster run reads its evidence back out of the cluster rather than assuming it: two pods on
+  distinct IPs, both logging `store="postgres"`, one ConfigMap resolved per node through `${POD_IP}`,
+  **two bindings in one database written by two different pods**, and then a call from alice that
+  node-a forwarded to bob — whose REGISTER it never saw — with 24000 samples recorded and
+  `heard_audio: true`. Media went directly between the phones, because there is no relay to go
+  through.
+
+  Both scripts print what they do **not** prove: each node record-routes its own address, so the route
+  set names a node. Put a single Service or VIP in front of the two and in-dialog requests will spread
+  across both, which is exactly the case affinity tokens exist for and they are not implemented.
+
 - **The cluster configuration schema is executable** (`DP-8`). `DP-1` specified one cluster-scoped
   document and nothing read it, so the binary still had the three provisional flags its own source
   calls placeholders. `load(bytes, identity, env)` is now a pure function returning either a config
