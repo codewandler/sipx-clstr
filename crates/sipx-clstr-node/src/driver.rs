@@ -48,6 +48,26 @@ pub struct NodeConfig {
     /// nothing look like a node that is up, and a default that quietly invented a realm would put a
     /// protection space in the deployment that nobody configured.
     pub auth: Option<AuthConfig>,
+    /// Where registrations live (`RG-12`).
+    ///
+    /// In-process by default, which is the only thing a single node needs. Two nodes that must agree
+    /// about a registration need [`StoreChoice::Postgres`] — an in-process store on each of two
+    /// nodes is not a cluster, it is two registrars each answering only for whoever happened to
+    /// reach it.
+    pub store: StoreChoice,
+}
+
+/// Which location service backs this node (`RG-12`, location-service §6.2).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StoreChoice {
+    /// Process-local. Bindings die with the process, and no peer can see them.
+    #[default]
+    InMemory,
+    /// The shared `PostgreSQL` location service (`RG-4`).
+    ///
+    /// The DSN is the *resolved* value: `cluster-config` §8 V9 keeps only a `dsnRef` in the
+    /// document, and resolving it is IO, which is this layer's job and not the loader's.
+    Postgres { dsn: String },
 }
 
 /// A tenant's digest policy: the realm it challenges in, its nonce key, and its credentials.
@@ -73,6 +93,7 @@ impl NodeConfig {
             listeners,
             tenant: "default".to_owned(),
             auth: None,
+            store: StoreChoice::InMemory,
         }
     }
 
@@ -135,6 +156,40 @@ pub enum NodeError {
     /// given (`DP-1` owns certificate configuration).
     #[error("no UDP or TCP listener is declared, and a TLS-only node cannot be served yet")]
     NoCleartextListener,
+    /// The configured location service could not be reached (`RG-12`).
+    ///
+    /// Refusing to start is the only correct answer. A registrar that fell back to an in-process
+    /// store would come up healthy, answer `200` to every REGISTER, and serve bindings no peer can
+    /// see — which is worse than not starting, because nothing would say so.
+    #[error("the configured location store could not be reached: {0}")]
+    LocationStoreUnreachable(String),
+}
+
+/// Open the location service this node was configured for (`RG-12`).
+///
+/// The `postgres` feature is what compiles the backend in; a node asking for it in a build without
+/// it is a configuration that cannot be honoured, and saying so is better than quietly using a
+/// different store than the one that was asked for.
+/// # Errors
+///
+/// [`NodeError::LocationStoreUnreachable`] when the configured store cannot be opened.
+pub fn open_store(choice: &StoreChoice) -> Result<Arc<dyn LocationStore + Send + Sync>, NodeError> {
+    match choice {
+        StoreChoice::InMemory => Ok(Arc::new(InMemoryStore::new())),
+        #[cfg(feature = "postgres")]
+        StoreChoice::Postgres { dsn } => {
+            // Connect here, at startup, rather than lazily on the first REGISTER. A registrar that
+            // discovers its store is gone while answering a request has already told the client it
+            // was up.
+            let store = crate::postgres_store::PostgresStore::connect(dsn)
+                .map_err(|error| NodeError::LocationStoreUnreachable(error.to_string()))?;
+            Ok(Arc::new(store))
+        }
+        #[cfg(not(feature = "postgres"))]
+        StoreChoice::Postgres { .. } => Err(NodeError::LocationStoreUnreachable(
+            "this binary was built without the `postgres` feature".to_owned(),
+        )),
+    }
 }
 
 /// Run the node until the process is asked to stop.
@@ -171,7 +226,7 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
         "node listening"
     );
 
-    let store = Arc::new(InMemoryStore::new());
+    let store: Arc<dyn LocationStore + Send + Sync> = open_store(&config.store)?;
     let policy = TenantPolicy::default();
     // One authenticator for the node, because it holds the replay window: a per-request one would
     // forget every nonce-count the moment it was created, which is a replay window that never says
@@ -212,7 +267,7 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
             }
             let proxy = proxy_config_keyed(&config, receiving, cookie_key);
             let edge = Edge {
-                store: &store,
+                store: store.as_ref(),
                 policy: &policy,
                 config: &config,
                 proxy: &proxy,
@@ -317,7 +372,7 @@ fn cookie_key() -> CookieKey {
 /// Everything one arrival is served against. A struct rather than seven arguments, which is what it
 /// had become.
 struct Edge<'a> {
-    store: &'a InMemoryStore,
+    store: &'a (dyn LocationStore + Send + Sync),
     policy: &'a TenantPolicy,
     config: &'a NodeConfig,
     proxy: &'a ProxyConfig,
@@ -419,7 +474,7 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
 
 async fn proxy_request(
     handle: &Handle,
-    store: &InMemoryStore,
+    store: &(dyn LocationStore + Send + Sync),
     config: &NodeConfig,
     proxy: &ProxyConfig,
     arrival: Incoming,
@@ -508,7 +563,7 @@ async fn proxy_request(
 
 async fn perform(
     handle: &Handle,
-    store: &InMemoryStore,
+    store: &(dyn LocationStore + Send + Sync),
     config: &NodeConfig,
     key: &TransactionKey,
     context: &mut ResponseContext,
@@ -559,7 +614,7 @@ async fn perform(
 /// Forward a request with no transaction of its own — an ACK for a 2xx.
 async fn forward_statelessly(
     handle: &Handle,
-    store: &InMemoryStore,
+    store: &(dyn LocationStore + Send + Sync),
     config: &NodeConfig,
     arrival: &Incoming,
 ) -> Result<(), sipx_transport::Error> {

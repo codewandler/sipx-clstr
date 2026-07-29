@@ -44,7 +44,8 @@ through another. This is the first moment the word "cluster" is earned.
 
 ## Notes
 
-- **Blocked by `DP-8` and `RG-12`.** Two nodes with two in-memory stores is not a cluster; it is
+- **Blocked by `DP-8`, `RG-12` and `DP-10`.** `DP-8` reads a document and `RG-12` can act on one;
+  `DP-10` is what makes a running node do both. Two nodes with two in-memory stores is not a cluster; it is
   two unrelated proxies that will each answer for whoever happened to register with them.
 - Deliberately **not** in scope: affinity tokens, flow ownership, registrar sharding, a load
   balancer in front. Those are the `AF-*` and `RG-5` work. This story is the smallest honest

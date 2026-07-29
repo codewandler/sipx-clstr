@@ -54,6 +54,10 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · proved at wave 4 — a fabricated AI row passes the gate, so 145 rows are unenforced prose
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
 
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
+
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
@@ -136,7 +140,6 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 _The one place the platform is allowed durable state — so its updates must serialize._
 - [RG-5 — Implement rendezvous sharding and shard handoff](RG-5-implement-rendezvous-sharding-and-shard-handoff.md) · Signalling
 - [RG-7 — Support migrating an existing credential store](RG-7-support-migrating-an-existing-credential-store.md) · Signalling · gates a downstream registrar cutover
-- [RG-12 — Reach a shared location store from a running node](RG-12-reach-a-shared-location-store-from-a-node.md) · Signalling · blocked by DP-8 — RG-4 built the Postgres store and driver.rs still hardcodes InMemoryStore
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
@@ -201,6 +204,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-9 — Say what digest actually protects, and decide whether that is enough](RG-9-say-what-digest-actually-protects.md) · Signalling · found reviewing RG-8 — RA-R-2 reads stronger than the mechanism delivers
 - [RG-10 — Say that a replayed credential can de-register every binding](RG-10-say-that-a-replayed-credential-can-deregister-everything.md) · Signalling · found reviewing RG-9 — §7.2 understates the exposure it exists to state
 - [RG-11 — Prove that a replayed credential empties the AoR through the wildcard path](RG-11-prove-the-wildcard-replay-empties-the-aor.md) · Signalling · RA-R-7 is deferred to this story — it is the only unproved row in the RA family
+- [RG-12 — Reach a shared location store from a running node](RG-12-reach-a-shared-location-store-from-a-node.md) · Signalling · the store is selectable and refuses to fall back; reading a document at startup is DP-10
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling · two rework rounds — the user privacy level was advertised as performed while a third of it was not

@@ -27,8 +27,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   silently ignored would be configuration nobody applies with nothing saying so, which is the
   failure V2 exists to prevent, one level up.
 
+- **A node can be pointed at a shared location store** (`RG-12`). `RG-4` built the PostgreSQL
+  location service and proved it satisfies the store contract; nothing made it reachable, because
+  `driver::run` opened `InMemoryStore::new()` unconditionally. Two nodes were therefore two islands,
+  each answering only for whoever happened to reach it. `NodeConfig` now carries a `StoreChoice` and
+  the driver opens what it names.
+
+  A configured store that cannot be reached **stops the node**, connected eagerly at startup rather
+  than lazily on the first `REGISTER`. Falling back to memory would produce a registrar that comes up
+  healthy, answers `200` to everything, and serves bindings no peer can see — with nothing saying so.
+
+  The failing-first test demonstrates both halves rather than asserting one: it opens two in-process
+  stores, writes one, reads the other, and requires the second to be **empty**; if that ever passes,
+  the cross-node half has stopped discriminating. It then writes through one PostgreSQL handle, reads
+  it back through a second independently-opened one, and checks a stale-revision write is refused
+  rather than merged. Run against a real database, not skipped.
+
 ### Known gaps
 
+- **Nothing reads a cluster document at startup yet** (`DP-10`). The loader parses one and the driver
+  can act on one, and `main.rs` still builds its configuration from the three provisional flags. Until
+  that lands, neither half is reachable from a running node, and the two-node proof (`DP-9`) is
+  blocked behind it.
 - **The config loader pulls `unsafe-libyaml` into the tree**, through `serde_yaml_ng`. Non-negotiable
   #3 forbids `unsafe`, and the workspace lint enforces it for crates *in* this workspace, so the gate
   passed without comment. The exposure is an operator-supplied document rather than network input,
