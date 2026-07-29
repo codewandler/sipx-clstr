@@ -11,7 +11,9 @@ the first real implementation — the NG control protocol spoken to an rtpengine
 ## 1. Normative references
 
 - **RFC 3264** — the offer/answer model with SDP. Fixes what `offer`, `answer` and a re-offer
-  mean, and (§3) that an offer belongs to the agent that generated it — the rule behind O4.
+  mean, and (§3) that an offer belongs to the agent that generated it — the rule behind O4. §6: a
+  stream whose offered formats are unacceptable is rejected by setting its port to zero — the
+  outcome MP3 makes visible rather than papers over.
 - **RFC 8866** — SDP (obsoletes RFC 4566). The body this port carries; its tolerance for
   attributes an intermediary does not understand is why §3.2 O3 forbids re-serializing one.
 - **RFC 6337** — SIP usage of the offer/answer model: where in a dialog an offer may legally
@@ -26,8 +28,22 @@ the first real implementation — the NG control protocol spoken to an rtpengine
 - **RFC 8445** §12 — ICE nominates the highest-priority working candidate pair, which is why an
   anchored call may not offer the relay as a low-priority candidate (§7.3).
 - **RFC 5761** — multiplexing RTP and RTCP on one port (the `rtcp-mux` key, §7.2).
-- **RFC 5763** and **RFC 4568** — DTLS-SRTP and SDES; keys that exist in the mapping and that
-  version 1 deliberately does not send (§7.4).
+- **RFC 3711** — SRTP, and the `RTP/SAVP` profile name. What "this leg is encrypted" means, and
+  the subject of §13's `SrtpPolicy`. §9.5 — the authentication tag length, which is the whole
+  difference between §13.1's two crypto-suite sets.
+- **RFC 4568** — SDES: keying material carried in the description itself (`a=crypto`), and §6.2,
+  the two SRTP crypto suites §13.1 admits. §7.2 requires that a description carrying a key be
+  protected in transit, which is why MP7 is a startup error rather than a warning.
+- **RFC 5764** and **RFC 5763** — DTLS-SRTP: keys negotiated in the media path, with only a
+  certificate fingerprint in the description, and its SIP/SDP framing. RFC 5764 §8 names the
+  `UDP/TLS/RTP/SAVP` profile §13.3 sends.
+- **RFC 8122** — the `a=fingerprint` attribute DTLS-SRTP's integrity rests on, and RFC 4145 §4.1 —
+  the `setup` attribute, whose passive and active roles are what §13.1's `DtlsRole` selects
+  between.
+- **RFC 3551** — the `RTP/AVP` profile name, the third and last member of §13.3's closed
+  `transport-protocol` set. The feedback profiles (`RTP/AVPF`, `RTP/SAVPF`) are deliberately not
+  in it: nothing in version 1 decides whether a leg carries RTCP feedback, and a policy that
+  cannot decide something must not assert it.
 - **RFC 3550** §6.4 — RTCP reception statistics; the shape of what `query` reports (§3.2 Q).
 - **RFC 768** — UDP. Unreliable, unordered, undelivered without notice, and bounded by one
   datagram: the three facts §6.3 D10, §8 and §9 are built on.
@@ -59,6 +75,8 @@ the first real implementation — the NG control protocol spoken to an rtpengine
 | the command mapping and the keys sent (§7) | pool membership, host networking, port ranges (`KO-7`) |
 | retransmission budget and timers (§8) | media transport itself — the platform never touches a packet |
 | the error taxonomy and health model (§9, §10) | SDP semantics: nothing here reads the body |
+| the per-trunk codec and SRTP policy, and the keys it derives (§13) | where a trunk object lives, and how it is configured and versioned (`RT-2`) |
+| that a carrier quirk profile may *constrain* media policy and never set it (§13.6) | the quirk-profile vocabulary itself (`EX-7`) |
 
 **Upstream considerations** (AGENTS.md rule 6): considered for upstream — **no**. `MediaRelay`
 and its NG binding stay in sipx-clstr, because both are platform orchestration rather than SIP
@@ -69,6 +87,16 @@ be protocol-generic — an SDP model — is deliberately not required: O3 keeps 
 end to end, so neither repository needs an SDP parser for `ME-2`. If a later story must *read* the
 body (`ME-4`'s latching decision may), that parser is protocol-generic and becomes a row in the
 [upstream ledger](../upstream.md) at that point, not now.
+
+**Upstream considerations for §13** (`ME-6`, same rule): considered for upstream — **no**.
+Per-trunk codec and SRTP policy is orchestration in the strict sense: its subject is a *trunk*, an
+object the kernel does not have and should not grow, and its whole output is a set of NG control
+keys for a relay the kernel never talks to. What is protocol-generic nearby — an SDP model, and
+RFC 3264 offer/answer bookkeeping — is again not required, because MP1 makes the derivation a
+function of declared policy alone and MP10 forbids reading the body to decide *or* to verify. The
+day a policy must be chosen by inspecting what a peer offered, that inspection needs a parser, and
+that parser is a row in the [upstream ledger](../upstream.md) — the same row §2 already reserves
+for `ME-4`, not a second one.
 
 ## 3. The `MediaRelay` port
 
@@ -96,6 +124,8 @@ pub struct OfferRequest {
     pub interfaces: Option<(InterfaceName, InterfaceName)>,  // initial offer only — §7.2
     pub ice: IcePolicy,
     pub class: CallClass,        // the tenant's per-call-class media policy (ME-4)
+    pub toward: TrunkMediaPolicy,// the declared policy of the peer that receives the returned
+                                 // SDP — §13, MP4. Not the caller's, not the call's
 }
 
 pub struct AnswerRequest { /* as OfferRequest, `to_tag` required, no `interfaces` */ }
@@ -394,9 +424,9 @@ Version 1 sends these commands and no others.
 
 | Port method | NG `command` | Required keys | Optional keys sent | Success reply |
 |---|---|---|---|---|
-| `offer` (initial) | `offer` | `command`, `call-id`, `from-tag`, `sdp` | `ICE`, `direction`, `received from`, `replace`, `supports`, `via-branch` | `result` = `ok`, plus `sdp` |
-| `answer` | `answer` | `command`, `call-id`, `from-tag`, `to-tag`, `sdp` | `ICE`, `received from`, `replace`, `supports`, `via-branch` | `result` = `ok`, plus `sdp` |
-| `update` (re-offer) | `offer` | `command`, `call-id`, `from-tag`, `to-tag`, `sdp` | as `answer` — no `direction` (U4) | `result` = `ok`, plus `sdp` |
+| `offer` (initial) | `offer` | `command`, `call-id`, `from-tag`, `sdp`, `transport-protocol`, `DTLS` (M4) | `ICE`, `SDES`, `codec`, `direction`, `received from`, `replace`, `supports`, `via-branch` | `result` = `ok`, plus `sdp` |
+| `answer` | `answer` | `command`, `call-id`, `from-tag`, `to-tag`, `sdp`, `transport-protocol`, `DTLS` (M4) | `ICE`, `SDES`, `codec`, `received from`, `replace`, `supports`, `via-branch` | `result` = `ok`, plus `sdp` |
+| `update` (re-offer) | `offer` | `command`, `call-id`, `from-tag`, `to-tag`, `sdp`, `transport-protocol`, `DTLS` (M4) | as `answer` — no `direction` (U4) | `result` = `ok`, plus `sdp` |
 | `delete` | `delete` | `command`, `call-id`, `from-tag` | `to-tag`, `via-branch` | `result` = `ok`, optionally statistics and `warning` |
 | `query` | `query` | `command`, `call-id` | `from-tag`, `to-tag` | `result` = `ok`, plus `created`, `last signal`, `tags`, `totals` |
 | health probe (§10) | `ping` | `command` | — | `result` = `pong` |
@@ -408,6 +438,13 @@ Version 1 sends these commands and no others.
   to be anchored sends media somewhere nobody is listening.
 - **M3** `result` values recognised: `ok`, `error`, `pong`, `load limit`. Any other value is
   `Malformed`.
+- **M4 — four keys are derived from the receiving peer's declared trunk policy** (§13), and only
+  from it: `transport-protocol`, `DTLS`, `SDES` and `codec`. The first two are sent on every
+  `offer`, `answer` and re-offer without exception, including where the policy is "no SRTP", so
+  that no leg's security depends on a node default (MP8a). The other two are sent when they
+  restrict something and are absent otherwise, because an empty restriction has no encoding but
+  absence (MP8b, E4). `delete`, `query` and `ping` carry none of the four — they negotiate
+  nothing.
 
 ### 7.2 The keys, and why each is sent
 
@@ -421,6 +458,10 @@ Version 1 sends these commands and no others.
 | `replace` | `["origin", "SDP-version"]` | origin-address rewrite keeps the endpoint's address out of the body that leaves the platform; version control keeps the SDP version monotone across a rewrite, which RFC 8866 §5.2 requires a modified description to observe |
 | `supports` | `["load limit"]` | REQUIRED on every `offer`, `answer` and `update`. This is what makes overload a distinguishable outcome instead of a rejection (§9); without it a full node is indistinguishable from a node that refused the request, and the reselection decision inverts |
 | `ICE` | §7.3 | |
+| `transport-protocol` | one of `RTP/AVP`, `RTP/SAVP`, `UDP/TLS/RTP/SAVP` | M4, MP8a. The receiving peer's declared SRTP mode, and nothing else (§13.3). The set is closed: RFC 3551, RFC 3711 and RFC 5764 §8 name all three |
+| `SDES` | `["off"]`, or a one-entry suite restriction; absent when the policy neither forbids SDES nor excludes a suite | M4, MP8b, §13.3 |
+| `DTLS` | `["off"]`, `["passive"]` or `["active"]` | M4, MP8a, §13.3. RFC 4145 §4.1 is what the two non-`off` values mean |
+| `codec` | a dictionary over `strip`, `offer` and `transcode` | M4, MP8b. Sent only when the policy manipulates codecs; `offer`/`strip` filter, `transcode` adds, and only `transcode` adds (MP3) |
 
 ### 7.3 The ICE stance
 
@@ -445,10 +486,17 @@ is worse than no anchor, because the platform believes it is in the path.
 
 ### 7.4 What version 1 does not send
 
-No DTLS, SDES, transcoding, codec manipulation, recording, transport-protocol rewriting,
-call-metadata or label key is sent. Each is a real capability of the integration target and each
-is a decision this spec is not entitled to make on a tenant's behalf; adding one is a story that
-amends §7.1, §7.2 and §12, so the bytes and the tests move together.
+`ME-6` took up the invitation this section used to extend, and did it the way the section asked:
+DTLS, SDES, transcoding, codec manipulation and transport-protocol rewriting **are** sent, as the
+derivation of a declared per-trunk policy and only ever that (§13), and §7.1, §7.2 and §12 moved
+with the bytes. The reason the original list existed is preserved rather than discarded — those
+are decisions this spec is not entitled to make on a tenant's behalf, so it does not make them: it
+fixes how a tenant's own declaration reaches the wire, and MP2 keeps every one of them off by
+default.
+
+Still unsent, and for the same original reason: recording, call-metadata and label keys, and any
+`transport-protocol` value outside the closed set of §13.3. Adding one is a story that amends
+§7.1, §7.2 and §12, so the bytes and the tests move together.
 
 ### 7.5 Commands version 1 does not use
 
@@ -591,12 +639,21 @@ every rule cites an RFC, another spec in this directory, or a property of UDP.
   candidate, re-verify every `MR-E` vector byte-for-byte, amend this section and §12 with anything
   that moved, and update the chart in the same change. Later series exist and are untested here;
   running against one is an explicit, recorded decision.
+- **V5 — §13.3's option spellings are unconfirmed until `CF-3` has run** (`ME-6`). The four keys
+  §13 adds are *this spec's* contract for what the encoder produces, and §12.2 pins those bytes
+  exactly. What they are not yet is confirmed to be the spelling the §11 baseline honours. That
+  gap is not symmetric with the rest of §7: a node that does not recognise `ICE` gives a worse
+  anchor, and a visible one, whereas a node that does not recognise `transport-protocol` or `SDES`
+  gives **clear-text media on a leg whose policy said encrypted** — silently, because D7's
+  ignore-unknown-keys discipline binds the far end as much as it binds us. MP12 is therefore a
+  hard precondition on `ME-2` rather than a note, and MR-C-8 is the vector that discharges it.
 
 ## 12. Test vectors
 
 Normative. `ME-2`'s tests derive from these; `CF-3` replays the `MR-E` and `MR-X` families against
-a real node at the §11 baseline. Six families: `MR-T` port semantics, `MR-N` the null relay,
-`MR-E` encoding (byte-exact), `MR-X` exchange and timers, `MR-F` faults, `MR-H` health.
+a real node at the §11 baseline. Eight families: `MR-T` port semantics, `MR-N` the null relay,
+`MR-E` encoding (byte-exact), `MR-X` exchange and timers, `MR-F` faults, `MR-H` health, and —
+added by `ME-6` — `MR-P` per-trunk media policy and `MR-C` its configuration validation (§12.5).
 
 ### 12.1 Port semantics (MR-T) and the null relay (MR-N)
 
@@ -647,6 +704,9 @@ examples of RFC 3261 §24, so no vector names a real host.
 | MR-E-15 | The MR-E-3 bytes followed by one extra byte | `DecodeFault` — trailing bytes (F1, D8) |
 | MR-E-16 | A reply spelling the timestamp key `last_signal` | decodes identically to one spelling it `last signal` (D11) |
 | MR-E-17 | A cookie of 33 characters, or one containing a space | rejected before decoding (§6.1, §6.2) |
+| MR-E-18 | Initial `offer` as MR-E-2, toward a trunk declaring `Restrict([PCMA, PCMU])`, `Transcode::None`, `Sdes { Sha1_80Only }` | the block below. `codec` carries `offer` and `strip` and **no** `transcode` (MP3); `SDES` carries the one suite exclusion; `transport-protocol` is `RTP/SAVP` (§13.3) |
+| MR-E-19 | `answer` as MR-E-4, toward a trunk declaring the identity policy `{ AsReceived, None, Disabled }` | the block below. **No** `codec` key at all (MP8b); `transport-protocol`, `SDES` and `DTLS` all present and all saying "no SRTP" (MP8a) |
+| MR-E-20 | Initial `offer` toward a trunk declaring `Restrict([PCMA])`, `To([PCMA])`, `DtlsSrtp { Passive }` | the block below. `codec` carries all three subkeys; `DTLS` is `["passive"]`; `transport-protocol` is `UDP/TLS/RTP/SAVP` (RFC 5764 §8) |
 
 ```rust
 // MR-E-1 — ping request; 25 bytes on the wire
@@ -705,6 +765,27 @@ b"0007_37 d6:result2:ok7:warning38:Call-ID not found or tags didn't matche"
 b"0007_38 d3:sdp112:v=0\r\no=alice 2890844526 2890844527 IN IP4 192.0.2.50\r\ns=-\r\nc=IN IP4 192.0.2.50\r\nt=0 0\r\nm=audio 30000 RTP/AVP 0\r\n6:result2:ok10:future-keyi1ee"
 ```
 
+The three blocks below are `ME-6`'s, and each is MR-E-2 or MR-E-4 with one thing changed — the
+`toward` policy — so a diff against those blocks is exactly the policy's effect on the wire and
+nothing else. Note where E3's raw-byte order puts the new keys: `DTLS`, `ICE` and `SDES` lead the
+dictionary because uppercase sorts before lowercase, `codec` falls between `call-id` and
+`command`, and `transport-protocol` between `to-tag` and `via-branch`.
+
+```rust
+// MR-E-18 — initial offer, codec restriction and SDES; 501 bytes on the wire
+b"0007_39 d4:DTLSl3:offe3:ICEl7:defaulte4:SDESl26:no-AES_CM_128_HMAC_SHA1_32e7:call-id22:a84b4c76e66710@invalid5:codecd5:offerl4:PCMA4:PCMUe5:stripl3:allee7:command5:offer9:directionl4:priv3:pube8:from-tag10:192830177413:received froml3:IP412:198.51.100.7e7:replacel6:origin11:SDP-versione3:sdp116:v=0\r\no=alice 2890844526 2890844526 IN IP4 198.51.100.7\r\ns=-\r\nc=IN IP4 198.51.100.7\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0\r\n8:supportsl10:load limite18:transport-protocol8:RTP/SAVP10:via-branch16:z9hG4bK776asdhdse"
+```
+
+```rust
+// MR-E-19 — answer, the identity policy; 425 bytes on the wire
+b"0007_3a d4:DTLSl3:offe3:ICEl7:defaulte4:SDESl3:offe7:call-id22:a84b4c76e66710@invalid7:command6:answer8:from-tag10:192830177413:received froml3:IP411:203.0.113.9e7:replacel6:origin11:SDP-versione3:sdp116:v=0\r\no=alice 2890844526 2890844526 IN IP4 198.51.100.7\r\ns=-\r\nc=IN IP4 198.51.100.7\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0\r\n8:supportsl10:load limite6:to-tag7:a6c85cf18:transport-protocol7:RTP/AVP10:via-branch16:z9hG4bK776asdhdse"
+```
+
+```rust
+// MR-E-20 — initial offer, transcoding and DTLS-SRTP; 503 bytes on the wire
+b"0007_3b d4:DTLSl7:passivee3:ICEl7:defaulte4:SDESl3:offe7:call-id22:a84b4c76e66710@invalid5:codecd5:offerl4:PCMAe5:stripl3:alle9:transcodel4:PCMAee7:command5:offer9:directionl4:priv3:pube8:from-tag10:192830177413:received froml3:IP412:198.51.100.7e7:replacel6:origin11:SDP-versione3:sdp116:v=0\r\no=alice 2890844526 2890844526 IN IP4 198.51.100.7\r\ns=-\r\nc=IN IP4 198.51.100.7\r\nt=0 0\r\nm=audio 49170 RTP/AVP 0\r\n8:supportsl10:load limite18:transport-protocol16:UDP/TLS/RTP/SAVP10:via-branch16:z9hG4bK776asdhdse"
+```
+
 ### 12.3 Exchange and timers (MR-X)
 
 Virtual time throughout; `t` is milliseconds from the moment the command is issued.
@@ -745,7 +826,371 @@ Virtual time throughout; `t` is milliseconds from the moment the command is issu
 | MR-H-9 | Pool membership withdrawn for a `Down` node | removed from the pool; no further probes (H8) |
 | MR-H-10 | A decode fault on a stray datagram | node health unchanged (§9) |
 
-## 13. What this spec does not decide
+### 12.5 Per-trunk media policy (MR-P) and its configuration (MR-C)
+
+`ME-6`'s. `MR-P` runs against the pure derivation of §13.2 MP1 — no node, no socket, no clock —
+so the whole family is a table-driven unit test. `MR-C` runs against configuration loading, and
+every row of it asserts a **refusal to start** rather than a runtime behaviour.
+
+MR-P-1 is the row the story's fourth acceptance item names: *the offer sent to a trunk matches its
+declared policy*. It is asserted as bytes, against MR-E-18, because bytes are the only form of
+"the offer sent to a trunk" that this platform ever holds — O3 and MP10 mean it never holds a
+parsed one.
+
+| # | Given | Expect |
+|---|---|---|
+| MR-P-1 | A trunk declaring `Restrict([PCMA, PCMU])`, `Transcode::None`, `Sdes { Sha1_80Only }`; an `offer` toward it | the keys of MR-E-18, byte for byte (MP1) |
+| MR-P-2 | That policy, ten times, varying Call-ID, tags, branch, source address and body | ten byte-identical key sets: the derivation reads the policy and nothing else (MP1) |
+| MR-P-3 | Two trunks, one `Sdes` and one `Disabled`, and a call routed to each | `RTP/SAVP` toward one and `RTP/AVP` toward the other, with no domain, URI, host or pattern anywhere in either derivation (MP1, MP6) |
+| MR-P-4 | A trunk configuration that omits `transcode` | `Transcode::None`, and no `transcode` subkey on the wire (MP2) |
+| MR-P-5 | `Restrict([PCMA])` with `Transcode::None` | `codec` carries `offer` and `strip` and **no** `transcode`: restricting is not transcoding (MP2, MP3) |
+| MR-P-6 | `AsReceived` with `Transcode::None` | no `codec` key at all — not an empty dictionary (MP8b, E4, MR-E-19) |
+| MR-P-7 | `AsReceived` with `To([PCMA])` | `codec` carries `transcode` and neither `offer` nor `strip` |
+| MR-P-8 | `SrtpPolicy::Disabled` | `transport-protocol` = `RTP/AVP`, `DTLS` = `["off"]`, `SDES` = `["off"]` — all three present on a policy that asks for no encryption (MP8a, MR-E-19) |
+| MR-P-9 | `Sdes { Rfc4568Both }` versus `Sdes { Sha1_80Only }` | `transport-protocol` = `RTP/SAVP` in both; `SDES` absent in the first and one exclusion in the second (§13.3, MP8b) |
+| MR-P-10 | `DtlsSrtp { Passive }` and `DtlsSrtp { Active }` | `UDP/TLS/RTP/SAVP` with `DTLS` = `["passive"]` / `["active"]`, `SDES` = `["off"]` in both (MR-E-20) |
+| MR-P-11 | A call between trunk A (`Disabled`) and trunk B (`Sdes`) | the `offer` carries **B's** keys and the `answer` carries **A's** (MP4) |
+| MR-P-12 | The same call with the trunks exchanged | the mapping exchanges with them. This row exists because MP4 inverted is not an error anywhere — it is clear-text media on the leg that was supposed to be encrypted |
+| MR-P-13 | A re-offer (`update`) on an established session | the same policy keys as the initial offer toward that peer, and still no `direction` (MP4, U4) |
+| MR-P-14 | The signature of `media_keys` | it admits a policy and a command and nothing else: no request, URI, domain, source address, SDP, clock or randomness is in scope (MP1, MP6). The assertion is that the declaration compiles as written |
+| MR-P-15 | A policy applied on `delete`, `query` and `ping` | none of the four keys appears (M4) |
+| MR-P-16 | The `sdp` returned by a successful `offer` under any policy | forwarded verbatim; nothing parses it to confirm the policy was applied (MP10, O3) |
+| MR-C-1 | `Sdes` on a trunk whose signalling transport is UDP or TCP | startup error naming the trunk and the transport; the node does not serve traffic (MP7, G-M1) |
+| MR-C-2 | The same policy on a TLS trunk | accepted (MP7) |
+| MR-C-3 | A quirk profile requiring SRTP, attached to a trunk declaring `Disabled` | startup error naming both the trunk and the profile (MP11, G-M5) |
+| MR-C-4 | Two quirk profiles on one trunk, both requiring SRTP, the trunk declaring `Sdes` | accepted: constraints intersect, and intersecting needs no precedence rule (MP11) |
+| MR-C-5 | A quirk profile carrying a field that *sets* an SRTP mode, a codec list or a transcoding list | rejected: the schema has no such field, so this fails to parse rather than failing to apply (MP11) |
+| MR-C-6 | `Restrict([])`, and a `CodecName` that is empty or not a token, and a list with a duplicate entry | a startup error each, naming the trunk and the entry (G-M2, G-M3, G-M4) |
+| MR-C-7 | A policy other than `{ AsReceived, None, Disabled }` while MP12 holds | startup error naming the trunk and MP12 (G-M6) |
+| MR-C-8 | Each key of §13.3, against a live node at the §11 baseline (`CF-3`) | each is honoured, asserted by observing the **media** — the transport protocol on the leg, and the formats carried — never by parsing the reply's `sdp` in the platform. This is the row that discharges MP12 and V5; a test may read a description, the platform may not (MP10) |
+
+## 13. Per-trunk media policy (`ME-6`)
+
+Normative. This section is numbered after §12 rather than before it because §12's number is cited
+from outside this file; nothing here is subordinate to the vectors, and §12.5 carries its rows.
+
+Which codecs are offered toward a peer, and whether the leg facing that peer is SRTP, are
+properties of the **trunk**. They are declared once, as data, in the trunk's own configuration.
+They are not properties of the call, the request, the caller's domain, the tenant, the time of
+day, or the branch of the routing logic that happened to produce the egress — and §13.2 is
+written so that none of those is even reachable from the decision.
+
+The failure this replaces is worth naming precisely, because it is what makes the rest of the
+section look strict. When the codec offered depends on which arm of a NAT test a call fell
+through, and SRTP is selected by matching a pattern against a domain, then two things are true at
+once: nobody can answer "what do we offer this carrier?" without reading the routing logic, and
+nobody can change the answer for one carrier without editing logic shared by all of them. Neither
+is a bug in any one line. Both are the absence of a declaration.
+
+### 13.1 The policy value
+
+```rust
+/// Everything the media decisions of §13.3 are permitted to read. There is nothing else.
+pub struct TrunkMediaPolicy {
+    pub codecs:    CodecPolicy,
+    pub transcode: Transcode,
+    pub srtp:      SrtpPolicy,
+}
+
+pub enum CodecPolicy {
+    /// Offer what was received, in the order received. The default.
+    AsReceived,
+    /// Keep only these, in this order. A filter over what arrived — never an addition (MP3).
+    Restrict(Vec<CodecName>),
+}
+
+pub enum Transcode {
+    /// No transcoding. The default, and it is emitted rather than assumed (MP2).
+    None,
+    /// Produce these formats, transcoding where the peer did not offer them.
+    To(Vec<CodecName>),
+}
+
+pub enum SrtpPolicy {
+    /// RTP/AVP toward this peer, and any keying the other leg carried is not propagated.
+    Disabled,
+    /// SDES — keys in the description (RFC 4568). Requires confidential signalling (MP7).
+    Sdes { suites: CryptoSuites },
+    /// DTLS-SRTP — keys in the media path (RFC 5764), fingerprint in the description (RFC 8122).
+    DtlsSrtp { role: DtlsRole },
+}
+
+/// Closed, and small on purpose: RFC 4568 §6.2 defines exactly two suites for SRTP, and the
+/// only policy question worth a knob is whether the 32-bit authentication tag is admissible
+/// (RFC 3711 §9.5).
+pub enum CryptoSuites { Rfc4568Both, Sha1_80Only }
+
+/// RFC 4145 §4.1. `Passive` is the default: a relay that accepts the DTLS association rather
+/// than initiating it works from behind a NAT the platform does not control.
+pub enum DtlsRole { Passive, Active }
+
+/// An RTP payload-format name. Byte-compared and case-preserving, like every other token this
+/// spec carries (E2); the platform assigns it no meaning beyond identity.
+pub struct CodecName(Bytes);
+```
+
+`TrunkMediaPolicy` is a field of the trunk object `RT-2` builds. This spec fixes its meaning and
+its effect on the wire; it does not fix where trunks are stored, how they are versioned, or how a
+route plan arrives at one — those are [routing-trunks](../designs/routing-trunks.md)'s.
+
+`OfferRequest` and `AnswerRequest` carry it as `toward` (§3.1): the policy of the peer that
+receives the returned SDP, per MP4.
+
+### 13.2 Rules
+
+- **MP1 — the declared policy is the only input.** The derivation is one total, pure function:
+
+  ```rust
+  fn media_keys(policy: &TrunkMediaPolicy, command: Command) -> Vec<(NgKey, NgValue)>;
+  ```
+
+  Its signature is the enforcement, not a comment about it. There is no request in scope, no URI,
+  no domain, no `From`, no source address, no SDP, no clock and no randomness — so a derivation
+  that consulted one could not be written without changing this line, which is a spec change under
+  review rather than a branch nobody reads. Two calls carrying the same policy produce the same
+  keys, byte for byte, whatever else differs about them (MR-P-2). This is AGENTS.md rule 2 applied
+  to the one decision this story exists to move: the pure part is the policy, and the driver's only
+  remaining job is to put the bytes on a socket.
+
+  `command` is the NG command of §7.1, and it is present for one reason: the derivation yields no
+  keys at all for `delete`, `query` and `ping` (M4, MR-P-15). It does not vary with anything about
+  the call.
+
+- **MP2 — no transcoding unless declared, and the default is written down.** A trunk whose
+  configuration omits `transcode` is `Transcode::None`, and `Transcode::None` appears in the
+  effective-policy record §13.5 exports, so "we do not transcode toward this carrier" is a
+  readable fact rather than the absence of one. Nothing else may turn transcoding on: not a codec
+  list (MP3), not an SRTP mode, not a call class, and not a quirk profile (§13.6). Transcoding is
+  the most expensive thing on this page and the easiest to acquire by accident; acquiring it
+  requires writing the word.
+
+- **MP3 — `codecs` filters, and only `transcode` adds.** `CodecPolicy::Restrict` may remove and
+  reorder the formats the received description carried. It can never introduce one that was
+  absent, because producing an absent format *is* transcoding, and transcoding is MP2's
+  declaration.
+
+  The consequence is stated here so that nobody meets it as a surprise: a `Restrict` list disjoint
+  from what the peer offered leaves the stream with no common format, and the call fails (§13.4)
+  instead of quietly consuming a transcoding slot. RFC 3264 §6 already describes that outcome —
+  the answerer rejects a stream whose formats are unacceptable by setting its port to zero — so
+  the failure is the offer/answer model working, not this platform inventing a fault. The
+  alternative, inferring `To(...)` from a `Restrict` list, is precisely the defect this story
+  exists to remove, one layer down: the transcoding bill would once again depend on something
+  nobody declared.
+
+- **MP4 — the policy in force is the *receiving* peer's, and it changes with the command.** An
+  `offer` carries party A's description and returns the description that travels toward party B,
+  so the keys on that command are **B's** trunk policy. An `answer` carries B's description and
+  returns what travels toward A, so its keys are **A's**.
+
+  | Command | Body carried | Returned SDP travels toward | `toward` is the policy of |
+  |---|---|---|---|
+  | `offer` (initial) | A | B | B |
+  | `answer` | B | A | A |
+  | `update` (re-offer by A) | A | B | B |
+  | `update` (re-offer by B) | B | A | A |
+
+  Getting this backwards is not a visible error: it is a call that negotiates encryption toward
+  the wrong half of itself and fails as one-way or clear-text media, which is the same class of
+  quiet wrongness O4 exists to prevent for `from_tag`. MR-P-11 and MR-P-12 assert it in both
+  directions for that reason.
+
+- **MP5 — SRTP is per leg, and the legs are independent.** The relay terminates each leg's media
+  security separately, so `Disabled` on one side and `Sdes` on the other is an ordinary, supported
+  configuration and not a contradiction to be resolved. That independence is the whole reason a
+  *per-trunk* SRTP mode is coherent: were security a property of the call, a carrier that requires
+  SRTP and an access side that cannot do it would have no expressible answer.
+
+- **MP6 — there is no domain-, pattern- or hostname-derived selection, anywhere.** SRTP is not
+  chosen by matching a regular expression against a request URI, a `To` domain, a `Contact` host or
+  a source address, and neither is a codec list. MP1's signature makes this unrepresentable rather
+  than merely forbidden — the same technique §7.3 I3 uses for the ICE variant that must not exist.
+  Where a deployment genuinely wants "these carriers, one rule", the mechanism is that those
+  carriers are trunks and a trunk's policy is data that can be shared by reference; it is not a
+  pattern evaluated per call.
+
+- **MP7 — `SrtpPolicy::Sdes` requires confidential signalling, checked at startup.** SDES puts the
+  session key in the description (RFC 4568 §5), and RFC 4568 §7.2 requires that a description
+  carrying one be protected in transit. A trunk declaring `Sdes` whose signalling transport is not
+  TLS is therefore a **configuration error that refuses to start**, naming the trunk and the
+  transport (MR-C-1) — not a log line, and not a runtime downgrade. A runtime warning about a key
+  that has already been sent in the clear is a description of an incident, and the value of
+  encrypting the media afterwards is close to zero. `DtlsSrtp` carries no key in the description
+  (RFC 5763 §5 — only a fingerprint, RFC 8122) and so imposes no such requirement; its integrity
+  requirement is that the fingerprint arrive unaltered, which is `AF-*`'s and the transport's.
+
+- **MP8 — the keys that decide a mode are always explicit; the keys that restrict within one are
+  sent when they restrict.**
+  - **MP8a — mode keys, unconditional.** `transport-protocol` and `DTLS` are sent on every
+    `offer`, `answer` and re-offer, for every `SrtpPolicy` **including `Disabled`**. This is §7.3
+    I4's rule applied to media security, and the reason is stronger here than it is for ICE: an
+    omitted key means whatever the node's default means at the version it happens to be running
+    (§11), and the difference between two such defaults is the difference between encrypted and
+    clear-text media. `transport-protocol` in particular is the single key that decides it, and it
+    is never omitted for any policy.
+  - **MP8b — restriction keys, when they restrict.** `SDES` is sent when the policy forbids SDES
+    (`["off"]`) or excludes a suite, and is absent when it does neither. `codec` is sent when
+    `codecs` is not `AsReceived`, or `transcode` is not `None`, or both. In each case the omitted
+    case is the *identity*, whose only encoding is absence: an empty list or an empty dictionary
+    violates E4 and asserts nothing that absence does not. §13.3's tables are the enumeration.
+
+- **MP9 — version 1 negotiates nothing; it asserts.** There is no opportunistic SRTP, no
+  best-effort fallback to RTP when a peer declines, and no codec policy conditioned on what the
+  peer offered. All three would require reading the description that came back, which O3 forbids
+  and MP10 restates. A trunk that must accept either is two trunks, or it waits for the story that
+  gives this section an SDP model — recorded in §13.7 as the open question it is.
+
+- **MP10 — the platform reads no body, to decide or to verify.** MP1 already forbids reading one
+  to decide. Verification is the harder half and gets its own clause: after `offer` returns, the
+  platform MUST NOT parse the returned `sdp` to confirm that the policy was applied — not for a
+  metric, not for a log line, not "just for the assert". A verifying parser is an SDP model in the
+  hot path acquired through the back door, with all of O3's failure modes and none of its
+  discipline. Proof that the policy reached the wire comes from §12.5's byte-exact vectors and
+  from `CF-3` observing the media itself; **a test may parse SDP, the platform may not**, and
+  MR-C-8 is written on exactly that division.
+
+- **MP11 — a quirk profile constrains media policy; it never sets it.** §13.6.
+
+- **MP12 — no policy beyond the identity ships before `CF-3` is green** (§11 V5). Until the
+  interop suite has confirmed, against the §11 baseline, that each §13.3 key is honoured, `ME-2`
+  MUST reject at startup any trunk policy other than
+  `{ AsReceived, None, Disabled }` — the identity policy, whose failure mode is the media-direct
+  behaviour the platform already has. The asymmetry is deliberate: an unrecognised codec key
+  degrades to "no manipulation", which is safe and loud, whereas an unrecognised SRTP key degrades
+  to clear text, which is unsafe and silent.
+
+### 13.3 The mapping onto NG keys
+
+The keys, and the exact bytes each policy value produces. `⟨absent⟩` means the key is not emitted
+at all (E4).
+
+| Policy value | `transport-protocol` | `SDES` | `DTLS` |
+|---|---|---|---|
+| `Disabled` | `RTP/AVP` | `["off"]` | `["off"]` |
+| `Sdes { Rfc4568Both }` | `RTP/SAVP` | `⟨absent⟩` | `["off"]` |
+| `Sdes { Sha1_80Only }` | `RTP/SAVP` | `["no-AES_CM_128_HMAC_SHA1_32"]` | `["off"]` |
+| `DtlsSrtp { Passive }` | `UDP/TLS/RTP/SAVP` | `["off"]` | `["passive"]` |
+| `DtlsSrtp { Active }` | `UDP/TLS/RTP/SAVP` | `["off"]` | `["active"]` |
+
+`SDES` is absent in exactly one row, and MP8a is why that is not a hole. The key that decides
+encrypted-versus-clear is `transport-protocol`, and it is present in every row. `SDES` says one of
+two further things — *not this mechanism at all*, or *this mechanism, minus a suite* — and
+`Sdes { Rfc4568Both }` says neither: it admits both suites RFC 4568 §6.2 defines, so it excludes
+none, and an empty exclusion list is what E4 forbids emitting. Absence there is E4 working, over a
+mode `RTP/SAVP` and `DTLS: ["off"]` have already fixed between them.
+
+| Policy value | `codec` |
+|---|---|
+| `AsReceived` + `None` | `⟨absent⟩` (MP8b) |
+| `Restrict([a, b])` + `None` | `{ "offer": [a, b], "strip": ["all"] }` |
+| `AsReceived` + `To([a])` | `{ "transcode": [a] }` |
+| `Restrict([a])` + `To([a])` | `{ "offer": [a], "strip": ["all"], "transcode": [a] }` |
+
+`strip` accompanies `offer` because `offer` alone states a preference and `strip` is what makes
+the restriction a restriction; together they are MP3's filter. `transcode` is the only subkey that
+can introduce a format, which is what makes MP2's default meaningful — remove `transcode` from a
+policy and no combination of the other two can add anything.
+
+Key order on the wire is E3's, over raw bytes, and is not the order of these tables: `DTLS`,
+`ICE`, `SDES`, then `call-id`, `codec`, `command`, and so on. §12.2's blocks are the authority.
+
+**These spellings are provisional** in the one specific sense §11 V5 defines: the encoding is
+fixed and tested here, and the far end's acceptance of it is fixed and tested by `CF-3`. MP12
+holds until then.
+
+### 13.4 Failure, and what the platform can honestly see
+
+A policy that the node cannot satisfy comes back as `result` = `error`, which is `Rejected` (§9).
+Everything §9 says about it applies unchanged: the reason bytes are kept verbatim, are never
+copied into a SIP response (X2), and **never** cause reselection (X1) — a codec or SRTP policy is
+deterministic, so a second node rejects it identically and reselecting would spend `B_media`
+learning that.
+
+The platform cannot distinguish "no common codec" from any other rejection without reading either
+the body or the reason string, and it does neither by default: the body is O3's and the reason is
+X2's. §9 X3 already provides the only sanctioned route — a tenant policy mapping specific
+rejection reasons to `488 Not Acceptable Here` (RFC 3261 §21.4.26) — and a codec-mismatch mapping
+is exactly the case that provision was written for. It stays configuration, per trunk, and it is
+never a default: the reason strings a node emits are the node's, and a default that pattern-matched
+them would be behaviour derived from a version rather than from a contract, which V2 forbids.
+
+What this leaves open, stated rather than hidden: **the observability of a codec mismatch is
+poor.** An operator sees `Rejected` with a reason string, and the call sees `500` unless a mapping
+is configured. §13.7 records it.
+
+### 13.5 Configuration validation, and the effective-policy record
+
+Every check below runs at **startup**, and every failure refuses to start, naming the trunk. This
+follows the discipline [extension-framework](../designs/extension-framework.md) sets for module
+manifests, for the same reason it gives: an invalid combination should fail a deployment, never a
+call.
+
+| # | Check | On violation |
+|---|---|---|
+| G-M1 | `Sdes` on a trunk whose signalling transport is not TLS (MP7) | error naming the trunk and its transport |
+| G-M2 | `Restrict([])` — an empty restriction, which offers nothing | error naming the trunk |
+| G-M3 | A `CodecName` that is empty or is not a token | error naming the trunk and the entry |
+| G-M4 | A duplicate `CodecName` within one list | error naming the trunk and the entry |
+| G-M5 | A quirk profile requiring SRTP on a trunk declaring `Disabled` (§13.6) | error naming the trunk **and** the profile |
+| G-M6 | Any policy other than the identity while MP12 holds | error naming the trunk and MP12 |
+
+**The effective-policy record.** Each trunk exports its resolved policy — every field, defaults
+included, plus the quirk profiles that constrained it — as one structured record, readable without
+placing a call. This is what makes the story's goal checkable rather than merely intended: "what
+do we offer this carrier, and is that leg encrypted?" is answered by reading one record, and
+nothing that is not in that record can reach §13.3. It is observability of a *declaration*, not of
+traffic, so §10 P5's rule that health counters are never control inputs does not bear on it.
+
+### 13.6 The seam with carrier quirk profiles (`EX-7`)
+
+`EX-7` specifies carrier quirk profiles: per-peer header injection and SDP rewriting as bounded,
+declarative data, attachable to a trunk or a domain, several of which may apply. Its acceptance
+includes a quirk that also implies SRTP. That is where the two stories meet, and this is this
+side's half of the seam. The vocabulary itself is `EX-7`'s and is not restated here.
+
+- **MP11 — a quirk profile may *require* an SRTP mode; it may never *assign* one.** A profile
+  carries a constraint (`requires_srtp`) that is checked at startup against the trunk's own
+  declared `SrtpPolicy` (G-M5). It carries no field that sets `SrtpPolicy`, `CodecPolicy` or
+  `Transcode`, and a profile schema that offers one is rejected (MR-C-5).
+
+  Two reasons, and the second is the one that decides it:
+
+  1. If a profile could set the mode, SRTP selection would once again be a consequence of *which
+     profile matched* — a pattern, evaluated per call, deciding whether media is encrypted. That
+     is the defect ME-6 exists to remove, wearing a better-typed hat. MP6 does not stop being true
+     because the pattern moved into a profile.
+  2. Profiles **compose** — `EX-7` says several may apply to one trunk — and assignments do not.
+     Two profiles assigning different modes need a precedence rule, and every precedence rule over
+     independently-authored configuration is a rule someone will be surprised by at three in the
+     morning. Constraints compose without one: they intersect, order-independently, and two
+     profiles both requiring SRTP agree (MR-C-4) while a profile and a trunk disagreeing is caught
+     before the process serves traffic (MR-C-3).
+
+- **Quirk SDP rewriting does not reach codecs or keying.** Whatever body rewriting `EX-7` defines
+  is a separate mechanism with its own vector; it is not a second path to the four keys of §13.3,
+  because those are derived from `TrunkMediaPolicy` by MP1's function and from nothing else. A
+  quirk that needs a codec offered adds a constraint the trunk's policy must already satisfy, in
+  the shape of MP11 — it does not edit the offer.
+
+- **Left to `EX-7`:** the spelling and placement of the constraint in the profile schema, whether
+  constraints exist for anything besides SRTP, and how a profile is bound to a trunk. This section
+  fixes only that the direction is constrain-not-assign, and that violating it is a startup error.
+
+### 13.7 What §13 does not decide
+
+- **Where trunks live, and how their configuration is versioned and reloaded** — `RT-2`, with the
+  `policy version` interaction [affinity-token](affinity-token.md) and `AF-1` own.
+- **Which trunk a call takes** — the route plan's, [routing-trunks](../designs/routing-trunks.md).
+  §13 begins after that question is answered, and deliberately cannot influence it.
+- **Opportunistic or negotiated SRTP, and codec policy conditioned on the peer's offer** — both
+  need to read a description (MP9, MP10). They are the same open question `ME-4` has, resolve to
+  the same upstream SDP-model row (§2), and are not answered by adding a variant here.
+- **Bandwidth, direction attributes, DTMF interworking and recording** — none is a codec or a
+  keying decision, and each would widen a vocabulary §13.1 keeps closed on purpose.
+- **The status a codec mismatch produces by default** — §9 X3's mapping is per tenant, and §13.4
+  says why there is no default.
+
+## 14. What this spec does not decide
 
 - **Which calls are anchored** — `ME-4`, over the hook phases of
   [hook-framework](hook-framework.md) §3, with `ME-5` implementing the module.
@@ -754,3 +1199,5 @@ Virtual time throughout; `t` is milliseconds from the moment the command is issu
 - **Pool operation** — `KO-7`: managed and external modes, host networking, port ranges, the
   private control interface, and draining.
 - **The interop container and its digest** — `CF-3`.
+- **The trunk object, and everything §13 leans on but does not own** — `RT-2` for the trunk
+  itself, `EX-7` for the quirk-profile vocabulary §13.6 constrains. §13.7 is that list in full.
