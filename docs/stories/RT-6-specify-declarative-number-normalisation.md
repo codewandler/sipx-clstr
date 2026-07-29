@@ -2,7 +2,7 @@
 id: RT-6
 title: Specify declarative number normalisation
 pillar: Signalling
-status: in-progress
+status: done
 priority: 
 design: docs/designs/routing-trunks.md
 epic: routing-trunks

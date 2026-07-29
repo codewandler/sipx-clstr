@@ -2,7 +2,7 @@
 id: RG-9
 title: Say what digest actually protects, and decide whether that is enough
 pillar: Signalling
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location

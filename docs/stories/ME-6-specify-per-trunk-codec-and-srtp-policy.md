@@ -2,7 +2,7 @@
 id: ME-6
 title: Specify per-trunk codec and SRTP policy
 pillar: Media
-status: in-progress
+status: done
 priority: 
 design: docs/designs/media-control.md
 epic: media-control

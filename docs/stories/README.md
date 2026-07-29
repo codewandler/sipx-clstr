@@ -43,12 +43,25 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ## Now (in progress)
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
+- [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 
 ## Next (ready — take the top one unless the user named a story)
 
+### Conformance & deterministic harness
+_The north star made executable: seeded multi-node simulation, and coverage that is measured._
+- [CF-9 — Make the declared rust-version true, and gate on it](CF-9-make-the-declared-rust-version-true.md) · Foundation · found building the container image — the workspace does not build on its own declared floor
+
+### Extension framework & RFC registry
+_Extensions become declared modules over typed hook phases, never edits to the core._
+- [EX-9 — Reconcile the quirk-profile media seam with the type ME-6 actually landed](EX-9-reconcile-the-quirk-profile-seam-with-ME-6.md) · Extensions · found reviewing EX-7 — it is written against SrtpMode; ME-6 landed SrtpPolicy
+
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-9 — Say what digest actually protects, and decide whether that is enough](RG-9-say-what-digest-actually-protects.md) · Signalling · found reviewing RG-8 — RA-R-2 reads stronger than the mechanism delivers
+- [RG-10 — Say that a replayed credential can de-register every binding](RG-10-say-that-a-replayed-credential-can-deregister-everything.md) · Signalling · found reviewing RG-9 — §7.2 understates the exposure it exists to state
+
+### Outbound routing & trunks
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
+- [RT-10 — Close the transform-totality holes before RT-2 implements](RT-10-close-the-normalisation-totality-holes.md) · Routing · found reviewing RT-6 — N12's totality claim does not hold as written
 
 ## Blocked
 _None._
@@ -76,7 +89,6 @@ _The operational contract: roles by config, a reference topology, and an honest 
 - [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
 - [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
 - [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
-- [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
 - [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
 
@@ -92,7 +104,6 @@ _Extensions become declared modules over typed hook phases, never edits to the c
 - [EX-3 — Implement the hook runtime](EX-3-implement-the-hook-runtime.md) · Platform · blocked by EX-1
 - [EX-4 — Implement registry codegen for syntax artifacts](EX-4-implement-registry-codegen-for-syntax-artifacts.md) · Platform · UPSTREAM decision per artifact
 - [EX-5 — Implement deployment profiles with compatibility checking](EX-5-implement-deployment-profiles-with-compatibility-checking.md) · Platform
-- [EX-7 — Specify carrier quirk profiles](EX-7-specify-carrier-quirk-profiles.md) · Platform
 - [EX-8 — Make the async query declaration normative in the hook-framework spec](EX-8-make-the-async-query-declaration-normative.md) · Platform · filed by EX-6 — the design is accepted, the spec does not yet say it
 
 ### Kubernetes operator, Helm packaging & autoscaling
@@ -115,7 +126,6 @@ _The SIP process controls media over a network protocol; it never touches a medi
 - [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media · blocked by ME-1, AF-1, AF-4 — the node id rides in the token
 - [ME-4 — Design SDP rewrite in the proxy path](ME-4-design-sdp-rewrite-in-the-proxy-path.md) · Media
 - [ME-5 — Implement the media-anchoring module](ME-5-implement-the-media-anchoring-module.md) · Media · blocked by ME-4, ME-2, EX-3
-- [ME-6 — Specify per-trunk codec and SRTP policy](ME-6-specify-per-trunk-codec-and-srtp-policy.md) · Media
 
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
@@ -132,7 +142,6 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
 - [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
 - [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone
-- [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling
 - [RT-8 — Express source-IP admission as reviewable config](RT-8-express-source-ip-admission-as-config.md) · Signalling · admission is the whole security boundary when no user is authenticated
 - [RT-9 — Specify tenant-scoped route selection](RT-9-specify-scoped-route-selection.md) · Signalling · several pools can be 'default' at once; a single global default cannot express it
@@ -147,12 +156,15 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
+- [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [ET-1 — Specify the e2e-tester role and the probe contract](ET-1-specify-the-e2e-tester-role-and-probe-contract.md) · Platform · M1 #11 · docs/specs/e2e-probe.md — verdict taxonomy, blast radius, 19 vectors; gates ET-2/ET-3
 - [ET-2 — Implement the sans-IO probe engine](ET-2-implement-the-sans-io-probe-engine.md) · Platform · M1 #12 · the probe engine and scheduler; every EP-* vector proved
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · M1 #13 · the echo endpoint; end to end through the real proxy, registrar and probe
 - [EX-1 — Specify hook phases and the module manifest](EX-1-specify-hook-phases-and-the-module-manifest.md) · Platform · must land before the proxy API hardens
 - [EX-6 — Design an async external routing hook](EX-6-design-an-async-external-routing-hook.md) · Platform · blocks a downstream deployment's parity milestone; a blocking HTTP call on the INVITE path today
+- [EX-7 — Specify carrier quirk profiles](EX-7-specify-carrier-quirk-profiles.md) · Platform
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
+- [ME-6 — Specify per-trunk codec and SRTP policy](ME-6-specify-per-trunk-codec-and-srtp-policy.md) · Media
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
 - [PX-2 — Design the proxy transaction driver](PX-2-design-the-proxy-transaction-driver.md) · Signalling · M1 #2 · decided: build on sipx_transport::Handle, not on a socket loop of our own
 - [PX-3 — Adopt the upstream header surgery API](PX-3-adopt-the-upstream-header-surgery-api.md) · Signalling · S-15 landed in sipx v0.4.0 — what remains is adopting it here; unblocks PX-4
@@ -166,7 +178,9 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-4 — Implement the PostgreSQL LocationStore backend](RG-4-implement-the-postgresql-locationstore-backend.md) · Signalling · M1 #10 · the same LS-* vectors on PostgreSQL, unchanged — and two races found
 - [RG-6 — Build forking target sets from location lookups](RG-6-build-forking-target-sets-from-location-lookups.md) · Signalling · M1 #7 · the registrar and the proxy meet; found a dropped Path in PX-5
 - [RG-8 — Settle B4 idempotency so a retransmission is a retry](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) · Signalling · found by RG-2's harness scenario — an ordinary UDP retransmission is answered 500
+- [RG-9 — Say what digest actually protects, and decide whether that is enough](RG-9-say-what-digest-actually-protects.md) · Signalling · found reviewing RG-8 — RA-R-2 reads stronger than the mechanism delivers
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
+- [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [VZ-1 — Implement the SSE replay feed and canvas page](VZ-1-implement-the-sse-replay-feed-and-canvas-page.md) · Platform · the constellation's first feed — a paced sim replay over SSE, one page, zero new runtime deps
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._

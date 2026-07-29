@@ -2,7 +2,7 @@
 id: DP-5
 title: Support listen-private / advertise-public listeners
 pillar: Cluster
-status: in-progress
+status: done
 priority: 
 design: docs/designs/deployment.md
 epic: deployment

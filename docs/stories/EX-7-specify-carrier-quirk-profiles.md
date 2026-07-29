@@ -2,7 +2,7 @@
 id: EX-7
 title: Specify carrier quirk profiles
 pillar: Platform
-status: in-progress
+status: done
 priority: 
 design: docs/designs/extension-framework.md
 epic: extension-framework

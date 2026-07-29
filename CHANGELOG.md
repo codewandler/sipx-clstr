@@ -7,6 +7,57 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Five stories, of which one changes behaviour and four are specifications. The behaviour change is
+the one that matters for anyone trying to run this: until now a node advertised the address it
+bound, so a container or a cloud host binding `0.0.0.0` told every peer to answer `0.0.0.0`.
+
+### Added
+
+- **A listener binds one address and advertises another** (`DP-5`) — `Listener { transport, bind,
+  advertise }`, validated as a set, with `sent_by()`, `record_route_uri()` and `contact_uri()` as
+  pure functions of it. The advertised address now reaches **`Via`** (RFC 3261 §18.1.1), not only
+  `Record-Route`: the driver maps onto the kernel's own `bind` vs `sent_by`/`sent_by_port` split
+  rather than shadowing it. `Record-Route` is built from the listener a request *arrived on*,
+  because a node may advertise one address on UDP and another on TLS. The identity set is every
+  listener's advertised host, so any edge still recognises any edge's `Route`.
+- **A node that would advertise an unspecified address refuses to start.** `sipx-clstr run --listen
+  0.0.0.0:5060` with no `--advertise` now exits 2 naming the address, where it previously started
+  and advertised `0.0.0.0`. A user-visible break in the CLI's default path, and deliberate: the
+  failure it replaces was silent and only visible from the far end.
+- **Carrier quirks are a bounded profile, not a scripting hook** (`EX-7`) — a closed op vocabulary
+  over a catalogue of headers and SDP fields, with composition, an anti-catalogue naming what is
+  deliberately inexpressible, and 22 vectors.
+- **Number normalisation is a closed rule vocabulary** (`RT-6`) — a new
+  [spec](docs/specs/number-normalisation.md): profiles, four transforms, digit guards with
+  fallback, a stated termination bound, and 45 vectors.
+- **Codec and SRTP are a declared per-trunk policy** (`ME-6`) — media-relay §13:
+  `TrunkMediaPolicy { codecs, transcode, srtp }`, twelve rules, six startup checks, the policy →
+  NG-key mapping, and 24 vectors including three byte-exact blocks. The rule that ties it to
+  `EX-7`: a quirk profile may **require** an SRTP mode and may never **assign** one, or SRTP
+  selection would go back to being a consequence of which pattern matched.
+
+### Changed
+
+- **What digest authentication actually protects is written down** (`RG-9`) — registrar-auth §7.
+  Under `qop=auth` the digest covers method and Request-URI and **not** `Contact`, `CSeq`,
+  `Call-ID`, `Expires` or the body (RFC 7616 §3.4.3), so a captured `Authorization` reattached to a
+  REGISTER differing in those fields hashes identically and is accepted. Verified against the
+  pinned kernel rather than inferred. The decision is to **accept**, bounded by the nonce lifetime,
+  with each rejected alternative recorded and reasoned. No production code changed — the mechanism
+  was never wrong, only the description of it. `RA-R-6` pins the behaviour twice, including what
+  ends up in the location store.
+
+### Known gaps
+
+- `ME-6`'s fourth acceptance item is **specified, not executed**: the assertion is pinned as vector
+  `MR-P-1` against a byte-exact block, but the `MediaRelay` types are a spec contract and `ME-2` is
+  the story that lands the Rust. The box is deliberately left unticked.
+- Independent review of `EX-7`, `RT-6` and `RG-9` after merge filed `RT-10`, `EX-9` and `RG-10` —
+  respectively: transform totality does not hold for a leading `+`; the quirk-profile media seam is
+  written against an `SrtpMode` type that `ME-6` did not land (it landed `SrtpPolicy`); and §7.2
+  understates its own exposure, because the same replayed credential on a `Contact: *` REGISTER
+  removes every binding rather than merely adding one.
+
 ## [0.6.0] — 2026-07-29
 
 M1's one known defect is closed, and M2's two defining subsystems — cluster affinity and media
