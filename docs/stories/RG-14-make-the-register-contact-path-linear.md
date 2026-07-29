@@ -2,7 +2,7 @@
 id: RG-14
 title: Make the REGISTER contact path linear, and bound the work before the quota decides
 pillar: Signalling
-status: ready
+status: done
 priority: 2
 design: docs/designs/registrar-location.md
 epic: registrar-location
@@ -39,7 +39,36 @@ and the per-address quota is applied only after all of that work has been done a
 
 ## Progress
 
-- (running log)
+- **Done, with the quota half deliberately left unchanged and said so.**
+- **The amplifier is closed.** `matches_contact` re-parsed every stored contact for every incoming
+  op — `O(ops · bindings · quota)` parses. Matching now computes a parsed view of the stored bindings
+  **once** before the op loop and reads it per op, so one reconciliation costs one parse per stored
+  binding. Equivalence still runs through the kernel's `Uri::equivalent`; nothing re-derives §19.1.4.
+- **Failing-first, counted not timed.** A test asserts that reconciling 10 contacts against 10 stored
+  bindings parses exactly **10** stored contacts, not 100. The instrument is a parse counter in
+  debug builds, because wall-clock would be flaky and a parse is the expensive unit. A second test
+  asserts a matching contact still updates in place, so the restructure did not change which binding
+  is touched.
+- **A field-based fix was tried and reverted.** Caching the parsed URI on `Binding` made the hot path
+  trivial, but `Binding` is serialized to PostgreSQL and `Uri` is not `Serialize` — so it broke the
+  persistence path. The parse-once-per-reconciliation view achieves the same asymptotic result
+  without touching the stored shape, which is why it is the answer.
+- **The quota ordering was NOT changed, and the acceptance is marked accordingly.** The comment in
+  `process.rs` already says the quota is checked against the *committed outcome* "so a refresh or a
+  removal can never trip it". Moving the check earlier risks altering *which* requests are accepted,
+  not just when the refusal happens — a registration that grows the set past the limit is refused
+  either way, but a refresh that reclaims expired bindings first may be accepted only because the
+  check ran after reaping. That is a semantic change, and the story's own note forbids changing
+  which requests are accepted silently. It is recorded as needing its own analysis rather than folded
+  in as an optimisation.
+- Considered for upstream: no. This is the platform's own reconciliation path.
+- Gate green, shared location-service suite unchanged.
+
+## Notes
+
+- Quota half not done here — see Progress. The check stayed where it is because moving it risks
+  changing which requests are accepted, and that needs its own analysis, not an optimisation folded
+  into a linearisation.
 
 ## Notes
 

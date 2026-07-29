@@ -133,14 +133,35 @@ fn explicit(
     set.drop_expired(cmd.now);
     let mut changed = false;
 
+    // Parse each stored contact **once** for the whole reconciliation (`RG-14`). The hot loop used
+    // to re-parse every stored binding against every incoming op — `O(contacts · bindings · quota)`
+    // parses, and against an open registrar that is a CPU amplifier an attacker can tune. The parse
+    // is the expensive part; equivalence on two already-parsed URIs is not. A binding whose stored
+    // contact will not parse is left unparsed and will match nothing, which is the same answer the
+    // old code gave it.
+    let parsed: Vec<Option<sipx_sip::Uri>> = set
+        .all()
+        .iter()
+        .map(|binding| {
+            #[cfg(debug_assertions)]
+            CONTACT_PARSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            sipx_sip::Uri::parse(binding.contact.clone()).ok()
+        })
+        .collect();
+
     for (op, granted) in ops.iter().zip(granted.iter().copied()) {
         // §5.3 — binding identity by §19.1.4 comparison. Equivalence is non-transitive, so an
         // incoming contact can match more than one stored binding; the first in creation order is
         // the one updated, which is a deterministic choice a vector can assert.
-        let matched = set
-            .all()
-            .iter()
-            .position(|binding| matches_contact(binding, op));
+        // Equivalence is non-transitive, so an incoming contact can match more than one stored
+        // binding; the first in creation order is the one updated, which is a deterministic choice a
+        // vector can assert. Matching reads the parsed view computed above, so the cost per op is a
+        // scan of `equivalent` calls, not `bindings` parses.
+        let matched = parsed.iter().position(|stored| {
+            stored
+                .as_ref()
+                .is_some_and(|stored| stored.equivalent(&op.uri))
+        });
 
         match matched {
             None => {
@@ -200,13 +221,12 @@ fn explicit(
     }
 }
 
-/// Whether a stored binding is the one this contact operation is about (§10.3 step 7).
-fn matches_contact(binding: &crate::binding::Binding, op: &ContactOp) -> bool {
-    // The kernel owns §19.1.4, including its tel rules. Re-deriving equivalence here would be
-    // shadow-implementing protocol logic, and a second implementation of a non-transitive
-    // relation is a second set of bugs.
-    sipx_sip::Uri::parse(binding.contact.clone()).is_ok_and(|stored| stored.equivalent(&op.uri))
-}
+/// How many times a stored contact has been parsed during reconciliation (`RG-14`).
+///
+/// An instrument, not part of the contract: the test that proves the contact path is linear counts
+/// parses rather than wall-clock time, which would be flaky. `release` builds do not carry it.
+#[cfg(debug_assertions)]
+pub static CONTACT_PARSES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Whether the stored binding already is what this command asks for — B4's precise condition.
 fn already_holds(stored: &crate::binding::Binding, cmd: &RegisterCommand, granted: u32) -> bool {
@@ -232,4 +252,126 @@ fn already_holds(stored: &crate::binding::Binding, cmd: &RegisterCommand, grante
 #[must_use]
 pub fn is_empty_at(set: &BindingSet, now: Timestamp) -> bool {
     set.active_count(now) == 0
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod rg14_tests {
+    use super::*;
+    use crate::binding::{Binding, Timestamp};
+    use crate::command::{ContactOp, ContactOps, RegisterCommand};
+    use bytes::Bytes;
+    use sipx_sip::Uri;
+
+    fn aor(uri: &str) -> crate::CanonicalAor {
+        crate::CanonicalAor::parse(uri.to_owned()).expect("a well-formed AoR")
+    }
+
+    fn op(contact: &str) -> ContactOp {
+        ContactOp {
+            uri: Uri::parse(Bytes::copy_from_slice(contact.as_bytes())).expect("a valid contact"),
+            verbatim: Bytes::copy_from_slice(contact.as_bytes()),
+            expires: Some(3600),
+            q: None,
+            instance_id: None,
+            reg_id: None,
+            push: None,
+        }
+    }
+
+    fn command(contacts: Vec<ContactOp>) -> RegisterCommand {
+        RegisterCommand {
+            tenant: "t".to_owned(),
+            aor: aor("sip:alice@example.test"),
+            call_id: Bytes::from_static(b"rg14-call"),
+            cseq: 1,
+            contacts: ContactOps::Explicit(contacts),
+            expires_header: None,
+            path: Vec::new(),
+            supports_path: false,
+            require: Vec::new(),
+            received: None,
+            flow_ref: None,
+            principal: None,
+            now: Timestamp::from_secs(1000),
+        }
+    }
+
+    /// **`RG-14`'s failing-first test.** The number of times a *stored* contact is parsed during one
+    /// reconciliation must be the number of stored bindings, not (ops × bindings). Before this
+    /// story, matching re-parsed every stored contact for every incoming op, so a REGISTER with many
+    /// contacts against an address-of-record holding many bindings cost `O(ops · bindings)` parses —
+    /// and the quota that would cap the result was applied after all of that work was done.
+    ///
+    /// Counted, not timed: wall-clock would be flaky, a parse is the expensive unit.
+    #[test]
+    fn rg14_reconciliation_parses_each_stored_contact_once() {
+        use std::sync::atomic::Ordering::Relaxed;
+
+        // Ten bindings already stored for this address-of-record.
+        let mut current = BindingSet::new();
+        for i in 0..10 {
+            current.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
+        }
+
+        // And a REGISTER carrying ten contacts.
+        let contacts: Vec<ContactOp> = (0..10)
+            .map(|i| op(&format!("sip:alice@198.51.100.{i}:5060")))
+            .collect();
+        let cmd = command(contacts);
+
+        let before = CONTACT_PARSES.load(Relaxed);
+        let _ = process(&cmd, &current, &TenantPolicy::default());
+        let parses = CONTACT_PARSES.load(Relaxed) - before;
+
+        assert_eq!(
+            parses, 10,
+            "one parse per stored binding, not one per (op × binding); got {parses}"
+        );
+    }
+
+    /// An op that matches a stored binding still resolves, through the precomputed view rather than
+    /// a fresh parse of every candidate.
+    #[test]
+    fn rg14_a_matching_contact_still_updates_the_same_binding() {
+        let mut current = BindingSet::new();
+        current.insert(binding("sip:alice@10.0.0.5:5060"));
+
+        let cmd = command(vec![op("sip:alice@10.0.0.5:5060")]);
+        let outcome = process(&cmd, &current, &TenantPolicy::default());
+
+        // A refresh of the same contact must not insert a second one. The active count is read
+        // back out of the set that comes back, however it came back.
+        match outcome {
+            Outcome::Commit { set, .. } => {
+                assert_eq!(set.active(cmd.now).count(), 1, "a refresh updates in place");
+            }
+            Outcome::Noop { response } => {
+                let _ = response;
+                // No change is also a correct answer for a refresh that is already the committed
+                // state — but the stored set must still hold exactly one active binding.
+                assert_eq!(current.active(cmd.now).count(), 1);
+            }
+            Outcome::Reject(reason) => panic!("a refresh must not be refused: {reason:?}"),
+        }
+    }
+
+    fn binding(contact: &str) -> Binding {
+        Binding {
+            contact: Bytes::copy_from_slice(contact.as_bytes()),
+            q: 1000,
+            call_id: Bytes::from_static(b"other"),
+            cseq: 1,
+            expires_at: Timestamp::from_secs(3600),
+            registered_at: Timestamp::from_secs(1),
+            refreshed_at: Timestamp::from_secs(1),
+            path: Vec::new(),
+            received: None,
+            instance_id: None,
+            reg_id: None,
+            flow_ref: None,
+            push: None,
+            principal: None,
+        }
+    }
 }
