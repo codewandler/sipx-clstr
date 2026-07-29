@@ -121,6 +121,70 @@ primitives are the kernel's — replacing a URI's user part losslessly, and stru
 `tel:` body, which sipx currently keeps opaque. The spec's §1 flags both for `CX-1`; the
 implementation, which lands with the trunk model, is what waits on them.
 
+### RT-7: a trunk's identity policy is a per-peer trust declaration
+
+`P-Asserted-Identity` is not a header the platform decorates a message with. RFC 3325 §1 confines
+the whole mechanism to a **Trust Domain**, and RFC 3324 §2.3 defines membership operationally: `B`
+trusts `A` if and only if there is a secure connection between them *and* `B` holds configuration
+saying `A` is a member. The second half is a configuration fact, and the grain that fact actually
+has is the **peer** — this carrier, that SBC — never the cluster.
+
+So the per-trunk policy [asserted-identity](../specs/asserted-identity.md) specifies is not a
+convenience wrapper over a header. It is the deployment writing down where the edge of its trust
+domain runs, one peer at a time, and RFC 3325 §1's `Spec(T)` checklist is what it has to answer.
+Three of that checklist's eight items — how trust-domain membership is determined (item 4), what
+happens when the request asks nothing about this header (item 5), and privacy handling for identity
+(item 8) — have no defensible platform-wide answer, so the spec makes each of them a required field
+on the trunk with **no default**. A trunk that does not say is a trunk that does not start.
+
+Item 5 is worth one more sentence, because the spec deliberately reads it wider than RFC 3325 §7
+words it. §7 says "there is no Privacy header field"; the spec's `when_unspecified` also covers a
+`Privacy` header carrying only values RFC 5379 §4.1 Table 1 gives `P-Asserted-Identity` no
+treatment under — `user`, `session`, `critical`, an unregistered token. The two cases are
+indistinguishable in what the caller said *about this header*, which is nothing, and reading them
+apart would let one unrelated priv-value bypass a deployment's declared fail-closed posture.
+
+Three decisions in that spec are worth reading even if the rest is skimmed:
+
+- **Trust is one axis and assertion is another, because RFC 3325 splits them.** §5 governs whether
+  a proxy *creates* an identity; §5 and §7 together govern whether an identity it holds *leaves*
+  toward a given next hop. Collapsing the two into one "PAI on/off" switch is what makes "assert
+  for regulatory trace, withhold from an untrusted peer" inexpressible — and that combination is
+  the entire reason RFC 3325 §7 has a `Privacy: id` token at all. The spec keeps them apart —
+  `A19` makes `assert: never` a statement about synthesis alone, and the gate of `A20`–`A24` is
+  what decides whether an identity in hand travels — which is also what lets the vector table
+  cover a product of axes rather than a path through a flowchart.
+- **A `Privacy: none` header can never be overridden by trunk configuration.** RFC 3323 §4.2 and
+  RFC 3325 §7 both make it a `MUST NOT`, and a per-trunk policy that could out-vote it would turn
+  a compliance control into a suggestion (`A22`). The one thing it does *not* protect is a
+  `P-Asserted-Identity` this platform received from a peer it does not trust: RFC 3325 §5 requires
+  that one to be replaced or removed regardless, or `Privacy: none` would be a two-word identity
+  spoof (`A6`).
+- **The pipeline order is derived, not chosen.** A step runs *before* the trunk's normalisation
+  profile if its output is a number whose shape is the trunk's business, and *after* if its output
+  is a constant the RFC fixes byte for byte. Identity synthesis is the first kind and runs before;
+  the anonymous-`From` form of RFC 5379 §5.1.4 is the second and runs after. One criterion, both
+  placements, and no ordering knob anywhere (`A9`). `AI-N-6` is the row that makes it a rule
+  rather than a preference: under the reverse order, an anonymised `From` meeting a guarded
+  normalisation profile picks up the **callee's** number.
+
+**The seam with normalisation, from this side.** [number-normalisation](../specs/number-normalisation.md)
+`N32` says normalisation rewrites the number inside an *existing* URI and never creates a field,
+and defers "whether and how `PAssertedIdentity` is created" here. The two halves meet at a point
+rather than overlapping: by the time the egress profile runs, this spec has already settled whether
+a `P-Asserted-Identity` exists on that branch and whose identity it names, so `NN-G-10`'s
+`Skipped { GuardedFieldAbsent }` is the trunk's view of a decision already taken — a trunk that
+declared `assert: never`, or a privacy gate that removed the field — rather than an open question.
+The identity policy chooses *whose* number; the normalisation profile chooses *what shape* it takes.
+
+Where the work lands (rule 6): considered for upstream — **no for the policy, and two candidate
+rows for the syntax.** Parsing `Privacy` into the closed `priv-value` set of RFC 3323 §4.2, and a
+typed `P-Asserted-Identity`/`P-Preferred-Identity` value list that enforces RFC 3325 §9.1's
+one-or-two constraint, are protocol-generic and belong to the kernel on exactly the argument the
+`Headers` surgery API was upstreamed on. Whether an identity is asserted, which one, and toward
+whom has a *trunk* as its subject, and the kernel has no trunks. The spec's §2 flags both for
+`CX-1`.
+
 **Overload control.** RFC 7339 signaling with RFC 7415 rate-based control, applied on both
 directions: honoring overload feedback from downstream, and emitting it upstream when this
 cluster sheds load (tying into the transport layer's existing backpressure-`503` behavior). Spec

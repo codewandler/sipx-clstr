@@ -340,9 +340,23 @@ Nothing new is filed against the [ledger](../upstream.md) by this story.
 
 #### What this hands to the spec
 
-EX-6 is a design decision, not a normative text. Making it normative is a follow-up story against
-[hook-framework](../specs/hook-framework.md), which EX-1 closed — the deltas, named so the next
-agent does not have to rediscover them:
+**Landed.** `EX-8` carried every delta below into
+[hook-framework](../specs/hook-framework.md): the closed enums and rules E4a/E4b in §4, the
+engine-owned `QueryDeadline` as **E7**, the declaration in **§6.1** with rules Q1–Q6, **G7**/**G8**
+in §7, `hook_budget` in §8, and vectors `HF-9` … `HF-13` in §9 — registered in the vector gate.
+The spec is now the contract; this section is the record of why it says what it says. Five points
+this design left implicit were decided there rather than left to the reader, and the spec is
+authoritative on all five: `Disposition` gained an `Apply` variant so that `on` can be total over
+seven outcomes as G7 requires (the `Answered` arm needed a disposition and had none); H11 joins
+the budget sum, since it permits `query` and its deadline delays the response the caller is
+waiting for; a `Reject` arm is declarable only where the phase permits the `Reject` effect
+(H3/H5/H7), which makes H9 and H11 queries state a `Proceed`/`ProceedWithout` fallback at startup
+or fail to boot; `ClientError` joins the never-cached outcomes, so that only `Answered` and
+`Declined` are cacheable; and §5's `Scratch` declaration gained an `optional` flag, because G8
+gates `ProceedWithout` on a property the class-(a) declaration did not yet carry. None of the
+five opens a path from a failed query to an unchosen egress — three of them narrow it.
+
+The deltas, as they were handed over:
 
 - **§4** — `QueryOutcome` and `Disposition` as closed enums; E4 gains the "`Query` is the last
   effect of its invocation" and "the outcome is decided once" rules; a `QueryDeadline` timer class

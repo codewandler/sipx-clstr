@@ -62,3 +62,98 @@ reason = "Transaction affinity — a 2xx ACK routed by token at a foreign edge. 
 # test — and is now proved by `RG-11`:
 # `crates/sipx-clstr-sim/tests/register_auth.rs::ra_r_7_…`. Removed rather than left in place,
 # because a deferral that names a covered row is the stale entry this file's header calls out.
+
+# ── hook-framework (`HF`) ────────────────────────────────────────────────────────────────────────
+#
+# Registered by `EX-8`, which added `HF-9` … `HF-13` and could not register only those: the check
+# reads every row out of the spec that owns the prefix, so bringing the prefix under the gate brings
+# `HF-1` … `HF-8` with it. Every one of the thirteen is a **startup** vector — §7 graph validation
+# rejecting a profile — and none can be executed before a hook runtime exists to build a graph:
+# there is no crate yet (`CX-2` creates it, `EX-3` implements the runtime). They are deferred as one
+# block for one reason, and each row still carries its own so that a row proved early is visible as
+# a stale deferral rather than lost in a group.
+
+[[deferred]]
+id = "HF-1"
+story = "EX-3"
+reason = "Computed per-phase order (G3), including the lexicographic tiebreak. Needs a runtime that builds the graph — no hook crate exists yet (CX-2 creates it)."
+
+[[deferred]]
+id = "HF-2"
+story = "EX-3"
+reason = "Dependency closure (G1) — an unprovided `requires`. Startup validation, no runtime yet."
+
+[[deferred]]
+id = "HF-3"
+story = "EX-3"
+reason = "Conflict rejection (G2) — a declared `conflicts` capability. Startup validation, no runtime yet."
+
+[[deferred]]
+id = "HF-4"
+story = "EX-3"
+reason = "Effect legality (G6) — an effect outside its phase's closed set. Startup validation, no runtime yet."
+
+[[deferred]]
+id = "HF-5"
+story = "EX-3"
+reason = """
+Derived `Supported`/`Allow` (G4) and the V6 acceptance set that follows from it. Needs both the
+runtime and the registry constants (`EX-2`/`EX-4`) the manifests are meant to name.
+"""
+
+[[deferred]]
+id = "HF-6"
+story = "EX-3"
+reason = "Implicit conflict (G2) — two modules advertising the same option tag. Startup validation, no runtime yet."
+
+[[deferred]]
+id = "HF-7"
+story = "EX-3"
+reason = """
+Token budget (G5) — `TokenFact` declarations over the module-fact sub-budget. The budget itself is
+already normative in affinity-token §3; what is missing is the graph validation that enforces it.
+"""
+
+[[deferred]]
+id = "HF-8"
+story = "EX-3"
+reason = "Ordering cycle (G3). Startup validation, no runtime yet."
+
+[[deferred]]
+id = "HF-9"
+story = "EX-3"
+reason = """
+A `QueryDecl.on` missing one outcome arm fails the boot (G7). Added by `EX-8` with the rule it
+proves; it becomes a test at `EX-3`'s query handling, which is the story that builds the graph
+validator this row runs against. The harness half of the same claim is EX-6's
+`external_route_*` scenario set, which needs the module as well as the validator.
+"""
+
+[[deferred]]
+id = "HF-10"
+story = "EX-3"
+reason = """
+Declared query timeouts summing over the profile's `hook_budget` fail the boot (G7). Needs the
+runtime, and needs a profile to carry `hook_budget` — `EX-5`'s catalog.
+"""
+
+[[deferred]]
+id = "HF-11"
+story = "EX-3"
+reason = "A `Proceed(DefaultRef)` naming no `defaults` entry fails the boot (G8). Startup validation, no runtime yet."
+
+[[deferred]]
+id = "HF-12"
+story = "EX-3"
+reason = """
+A `Reject` status outside the closed set — and a 6xx in particular — fails the boot (G8). Startup
+validation, no runtime yet.
+"""
+
+[[deferred]]
+id = "HF-13"
+story = "EX-3"
+reason = """
+A default naming a pool that is no configured trunk fails the boot (G8, the closed-world clause).
+Needs the runtime and the configured trunk set to check the default against.
+"""
