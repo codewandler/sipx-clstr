@@ -24,6 +24,14 @@ spec:
         app.kubernetes.io/name: sipx-clstr
         app.kubernetes.io/component: node
     spec:
+      # Do NOT add a toleration for `node.kubernetes.io/disk-pressure` here. It was tried and it is
+      # actively harmful: the taint and the eviction manager are two separate mechanisms, so
+      # tolerating the taint lets the pod schedule and then kubelet evicts it immediately for the
+      # same underlying condition. The ReplicaSet replaces it, and the result is an eviction loop
+      # that produced over a thousand `Evicted` pod objects in minutes. The pod being stateless and
+      # read-only does not exempt it — eviction under disk pressure is node-scoped, not usage-scoped.
+      # If this pod will not schedule, free space on the host; there is no manifest-level answer.
+      #
       # No hostNetwork here. The default deployment set uses it so UDP 5060 sees the real source
       # address, but inside a single-node k3d cluster pod-to-pod traffic already arrives with the
       # client pod's own address, and host networking would collide with anything else on 5060.

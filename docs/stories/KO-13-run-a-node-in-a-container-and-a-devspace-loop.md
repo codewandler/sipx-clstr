@@ -55,6 +55,16 @@ call between them.
   script in containers. Acceptance item 4 stays unticked until it is run for real.
 - **The image cannot use the workspace's declared `rust-version`.** Pinned to 1.97 with the reason
   in the `Dockerfile`; see the *Notes* below.
+- **A toleration for the disk-pressure taint was tried and reverted — do not retry it.** It looks
+  correct: the pod is stateless, mounts no volume and has `readOnlyRootFilesystem`, so it neither
+  causes disk pressure nor is threatened by it. But the taint and the **eviction manager** are two
+  separate mechanisms keyed off the same condition. Tolerating the taint let the pod schedule and
+  kubelet then evicted it at once; the ReplicaSet replaced it, and the loop produced **1158
+  `Evicted` pod objects within minutes** before it was stopped. Eviction under disk pressure is
+  node-scoped, not usage-scoped, so "this pod is not the problem" does not exempt it. The manifest
+  now carries that as a comment where the toleration would go, because the next person to hit a
+  `Pending` pod will reach for exactly this. There is no manifest-level answer; the answer is free
+  space on the host.
 
 ## Notes
 - **What this does not prove**, stated plainly because a green run invites the opposite reading: one
