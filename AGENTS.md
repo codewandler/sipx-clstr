@@ -21,9 +21,11 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `website/` | the published documentation site (Docusaurus), deployed on release | built by CI |
 | `CHANGELOG.md` | closed stories roll up here | hand-written |
 
-**The state of play, in one line:** M1 is at its last story — `RG-2`, in progress — and sipx
-`v0.4.0` cleared the whole [upstream ledger](docs/upstream.md), so nothing here waits on the
-kernel. The gate is green. Check the board before assuming any of that is current.
+**The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
+criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the whole
+[upstream ledger](docs/upstream.md), so nothing here waits on the kernel. The gate is green, and
+M1 ships one known defect: `RG-8`, a retransmitted REGISTER answered `500`, `ready` at priority 1.
+Check the board before assuming any of that is current.
 
 ## Non-negotiables
 

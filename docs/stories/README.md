@@ -9,17 +9,23 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 
 ## Status
 
-**M1 is at its last story, and the kernel no longer blocks anything.** The four load-bearing specs
-live in `docs/specs/` — proxy behavior, location service, affinity token, hook framework — joined
-now by `registrar-auth`; the deterministic-harness design is accepted and the harness is built.
-sipx **`v0.4.0`** cleared the whole [upstream ledger](../upstream.md) in one release: `S-15`,
-`S-16`, `T-14`, `T-16`, `T-17`, `T-18`, `T-19` and `X-20` all landed, leaving only `X-15`, which
-`CF-1` had already decided stays local. Nothing here waits on sipx.
+**M1 is complete: all fourteen stories are `done` and every exit criterion is proved.** The four
+load-bearing specs live in `docs/specs/` — proxy behavior, location service, affinity token, hook
+framework — joined now by `registrar-auth`; the deterministic-harness design is accepted and the
+harness is built. sipx **`v0.4.0`** cleared the whole [upstream ledger](../upstream.md) in one
+release, leaving only `X-15`, which `CF-1` had already decided stays local. Nothing here waits on
+sipx.
 
-`RG-2` — M1 #9, the milestone's last open story — is **in progress**: the spec and the sans-IO
-decision core are in and its RA vectors pass; what remains is wiring the decision into REGISTER
-processing and the harness scenario for M1's fifth exit criterion. M1's stories and their exit
-criteria are in the [roadmap](../roadmap.md#m1-in-detail); each carries its position as `M1 #n`.
+`RG-2` closed the milestone: digest runs *before* REGISTER processing through `parse::admit`, the
+principal it yields reaches the binding, and `sipx-clstr-sim/tests/register_auth.rs` proves the
+retransmission case end to end. M1's stories and their exit criteria are in the
+[roadmap](../roadmap.md#m1-in-detail); each carries its position as `M1 #n`.
+
+**M1 ships with one known defect, and it is the top of `Next`.** That same scenario found that a
+REGISTER which correctly authenticates as a retransmission is then refused `500`: location-service
+§5.3's B4 tests idempotency against an absolute deadline, so it holds only for a retry arriving in
+the same nanosecond. `RG-8` owns it — a spec decision first, then a one-function change — and it is
+`ready` at priority 1.
 
 Only the stories with no unmet dependency are `ready` — the rest become ready as the one before
 them lands, so the top of `Next` is always genuinely takeable. **The generated lists below group
@@ -36,10 +42,12 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ## Now (in progress)
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
-- [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · unblocked by sipx v0.4.0 — the spec and the decision core are in; the store wiring is not
 
 ## Next (ready — take the top one unless the user named a story)
-_None._
+
+### Registrar & location service
+_The one place the platform is allowed durable state — so its updates must serialize._
+- [RG-8 — Settle B4 idempotency so a retransmission is a retry](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) · Signalling · found by RG-2's harness scenario — an ordinary UDP retransmission is answered 500
 
 ## Blocked
 _None._
@@ -150,6 +158,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [PX-6 — Implement CANCEL and Timer C](PX-6-implement-cancel-and-timer-c.md) · Signalling · M1 #6 · CANCEL and Timer C, proved under adversarial harness schedules
 - [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · M1 #8 · the PB table as a generated, checked report — and it found a deleted test
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
+- [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
 - [RG-4 — Implement the PostgreSQL LocationStore backend](RG-4-implement-the-postgresql-locationstore-backend.md) · Signalling · M1 #10 · the same LS-* vectors on PostgreSQL, unchanged — and two races found
 - [RG-6 — Build forking target sets from location lookups](RG-6-build-forking-target-sets-from-location-lookups.md) · Signalling · M1 #7 · the registrar and the proxy meet; found a dropped Path in PX-5

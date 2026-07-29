@@ -6,7 +6,7 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-28:_ **M0 is complete and M1 is defined.** The four load-bearing specs are
+_As of 2026-07-29:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
 written and cross-reconciled — proxy behavior, location service, affinity token, hook framework
 — the deterministic-harness design is accepted with its sipx-testkit upstream split decided, and
 `CX-1` has filed the kernel gaps as stories in the sipx repo. M1 is scoped below: fourteen
@@ -69,7 +69,7 @@ than half of M2.
 | 6 | `PX-6` | CANCEL and Timer C | `PB-C-*` |
 | 7 | `RG-6` | forking target sets built from location lookups | `PB-F-2` fed by `LS-L-*` |
 | 8 | `PX-7` | the proxy torture vectors, run in the harness | the whole `PB-*` table, as a report |
-| 9 | `RG-2` | server-side digest — challenge, verify, replay window | RFC 7616 vectors + a replayed `nc` — **blocked**, see below |
+| 9 | `RG-2` | server-side digest — challenge, verify, replay window | `RA-*` vectors, plus the retransmission proved end to end in the harness |
 | 10 | `RG-4` | the PostgreSQL `LocationStore` | the `LS-*` tables again, unchanged, on a second backend |
 | 11 | `ET-1` | the e2e-tester role and the probe contract | spec accepted with a verdict taxonomy |
 | 12 | `ET-2` | the sans-IO probe engine | failure scenarios as seeded harness tests |
@@ -115,15 +115,27 @@ protocol-generic and this repo does not shadow-implement kernel logic (AGENTS.md
 `RG-2` sits at position 9, late enough that the kernel work has room, and M1's other thirteen
 stories do not wait for it.
 
-**Where that leaves M1: thirteen of fourteen, and the fourteenth is upstream's to release.** The
-kernel work `RG-2` needs is *written* — `S-16` (the authenticator) and `X-20` (which makes it
-reachable from a crate that has no async runtime) both exist on sipx's `main`. Neither is in a tag,
-and this workspace pins tags rather than branches on purpose, so `RG-2` stays `blocked` and exit
-criterion 5 stays unproven. See the [upstream ledger](upstream.md); the remedy is a sipx release,
-not a workaround here.
+**Where that leaves M1: fourteen of fourteen, and every exit criterion proved.** The last of them
+was criterion 5, which waited on the kernel: `S-16` (the authenticator) and `X-20` (which makes it
+reachable from a crate with no async runtime) landed in sipx `v0.4.0`, and `RG-2` closed against the
+pin this workspace now carries. The [upstream ledger](upstream.md) is clear.
+
+**One thing M1 exits with, said plainly.** `RG-2`'s harness scenario proved criterion 5 and, in
+doing so, found that a REGISTER which correctly authenticates as a retransmission is then refused
+`500` by the location service — [location-service](specs/location-service.md) §5.3's B4 tests
+idempotency against an absolute deadline, so it is true only for a retry arriving in the same
+nanosecond. Criterion 5 is about authentication and holds; criterion 4's vectors pass as written.
+But an ordinary lost `200` over UDP reaches this, so it is a defect M1 ships with rather than one it
+is free of. [`RG-8`](stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) owns it,
+`ready` at priority 1, and it is the first thing after M1 rather than an M2 subject.
 
 ## Delivered
 
+- **M1 — one node that proxies and registers** (0.5.0): all fourteen stories, every exit criterion
+  proved. Two `sipx` CLI phones register through one node and call each other with media flowing
+  direct (`CX-3`); the proxy torture vectors, the location-service vectors on both backends, and the
+  registrar-auth vectors all pass in the deterministic harness; digest runs before REGISTER
+  processing and a retransmission is not mistaken for a replay (`RG-2`). Ships with `RG-8` open.
 - **The M0 specs** (0.2.0): `docs/specs/proxy-behavior.md`, `location-service.md`,
   `affinity-token.md`, `hook-framework.md`, and the accepted deterministic-harness design —
   written concurrently, cross-reconciled (token budget 157 B ≤ 200 B end-to-end, hook phases
@@ -134,9 +146,13 @@ not a workaround here.
 
 ## Next
 
-- `CX-2` — the Cargo workspace and the gate, the first act of M1. Then the M1 set above, in
-  order. The operator epic advances in parallel (`KO-2` in progress) and the kernel stories
-  `CX-1` filed advance on sipx's own schedule.
+- `RG-8` — settle B4's idempotency rule so a retransmitted REGISTER is a retry rather than a `500`.
+  Priority 1 and the only `ready` story: it is a spec decision in
+  [location-service](specs/location-service.md) §5.3 before it is a code change, and it supersedes
+  the open question `RG-3` had deferred to the cluster stories.
+- Then M2: the affinity token (`AF-*`) is the defining subsystem, and `DP-1`'s config schema
+  replaces the node's provisional one. The operator epic advances in parallel (`KO-2` in progress)
+  and the kernel stories `CX-1` filed advance on sipx's own schedule.
 
 ## Epics
 

@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://codewandler.github.io/sipx-clstr/"><img src="https://img.shields.io/badge/docs-codewandler.github.io%2Fsipx--clstr-E2622A" alt="Documentation"></a>
-  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/status-M1%20in%20progress-2F3A45" alt="Status: M1 in progress"></a>
+  <a href="docs/roadmap.md"><img src="https://img.shields.io/badge/status-M1%20complete-2F3A45" alt="Status: M1 complete"></a>
   <a href="https://github.com/codewandler/sipx"><img src="https://img.shields.io/badge/built%20on-sipx-F98A3C" alt="Built on sipx"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F3A45" alt="MIT or Apache 2.0 license"></a>
 </p>
@@ -25,12 +25,13 @@
 
 ---
 
-> **Read this first.** sipx-clstr is **early**. Four load-bearing specifications are written and
-> cross-reconciled, and the Cargo workspace now exists with its gate green — but **nothing
-> forwards a SIP message yet**. M1, which makes one node proxy and register, is
-> [scoped as fourteen ordered stories](docs/roadmap.md#m1-in-detail) with exit criteria you can
-> run. If you need a proxy today, this is not it — but if you want to see the argument before the
-> implementation, it is all here, and that is deliberate.
+> **Read this first.** sipx-clstr is **early, and now real**. M1 is complete: **one node proxies
+> and registers**, and two `sipx` CLI phones register through it and call each other with media
+> flowing directly between them — a scripted, repeatable proof, not a claim
+> ([`scripts/e2e-call.sh`](scripts/e2e-call.sh)). What does *not* exist yet is the cluster: no
+> affinity tokens, no trunks, no media control, no deployment surface. That is M2. If you need a
+> clustered proxy today, this is not it — but one node is a foundation rather than a demo, and
+> every rule it follows is written down first.
 
 ## The problem
 
@@ -84,17 +85,19 @@ multi-node test is treated as a bug in the design, not in the test.
 
 | | |
 |---|---|
-| **Written** | Proxy behaviour, location service, affinity token, hook framework — four specs with normative rules and test-vector tables |
-| **Accepted** | The deterministic multi-node harness design, and its split with the upstream test kit |
-| **Building** | The Cargo workspace, its lints and the gate. Five crates, split along the sans-IO boundary — `tokio` is a dependency of the driver crate and of nothing else |
-| **Not yet** | Anything that forwards a SIP message. The proxy core, the registrar and the harness are M1 stories 3–8 |
-| **Built on** | [sipx](https://github.com/codewandler/sipx) 0.2.1 — the SIP kernel this platform orchestrates, pinned to a tag. Protocol logic belongs there; this repo adds clustering |
+| **Written** | Proxy behaviour, location service, affinity token, hook framework, registrar auth — five specs with normative rules and test-vector tables |
+| **Working** | One node that proxies and registers: RFC 3261 §16 forwarding with forking, CANCEL and Timer C; REGISTER with server-side digest over an in-memory or PostgreSQL location store; the end-to-end call probe |
+| **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) says which vector rows are proved and which are deferred, with a reason for each |
+| **Not yet** | The cluster. Affinity tokens, trunk routing, media control, roles by config, the operator and chart — all M2 and beyond |
+| **Known defect** | A retransmitted REGISTER is answered `500` rather than treated as an idempotent retry (`RG-8`, the top of the backlog) |
+| **Built on** | [sipx](https://github.com/codewandler/sipx) 0.7.0 — the SIP kernel this platform orchestrates, pinned to a tag. Protocol logic belongs there; this repo adds clustering |
 
-**Milestones.** M0 foundation on paper *(complete)* → **M1 one node that proxies and registers
-*(in progress)*** → M2 a cluster you can deploy → M3 modern reachability (Outbound, GRUU,
-WebSocket, push) → M4 service families. M1 is
+**Milestones.** M0 foundation on paper *(complete)* → M1 one node that proxies and registers
+*(complete)* → **M2 a cluster you can deploy *(next)*** → M3 modern reachability (Outbound, GRUU,
+WebSocket, push) → M4 service families. M1 was
 [fourteen stories in a fixed order](docs/roadmap.md#m1-in-detail), each with the vectors that
-prove it; the rest, and what "done" means for each, is in **[the roadmap](docs/roadmap.md)**.
+prove it, and all six of its exit criteria hold; the rest, and what "done" means for each, is in
+**[the roadmap](docs/roadmap.md)**.
 
 ## Why specs first
 

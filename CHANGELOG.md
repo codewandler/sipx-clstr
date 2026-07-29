@@ -7,6 +7,60 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-29
+
+### Added
+
+- **M1 is complete** (`RG-2`, the fourteenth story) — **server-side digest, wired**. The decision
+  core and its 22 `RA` vectors were already in; what landed here is the seam and the proof.
+  - **`registrar::parse::admit` is where authentication happens**, and
+    [registrar-auth](docs/specs/registrar-auth.md) §2's ordering is now structural rather than
+    conventional: it runs `TenantAuth::decide` and builds a `RegisterCommand` **only** on
+    `Proceed`, so a challenged request never exists as something `process` could store. It returns
+    `Admission::{Command, Challenge, Reject}` rather than a `Result` — a challenge is not a
+    failure, it is the first half of a round trip the client is expected to finish, and typing it
+    as an error would put it on the same footing as a malformed message.
+  - **`EdgeContext::principal` is removed.** An identity is not something an edge *knows*, it is
+    what a decision *produced*; a settable field would have let a driver assert an identity nobody
+    proved, which is the one mistake in this area no downstream test could catch. `admit` is now
+    the only way a principal is ever attached, and `register_command` is explicitly the open-tenant
+    path — it yields `principal: None`, which §3 A1 requires to be a *recorded* fact so the audit
+    trail can say "unauthenticated" rather than fail to say anything.
+  - **The command's tenant comes from the authenticator, not the edge.** §5 shapes the principal as
+    `<tenant>:<username>` because a username is unique only within a tenant; sourcing the two from
+    different places would let a misconfigured listener write tenant A's bindings under a principal
+    naming tenant B. One source, so they cannot disagree.
+  - **`Timestamp::as_secs`** is the clock seam — the location service counts nanoseconds and digest
+    counts seconds. Truncating, deliberately: a nonce then expires a moment late rather than a
+    moment early, so nobody is told `stale` for a nonce that was still good.
+  - **The node driver can authenticate**, via `NodeConfig::auth` (realm, nonce secret, credentials),
+    open by default — a default that quietly required credentials would make a node that answers
+    nothing look like a node that is up. One `Mutex<TenantAuth>` per process, because the replay
+    window is the thing it holds and a per-request authenticator is a window that never says no.
+  - **`sipx-clstr-sim/tests/register_auth.rs`** — the harness scenario M1's fifth exit criterion
+    asks for, in eight cases: the challenge/answer round trip, the principal reaching the stored
+    binding, `RA-R-1`'s retransmission, `RA-R-2`'s forged twin, `RA-D-4`'s foreign realm refused
+    `403`, a wrong password binding nothing, an open tenant recording `None`, and a byte-for-byte
+    replay sweep under jitter. The phone's half is `sipx_ua::auth::respond` — the kernel's own
+    client — so what it proves is that the two halves of digest agree, not that this file agrees
+    with itself.
+
+### Known issues
+
+- **A retransmitted REGISTER authenticates and is then refused `500`** (`RG-8`, `ready`, priority
+  1). The authentication half is correct — same nonce, same nonce-count, same digest, admitted
+  twice, exactly as `RA-R-1` requires. What refuses it is
+  [location-service](docs/specs/location-service.md) §5.3 B5, because B4's idempotency test reads
+  "same granted expiry base" as the same **absolute deadline**, which is true only for a retry
+  arriving in the very nanosecond of the original. Over UDP a lost `200` produces this every day.
+  - `RG-3` had recorded the question and deferred it to the cluster stories, framed as a
+    *re-presentation at a second node* stamping its own `now`. The harness reached it with one
+    node, one phone and no cluster at all, which is what moved it from M2's problem to M1's.
+  - Left unfixed here on purpose: §5.3 is normative, the reading changes there before the code
+    does, and reversing a decision that is on the record belongs to the story that owns it.
+    `a_retransmission_that_authenticates_is_still_refused_by_the_ordering_rule` pins the current
+    behaviour meanwhile, so the defect is something a build fails on rather than a paragraph.
+
 ## [0.4.0] — 2026-07-29
 
 ### Added
