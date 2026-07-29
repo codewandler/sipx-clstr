@@ -44,23 +44,13 @@ fn user_of(uri: &Uri) -> String {
         .unwrap_or_default()
 }
 
-/// Remove the topmost `Via`, by rebuilding the header collection around it.
+/// Remove the topmost `Via`.
 ///
-/// This is the operation sipx `S-15` exists to make unnecessary: `Headers` can push and it can
-/// remove *every* occurrence of a name, but it cannot remove the first one, so popping one `Via`
-/// means copying all the others. Correct, and O(n) clones per hop. When `S-15` lands this becomes
-/// a call.
+/// One call since sipx `S-15` (v0.4.0). This stub used to rebuild the header collection around the
+/// header it wanted gone, because `Headers` could remove every occurrence of a name but not the
+/// first one.
 fn pop_top_via(response: &mut Response) {
-    let mut rebuilt = sipx_sip::Headers::new();
-    let mut popped = false;
-    for existing in response.headers.iter() {
-        if !popped && existing.name() == &HeaderName::Via {
-            popped = true;
-        } else {
-            rebuilt.push(existing.clone());
-        }
-    }
-    response.headers = rebuilt;
+    response.headers.remove_first(&HeaderName::Via);
 }
 
 // ---------------------------------------------------------------------------------------------

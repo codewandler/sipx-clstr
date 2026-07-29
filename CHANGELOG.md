@@ -198,6 +198,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Via surgery is one upstream call instead of a collection rebuild** (`PX-3`). sipx `S-15`
+  shipped `Headers::remove_first` in `v0.4.0`, so the two sites that built a fresh `Headers` and
+  copied every header except the topmost `Via` into it — the proxy's `pop_via` and the harness
+  stub's `pop_top_via` — are each a single call. `remove_all` in `forward.rs` stays: it means
+  *every* occurrence, and adoption ends where the semantics differ.
+  - `tests/header_surgery.rs` pins what the rebuild was silently guaranteeing. The existing `PB-R`
+    rows only check that our own `Via` is gone, which is equally true of a response whose remaining
+    stack came back shuffled; the new rows use a three-`Via` stack and assert arrival order
+    survives, and that headers either side of the stack are untouched.
+  - One test reads the crate's source rather than its behaviour, because "uses the upstream API
+    *exclusively*" is not a behavioural claim — a reintroduced rebuild would pass every other
+    assertion in the file.
 - **The upstream ledger grew a state for "written but not released", because that is where `RG-2`
   is.** The kernel work M1's last story needs now exists — `S-16` (server-side digest: nonce
   minting, challenge emission, verification, a bounded replay window) and `X-20` (which makes those

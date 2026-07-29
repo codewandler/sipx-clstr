@@ -3,11 +3,11 @@ id: CF-4
 title: Add fault injection to the simulation
 pillar: Platform
 status: ready
-priority: 3
+priority: 2
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: CF-5 is done and X-14 landed in v0.4.0 — best taken after CF-7 so it builds on the kernel link
+note: CF-5 is done; independent of CF-7 — net.rs is what a fault schedule acts on and it is staying local
 ---
 
 # Add fault injection to the simulation

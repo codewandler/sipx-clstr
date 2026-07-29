@@ -2,12 +2,12 @@
 id: CF-7
 title: Adopt the kernel timer queue and loopback link
 pillar: Platform
-status: ready
-priority: 1
+status: blocked
+priority:
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: X-14 landed in sipx v0.4.0 — delete the harness's local copies
+note: X-14 shipped but does not fit — both kernel pieces are keyed to tokio::time::Instant; BLOCKED on a new upstream ask
 ---
 
 # Adopt the kernel timer queue and loopback link
@@ -25,13 +25,38 @@ ships them, so the two repos share one cancellation discipline instead of two th
       invalidates every regression seed in the suite.
 
 ## Progress
-- **Unblocked 2026-07-29.** sipx `v0.4.0` ships `X-14`: the seeded link is
-  `sipx-testkit/src/link.rs` with its own `tests/loopback.rs`, and the generalized queue is in
-  `sipx-transport/src/timers.rs`. The workspace already pins `v0.4.0` (`RG-2`), so this is
-  takeable with no further dependency work.
-- `CF-5` shipped the harness with local implementations of both, which is what its fourth
-  acceptance criterion ("components upstreamed per CF-1's split are consumed from sipx, not
-  forked") could not satisfy while the upstream work was unfiled. This story is what closes it.
+**Attempted 2026-07-29 and re-blocked on a gap `X-14` did not close.** `v0.4.0` does ship both
+pieces — `sipx-testkit/src/link.rs` and a `TimerQueue` generalized over its *key* — but they were
+generalized for the kernel's own loopback tests, which run on a tokio clock. Neither is drivable
+from virtual time, and adopting either would cost more determinism than the convergence is worth.
+
+- **`TimerQueue<K>` is generic over its key and not over its clock.** It is keyed to
+  `tokio::time::Instant` (`sipx-transport/src/timers.rs:19`), and that type has exactly two
+  constructors: `now()`, which reads the machine's clock, and `from_std`, which needs a
+  `std::time::Instant` that has no zero either. There is no way to build an epoch. Anchoring on a
+  real `now()` inside the simulation contradicts `time.rs`'s own premise — *"a simulation that
+  could ask the operating system what time it is would be a simulation whose results depend on the
+  machine that ran it"* — which is the property `CF-5` exists to guarantee.
+- **`TimerQueue` also holds no payload.** The harness runs `EventQueue<Event>`: deliveries, timers
+  and link breaks in **one** totally ordered queue, ties broken by insertion sequence. That single
+  order is what makes the trace a pure function of (scenario, seed). `TimerQueue` stores keys only,
+  so adopting it would split that into two heaps merged at pop time, and the total event order
+  would become a function of how the merge breaks ties across two structures. That is a
+  determinism regression wearing the costume of convergence.
+- **`testkit::Link` is the wrong shape twice over.** It is two-sided (`Side::Left`/`Right`) where
+  the harness needs an N-node mesh with partition state; it has no stream class, so RFC 3261 §16.9
+  transport failure has nowhere to live; and it draws its faults from its own internal splitmix64
+  rather than from `SimRng`. That last one alone fails this story's third criterion: moving fault
+  randomness into the kernel's generator changes what every seed in the suite means.
+- **Nothing was adopted and nothing was re-recorded.** The alternative was to bend the harness
+  around the kernel's clock and re-record the pins; the pins are the regression suite, and a
+  re-recorded pin proves only that the new behaviour is the new behaviour.
+
+**What would unblock it** is an upstream change this repo has not filed yet: `TimerQueue` generic
+over its instant type (`TimerQueue<K, I: Ord>`, or a `Clock` associated type) so a virtual clock
+can drive it, and either an N-party link or an explicit decision that the mesh stays here and only
+the two-party primitive is shared. Until then `CF-5`'s local implementations are the correct code,
+and the fourth criterion it could not satisfy stays unsatisfied for a reason now written down.
 
 ## Notes
 - Upstream story: sipx [X-14](https://github.com/codewandler/sipx/blob/main/docs/stories/X-14-testkit-timer-queue-and-loopback-link.md),

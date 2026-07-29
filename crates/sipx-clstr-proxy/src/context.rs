@@ -692,21 +692,14 @@ impl ResponseContext {
 
 /// R2 — pop the topmost `Via`, which is ours.
 ///
-/// Rebuilds the header collection, because `Headers` can remove *every* occurrence of a name but
-/// not the first one. That is the operation sipx `S-15` exists to provide; until it lands this costs
-/// one clone per header per hop, which is correct and slow rather than wrong.
+/// `Headers::remove_first` since sipx `S-15` (v0.4.0). It used to rebuild the whole collection,
+/// because `Headers` could remove *every* occurrence of a name but not the first one — correct,
+/// and one clone per header per hop. The upstream operation removes at an exact position, which is
+/// what §16.7 step 2 actually asks for: `Via` order *is* the return path, so everything below the
+/// one we take must keep its place.
 fn pop_via(response: Response) -> Response {
     let mut response = response;
-    let mut rebuilt = sipx_sip::Headers::new();
-    let mut popped = false;
-    for header in response.headers.iter() {
-        if !popped && header.name() == &HeaderName::Via {
-            popped = true;
-        } else {
-            rebuilt.push(header.clone());
-        }
-    }
-    response.headers = rebuilt;
+    response.headers.remove_first(&HeaderName::Via);
     response
 }
 

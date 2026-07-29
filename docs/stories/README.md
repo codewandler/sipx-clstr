@@ -42,19 +42,14 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · X-14 landed in sipx v0.4.0 — delete the harness's local copies
-- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · CF-5 is done and X-14 landed in v0.4.0 — best taken after CF-7 so it builds on the kernel link
-
-### Proxy engine
-_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
-- [PX-3 — Header surgery API in sipx](PX-3-header-surgery-api-in-sipx.md) · Signalling · S-15 landed in sipx v0.4.0 — what remains is adopting it here; unblocks PX-4
+- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · CF-5 is done; independent of CF-7 — net.rs is what a fault schedule acts on and it is staying local
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · T-17 settled it upstream in v0.4.0 — design against the kernel resolver, not around it
 
 ## Blocked
-_None._
+- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · X-14 shipped but does not fit — both kernel pieces are keyed to tokio::time::Instant; BLOCKED on a new upstream ask
 
 ## Backlog
 
@@ -155,6 +150,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [EX-1 — Specify hook phases and the module manifest](EX-1-specify-hook-phases-and-the-module-manifest.md) · Platform · must land before the proxy API hardens
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
 - [PX-2 — Design the proxy transaction driver](PX-2-design-the-proxy-transaction-driver.md) · Signalling · M1 #2 · decided: build on sipx_transport::Handle, not on a socket loop of our own
+- [PX-3 — Adopt the upstream header surgery API](PX-3-adopt-the-upstream-header-surgery-api.md) · Signalling · S-15 landed in sipx v0.4.0 — what remains is adopting it here; unblocks PX-4
 - [PX-5 — Implement stateful forwarding with forking](PX-5-implement-stateful-forwarding-with-forking.md) · Signalling · M1 #5 · stateful forwarding and forking; found a loop-detection defect in PX-1 §6
 - [PX-6 — Implement CANCEL and Timer C](PX-6-implement-cancel-and-timer-c.md) · Signalling · M1 #6 · CANCEL and Timer C, proved under adversarial harness schedules
 - [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · M1 #8 · the PB table as a generated, checked report — and it found a deleted test
