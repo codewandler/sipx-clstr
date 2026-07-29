@@ -122,8 +122,20 @@ without restart. A dynamic membership service is a later, separate decision.
   time rather than warn.
 - Key rotation now has to outlast registrations, not only tokens: a reference leaves circulation
   when the binding holding it is refreshed, so the overlap window is `max(token lifetime,
-  maximum registration expiry)` (AF-2's amendment to the rotation rule). A deployment that raises
-  registration expiry above the token lifetime lengthens every rotation.
+  maximum registration expiry)` (AF-2 wrote that term into the rotation rule and the mint-window
+  rule both). A deployment that raises registration expiry above the token lifetime lengthens
+  every rotation.
+- **That rotation bound rests on a location binding being a reference's only carrier**, which is
+  true in M1/M2 and is what makes registration expiry a bound at all. M3's Path-URI carriage would
+  break it: a route set an endpoint has learned is never recomputed (RFC 3261 §12.2.1.2), so a
+  reference sitting in one is refreshed by nothing. M3 must therefore either re-bound rotation or
+  give the reference an expiry after all — it cannot inherit AF-2's argument unexamined.
+- Two lifetimes now have to be kept in step, and the platform owns both ends: a connection's idle
+  timeout and the registration expiry granted over that connection. AF-2 clamps the grant to the
+  idle timeout rather than trusting them to be configured compatibly, because the failure is
+  silent — the binding outlives the flow and every call toward that client is answered `480` until
+  the binding expires. Worth revisiting once RFC 5626 keepalives (M3) give flows a liveness signal
+  that does not depend on the refresh cadence.
 - The stickiness-miss path: how often the L4 dataplane delivers a transaction-scoped message to
   the wrong edge in practice, and whether PX-1's degraded behavior (stateless CANCEL forwarding,
   retransmission absorption) is enough — measured under the harness's fault schedules.

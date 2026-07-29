@@ -259,7 +259,14 @@ no key material in any message. Required attributes per key entry:
 **[sipx-clstr] rules (the config loader MUST enforce):**
 
 - Exactly one `mint: true` key at any config version, and its verify window covers
-  `now + L + S` (lifetime and skew, §7/§8).
+  `now + max(L, E_max) + S` — the longest a record minted under it can still be presented. `L` is
+  the token lifetime and `S` the skew (§7/§8); `E_max` is the tenant's maximum registration expiry
+  (location-service §5.2 E5, default 86 400 s), which is what bounds a **flow reference** minted
+  under it, since a reference carries no expiry of its own and leaves circulation only when the
+  binding holding it refreshes (§11.4 FM7). With the defaults, `L = E_max = 86 400 s`, so the two
+  terms are equal; without the `E_max` term a single configuration with `E_max > L` and **no
+  rotation at all** would let the mint key expire out from under references it minted. BI6's clamp
+  only ever lowers a connection-bound grant, so `E_max` stays a valid ceiling.
 - No two entries share an `id` while both verify windows are open — ids may wrap over the years,
   never overlap.
 - A key id absent from the current key set is an **unknown key**: verification fails (§8, S2).
@@ -271,18 +278,33 @@ no key material in any message. Required attributes per key entry:
 | K1 | Add key B with `mint: false`, `verify_from ≤ now` to the configuration; reload every node |
 | K2 | Confirm every node holds B (a deployment concern — DP observability, not this spec) |
 | K3 | Flip `mint` from A to B in one config change; reload |
-| K4 | Keep A verify-valid until `t_switch + L + S` (last possible A-mint plus maximum token lifetime plus skew), then remove A |
+| K4 | Keep A verify-valid until `t_switch + max(L, E_max) + S` — the last possible A-mint, plus the longest a record minted under it can still be presented, plus skew — then remove A |
 
 Rationale for the order: between K1 and K3 every node can verify B-tokens before any node mints
 one, so a reload wave can never produce a token some healthy edge rejects. Rationale for K4's
-bound: every token minted under A expires by `t_switch + L`, so when A retires, no *live* token
-references it.
+bound, one term per record family:
 
-**Tokens under a retired key** are hard-rejected (unknown key id → `403`, §8). Followed
-procedure means only already-expired tokens are affected. Retiring early is permitted for exactly
-one reason — key compromise — and its stated cost is that mid-dialog requests of dialogs minted
-under the retired key are answered `403`: killing those dialogs is chosen over routing on tokens
-an attacker may now forge. Blast radius of a compromise is otherwise bounded by `L` and rotation.
+- `L` bounds A-minted **tokens**: every one of them expires by `t_switch + L`, so when A retires
+  no *live* token references it.
+- `E_max` bounds A-minted **flow references**, which have no expiry of their own (§11.4 FM7). A
+  reference leaves circulation when the binding carrying it is refreshed — the refresh re-presents
+  the reference the owner has since re-minted under B (§11.4 FM3) — and a binding that is *not*
+  refreshed expires within its granted lifetime, capped by `E_max` (location-service §5.2 E5).
+  Either way, by `t_switch + E_max` no live binding still carries an A-minted reference.
+
+With the default `L` and `E_max` both 86 400 s the bound is numerically what it was; a deployment
+that raises either one lengthens every rotation by the same amount. **The `E_max` term holds only
+while a location binding is a reference's sole carrier** — see the caveat under §11.4.
+
+**Tokens and references under a retired key** are hard-rejected: unknown key id → `403` for a
+token (§8 S2), and `Invalid` at FV2 for a reference, which removes the target (§13.1 D3) and ends
+in `480` once the set empties (D8). Followed procedure means only already-expired tokens and
+already-replaced references are affected. Retiring early is permitted for exactly one reason —
+key compromise — and its stated cost is now two-sided: mid-dialog requests of dialogs minted under
+the retired key are answered `403`, and requests toward clients whose bindings still carry
+references minted under it are answered `480` until each binding refreshes. Killing those dialogs
+and delaying those calls is chosen over routing on records an attacker may now forge. Blast radius
+of a compromise is otherwise bounded by `L`, `E_max` and rotation.
 
 ## 7. Mint rules
 
@@ -294,7 +316,7 @@ an attacker may now forge. Blast radius of a compromise is otherwise bounded by 
 | M2 | **Direction.** ORIG names the dialog side that sent the dialog-forming request; TERM the side it was forwarded to. Each token's direction field names the side that will *present* it: the entry facing the originating side carries ORIG, the entry facing the terminating side carries TERM. The mint pushes the ORIG entry first and the TERM entry on top of it, so route-set learning (RFC 3261 §12.1.1 in order for the UAS, §12.1.2 reversed for the UAC) hands each endpoint its own side's entry as the first of the pair |
 | M3 | The pair's claims are identical except direction and nonce: same tenant, home shard, edge affinity, media node, policy version, expiry, **and byte-identical module-facts region**. Verification enforces this (§8, S9) |
 | M4 | Nonces come from the injected randomness source (RFC 4086), fresh per token — the two entries of a pair MUST NOT share one. A `(key id, nonce)` pair MUST never repeat: nonce reuse under an AEAD key is catastrophic (RFC 8439 §4). A key MUST be rotated before 2³² mints; random 96-bit nonces then collide with probability ≤ (2³²)²∕2⁹⁷ = 2⁻³³ |
-| M5 | `expiry = now + L`, with `L` the configured token lifetime. Default **L = 86 400 s (24 h)**; configurable, floor 600 s. The rotation overlap (§6 K4) scales with `L` — a deployment raising `L` accepts slower key retirement |
+| M5 | `expiry = now + L`, with `L` the configured token lifetime. Default **L = 86 400 s (24 h)**; configurable, floor 600 s. The rotation overlap (§6 K4) scales with `max(L, E_max)` — a deployment raising `L` above the maximum registration expiry accepts slower key retirement, and one raising registration expiry above `L` does the same |
 | M6 | **No mid-dialog refresh — expiry outlives the dialog.** RFC 3261 §12.2.1.2/§12.2.2 forbid recomputing the route set on target refresh, and RFC 6141 confirms it: a token minted into a re-INVITE's Record-Route can never reach the peer's route set, so an effective in-dialog refresh mechanism does not exist in the protocol. Decision: the platform does not Record-Route target refresh requests (proxy-behavior F4 already scopes Record-Route to dialog-forming requests); a target refresh is an ordinary mid-dialog request — token verified, forwarded, nothing re-minted. A dialog outliving `L` fails **explicitly**: its next in-dialog request is answered `403` (§8) — never mis-routed. Deployments whose dialogs plausibly exceed 24 h raise `L`; that is the only mechanism, and specifying a "refresh" the peer cannot adopt would be false comfort |
 | M7 | **Path (M3).** Registration flows mint the same layout into Path URIs with the same `aft` parameter and budget; the direction value for Path tokens is fixed by the M3 stories when the upstream typed Path header lands ([upstream.md](../upstream.md)). Version 1 reserves no additional fields for it |
 | M8 | **Module facts.** The facts region is handed to `mint` as opaque bytes, `0 ≤ F ≤ 64`, assembled from `ContributeTokenFact` effects at hook phase H9 into the F4 mint draft (hook-framework §3/§5); Σ of declared `max_bytes` over a profile is gated at startup (G5), so a conforming deployment cannot present an over-budget region to `mint`. `mint` MUST reject F > 64 regardless — the layout ceiling is not the hook framework's to relax |
@@ -571,7 +593,7 @@ second id space for the same nodes would be a second thing to get wrong in confi
 2³²; the width is chosen so the slot space never has to be recycled tightly. `generation` u32: at
 one reconnect per second on the *same slot* it lasts 136 years, and it is never wrapped (CT4).
 `incarnation` u32: whole seconds, valid until 2106 like §3's expiry, and monotone across restarts
-by CT2 rather than by luck. `transport` gets a full byte for the same reason `direction` does —
+by CT2 rather than by luck — within the clock assumption CT2 states. `transport` gets a full byte for the same reason `direction` does —
 a fixed-offset byte keeps the parse trivial and leaves 250 values to reject as corruption. Per the
 design rule, no field is a hostname, a port or a raw node identifier: a reference is meaningless
 without the cluster's own configuration.
@@ -601,7 +623,7 @@ call site for both families.
 |---|---|
 | FM1 | A reference is minted by the edge that **accepted** the connection, at accept time, and cached in that connection's table row (§12.2 CT3). No other node may mint a reference naming it — an owner is the only thing that can know a slot's generation |
 | FM2 | Claims come from the row, never from a message: `tenant` and `transport` from the accepting listener's trust context and transport class, `node`/`incarnation`/`connection`/`generation` from the row's identity |
-| FM3 | **The bytes are stable for the life of the connection.** `mint_flow` runs again for a live connection only when the mint key changes (§6 K3); such a re-mint preserves the flow identity and changes only nonce, key id and tag. Rationale: consumers compare identity (D6), and byte stability keeps a REGISTER retransmission byte-identical to the original, which is what location-service §5.3 B4 compares |
+| FM3 | **The bytes are stable for the life of the connection.** `mint_flow` runs again for a live connection only when the mint key changes (§6 K3); such a re-mint preserves the flow identity and changes only nonce, key id and tag. Rationale: a reference is an identifier, and one that changed under a client's retransmission would make "is this the same flow?" depend on when the question was asked. Consumers compare identity (D6), which survives a re-mint anyway; byte stability is the stronger property that makes the weaker one cheap to rely on. It is **not** an idempotency requirement — the registrar's retry check does not compare `flow_ref` at all (BI5) |
 | FM4 | Every reference is authenticated; **encrypted mode is the default**. §4 applies verbatim — same algorithms, same key attributes, same constant-time comparison, same rule that no decision branches on unauthenticated body bytes |
 | FM5 | Nonces come from the injected randomness source (RFC 4086), fresh per mint. §7 M4's `(key id, nonce)` uniqueness requirement spans **both** families: tokens and flow references minted under one key draw from one nonce space, and the 2³² per-key mint ceiling counts both. Reusing a nonce across families under one AEAD key is exactly as catastrophic as reusing it within one |
 | FM6 | **Connection-oriented transports only.** A binding registered over UDP carries no reference (`flow_ref: None`): a UDP client has no connection for anyone to own, and a request toward it is carried by the dataplane's 5-tuple stickiness (proxy-behavior §11), not by an owner. Transport value `0x05` is reserved for the RFC 5626 outbound flows M3 adds |
@@ -618,14 +640,22 @@ connection and FM3 breaks. What a reference confers is bounded instead by the co
 life, and the routes to using one are bounded further — it is reachable only through a live
 location binding, which expires under the tenant's registration maximum (location-service §5.2 E5).
 
-**Consequence for key rotation — §6 K4, amended.** A retiring key must stay verify-valid until
-`t_switch + max(L, E_max) + S`, where `E_max` is the tenant's maximum registration expiry
-(location-service §5.2 E5, default 86 400 s). Rationale: K4's original bound covers every *token*
-minted under the old key, because tokens expire by `t_switch + L`. A reference does not expire; it
-leaves circulation when the binding holding it is refreshed and the re-minted bytes (FM3)
-propagate, which takes at most one registration interval. With the default `L` and `E_max` both
-86 400 s the bound is numerically unchanged; a deployment that raises `E_max` above `L` lengthens
-the overlap.
+**Consequence for key rotation — why §6 carries an `E_max` term.** A token expires, so `L` bounds
+how long an old key must keep verifying one. A reference does not, so something else must bound
+it: it leaves circulation when the binding holding it is refreshed (the refresh re-presents the
+re-minted bytes) or when that binding expires unrefreshed, and both are capped by the tenant's
+maximum registration expiry `E_max`. That is why §6's mint-window rule and K4 both read
+`max(L, E_max) + S` rather than `L + S`. This is stated once, normatively, in §6 — the config
+loader is what enforces it — and the reasoning lives here.
+
+**Caveat, and it is the load-bearing assumption:** the `E_max` term bounds circulation only while
+a **location binding is a reference's sole carrier**. That holds in M1/M2 by construction — a
+reference exists in exactly two places, the owner's table row and the bindings registered over
+that flow. It would stop holding the moment a reference is carried anywhere that is not refreshed
+on a registration cadence; M3's Path-URI carriage (§11.2) is exactly that, because a route set an
+endpoint has learned is never recomputed (RFC 3261 §12.2.1.2). Whatever M3 decides about carrying
+references in Path must therefore either re-bound rotation or give the reference an expiry after
+all — it cannot inherit this argument unexamined.
 
 ### 11.5 Verification
 
@@ -691,7 +721,7 @@ message.
 | # | Rule |
 |---|---|
 | CT1 | **Node ids are unique.** A `node` id names exactly one node at every configuration version; AF-6/DP-1's config validation enforces it. Two nodes sharing an id would give two different connections one flow identity — the only way to break §11's invariant from outside this spec, and the reason the check is a validation error rather than a warning |
-| CT2 | **Incarnation.** A node takes an incarnation — UNIX seconds — once at startup, before accepting its first connection, and it is an **input** to the table, not a clock the table reads. A node MUST NOT begin accepting until its incarnation is strictly greater than that of its previous run on the same `node` id; a restart inside the same second waits for the next. Rationale: without it a restarted node re-issues `connection`/`generation` from the beginning, and a reference minted before the restart could resolve to a connection accepted after it (FR-9) |
+| CT2 | **Incarnation.** A node takes an incarnation — UNIX seconds — once at startup, before accepting its first connection, and it is an **input** to the table, not a clock the table reads. A node MUST NOT begin accepting until its incarnation is strictly greater than that of its previous run on the same `node` id; a restart inside the same second waits for the next. Rationale: without it a restarted node re-issues `connection`/`generation` from the beginning, and a reference minted before the restart could resolve to a connection accepted after it (FR-9). **Mechanism** (no persistence required): take the process-start second, then delay the first accept until the wall clock strictly exceeds it — at most a one-second wait. **Limit, stated rather than assumed:** this rests on a clock that does not step backwards across a restart. An NTP step back over the incarnation gap reopens FR-9's scenario exactly, so a deployment that cannot rule one out MUST seed the incarnation from a persisted counter instead (AF-6/DP-1's schema) |
 | CT3 | **Accept.** Take a free slot; set `generation` to that slot's previous generation + 1, or 1 if the slot has never been used; state `Open`; mint and cache the reference (FM1) |
 | CT4 | **Generation never wraps.** `generation` is monotone per slot within an incarnation and is never reused. On reaching `0xFFFFFFFF` the slot is **retired** — off the free list for the rest of the incarnation — rather than wrapped. A wrap is precisely the aliasing CT2 and CT3 exist to prevent, and retiring one slot after 2³² reuses costs nothing |
 | CT5 | **Close.** Peer close, transport error, idle timeout (§12.3), drain deadline and shutdown all move the row to `Closed`. A closed row resolves to nothing (§13.2 RS4) |
@@ -707,7 +737,7 @@ with the timer.
 
 | Timer | Default | Fires when | Effect |
 |---|---|---|---|
-| `T_idle` | **3900 s** | `now − last_activity ≥ T_idle` | Close the connection (CT5). Configurable; `0` disables. It MUST be greater than the tenant's default registration interval — until RFC 5626 keepalives arrive in M3, a client's REGISTER refresh is the only traffic on an otherwise idle registration flow, so a shorter idle timer closes the very flow the platform just promised to deliver on. The default is location-service §5.2 E3's 3600 s plus a 300 s margin for a late refresh |
+| `T_idle` | **3900 s** | `now − last_activity ≥ T_idle` | Close the connection (CT5). Configurable; `0` disables both this timer and BI6's clamp. It MUST exceed the **granted** expiry of every binding the flow carries — not the tenant's *default* interval, which is only E3's fallback and says nothing about what E1/E2 may request and E5 may grant. §13.3 **BI6** is what makes that true, by clamping the grant to `T_idle − M` rather than by binding this timer to a tenant setting the node cannot see. Rationale: until RFC 5626 keepalives arrive in M3, a REGISTER refresh is the only traffic on an idle registration flow, so an idle timer shorter than the refresh cadence closes the very flow the platform just promised to deliver on. The default is location-service §5.2 E3's 3600 s plus the 300 s margin `M`, so a default deployment still grants 3600 s and refreshes comfortably inside the timer |
 | `T_drain` | **30 s** | graceful shutdown started `T_drain` ago | Every `Draining` row closes (CT9) |
 
 ## 13. Delivery: resolution and binding integration **[sipx-clstr]**
@@ -761,7 +791,20 @@ connection into a server error:
 | BI2 | The location service stores and returns it **verbatim and uninterpreted** — location-service §4 and §7 L7 already say so, and nothing here changes it. In particular the store never verifies a reference: verification needs the key set, which belongs to the signalling layer, and a store that verified would have to be redeployed on every rotation |
 | BI3 | `lookup` yields `Target { contact, route_set, flow_ref, q, expires_in }` (location-service §7). D2 turns `Some(flow_ref)` into an owner with no further lookup. That chain — `lookup` → `verify_flow` → `node` → RPC — is what "a lookup yields the owner" means here, and it touches one store read and two pure functions |
 | BI4 | **Tenant agreement.** The reference's `tenant` is §3's logical u32; the location service keys bindings by an opaque UTF-8 tenant id (location-service §4). They are the same tenant under a configuration-owned mapping (AF-6/DP-1). Delivery MUST pin `FlowExpect.tenant` to the tenant the lookup was keyed by (FV6): a reference carrying another tenant's id is a scope violation, not a routing hint |
-| BI5 | **The reconnect/idempotency interaction — flagged, not silently decided.** A UA whose connection drops mid-REGISTER reconnects and retransmits: same `Call-ID`, same `CSeq`, new flow reference. location-service §5.3 B4 compares "same granted expiry base, same contact set effect" and says nothing about `flow_ref`, so as written that retransmission is a Noop and the binding keeps a reference whose flow is dead. **The safety invariant is untouched** — the stale reference resolves to nothing (RS3), never to the new connection — so this is a reachability gap of at most one refresh interval, not a mis-delivery, and it self-heals. Closing it changes §5.3's comparison and is therefore [RG-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md)'s call. This spec's recommendation, for the record: treat a differing **flow identity** — not differing bytes (FM3, D6) — as a state difference the retry applies, replacing `flow_ref` and `received` and leaving the granted expiry and the contact set alone |
+| BI5 | **The reconnect/idempotency interaction — flagged, not silently decided.** A UA whose connection drops mid-REGISTER reconnects and retransmits: same `Call-ID`, same `CSeq`, new flow reference. location-service §5.3 B4 compares "same granted expiry base, same contact set effect" and says nothing about `flow_ref`, so as written that retransmission is a Noop and the binding keeps a reference whose flow is dead. **The safety invariant is untouched** — the stale reference resolves to nothing (RS3), never to the new connection — so this is a reachability gap of at most one refresh interval, not a mis-delivery, and it self-heals. [RG-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) has since settled that comparison over the granted duration and the stored Path vector, and deliberately not over `flow_ref` — so this is now an open item for **AF-7**, which is where the flow-aware half would be implemented, not a pending decision elsewhere. This spec's recommendation, for the record: treat a differing **flow identity** — not differing bytes (FM3, D6) — as a state difference the retry applies, replacing `flow_ref` and `received` and leaving the granted expiry and the contact set alone |
+| BI6 | **A binding must not outlive the flow it names.** When `RegisterCommand.flow_ref` is `Some` and the accepting node's `T_idle` is non-zero, the effective maximum granted expiry for that binding is `min(tenant max, T_idle − M)`, with the refresh margin `M` = **300 s** by default. This changes no rule in location-service: §5.2 E5 already lowers an over-long request to the maximum silently and states the granted value in the `200` (RFC 3261 §10.3 step 7 permits shortening) — BI6 supplies a second input to that maximum, for connection-bound registrations only. `T_idle = 0` disables the timer and the clamp together |
+
+**Why BI6 exists, in one failure.** E5's tenant maximum defaults to 86 400 s and a client that
+asks for it gets it — and a registered client is then idle *by design*, because refreshing is the
+only traffic a registration generates until RFC 5626 keepalives arrive in M3. Without the clamp,
+an entirely default deployment closes the connection at `T_idle` and the binding survives roughly
+23 hours naming a `Closed` row: every request toward that AoR verifies, resolves `FlowDead` at
+RS4, loses its target to D3 and is answered `480` by D8 — with nothing to shorten it, since §13.2
+deliberately does not invalidate bindings and D9 defers `430 Flow Failed` to M3. The clamp binds
+the two lifetimes to each other at the one place that knows both. Its useful side effect: on a
+healthy registration the client's own refresh cadence keeps the flow non-idle, so `T_idle` never
+fires at all, and it is left doing the job it is for — closing flows whose client has stopped
+refreshing.
 
 ## 14. Flow-reference test vectors
 
@@ -900,7 +943,19 @@ Total lookups outside the node: one location-service read, which the request nee
 directory, no membership query, no dialog store — AGENTS.md rule 5 holds on this path by
 construction, not by care.
 
+**FR-22 — the binding never outlives the flow (BI6).** Node 5 with `T_idle = 3900`, `M = 300`,
+tenant maximum at its 86 400 s default. A client registers over the TLS flow of FR-1's fixture
+with `Expires: 86400`:
+
+| Step | Expect |
+|---|---|
+| a | The command carries `flow_ref: Some(…)` (BI1), so the effective maximum is `min(86 400, 3900 − 300)` = **3600 s**; E5 lowers the grant silently and the `200` states `expires=3600` |
+| b | The client refreshes on that cadence, so `last_activity` advances every ~3600 s and `T_idle` never fires — a healthy registration keeps its own flow alive |
+| c | The client stops refreshing. `T_idle` fires at 3900 s, CT5 closes the row; the binding has already expired at 3600 s, so no binding ever names a `Closed` row |
+| d | Same registration with `T_idle = 0`: no clamp, grant is the tenant's 86 400 s, and no idle timer exists to close the flow underneath it — the two settings move together |
+| e | Contrast, the defect BI6 removes: without the clamp, step a grants 86 400 s, step c closes the flow at 3900 s, and every request toward that AoR for the next ~23 h verifies, hits RS4, and is answered `480` (D8) |
+
 AF-7 derives its connection-table and `mint_flow`/`verify_flow` tests from these vectors verbatim,
-and its multi-node harness scenario from FR-7, FR-9 and FR-21; the natural home for the two
-functions is AF-4's crate, since both families share the key set, the algorithms and the AEAD call
-site.
+and its multi-node harness scenario from FR-7, FR-9 and FR-21; FR-22 is a registrar-path test and
+belongs with the flow-aware half of AF-7's binding work. The natural home for the two functions is
+AF-4's crate, since both families share the key set, the algorithms and the AEAD call site.

@@ -78,6 +78,44 @@ call; the spec records the recommendation (compare **flow identity**, not bytes)
 - 2026-07-29: Zero Rust changed. Doc gate green: `cargo fmt --all --check`,
 `scripts/check-provenance.sh`, `scripts/check-vectors.py --check`, `scripts/check-docs.sh`. Board,
 CHANGELOG and roadmap untouched per task scope.
+- 2026-07-29 (review round 2): **Two blocking findings fixed, both mine.**
+  1. *The rotation bound was prose in §11.4 while §6 still shipped `L + S`* — and §6 is the table
+  headed "the config loader MUST enforce", so DP-1 would have implemented the stale bound. Applied
+  `max(L, E_max) + S` to **both** §6 rules — K4 *and* the mint-key window, which had the same
+  defect standalone: a single config with `E_max > L` and no rotation at all would let the mint key
+  expire out from under references it minted. §7 M5's "overlap scales with `L`" corrected too.
+  §11.4 now defers to §6 for the rule and keeps only the reasoning; §6's retired-key paragraph
+  covers references (`Invalid` at FV2 → `480`) alongside tokens, including the early-retirement
+  cost.
+  2. *`T_idle`'s MUST was bound to E3's **default** interval, not to what E5 can **grant***. On
+  entirely default config a client asking `Expires: 86400` gets it, goes idle by design, loses its
+  connection at 3900 s, and every call toward it is `480` for ~23 h with nothing to shorten it.
+  Fixed at the lifetime that is actually wrong rather than by inflating the timer: new **BI6**
+  clamps the effective maximum granted expiry for connection-bound registrations to
+  `min(tenant max, T_idle − M)`, `M` = 300 s. It changes no location-service rule — E5 already
+  lowers an over-long request silently and states the grant — and it composes with the defaults
+  (3900 − 300 = 3600, E3's existing default). Side effect worth having: a healthy registration's
+  own refresh cadence keeps its flow non-idle, so `T_idle` only ever fires on clients that have
+  stopped refreshing. `T_idle = 0` disables timer and clamp together. Vector **FR-22** pins all of
+  it, including the defect in row (e).
+- 2026-07-29 (review round 2, minors): FM3's *rationale* was wrong — it claimed byte stability is
+  "what B4 compares"; RG-8 has since landed and compares granted duration and stored Path only.
+  The rule stands, its reason is now stated correctly (a reference is an identifier; stability
+  keeps identity comparison cheap) and it explicitly disclaims being an idempotency requirement.
+  CT2 gained its mechanism (delay the first accept until the wall clock strictly exceeds the
+  process-start second — no persistence needed) and, more importantly, its **limit**: it rests on
+  a clock that does not step backwards across a restart, and an NTP step back reopens FR-9 exactly,
+  so a deployment that cannot rule one out MUST seed the incarnation from a persisted counter.
+  §11.2's "monotone by CT2 rather than by luck" now says "within the clock assumption CT2 states".
+- 2026-07-29 (review round 2, recorded not solved): §6's `E_max` term bounds circulation **only
+  while a location binding is a reference's sole carrier**. M3's Path-URI carriage would break it —
+  a route set an endpoint has learned is never recomputed (RFC 3261 §12.2.1.2) — so M3 must either
+  re-bound rotation or give the reference an expiry after all. Stated as a caveat at §11.4 and as
+  an open question in the design.
+- 2026-07-29 (review round 2): BI5 re-pointed — RG-8 has landed and settled B4 without `flow_ref`,
+  so the flow-aware half is now **AF-7's** open item, not a pending decision elsewhere. The
+  recommendation itself is unchanged. The FR rows sitting outside `check-vectors.py`'s `SPECS` map
+  is filed as CF-8; those files untouched.
 
 ## Notes
 - Design: [cluster-affinity](../designs/cluster-affinity.md).
