@@ -196,6 +196,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   responses, timers and an upstream CANCEL become one input at a time, no locks on the signalling
   path, and the three places backpressure actually lives.
 
+- **The RoutePlan and the resolver decision** (`RT-1`, design accepted). The epic's headline
+  question — build an async shared-cache resolver here, or get one upstream — is settled
+  **upstream**: sipx `T-17` shipped it in `v0.4.0`, including the `_sip._ws`/`_sips._wss` prefetch
+  this story was written to chase, so no caching layer is built here.
+  - The seam that made it possible is `Prefetched`: RFC 3263 selection is pure computation over
+    records, so the kernel awaits first and hands the answers to a synchronous `resolve` — which is
+    how a proxy and a UA share selection logic without either becoming async.
+  - What stays local is the *plan*, not the resolution. `RoutePlan` is an ordered list of
+    `Attempt`s that **wrap** the kernel's `Target` rather than restating it, adding provenance and
+    trunk context. A second address type here would eventually disagree with the kernel about which
+    host a TLS certificate must be valid for, and that disagreement is a silent downgrade.
+  - Every await lands in the driver by construction: the sans-IO core emits the `ResolveTargets`
+    effect it already has, and the plan comes back as one input — so `RT-4`'s failover vectors are
+    ordinary harness scenarios rather than tests that need a nameserver.
 - **Failure is a scripted input** (`CF-4`). `sipx-clstr-sim::fault` adds `Fault` — `KillNode`,
   `Partition`, `Heal`, `SetLinkPolicy`, `TimerSkew` — and `Schedule`, both plain values, so a
   scenario can generate, mutate or fuzz its weather without touching scenario logic, and composing

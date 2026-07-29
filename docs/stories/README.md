@@ -39,10 +39,7 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · unblocked by sipx v0.4.0 — the spec and the decision core are in; the store wiring is not
 
 ## Next (ready — take the top one unless the user named a story)
-
-### Outbound routing & trunks
-_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
-- [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · T-17 settled it upstream in v0.4.0 — design against the kernel resolver, not around it
+_None._
 
 ## Blocked
 - [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · X-14 shipped but does not fit — both kernel pieces are keyed to tokio::time::Instant; BLOCKED on a new upstream ask
@@ -155,6 +152,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
 - [RG-4 — Implement the PostgreSQL LocationStore backend](RG-4-implement-the-postgresql-locationstore-backend.md) · Signalling · M1 #10 · the same LS-* vectors on PostgreSQL, unchanged — and two races found
 - [RG-6 — Build forking target sets from location lookups](RG-6-build-forking-target-sets-from-location-lookups.md) · Signalling · M1 #7 · the registrar and the proxy meet; found a dropped Path in PX-5
+- [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [VZ-1 — Implement the SSE replay feed and canvas page](VZ-1-implement-the-sse-replay-feed-and-canvas-page.md) · Platform · the constellation's first feed — a paced sim replay over SSE, one page, zero new runtime deps
 
 _See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
