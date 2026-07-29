@@ -38,6 +38,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Flow references and connection ownership are specified** (`AF-2`,
+  [affinity-token](docs/specs/affinity-token.md) §11–§14). A `flow_ref` is a signed, AEAD-encrypted
+  reference to one client connection — node, incarnation, table slot, generation, transport and
+  tenant — stored in a location binding, so a mid-dialog request finds the socket its client is on
+  without a cluster-wide lookup. Fixed at 49 B encrypted / 45 B authenticated-only, sharing the
+  14-byte header, key set and AEAD call site `AF-1` already fixed rather than duplicating them, with
+  21 byte-exact vectors.
+- **A reference carries no expiry, deliberately** — it names an object that exists, and that
+  object's death is a tighter bound than any clock, needing no clock to enforce. Slot reuse is
+  closed by a generation bump on reconnect and by an `incarnation` (the owner's boot second) that
+  the design's original `signed(node_id, connection_id, generation)` sketch did not have: without
+  it a restarted node re-issues tuples a live reference already names.
+- **That choice reaches back into key rotation.** Because a reference leaves circulation only when
+  the binding holding it refreshes, §6's rotation step K4 **and** the mint-key window now cover
+  `max(L, E_max) + S`, where `E_max` is the tenant's maximum registration expiry. The second is an
+  independent defect the first would not have caught: with `E_max > L` a single configuration and
+  **no rotation at all** would let a mint key expire out from under references it minted.
+- **A binding must not outlive the flow it names** (`BI6`). The idle timer closes a connection at
+  `T_idle`, but E5 grants a registration up to the tenant maximum — and a registered client is idle
+  *by design*, since refreshing is the only traffic a registration generates until RFC 5626
+  keepalives arrive. So an entirely default deployment would close the connection and leave the
+  binding pointing at it for ~23 hours, answering `480` for every call toward that client. The fix
+  clamps the granted expiry to `T_idle − M` for connection-bound registrations rather than inflating
+  the timer past a day, which would stop it being a resource bound at all.
 - **`MediaRelay` and the rtpengine NG adapter contract are pinned** (`ME-1`,
   [media-relay](docs/specs/media-relay.md), 573 lines). The platform's only view of media is a
   trait — offer/answer/update/delete/query with a state table and a `NullMediaRelay` whose

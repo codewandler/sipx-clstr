@@ -2,7 +2,7 @@
 id: AF-2
 title: Specify flow references and connection ownership
 pillar: Cluster
-status: in-progress
+status: done
 priority: 
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity

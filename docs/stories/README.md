@@ -57,7 +57,6 @@ _None._
 
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
-- [AF-2 — Specify flow references and connection ownership](AF-2-specify-flow-references-and-connection-ownership.md) · Cluster
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
 - [AF-4 — Implement the token mint/verify library](AF-4-implement-the-token-mint-verify-library.md) · Cluster · blocked by AF-1
 - [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4 only — PX-5 is done and T-14's typed Path landed in v0.4.0
@@ -140,6 +139,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 
 ## Done
 - [AF-1 — Specify the affinity token](AF-1-specify-the-affinity-token.md) · Cluster
+- [AF-2 — Specify flow references and connection ownership](AF-2-specify-flow-references-and-connection-ownership.md) · Cluster
 - [CF-1 — Design the deterministic cluster harness](CF-1-design-the-deterministic-cluster-harness.md) · Platform · UPSTREAM: sipx-testkit split filed as sipx X-14; see docs/upstream.md
 - [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · the schedule half; the sim-vs-real fidelity row moved to CF-3, which owns the sockets
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
