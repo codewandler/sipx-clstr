@@ -2,12 +2,12 @@
 id: RT-1
 title: Design the RoutePlan and shared-cache resolver
 pillar: Signalling
-status: backlog
-priority: 
+status: ready
+priority: 4
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, dns]
-note: UPSTREAM: filed as sipx T-17, which decides upstream-vs-local — see docs/upstream.md
+note: T-17 settled it upstream in v0.4.0 — design against the kernel resolver, not around it
 ---
 
 # Design the RoutePlan and shared-cache resolver

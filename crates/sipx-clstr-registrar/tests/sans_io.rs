@@ -61,10 +61,7 @@ fn dependency_graph(lockfile: &str) -> HashMap<String, Vec<String>> {
         if let Some(name) = name.take() {
             // Several versions of one crate share a name here. Merging their edges is the
             // conservative direction: it can only make the graph larger, never hide a path.
-            graph
-                .entry(name)
-                .or_insert_with(Vec::new)
-                .append(dependencies);
+            graph.entry(name).or_default().append(dependencies);
         }
         dependencies.clear();
     };
@@ -169,7 +166,10 @@ version = "1.0.0"
     let graph = dependency_graph(fixture);
     assert_eq!(graph.get("alpha").unwrap(), &["beta", "gamma"]);
     assert_eq!(graph.get("beta").unwrap(), &["delta"]);
-    assert!(graph.contains_key("gamma"), "a package with no dependencies");
+    assert!(
+        graph.contains_key("gamma"),
+        "a package with no dependencies"
+    );
 
     // Transitive, which is the whole point: `delta` is two hops from `alpha`.
     let reachable = reachable(&graph, "alpha");

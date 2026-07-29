@@ -41,7 +41,7 @@ sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0" }
 # gate's own rule — no `tokio` outside sipx-clstr-node — is what would otherwise force this repo to
 # write digest a second time, and two implementations of one algorithm eventually disagree about
 # who is authenticated.
-sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0" }
+sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v0.4.0", default-features = false }
 
 # Core
 bytes = "1"

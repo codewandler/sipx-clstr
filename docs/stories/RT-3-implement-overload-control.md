@@ -7,7 +7,7 @@ priority:
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing]
-note: RFC 7339 / RFC 7415
+note: RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
 ---
 
 # Implement overload control

@@ -21,9 +21,9 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `website/` | the published documentation site (Docusaurus), deployed on release | built by CI |
 | `CHANGELOG.md` | closed stories roll up here | hand-written |
 
-**The state of play, in one line:** M0 is complete and M1 is scoped as fourteen ordered stories
-(see the [roadmap](docs/roadmap.md#m1-in-detail)); the workspace exists and the gate is green, and
-`PX-2` is next. Check the board before assuming that is current.
+**The state of play, in one line:** M1 is at its last story — `RG-2`, in progress — and sipx
+`v0.4.0` cleared the whole [upstream ledger](docs/upstream.md), so nothing here waits on the
+kernel. The gate is green. Check the board before assuming any of that is current.
 
 ## Non-negotiables
 

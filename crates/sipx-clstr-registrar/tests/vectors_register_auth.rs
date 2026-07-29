@@ -9,10 +9,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+use bytes::Bytes;
 use sipx_clstr_registrar::auth::{
     Algorithm, CredentialStore, Decision, InMemoryCredentials, Reason, TenantAuth,
 };
-use bytes::Bytes;
 use sipx_sip::{HeaderName, Method, Request, RequestBuilder, Uri};
 use sipx_ua::auth::{Challenge, Credentials, respond};
 
@@ -153,7 +153,8 @@ fn ra_d_3_correct_credentials_proceed_with_a_principal() {
 fn ra_d_4_credentials_for_another_realm_are_forbidden_not_rechallenged() {
     let mut auth = tenant();
     // A challenge from somewhere else entirely, answered correctly *for that somewhere else*.
-    let elsewhere = r#"Digest realm="biloxi.example", nonce="abc.def", algorithm=SHA-256, qop="auth""#;
+    let elsewhere =
+        r#"Digest realm="biloxi.example", nonce="abc.def", algorithm=SHA-256, qop="auth""#;
     let header = answer(elsewhere, USER, PASSWORD, "REGISTER", 1);
 
     // A3: a realm is a protection space. Challenging again would loop between two ends that
@@ -203,7 +204,8 @@ fn ra_d_6_an_unknown_user_is_indistinguishable_from_a_wrong_password() {
 #[test]
 fn ra_d_7_a_nonce_this_edge_never_minted_is_refused() {
     let mut auth = tenant();
-    let forged = format!(r#"Digest realm="{REALM}", nonce="0000.dead", algorithm=SHA-256, qop="auth""#);
+    let forged =
+        format!(r#"Digest realm="{REALM}", nonce="0000.dead", algorithm=SHA-256, qop="auth""#);
     let header = answer(&forged, USER, PASSWORD, "REGISTER", 1);
 
     let challenge = expect_challenge(decide_with(&mut auth, &header, T0));
@@ -366,7 +368,10 @@ fn ra_r_3_counting_up_across_refreshes_authenticates_every_time() {
     for nc in 1..=5 {
         let header = answer(&value, USER, PASSWORD, "REGISTER", nc);
         assert!(
-            matches!(decide_with(&mut auth, &header, T0), Decision::Proceed { .. }),
+            matches!(
+                decide_with(&mut auth, &header, T0),
+                Decision::Proceed { .. }
+            ),
             "nc={nc}"
         );
     }
@@ -401,7 +406,10 @@ fn ra_r_5_the_replay_window_does_not_grow_with_traffic() {
         let now = T0 + step;
         let value = challenge_value(&mut auth, now);
         let header = answer(&value, USER, PASSWORD, "REGISTER", 1);
-        if matches!(decide_with(&mut auth, &header, now), Decision::Proceed { .. }) {
+        if matches!(
+            decide_with(&mut auth, &header, now),
+            Decision::Proceed { .. }
+        ) {
             authenticated += 1;
         }
     }

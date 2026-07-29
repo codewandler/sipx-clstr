@@ -439,7 +439,7 @@ impl Phone {
             builder = builder
                 .header(HeaderName::Supported, "path")
                 .expect("Supported")
-                .header(HeaderName::Other(Bytes::from_static(b"Path")), path)
+                .header(HeaderName::Path, path)
                 .expect("Path");
         }
         Message::Request(builder.build())

@@ -1508,10 +1508,8 @@ dependencies = [
  "rand 0.9.5",
  "sha2 0.10.9",
  "sipx-sip",
- "sipx-transport",
  "subtle",
  "thiserror",
- "tokio",
  "tracing",
 ]
 

@@ -9,12 +9,18 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 
 ## Status
 
-**M0 is complete and M1 is scoped.** The four load-bearing specs live in `docs/specs/` — proxy
-behavior, location service, affinity token, hook framework — the deterministic-harness design is
-accepted, and `CX-1` has filed the kernel gaps as stories in the sipx repo
-([ledger](../upstream.md)). M1 is **fourteen stories in a fixed order**, listed with their exit
-criteria in the [roadmap](../roadmap.md#m1-in-detail);
-each M1 story's `note:` carries its position as `M1 #n`. `CX-2` opens it with the Cargo workspace.
+**M1 is at its last story, and the kernel no longer blocks anything.** The four load-bearing specs
+live in `docs/specs/` — proxy behavior, location service, affinity token, hook framework — joined
+now by `registrar-auth`; the deterministic-harness design is accepted and the harness is built.
+sipx **`v0.4.0`** cleared the whole [upstream ledger](../upstream.md) in one release: `S-15`,
+`S-16`, `T-14`, `T-16`, `T-17`, `T-18`, `T-19` and `X-20` all landed, leaving only `X-15`, which
+`CF-1` had already decided stays local. Nothing here waits on sipx.
+
+`RG-2` — M1 #9, the milestone's last open story — is **in progress**: the spec and the sans-IO
+decision core are in and its RA vectors pass; what remains is wiring the decision into REGISTER
+processing and the harness scenario for M1's fifth exit criterion. M1's stories and their exit
+criteria are in the [roadmap](../roadmap.md#m1-in-detail); each carries its position as `M1 #n`.
+
 Only the stories with no unmet dependency are `ready` — the rest become ready as the one before
 them lands, so the top of `Next` is always genuinely takeable. **The generated lists below group
 by epic and do not order by priority** — `/track:next` reports the true top; do not take the
@@ -30,13 +36,25 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 
 ## Now (in progress)
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
+- [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · unblocked by sipx v0.4.0 — the spec and the decision core are in; the store wiring is not
 
 ## Next (ready — take the top one unless the user named a story)
-_None._
+
+### Conformance & deterministic harness
+_The north star made executable: seeded multi-node simulation, and coverage that is measured._
+- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · X-14 landed in sipx v0.4.0 — delete the harness's local copies
+- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · CF-5 is done and X-14 landed in v0.4.0 — best taken after CF-7 so it builds on the kernel link
+
+### Proxy engine
+_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
+- [PX-3 — Header surgery API in sipx](PX-3-header-surgery-api-in-sipx.md) · Signalling · S-15 landed in sipx v0.4.0 — what remains is adopting it here; unblocks PX-4
+
+### Outbound routing & trunks
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
+- [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · T-17 settled it upstream in v0.4.0 — design against the kernel resolver, not around it
 
 ## Blocked
-- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · BLOCKED on sipx X-14 — delete the harness's local copies when it lands
-- [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · BLOCKED on a sipx release carrying S-16 + X-20 — both are written, neither is tagged
+_None._
 
 ## Backlog
 
@@ -45,7 +63,7 @@ _What makes N nodes one proxy: routing state rides in the message, and every res
 - [AF-2 — Specify flow references and connection ownership](AF-2-specify-flow-references-and-connection-ownership.md) · Cluster
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
 - [AF-4 — Implement the token mint/verify library](AF-4-implement-the-token-mint-verify-library.md) · Cluster · blocked by AF-1
-- [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4, PX-5; UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
+- [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4 only — PX-5 is done and T-14's typed Path landed in v0.4.0
 - [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster · feeds DP-1 — this story owns the membership/key schema sections
 - [AF-7 — Implement connection ownership and the owner RPC](AF-7-implement-connection-ownership-and-the-owner-rpc.md) · Cluster · blocked by AF-2, AF-3 — implements both
 
@@ -53,7 +71,6 @@ _What makes N nodes one proxy: routing state rides in the message, and every res
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-2 — Generate the conformance report from the registry](CF-2-generate-the-conformance-report-from-the-registry.md) · Platform · blocked by EX-2
 - [CF-3 — Build the real-network interop harness](CF-3-build-the-real-network-interop-harness.md) · Platform · SIPp + sipx CLI + rtpengine
-- [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · blocked by CF-5; UPSTREAM: testkit split filed as sipx X-14 — see docs/upstream.md
 - [CF-6 — Seed the conformance registry with the M1 profile](CF-6-seed-the-conformance-registry-with-the-m1-profile.md) · Platform · blocked by EX-2 — the extraction work CF-2's report needs
 
 ### Roles, topology & operations
@@ -106,8 +123,7 @@ _The SIP process controls media over a network protocol; it never touches a medi
 
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
-- [PX-3 — Header surgery API in sipx](PX-3-header-surgery-api-in-sipx.md) · Signalling · UPSTREAM: filed as sipx S-15 — see docs/upstream.md
-- [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; blocked by PX-1, PX-3; UPSTREAM: sipx S-15 — see docs/upstream.md
+- [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
 - [PX-8 — Decide whether topology hiding is in scope, and how it survives a node change](PX-8-decide-whether-topology-hiding-is-in-scope.md) · Signalling · a real deployment's current implementation is the defect the cluster design exists to fix
 
 ### Registrar & location service
@@ -117,9 +133,8 @@ _The one place the platform is allowed durable state — so its updates must ser
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
-- [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · UPSTREAM: filed as sipx T-17, which decides upstream-vs-local — see docs/upstream.md
 - [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
-- [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415
+- [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
 - [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
 - [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling

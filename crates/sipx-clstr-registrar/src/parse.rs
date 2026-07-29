@@ -73,7 +73,11 @@ pub fn register_command(
         cseq,
         contacts,
         expires_header,
-        path: route_values(request, &HeaderName::Other(Bytes::from_static(b"Path"))),
+        // Typed since sipx `T-14` (v0.4.0). Before that `Path` fell through to `Other`, and looking
+        // it up under the old name after the kernel started typing it finds nothing at all — a
+        // registered route set that silently becomes empty, which is what `register_then_call`'s
+        // Path scenario caught.
+        path: route_values(request, &HeaderName::Path),
         supports_path: option_tags(request, &HeaderName::Supported)
             .iter()
             .any(|tag| tag == "path"),

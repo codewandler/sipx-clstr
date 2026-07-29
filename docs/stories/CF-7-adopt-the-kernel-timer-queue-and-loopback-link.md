@@ -2,12 +2,12 @@
 id: CF-7
 title: Adopt the kernel timer queue and loopback link
 pillar: Platform
-status: blocked
-priority:
+status: ready
+priority: 1
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: BLOCKED on sipx X-14 — delete the harness's local copies when it lands
+note: X-14 landed in sipx v0.4.0 — delete the harness's local copies
 ---
 
 # Adopt the kernel timer queue and loopback link
@@ -25,9 +25,13 @@ ships them, so the two repos share one cancellation discipline instead of two th
       invalidates every regression seed in the suite.
 
 ## Progress
-- Blocked. `CF-5` shipped the harness with local implementations of both, which is what its
-  fourth acceptance criterion ("components upstreamed per CF-1's split are consumed from sipx,
-  not forked") could not satisfy while the upstream work was unfiled.
+- **Unblocked 2026-07-29.** sipx `v0.4.0` ships `X-14`: the seeded link is
+  `sipx-testkit/src/link.rs` with its own `tests/loopback.rs`, and the generalized queue is in
+  `sipx-transport/src/timers.rs`. The workspace already pins `v0.4.0` (`RG-2`), so this is
+  takeable with no further dependency work.
+- `CF-5` shipped the harness with local implementations of both, which is what its fourth
+  acceptance criterion ("components upstreamed per CF-1's split are consumed from sipx, not
+  forked") could not satisfy while the upstream work was unfiled. This story is what closes it.
 
 ## Notes
 - Upstream story: sipx [X-14](https://github.com/codewandler/sipx/blob/main/docs/stories/X-14-testkit-timer-queue-and-loopback-link.md),

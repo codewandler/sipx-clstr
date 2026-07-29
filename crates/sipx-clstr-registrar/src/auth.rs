@@ -120,11 +120,7 @@ impl TenantAuth {
     /// deployment that has nowhere to keep one can generate it per start and pay a `stale=true`
     /// round trip after each restart.
     #[must_use]
-    pub fn required(
-        tenant: impl Into<String>,
-        realm: impl Into<String>,
-        secret: [u8; 32],
-    ) -> Self {
+    pub fn required(tenant: impl Into<String>, realm: impl Into<String>, secret: [u8; 32]) -> Self {
         Self {
             tenant: tenant.into(),
             authenticator: Authenticator::new(realm, secret),
@@ -274,11 +270,7 @@ impl TenantAuth {
 const ABSENT_USER_PLACEHOLDER: &str = "\0no such user\0";
 
 #[cfg(test)]
-#[expect(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    reason = "test code, where a broken fixture should fail loudly"
-)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 

@@ -2,12 +2,12 @@
 id: CF-4
 title: Add fault injection to the simulation
 pillar: Platform
-status: backlog
-priority: 
+status: ready
+priority: 3
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: blocked by CF-5; UPSTREAM: testkit split filed as sipx X-14 — see docs/upstream.md
+note: CF-5 is done and X-14 landed in v0.4.0 — best taken after CF-7 so it builds on the kernel link
 ---
 
 # Add fault injection to the simulation

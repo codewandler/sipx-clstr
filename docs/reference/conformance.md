@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12 and
 it, and *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story
 that will.
 
-**53 of 61 rows proved**; 8 deferred.
+**75 of 83 rows proved**; 8 deferred.
 
 ## Proxy — request validation (§4)
 
@@ -124,3 +124,45 @@ that will.
 | `EP-C-1` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 | `EP-C-2` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 | `EP-C-3` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
+
+## Registrar auth — the decision (§3)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `RA-D-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-7` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-8` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-9` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-10` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+
+## Registrar auth — algorithm selection (§4)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `RA-A-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-A-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-A-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-A-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+
+## Registrar auth — replay and retransmission (§3, §6)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `RA-R-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-R-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-R-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-R-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+
+## Registrar auth — the tenant boundary (§5)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `RA-T-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-T-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-T-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
