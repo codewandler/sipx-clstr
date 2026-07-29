@@ -48,6 +48,7 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
 - [RG-8 — Settle B4 idempotency so a retransmission is a retry](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) · Signalling · found by RG-2's harness scenario — an ordinary UDP retransmission is answered 500
+- [RG-9 — Say what digest actually protects, and decide whether that is enough](RG-9-say-what-digest-actually-protects.md) · Signalling · found reviewing RG-8 — RA-R-2 reads stronger than the mechanism delivers
 
 ## Blocked
 _None._
