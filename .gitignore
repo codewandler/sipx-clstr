@@ -19,3 +19,7 @@ yarn-error.log*
 # Local agent/tool configuration and e2e-run artefacts — machine state, not project content.
 /.flux/
 /tone.wav
+
+# Agent worktrees: full checkouts of this repository, created by tooling.
+# They must never be committed — as gitlinks they become broken submodule refs.
+.claude/
