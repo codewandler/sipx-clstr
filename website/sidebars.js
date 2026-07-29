@@ -17,6 +17,7 @@ const sidebars = {
         'specs/proxy-behavior',
         'specs/location-service',
         'specs/affinity-token',
+        'specs/number-normalisation',
         'specs/hook-framework',
         'specs/media-relay',
         'specs/e2e-probe',

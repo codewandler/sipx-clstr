@@ -1,7 +1,7 @@
 # Design: Outbound routing & trunks
 
 **Status:** accepted (RT-1) · **Pillar:** Signalling · **Epic:** `routing-trunks` ·
-**Stories:** RT-1 … RT-4
+**Stories:** RT-1 … RT-9
 
 ## Why
 
@@ -77,8 +77,47 @@ settled before the trunk model is real.
 
 **Trunks are stateful objects.** Above DNS, a trunk carries: concurrent-call and calls-per-second
 limits, a circuit breaker fed by response-code and timeout history, retry budget, preferred
-transports, number normalization and identity rules, and media policy hooks. Trunk selection is a
-typed routing module (see `extension-framework`), not a DSL.
+transports, number normalization ([number-normalisation](../specs/number-normalisation.md), RT-6)
+and identity rules, and media policy hooks. Trunk selection is a typed routing module (see
+`extension-framework`), not a DSL.
+
+### RT-6: normalisation is data, and its vocabulary is closed
+
+Number normalisation arrives as regexes embedded in route blocks — a form in which no rule can be
+reviewed on its own, tested on its own, or diffed without reading the routing logic around it.
+[number-normalisation](../specs/number-normalisation.md) makes it a **profile**: a named value
+bound at exactly two points, ingress scope and trunk, and evaluated by a pure function of
+`(profile, numbers)` that the harness drives with no message in sight.
+
+The load-bearing decision is not that normalisation became declarative — it is *how small the
+declaration language is allowed to get*. Four fields (Request-URI, To, From, P-Asserted-Identity,
+and only the number position of each), four transforms (`replace_prefix`, `strip_leading_zeros`,
+`add_prefix`, `ensure_prefix`), and one guard per field with two condition forms. Three
+consequences follow, and each was worth more than the expressiveness given up:
+
+- **Every profile terminates in a bounded number of steps** — 4 × (4 + 1) — because the three
+  evaluation phases each read the previous phase's snapshot and nothing reads its own output.
+  There is no fixed point to reach and no rule that can reference another.
+- **The E.164 egress policy is a rule, not a code path.** A leading `+` reaches a carrier only
+  because some `ensure_prefix` in a bound profile put it there, and `e164: global` is the
+  15-digit ITU-T bound as a guard condition. Nothing in the platform assumes a `+` anywhere else.
+- **"We need one more transformation" has a deliberately expensive answer**: a typed module under
+  the [hook framework](../specs/hook-framework.md) with a declared manifest, or an external
+  routing hook (EX-6) — never a new config keyword. The vision's non-goal is a routing DSL, and
+  the way a repo acquires one is by adding a keyword per quarter to a config grammar that already
+  works.
+
+The two application points exist because `add_prefix` is deliberately not idempotent: a
+double-applied profile is *visible* rather than silent, which is what makes "at most one profile
+per direction, never chained" enforceable instead of aspirational. And normalisation never runs
+on a request inside a dialog, on CANCEL, on an ACK for a non-2xx, or on REGISTER — RFC 3261 §9.1
+and §17.1.1.3 require those to repeat the original Request-URI, `To` and `From` byte for byte, and
+the address-of-record key belongs to [location-service](../specs/location-service.md) §3.
+
+Where the work lands (rule 6): the **policy** is orchestration and stays here; two **syntax**
+primitives are the kernel's — replacing a URI's user part losslessly, and structured access to a
+`tel:` body, which sipx currently keeps opaque. The spec's §1 flags both for `CX-1`; the
+implementation, which lands with the trunk model, is what waits on them.
 
 **Overload control.** RFC 7339 signaling with RFC 7415 rate-based control, applied on both
 directions: honoring overload feedback from downstream, and emitting it upstream when this
@@ -94,6 +133,11 @@ work lands with M2/M3 when the trunk model is real.
   Probing may supplement for idle trunks.
 - **A routing script language.** Rejected by the vision's non-goal: policy composes from typed
   modules with declared inputs, not an embedded interpreter.
+- **A regex per field for normalisation** (RT-6's obvious option, and the shape the requirement
+  arrives in). Rejected: one regex per field is an interpreter admitted through the side door —
+  unbounded in cost, unreviewable in a diff, and impossible to enumerate vectors for. The closed
+  four-transform vocabulary covers the same ground as a table a reviewer can read, and what it
+  cannot express is meant to be a module, not a longer pattern.
 - **A caching layer here that snapshots into the sync `Resolver` trait** (RT-1's local option).
   Rejected once `T-17` landed: it would duplicate a cache the kernel now has, and a second cache
   with its own TTL handling is a second thing to be wrong about negative answers — the failure
@@ -116,6 +160,12 @@ work lands with M2/M3 when the trunk model is real.
   settled against AF-1 before RT-2 closes.
 - The overload-collapse scenario (RT-3) needs load modeling the harness's current transport
   model does not express; CF-1 must take this as an input.
+- Ingress normalisation rewrites the Request-URI *before* target determination, so it changes the
+  key a location lookup uses (`NN-C-6`). A deployment that normalises on ingress but registers
+  unnormalised addresses-of-record looks up a number nobody registered. The binding is per ingress
+  scope and there is no default, which makes this a decision rather than a surprise — but whether
+  the configuration loader should refuse the combination outright is open until RT-9 fixes the
+  scope vocabulary.
 
 ## Acceptance / done
 
