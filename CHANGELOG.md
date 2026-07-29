@@ -7,6 +7,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Topology hiding: decided out of scope for v1** (`PX-8`, decision recorded in
+  [proxy-engine](docs/designs/proxy-engine.md)). The finding that settles it is that there is
+  nothing of the platform's own topology on the wire to hide: a surface-by-surface reading shows
+  the cluster contributes exactly **one** Via — an advertised identity, never a bind address or a
+  node name (`DP-5`) — and **one** Record-Route pair naming a cluster-wide service identity
+  ([affinity-token](docs/specs/affinity-token.md) §5), with shard, edge and media ids living only
+  as ciphertext inside the token body (§3, §4). One Via is a north-star property rather than a
+  convenience — a cluster that contributed several would be distinguishable from one correct proxy
+  by reading the message — so the decision rests on a commitment the platform already holds.
+- The **rejected** option is recorded with its reason: the per-dialog header store that strips Via
+  and Record-Route, persists them, and restores them on each later message. It is the hot-path
+  dialog lookup non-negotiable 5 forbids by definition, and keyed by the minting node it *is* the
+  non-interchangeable-replica defect the story was filed against. RFC 3323 §5.1 describes that
+  construction and concedes it "requires the privacy service to keep a pretty significant amount of
+  state on a per-dialog basis" — the citation argues against itself.
+- The **unbuilt but admissible** option is written down so a reversal inherits it rather than
+  rediscovering it: RFC 3323 §5.1's own stateless alternative — removed Via entries encrypted under
+  the token key family into a `via-extension` parameter of our own Via, returned verbatim per
+  RFC 3261 §8.2.6.2 and restorable by any node holding the cluster key. Not built in v1 because it
+  enlarges the message it exists to shrink (RFC 3261 §18.1.1), it cannot be a hook module
+  (hook-framework §3 keeps Via engine-internal), and Record-Route privacy has no restorable form in
+  the direction usually wanted.
+- What remains of the demand is per-carrier RFC 3323 header privacy, and it is already owned:
+  `RT-5` (egress header allowlist) and `RT-7` (`Privacy`/`P-Asserted-Identity` policy). *Considered
+  for upstream: no* — trust-boundary policy over cluster-owned identities and keys is orchestration;
+  the one protocol-generic piece either mechanism would need landed as sipx `S-15` (`PX-3`).
+
 ## [0.5.1] — 2026-07-29
 
 ### Fixed

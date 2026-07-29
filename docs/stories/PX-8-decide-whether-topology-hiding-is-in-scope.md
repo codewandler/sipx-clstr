@@ -2,7 +2,7 @@
 id: PX-8
 title: Decide whether topology hiding is in scope, and how it survives a node change
 pillar: Signalling
-status: in-progress
+status: done
 priority: 
 design: docs/designs/proxy-engine.md
 epic: proxy-engine

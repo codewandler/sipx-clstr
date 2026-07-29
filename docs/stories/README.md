@@ -120,7 +120,6 @@ _The SIP process controls media over a network protocol; it never touches a medi
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
-- [PX-8 — Decide whether topology hiding is in scope, and how it survives a node change](PX-8-decide-whether-topology-hiding-is-in-scope.md) · Signalling · a real deployment's current implementation is the defect the cluster design exists to fix
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
@@ -157,6 +156,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [PX-5 — Implement stateful forwarding with forking](PX-5-implement-stateful-forwarding-with-forking.md) · Signalling · M1 #5 · stateful forwarding and forking; found a loop-detection defect in PX-1 §6
 - [PX-6 — Implement CANCEL and Timer C](PX-6-implement-cancel-and-timer-c.md) · Signalling · M1 #6 · CANCEL and Timer C, proved under adversarial harness schedules
 - [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · M1 #8 · the PB table as a generated, checked report — and it found a deleted test
+- [PX-8 — Decide whether topology hiding is in scope, and how it survives a node change](PX-8-decide-whether-topology-hiding-is-in-scope.md) · Signalling · a real deployment's current implementation is the defect the cluster design exists to fix
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
