@@ -2,7 +2,7 @@
 id: RG-13
 title: Bound the location store's growth — the change log and the row set both grow forever
 pillar: Signalling
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location

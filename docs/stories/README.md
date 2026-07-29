@@ -44,9 +44,7 @@ site · `FC` fail-closed configuration.
 
 ## Now (in progress)
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · the downgrade is closed (CC-V10); the tls sub-block and the published exposure row are left
-- [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
-- [RG-13 — Bound the location store's growth — the change log and the row set both grow forever](RG-13-bound-the-location-stores-growth.md) · Signalling · changes is a Vec nothing in the shipped path ever drains, in both backends
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
@@ -205,6 +203,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [EX-9 — Reconcile the quirk-profile media seam with the type ME-6 actually landed](EX-9-reconcile-the-quirk-profile-seam-with-ME-6.md) · Extensions · found reviewing EX-7 — it is written against SrtpMode; ME-6 landed SrtpPolicy
 - [EX-10 — Give `overrides` a schema, or remove it from the composition rule](EX-10-give-overrides-a-schema-or-remove-it.md) · Extensions · found reviewing EX-7 — the one construct that resolves a contested target is in no schema
 - [FC-2 — Make unapplied configuration visible at startup, at the depth the keys actually live](FC-2-make-unapplied-configuration-visible-at-startup.md) · Cluster · the warning exists, is correct, and reaches nobody — it is logged before the subscriber is installed
+- [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
 - [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
 - [ME-6 — Specify per-trunk codec and SRTP policy](ME-6-specify-per-trunk-codec-and-srtp-policy.md) · Media
@@ -225,6 +224,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-10 — Say that a replayed credential can de-register every binding](RG-10-say-that-a-replayed-credential-can-deregister-everything.md) · Signalling · found reviewing RG-9 — §7.2 understates the exposure it exists to state
 - [RG-11 — Prove that a replayed credential empties the AoR through the wildcard path](RG-11-prove-the-wildcard-replay-empties-the-aor.md) · Signalling · RA-R-7 is deferred to this story — it is the only unproved row in the RA family
 - [RG-12 — Reach a shared location store from a running node](RG-12-reach-a-shared-location-store-from-a-node.md) · Signalling · the store is selectable and refuses to fall back; reading a document at startup is DP-10
+- [RG-13 — Bound the location store's growth — the change log and the row set both grow forever](RG-13-bound-the-location-stores-growth.md) · Signalling · changes is a Vec nothing in the shipped path ever drains, in both backends
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling · two rework rounds — the user privacy level was advertised as performed while a third of it was not

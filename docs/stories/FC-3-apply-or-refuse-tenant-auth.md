@@ -2,7 +2,7 @@
 id: FC-3
 title: Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar
 pillar: Cluster
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
