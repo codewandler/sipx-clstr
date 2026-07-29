@@ -84,6 +84,22 @@ retransmission that is not delivered within the same nanosecond as the original 
 - **Failing-first, both halves.** `ra_r_1_a_retransmitted_register_authenticates_again` with its
   restored assertion failed `[401, 200, 500]` vs `[401, 200, 200]`; `ls_r_3_…` with the 500 ms
   delay failed `left: 500, right: 200`. Both pass on the one-line change to `already_holds`.
+- **Review round 2 — B4.3, because the first draft of §5.3.1 over-promised.** "The carve-out stays
+  narrow" and §5.3's "replaying the same token a no-op rather than a second write" both read as if a
+  spent token could never produce a commit. It can: `process::explicit` reaches the ordering check
+  only for a **matched** binding, so a request that replays a spent token *and* carries an unbound
+  contact adds it via B1 and commits. Measured on this branch: `status=200 commits=true
+  rev=Revision(2)`, CA's deadline untouched. It is a wording and vector gap rather than a hole — the
+  same UA can register that contact in a request carrying only it, which B1 accepts identically at
+  the merge base, so the ordering token never gated the addition; the principal (S3/S4) and the
+  quota (§5.5) do. Fixed by stating it: rule **B4.3**, the qualified sentence in §5.3, vector
+  `LS-R-23`, and `ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound`.
+- **Review round 2 — the cross-backend suite's `LS-R-22` asserted only the status**, where its
+  sibling B5 row `LS-R-4` also asserts the store did not move, so a backend that aborted *and*
+  committed would have passed. Revision check added. Both new suite checks were falsified
+  deliberately before being left in — flipped, observed to report
+  `in-memory: LS-R-23 — expected CA untouched beside a new CB` and
+  `in-memory: LS-R-22 — the store moved under an aborted request`, then restored.
 
 ## Notes
 - Found by: [`RG-2`](RG-2-implement-server-side-digest-authentication.md); the defect was pinned by
