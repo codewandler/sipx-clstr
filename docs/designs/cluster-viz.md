@@ -15,7 +15,7 @@ product is an append-only, totally ordered, timestamped trace
 needs, and today it is readable only as a fixed-width text diff — the right format for catching a
 regression, the wrong one for seeing a partition heal, a timer storm, or a BYE route around a dead
 edge. Meanwhile the invariant metrics DP-3 owes
-([DP-3](../stories/DP-3-implement-observability-that-proves-the-invariants.md)) are numbers an
+([DP-3](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/DP-3-implement-observability-that-proves-the-invariants.md)) are numbers an
 operator must already believe in to look at. The constellation closes the legibility gap: the
 architecture chart drawn live, messages as particles, faults as visible events, and the invariants
 as counters that must not move — in the simulation first, and against a real deployment when the
@@ -48,17 +48,17 @@ message was.
 2. **Interactive sim (VZ-2).** The same stream, plus a control channel: `POST` endpoints that
    inject faults into the running `Sim` — kill a node, partition a link set for a window, ramp
    offered load — mapping onto `Sim::set_partitioned` and the CF-4 fault-schedule machinery
-   ([CF-4](../stories/CF-4-add-fault-injection-to-the-simulation.md)). The master seed and scenario
+   ([CF-4](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/CF-4-add-fault-injection-to-the-simulation.md)). The master seed and scenario
    name are always on screen; "share this run" is copying the seed, replaying it is the harness's
    own `HARNESS_SEED` discipline. A readout shows virtual time against wall time — idle periods
    fast-forward, storms play out — the harness's fast-forward made visible rather than hidden.
 3. **Real cluster (VZ-3, specified now, built when its sources exist).** The same schema fed by a
    live deployment: invariant-metric changes from the DP-3 set, probe verdicts from ET-5
-   ([ET-5](../stories/ET-5-publish-probe-results-as-metrics-and-alerts.md)), rollout stages from
+   ([ET-5](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/ET-5-publish-probe-results-as-metrics-and-alerts.md)), rollout stages from
    the operator's staged rollouts
-   ([KO-8](../stories/KO-8-apply-live-config-changes-as-a-staged-rollout.md)), and — for real
+   ([KO-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/KO-8-apply-live-config-changes-as-a-staged-rollout.md)), and — for real
    message particles — DP-7's selective signalling capture
-   ([DP-7](../stories/DP-7-duplicate-signalling-to-a-capture-target-selectively.md)), which is the
+   ([DP-7](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/DP-7-duplicate-signalling-to-a-capture-target-selectively.md)), which is the
    hot-path-safe tap by design. Nothing streams from the real cluster today: the node is a
    skeleton and the metric sets are backlog stories, and this design does not pull them forward.
 

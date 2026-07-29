@@ -110,6 +110,11 @@ published:
 - New specs carry normative references and test-vector tables, not prose alone.
 - Anything added under `docs/` that should be readable on the site is reachable from
   `website/sidebars.js`; the site build fails on a broken link rather than shipping one.
+- **A published doc never relative-links into an excluded one.** `docusaurus.config.js` excludes
+  `stories/**`, so `](stories/RG-8-….md)` resolves on disk and 404s on the site — link the story's
+  **GitHub URL** instead. `check-docs.py` enforces this, reading the exclude list from the site
+  config rather than keeping its own copy. It exists because the `v0.4.0` site deploy failed on
+  exactly this while the gate stayed green.
 
 ## Publishing
 

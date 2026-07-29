@@ -7,6 +7,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-07-29
+
+### Fixed
+
+- **The documentation site could not deploy**, and had not since `v0.4.0`. `docs/designs/cluster-viz.md`
+  relative-linked into five story files; `docs/roadmap.md` picked up a sixth in `0.5.0`. Those paths
+  resolve perfectly on disk — which is why the gate passed them — but `docusaurus.config.js`
+  excludes `stories/**` from the published site, so each one is a broken link there, and Docusaurus
+  fails the build rather than shipping one. Rewritten as absolute GitHub URLs, which is what the
+  rest of `docs/` already did.
+- **The gate had the matching hole**, which is the actual defect: a check that says "every relative
+  link resolves" is not the same as "every published page resolves", and the difference is exactly
+  the set of files the site excludes. `scripts/check-docs.py` gained that third rule, and it reads
+  the exclude globs **from the site config** rather than restating them — a check that keeps its own
+  copy of the list is one that eventually disagrees with the thing it checks. Per AGENTS.md, green
+  locally and red in CI is a bug in the gate, so it was fixed there rather than worked around.
+
 ## [0.5.0] — 2026-07-29
 
 ### Added

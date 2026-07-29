@@ -126,7 +126,7 @@ doing so, found that a REGISTER which correctly authenticates as a retransmissio
 idempotency against an absolute deadline, so it is true only for a retry arriving in the same
 nanosecond. Criterion 5 is about authentication and holds; criterion 4's vectors pass as written.
 But an ordinary lost `200` over UDP reaches this, so it is a defect M1 ships with rather than one it
-is free of. [`RG-8`](stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) owns it,
+is free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md) owns it,
 `ready` at priority 1, and it is the first thing after M1 rather than an M2 subject.
 
 ## Delivered
