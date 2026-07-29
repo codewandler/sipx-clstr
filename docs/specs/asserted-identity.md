@@ -602,34 +602,50 @@ Principal `acme:anna`. The assertable set (A5) holds one `AssertedIdentity` carr
 `{ sip: sip:+4930111222@acme.example, tel: tel:+4930111222 }`. A row that says otherwise varies
 this and says so in its *Given*.
 
-**On "a vector per policy combination".** The declared axes are `trust` (2), the requested privacy
-(RFC 3323 §4.2's five values plus absent and an unregistered token), the source list, and
-`when_absent` (2). Their full cross product is not enumerated, and enumerating it would prove less
-than the tables below do: `AI-T` is **exhaustive** over the two axes that interact — trust ×
-privacy, which A24 declares total — while A19, A25 and A10 establish that the source list and the
-`From` question are *independent* of it, each with its own rows. Independence proved once beats a
-product enumerated once and re-enumerated wrongly on the next change.
+**On "a vector per policy combination".** The declared axes are `trust` (2), the requested privacy,
+the source list, and `when_unspecified` (2). The privacy axis is not enumerated as raw header text
+— that set is open, because RFC 3323 §4.2 admits an unregistered `token` — but as §4's
+`PaiRequest`, whose derivation is total and has three values. So the gate's combination space is
+`2 × 3` and `AI-T-1`…`AI-T-11` walk **all of it**, both values of `when_unspecified` included;
+`AI-D-1`…`AI-D-7` prove the derivation itself is total over the raw header, which is what makes
+"exhaustive over `PaiRequest`" the same claim as "exhaustive over every `Privacy` header a caller
+can write". The source list and the `From` question are *independent* of the gate — A19, A25 and
+A10 — and carry their own tables. Independence proved once beats a product enumerated once and
+re-enumerated wrongly on the next change.
 
-**The emission gate (AI-T)** — exhaustive over `trust` × requested privacy, with a
-`P-Asserted-Identity` in hand. `when_absent: include` unless the row says otherwise.
+**The `PaiRequest` derivation (AI-D)** — §4, A34. Total over the raw `Privacy` header.
 
 | # | Given | Expect |
 |---|---|---|
-| AI-T-1 | trusted peer, no `Privacy` header | `Emit` (A20) |
-| AI-T-2 | trusted, `Privacy: none` | `Emit` — and the `Privacy` header forwarded byte-identical (A22) |
-| AI-T-3 | trusted, `Privacy: id` | `Emit` — §7's `MUST` is scoped to untrusted elements, and declaring the peer trusted is RFC 5379 §5.1.8's "confidence" (A20) |
-| AI-T-4 | trusted, `Privacy: header` | `Emit`, same reasoning (A20) |
-| AI-T-5 | trusted, `Privacy: user` | `Emit` — Table 1 gives `P-Asserted-Identity` no treatment under `user` (A25) |
-| AI-T-6 | untrusted, no `Privacy`, `when_absent: include` | `Emit` (A23; RFC 3325 §7's RECOMMENDED, taken by declaration) |
-| AI-T-7 | untrusted, no `Privacy`, `when_absent: remove` | `Withhold(PolicyWhenAbsent)` (A23) |
-| AI-T-8 | untrusted, `Privacy: none`, `when_absent: remove` | `Emit` — `none` out-votes the policy, never the reverse (A22) |
-| AI-T-9 | untrusted, `Privacy: id` | `Withhold(PrivacyId)` (A21) |
-| AI-T-10 | untrusted, `Privacy: header` | `Withhold(PrivacyHeader)` (A21, RFC 5379 §5.1.8) |
-| AI-T-11 | untrusted, `Privacy: user` | `Emit` — `user` does not touch this header; the `From` is what it anonymises (A25) |
-| AI-T-12 | untrusted, `Privacy: id`, two values in hand (`sip` + `tel`) | Both removed — RFC 3325 §7: "all instances of the header field values MUST be removed" (A21) |
-| AI-T-13 | `assert: never`, trusted peer, PAI received from a trusted sender | Forwarded — `Never` creates nothing and removes nothing (A19) |
-| AI-T-14 | `assert: never`, untrusted, `when_absent: remove`, PAI in hand | `Withhold(PolicyWhenAbsent)` — the same gate, unaffected by `Never` (A19) |
-| AI-T-15 | untrusted, `Privacy: id;user` | `Withhold(PrivacyId)` **and** the `From` anonymised — both axes fire, neither because of the other (A25) |
+| AI-D-1 | No `Privacy` header | `Unspecified` (A23) |
+| AI-D-2 | `Privacy: id` | `Withhold` (A21) |
+| AI-D-3 | `Privacy: header` | `Withhold` — RFC 5379 §4.1 Table 1 marks PAI `delete` under `header` (A21) |
+| AI-D-4 | `Privacy: none` | `Preserve` (A22) |
+| AI-D-5 | `Privacy: user`, `Privacy: session`, `Privacy: critical`, or `Privacy: user;session;critical` | `Unspecified` — Table 1 gives `P-Asserted-Identity` no treatment under any of them (A23) |
+| AI-D-6 | `Privacy: fictional` (an unregistered token, RFC 3323 §4.2) | `Unspecified` — an unknown token says nothing about this header, and guessing would be the fail-open reading (A23) |
+| AI-D-7 | `Privacy: none;id` (non-conforming — RFC 3323 §4.2 forbids a UA constructing it) | `Withhold`, not `Preserve` — the tie breaks toward not disclosing (A34) |
+
+**The emission gate (AI-T)** — exhaustive over `PeerTrust` × `PaiRequest`, with a
+`P-Asserted-Identity` in hand. `when_unspecified: include` unless the row says otherwise. Cell
+references are to §8.1.
+
+| # | Given | Expect |
+|---|---|---|
+| AI-T-1 | trusted, `Unspecified` (no `Privacy` header) | `Emit` (A20) |
+| AI-T-2 | trusted, `Preserve` (`Privacy: none`) | `Emit`, header forwarded byte-identical (A20, A22) |
+| AI-T-3 | trusted, `Withhold` (`Privacy: id`) | `Emit` — RFC 3325 §9.3 scopes `id` to entities *outside* the trust domain, and §7's `MUST` to untrusted elements; RFC 5379 §5.1.8's "confidence" is what declaring the peer trusted asserts (A20) |
+| AI-T-4 | trusted, `Withhold` (`Privacy: header`) | `Emit`, same cell and same reasoning (A20) |
+| AI-T-5 | trusted, `Unspecified` (`Privacy: user`) | `Emit` — Table 1 gives this header no treatment under `user` (A20, A25) |
+| AI-T-6 | untrusted, `Unspecified` (no `Privacy`), `when_unspecified: include` | `Emit` (A23; RFC 3325 §7's RECOMMENDED, taken by declaration) |
+| AI-T-7 | untrusted, `Unspecified` (no `Privacy`), `when_unspecified: remove` | `Withhold(PolicyWhenAbsent)` (A23) |
+| AI-T-8 | untrusted, `Preserve`, `when_unspecified: remove` | `Emit` — `none` out-votes the policy, never the reverse. **The row A19 defers to**: this is why no configuration here guarantees the header never reaches a peer (A22) |
+| AI-T-9 | untrusted, `Withhold` (`Privacy: id`) | `Withhold(PrivacyId)` (A21) |
+| AI-T-10 | untrusted, `Withhold` (`Privacy: header`) | `Withhold(PrivacyHeader)` (A21, RFC 5379 §5.1.8) |
+| AI-T-11 | untrusted, `Unspecified` (`Privacy: user`), `when_unspecified: remove` | `Withhold(PolicyWhenAbsent)` — **the B3 row**: an unrelated priv-value does not bypass a declared fail-closed posture, and `user`'s own effect is §9's, not this header's (A23, A25) |
+| AI-T-12 | untrusted, `Withhold`, two values in hand (`sip` + `tel`) | Both removed — RFC 3325 §7: "all instances of the header field values MUST be removed" (A21) |
+| AI-T-13 | `assert: never`, trusted, PAI received from a trusted sender | Forwarded — `Never` creates nothing and removes nothing (A19) |
+| AI-T-14 | `assert: never`, untrusted, `Unspecified`, `when_unspecified: remove`, PAI in hand | `Withhold(PolicyWhenAbsent)` — the same gate, unaffected by `Never` (A19) |
+| AI-T-15 | untrusted, `Privacy: id;user` | `Withhold(PrivacyId)` **and** the `From` anonymised on a trunk declaring `user_privacy: perform` — both axes fire, neither because of the other (A25) |
 
 **Selection (AI-S).**
 
@@ -652,18 +668,22 @@ product enumerated once and re-enumerated wrongly on the next change.
 
 | # | Given | Expect |
 |---|---|---|
-| AI-A-1 | `Privacy: user`, `anonymous_from: rfc5379` | `From: "Anonymous" <sip:anonymous@anonymous.invalid>;tag=a1` — tag byte-identical (A26) |
-| AI-A-2 | `Privacy: user`, `anonymous_from: as_received` | `From` byte-identical — §5.1.4's Note permits local-policy anonymisation, it does not require it (A26) |
-| AI-A-3 | `Privacy: id` only, `anonymous_from: rfc5379`, untrusted | `From` byte-identical, PAI withheld — `id` is not `user` (A25, Table 1) |
-| AI-A-4 | `Privacy: user` only, untrusted, `when_absent: include` | `From` anonymised **and** PAI emitted — the row that shows "anonymous caller" is not one flag (A25) |
-| AI-A-5 | `From` arrives already in §5.1.4's form, `anonymous_from: as_received` | Forwarded byte-identical; nothing to do |
+| AI-A-1 | `Privacy: user`, `user_privacy: perform` | `From: "Anonymous" <sip:anonymous@anonymous.invalid>;tag=a1` — tag byte-identical (A26) |
+| AI-A-2 | `Privacy: user`, `user_privacy: decline` | `From` byte-identical, and the six §5.3 headers forwarded — `Decline` performs none of it, which is exactly why A29 makes `user` unperformable on this trunk (A33) |
+| AI-A-3 | `Privacy: id` only, `user_privacy: perform`, untrusted | `From` byte-identical, PAI withheld — `id` is not `user` (A25, Table 1) |
+| AI-A-4 | `Privacy: user` only, untrusted, `when_unspecified: include` | `From` anonymised **and** PAI emitted — the row that shows "anonymous caller" is not one flag (A25) |
+| AI-A-5 | `From` arrives already in §5.1.4's form (the UA anonymised it), `user_privacy: decline`, no `Privacy` header | Forwarded byte-identical — the platform neither undoes the UA's anonymisation nor claims credit for it |
 | AI-A-6 | AI-T-15's request (`Privacy: id;user`, untrusted) with E1 and E3's `From` step run in the opposite order | Byte-identical output either way — neither step reads the field the other writes (A25) |
 | AI-A-7 | `Privacy: user`, `announce_id: when_withheld`, PAI emitted | No `id` appended — nothing was withheld (A27) |
 | AI-A-8 | `Privacy: id`, untrusted, `announce_id: when_withheld` | PAI withheld; forwarded `Privacy: id` — one occurrence, not two (A27; RFC 3323 §4.2) |
 | AI-A-9 | `Privacy: none`, `announce_id: when_withheld` | `Privacy: none` byte-identical, no `id` appended, PAI emitted (A22) |
-| AI-A-10 | `anonymous_from: rfc5379`, `From` carries display-name `"Anna"` and `;tag=a1` | Display-name and URI replaced; every other byte, tag included, identical (A26) |
+| AI-A-10 | `user_privacy: perform`, `From` carries display-name `"Anna"` and `;tag=a1` | Display-name and URI replaced; every other byte, tag included, identical (A26) |
 | AI-A-11 | In-dialog BYE toward the trunk, no `Privacy` header, dialog-forming request carried `Privacy: user` | `From` anonymised — the flag rode A12's token fact and P2's `TokenFact` returned it |
 | AI-A-12 | The same BYE delivered to a **different** edge | Identical outcome — the fact is in the message, not in a node (A12, invariant 5) |
+| AI-A-13 | `Privacy: user`, `user_privacy: perform`; request carries `Subject`, `Call-Info`, `Organization`, `User-Agent`, `Reply-To` and `In-Reply-To` | All six removed as well as the `From` anonymised — RFC 3323 §5.3's `MUST`, RFC 5379 §4.1 Table 1's `user` column (A33) |
+| AI-A-14 | As AI-A-13 with `user_privacy: decline` | All six forwarded and the `From` untouched — `Decline` performs none of it, which is what makes `user` unperformable under A29 rather than partially performed (A33) |
+| AI-A-15 | As AI-A-13, but the request also carries `Call-ID` and `Referred-By` | Both forwarded unchanged — `Call-ID` is RFC 3323 §5.3's `MAY` behind a B2BUA, `Referred-By` carries Table 1's circumstance asterisk; declining a `MAY` is not a failure to perform `user` (A33) |
+| AI-A-16 | `Privacy: user` on a trunk whose RT-5 egress allowlist already drops `User-Agent` | Removed once; the two mechanisms only remove, so they compose with no precedence rule (A33) |
 
 **The normalisation seam (AI-N)** — egress profile `carrier-e164` of
 [number-normalisation](number-normalisation.md) §9 unless the row says otherwise.
@@ -674,24 +694,26 @@ product enumerated once and re-enumerated wrongly on the next change.
 | AI-N-2 | As AI-N-1 with that guard's `fallback: reject` | Still `Skipped`, **not** `Reject` (`NN-G-11`); the branch forwards |
 | AI-N-3 | `source: [principal]` yielding `sip:4930111222@acme.example`; profile adds `p_asserted_identity` with `[{ ensure_prefix: "+" }]` | Forwarded `P-Asserted-Identity: <sip:+4930111222@acme.example>` — E1 created it, E2 shaped it (A8, A9) |
 | AI-N-4 | As AI-N-3 but `Privacy: id` and an untrusted peer, and the profile guards `p_asserted_identity` with `fallback: reject` | Forwarded with no PAI and **no rejection**: E1 withheld before E2 ran, so the trunk's guard never sees a field and cannot fail a branch over a header that was never going to leave (A8) |
-| AI-N-5 | `anonymous_from: rfc5379`, `Privacy: user`, profile normalises `from` with `[{ ensure_prefix: "+" }]` and no guard | `From: "Anonymous" <sip:anonymous@anonymous.invalid>;tag=a1` — E3 runs after E2, so the constant is written last and unshaped (A9) |
+| AI-N-5 | `user_privacy: perform`, `Privacy: user`, profile normalises `from` with `[{ ensure_prefix: "+" }]` and no guard | `From: "Anonymous" <sip:anonymous@anonymous.invalid>;tag=a1` — E3 runs after E2, so the constant is written last and unshaped (A9) |
 | AI-N-6 | As AI-N-5 but the `from` guard is `{ e164: global, fallback: to }`, and the `to` field is transformed `[{ ensure_prefix: "+" }]` | Forwarded as AI-N-5. Under the reverse order it would not be: E2 would see `anonymous`, `N6` would make it `NotANumber`, `N31` would make the guard never hold, and `N17` would substitute `To`'s phase-1 number into the `From` URI's user part — `From: "Anonymous" <sip:+4930555000@anonymous.invalid>`, the **callee's** number in the anonymous caller's `From`. The ordering rule is a privacy control, not a style choice (A9) |
-| AI-N-7 | A trunk declaring `anonymous_from: rfc5379` bound to a profile whose `from` guard is `fallback: reject` | Configuration load fails, naming the trunk, the policy and the profile (`G-A7`) |
+| AI-N-7 | A trunk declaring `user_privacy: perform` bound to a profile whose `from` guard is `fallback: reject` | Configuration load fails, naming the trunk, the policy and the profile (`G-A7`) |
 
 **`Privacy: critical` (AI-C).**
 
 | # | Given | Expect |
 |---|---|---|
-| AI-C-1 | `Privacy: id;critical`, untrusted | Forwarded, PAI withheld — `id` is performable (A29) |
+| AI-C-1 | `Privacy: id;critical`, **untrusted** | Forwarded, PAI withheld — `id` is performed by withholding on this branch (A29). `AI-C-11` is the trusted half |
 | AI-C-2 | `Privacy: header;critical` | `500 (Server Error)`, reason enumerating `header` (A30; RFC 3323 §5, RFC 5379 §4.3) |
 | AI-C-3 | `Privacy: session;critical` | `500`, reason enumerating `session` (A29, A30) |
-| AI-C-4 | `Privacy: user;critical`, trunk `anonymous_from: rfc5379` | Forwarded, `From` anonymised — `user` is performable **on this trunk** (A29) |
-| AI-C-5 | `Privacy: user;critical`, trunk `anonymous_from: as_received` | `500`, reason enumerating `user` — performability is per trunk (A29) |
+| AI-C-4 | `Privacy: user;critical`, trunk `user_privacy: perform`, request carrying all six of RFC 3323 §5.3's headers | Forwarded — `From` anonymised **and** all six removed. **The B1 row**: `user` is performable here only because A33 makes `Perform` do all seven things; a trunk that anonymised the `From` alone would be forwarding a request the caller asked to have rejected (A29, A33) |
+| AI-C-5 | `Privacy: user;critical`, trunk `user_privacy: decline` | `500`, reason enumerating `user` — performability is per trunk (A29) |
 | AI-C-6 | `Privacy: id;fictional;critical` | `500`, reason enumerating `fictional` — RFC 3323 §4.2 admits extension tokens; the platform claims only what it performs (A29) |
 | AI-C-7 | `Privacy: header` without `critical`, `on_unperformable: forward` | Forwarded; `header` stays in the forwarded `Privacy` for a downstream element (A28, A31) |
 | AI-C-8 | As AI-C-7 with `on_unperformable: reject` | `500` — RFC 5379 §4.3's recommendation, taken per trunk (A31) |
 | AI-C-9 | `Privacy: none;critical` | Forwarded, PAI emitted, header byte-identical — `none` requests no privacy functions, so nothing is unperformable (A22, A30) |
 | AI-C-10 | `Proxy-Require: privacy` | `420 Bad Extension` with `Unsupported: privacy`, at proxy-behavior `V6`, before any rule here runs (A32) |
+| AI-C-11 | `Privacy: id;critical` toward a **trusted** peer | Forwarded with the PAI, **no** `500` — **the B2 row**: RFC 3325 §9.3 scopes `id` to entities outside the trust domain, so forwarding inside it honours the token. `id` is performable in both cells of §8.1's `Withhold` column, which is why it is unconditional where `user` is not (A29, §8.1) |
+| AI-C-12 | `Privacy: header;critical` toward a **trusted** peer | `500`, reason enumerating `header` — `header` is never performable, and trust does not make it so; only `id`'s scoping argument survives the trusted branch (A29) |
 
 **Pipeline and binding (AI-P).**
 
@@ -704,7 +726,8 @@ product enumerated once and re-enumerated wrongly on the next change.
 | AI-P-5 | In-dialog re-INVITE toward the trunk | No synthesis; the gate still runs (A11) |
 | AI-P-6 | Out-of-dialog `OPTIONS` toward the trunk | Asserted — RFC 3325 §9.1's table marks OPTIONS `o` (A11) |
 | AI-P-7 | `REGISTER` on a scope with an identity policy | No `P-Asserted-Identity` added — §9.1's table marks REGISTER `-`, and the registrar path is not this one (A11) |
-| AI-P-8 | `200 OK` from the callee carrying `P-Asserted-Identity`, forwarded toward an untrusted ingress peer whose request carried `Privacy: id` | Withheld at `BeforeResponseForward` (H11) — RFC 5379 §4.1 marks the header `Rr` (A13) |
+| AI-P-8 | `200 OK` from the callee carrying `P-Asserted-Identity` **and `Privacy: id`**, forwarded toward an untrusted ingress peer | Withheld at `BeforeResponseForward` (H11) — RFC 5379 §4.1 marks the header `Rr` (A13) |
+| AI-P-11 | `200 OK` carrying `P-Asserted-Identity` and **no** `Privacy`, forwarded toward an untrusted ingress peer whose *request* carried `Privacy: id` | **Emitted or withheld by `when_unspecified` alone** — the request's `id` does not reach this decision. It was a statement about the *caller's* identity; the header here carries the *callee's* (A13) |
 | AI-P-9 | The fixture INVITE retransmitted | Byte-identical forwarded message — `egress_identity` is a pure function of `(policy, facts)` (A4, proxy-behavior §10 `S4`) |
 | AI-P-10 | A trunk with **no** identity policy bound | Nothing created; any PAI removed toward the peer; `Privacy` and `From` bytes untouched — A1/A19/A23's fail-closed triple |
 
@@ -718,6 +741,7 @@ product enumerated once and re-enumerated wrongly on the next change.
 | AI-X-4 | AI-A-8's forwarded `Privacy` | `Privacy: id` |
 | AI-X-5 | `Privacy: user` received, PAI withheld, `announce_id: when_withheld` | `Privacy: user;id` — `;`-separated per RFC 3323 §4.2's ABNF, received order preserved, `id` appended (A27) |
 | AI-X-6 | AI-S-1's assertion, the `From` carrying display-name `"Anna"` | `<sip:+4930111222@acme.example>` — no display-name is synthesised, and the `From`'s is not borrowed (A16) |
+| AI-X-7 | `Privacy: user;critical` received, `when_unspecified: remove` so the PAI is withheld, `announce_id: when_withheld` | `Privacy: user;id;critical` — `id` is inserted **before** `critical`, because RFC 3323 §4.2's construction rule puts the values first and `critical` last (A27) |
 
 ## 14. What this spec does not decide
 
@@ -727,6 +751,9 @@ product enumerated once and re-enumerated wrongly on the next change.
 | Cryptographic identity — signing the assertion rather than asserting it inside a trust domain | RFC 8224/STIR and RFC 8225. A different trust model, not a stronger setting of this one |
 | The shape of the number inside any field this spec writes | [number-normalisation](number-normalisation.md), bound per trunk; §6.1 is the seam and A9 the ordering rule |
 | Where the assertable set of A5 comes from, and how a principal maps to numbers | RG-1's store and DP-1's schema. This spec fixes only that it is resolved at ingress and never at egress (A4) |
+| Whether a `Literal`'s `sip` domain is inside the trust domain — RFC 3324 §2.2's first half | DP-1, once the deployment's own domain set is schema. It then becomes a startup check and belongs in `G-A6`; §12 records why it is an operator obligation until then |
+| Whether a `Literal`'s `tel` number is owned by the deployment — RFC 3324 §2.2's second half | **Nobody, and deliberately.** There is no registry a node could consult, and a syntactic proxy for ownership would pass for the wrong reason. It stays an operator obligation that §12's effective-policy record makes auditable |
+| Anonymising a `From` for a caller who did **not** request privacy | Not expressible, on purpose. RFC 5379 §5.1.4's Note permits it as local policy, but it would suppress the identity of callers who asked for nothing, and a trunk that wants one presented identity toward a carrier already has `IdentitySource::Literal` — which asserts rather than hides, and which §12 flags per branch |
 | The ingress scope vocabulary the receiving side of A1/A6 is keyed on | RT-8 (source-IP admission as configuration) and RT-9 (scoped route selection) |
 | `Privacy: header` — Via, Contact and Record-Route obscuring | Declined for v1 by PX-8; RFC 3323 §5.1 puts it in a B2BUA ([services-b2bua](../designs/services-b2bua.md)). A29 refuses to claim it rather than half-performing it |
 | Which headers besides these reach a given carrier | RT-5's per-trunk egress header allowlist — the same grain, the same obligation, a different field set |

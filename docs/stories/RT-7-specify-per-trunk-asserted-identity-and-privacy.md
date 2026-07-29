@@ -43,17 +43,20 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
       construction in `A10` (every source reads ingress facts, so a `From` about to be anonymised
       can never feed the identity asserted on that branch). Separately, `A9` fixes the order
       against *normalisation*, where order genuinely is observable: `AI-N-6`.
-- [x] Test vectors per policy combination. → §13, 72 rows in seven families: `AI-T` (15, the
-      emission gate), `AI-S` (12, selection), `AI-A` (12, anonymous callers and `From`), `AI-N`
-      (7, the normalisation seam), `AI-C` (10, `critical`), `AI-P` (10, pipeline and binding),
-      `AI-X` (6, byte-exact). §13's preamble states why the full cross product is *not* enumerated
-      and what is proved instead: `AI-T` is exhaustive over the two axes that interact, and `A19`,
-      `A25` and `A10` establish that the other two are independent. Registration in the vector
-      gate is deferred — see *Progress*.
+- [x] Test vectors per policy combination. → §13, 87 rows in eight families: `AI-D` (7, the
+      `PaiRequest` derivation), `AI-T` (15, the emission gate), `AI-S` (12, selection), `AI-A`
+      (16, anonymous callers and `From`), `AI-N` (7, the normalisation seam), `AI-C` (12,
+      `critical`), `AI-P` (11, pipeline and binding), `AI-X` (7, byte-exact). §13's preamble
+      states what is proved instead of a raw cross product: the privacy axis is enumerated as
+      `PaiRequest` (3 values, total derivation) rather than as header text, so `AI-T` walking all
+      `2 × 3` cells plus `AI-D` proving the derivation total *is* exhaustiveness over every
+      `Privacy` header a caller can write. `A19`, `A25` and `A10` establish that the source list
+      and the `From` question are independent. Registration in the vector gate is deferred — see
+      *Progress*.
 
 ## Progress
 - **Spec written: [asserted-identity](../specs/asserted-identity.md)**, new and normative — 32
-  rules `A1`–`A32`, 8 startup checks `G-A1`–`G-A8`, 72 vectors. AGENTS.md rule 4's test: normative
+  rules `A1`–`A34`, 8 startup checks `G-A1`–`G-A8`, 87 vectors. AGENTS.md rule 4's test: normative
   references, types, state rules and a test-vector table, not prose.
 - **Where creation sits, and why it is a rule rather than an implementation detail.** `A8` fixes
   three egress steps inside the window `N23` already reserves between F2 and F5 — **E1** identity,
@@ -119,6 +122,50 @@ Make P-Asserted-Identity synthesis and privacy handling a per-trunk policy, sinc
   obvious "§1 is the intro" assumption would have cited the wrong clause. And RFC 3325 §10.1's own examples emit two values
   as **two header lines** with the `tel` value as a bare `addr-spec`, so §7.1 states the emitted
   form explicitly rather than assuming the comma-separated ABNF form is what the wire shows.
+- **Reworked after independent review, which found four blocking defects. All four are closed.**
+  - **`user` was advertised as performable while only a third of it was performed.** RFC 5379 §4.1
+    Table 1's `user` column is not only `From: anonymize` — it also deletes `Call-Info`,
+    `In-Reply-To`, `Organization`, `Reply-To`, `Subject` and `User-Agent`, and RFC 3323 §5.3 makes
+    that a `MUST`. A trunk could therefore claim `user`, anonymise the `From`, and forward six
+    headers naming the caller's software, employer and subject line — and under `A30` that means
+    **forwarding a `user;critical` request the caller asked to have rejected**. New `A33` makes
+    `UserPrivacy::Perform` all seven things and `Decline` none; the middle value is gone because a
+    partial performance is a false claim. `Call-ID` and `Referred-By` are declined *with reasons*
+    (a `MAY` behind a B2BUA, and Table 1's circumstance asterisk) — declining a `MAY` is not a
+    failure to perform the level. `AI-A-13…16`, `AI-C-4`.
+  - **`id`'s unconditional performability looked inconsistent with `A20`.** It is not, and `A29`
+    now carries the argument rather than the assertion: RFC 3325 §9.3 scopes `id` to entities
+    *outside* the trust domain, so forwarding to a peer inside it honours the token too. Both cells
+    of §8.1's `Withhold` column are performances. `user` differs in kind — a trunk may simply not
+    do it. `AI-C-11`, `AI-C-12`.
+  - **The gate was not total.** Six of sixteen trust × privacy cells were undetermined, so
+    `when_absent: remove` as a fail-closed posture was **bypassable by one unrelated priv-value**.
+    Introduced `PaiRequest { Withhold, Preserve, Unspecified }` as a total derivation over
+    `RequestedPrivacy`, renamed `when_absent` → `when_unspecified` to match what it decides, and
+    added §8.1 enumerating all six cells. `A24` is now checkable instead of asserted, and the
+    exhaustiveness claim in §13 is a claim about a 3-valued derived type rather than about an open
+    set of header text. New `A34` settles the contradictory `none` + `id` header toward not
+    disclosing. `AI-D-1…7`, `AI-T-11`.
+  - **`A19` told an operator something false.** It said `trust: untrusted` + `remove` meant no PAI
+    reaches a peer under any circumstance; `AI-T-8` and `A22` say `none` still emits. `A19` now
+    states plainly that **no configuration here gives that guarantee** and names the one that does
+    — RT-5's unconditional egress header allowlist — with the reason it is deliberately a separate
+    control.
+  - Smaller, same pass: the §10.1 citation claimed a byte-for-byte match that `§7.1` itself
+    contradicts (it fixes the two-header-line *carriage*, not the bracket form); `A6` re-grounded
+    on RFC 3325 §5's **receive-side** `MUST` so §7's unqualified `MUST NOT remove` is no longer
+    reinterpreted; `A12`'s `G5` repointed at hook-framework, which is where it lives;
+    `A11`'s method set narrowed to the reachable intersection `{INVITE, OPTIONS, SUBSCRIBE,
+    REFER}`, with BYE and NOTIFY named as permitted-but-unreachable rather than left as an empty
+    branch; `A27` inserts `id` before `critical` per §4.2's construction rule (`AI-X-7`); `G-A6`
+    dropped an unimplementable "declared assertion domain" check and §12 now records RFC 3324
+    §2.2 as an operator obligation, with §14 naming DP-1 for the `sip` half and **nobody** for the
+    `tel` half, because E.164 ownership is not checkable from configuration at all.
+  - **Both open questions settled in the text.** `A13`: the response gate reads the **response's
+    own** `Privacy` header — a PAI on a response is the *answering* party's identity and the
+    caller's `Privacy: id` is not a licence to suppress the callee's, which also means the response
+    path needs no state to travel (`AI-P-8`, `AI-P-11`). `A11`: BYE is **not** reachable, and now
+    says so.
 - **Deferred, and tracked — do not re-file:** the `AI` rows are **not** registered in
   `scripts/check-vectors.py`, and `docs/reference/vector-scope.toml` /
   `docs/reference/conformance.md` carry no `AI` rows. Those three files were fenced to another

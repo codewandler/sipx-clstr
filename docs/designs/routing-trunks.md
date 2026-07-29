@@ -133,9 +133,16 @@ So the per-trunk policy [asserted-identity](../specs/asserted-identity.md) speci
 convenience wrapper over a header. It is the deployment writing down where the edge of its trust
 domain runs, one peer at a time, and RFC 3325 §1's `Spec(T)` checklist is what it has to answer.
 Three of that checklist's eight items — how trust-domain membership is determined (item 4), what
-happens when no `Privacy` header is present (item 5), and privacy handling for identity (item 8) —
-have no defensible platform-wide answer, so the spec makes each of them a required field on the
-trunk with **no default**. A trunk that does not say is a trunk that does not start.
+happens when the request asks nothing about this header (item 5), and privacy handling for identity
+(item 8) — have no defensible platform-wide answer, so the spec makes each of them a required field
+on the trunk with **no default**. A trunk that does not say is a trunk that does not start.
+
+Item 5 is worth one more sentence, because the spec deliberately reads it wider than RFC 3325 §7
+words it. §7 says "there is no Privacy header field"; the spec's `when_unspecified` also covers a
+`Privacy` header carrying only values RFC 5379 §4.1 Table 1 gives `P-Asserted-Identity` no
+treatment under — `user`, `session`, `critical`, an unregistered token. The two cases are
+indistinguishable in what the caller said *about this header*, which is nothing, and reading them
+apart would let one unrelated priv-value bypass a deployment's declared fail-closed posture.
 
 Three decisions in that spec are worth reading even if the rest is skimmed:
 
