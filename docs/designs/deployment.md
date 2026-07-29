@@ -21,6 +21,103 @@ share one process; at large scale they scale separately, without SDK changes. DP
 config schema (typed, versioned, reloadable where safe: trunk state, token keys, shard map) —
 config-first membership per `cluster-affinity`.
 
+**The schema is [cluster-config](../specs/cluster-config.md)** (DP-1), and the reason it is a
+normative spec rather than a paragraph here is that it arrived with three artefacts already
+asserting a schema: the chart's `cluster:` tree, the provisional `NodeConfig`/`Listeners` types in
+`sipx-clstr-node`, and half a dozen specs that each name configuration they expect to exist. The
+story's job was to reconcile those into one definition, not to add a fourth. Four decisions carry
+it.
+
+*One document, two readers.* The document is **cluster-scoped**, and a node reads a projection of
+it through an identity — node id, zone, role set — supplied from outside (spec §5). This is what
+makes the chart's claim ("the same tree a node reads") true without giving every node its own
+file: `values.yaml`, the `SipxCluster` spec and what a node loads are one set of bytes, so a diff
+between two versions is reviewable in one place, and "which configuration is this cluster running"
+has an answer. Loading is a pure function of `(bytes, identity, environment)` — no socket, no
+clock, no second file — so the whole of validation runs in the harness (AGENTS.md #2). Even
+`${NODE_IP}` interpolation takes its values as an argument rather than reading the process
+environment, which is the difference between a schema that can be tested and one that can only be
+deployed.
+
+*Typed and versioned means two numbers, not one.* `apiVersion` versions the **schema** — additive
+changes only within one, refuse rather than best-effort parse an unknown one, and `v1alpha1`
+promises nothing, said out loud so it is not quietly treated as stable. `version` versions the
+**configuration**: a `u32`, strictly increasing, and deliberately not invented here — it is the
+value `affinity-token` §3 already stamps into a token's `policy version` field, which is where the
+width comes from. Two specs were already saying "at every configuration version"
+(`affinity-token` §6, §12.2 CT1) about a thing nothing defined; now it exists and a rollback is a
+new version carrying old content, rather than a number going backwards.
+
+*A role set, and roles that never decide anything.* Six roles — `edge`, `registrar`,
+`inbound-proxy`, `outbound-proxy`, `e2e-tester`, `echo`; the sixth because
+[e2e-probe](../specs/e2e-probe.md) §9 puts it there. The property that makes "any combination"
+safe is stated as a rule: **a role selects which decision paths are wired and never what a request
+decides**. Direction, tenant, scope and trunk come from the ingress binding and the message, so
+`inbound-proxy` and `outbound-proxy` in one process cannot disagree — there is nothing for them to
+disagree about. The one refused combination is the probe roles beside the call-path roles, and it
+is refused because [e2e-probe](../specs/e2e-probe.md) §11 requires it: a probe that enters through
+the node it is probing measures a path no caller takes, which is why the architecture chart draws
+it outside the border.
+
+*Three reloadable things, three different semantics.* "Reloadable" was one word covering three
+unrelated mechanisms, and naming them separately is most of the work:
+
+| Subset | Semantics | What happens to work in flight |
+|---|---|---|
+| Trunks | **stamp and retire** — a `RoutePlan` already carries the policy version it was built under, so a plan completes against the trunk objects of its own version and the new table serves new plans. A trunk deleted mid-call strands nothing; per-trunk breaker and CPS state survives a reload that leaves the trunk's identity unchanged, because resetting every breaker turns a routine config push into a synchronized retry storm | Established dialogs untouched (RFC 3261 §12.2.1.2 — route sets are not recomputed); in-flight transactions finish on the stamped version |
+| Token keys | **distribute, then activate** — `affinity-token` §6 K1–K4 unchanged. What DP-1 adds is the pair of transition rules a spec that sees one document cannot state: a reload may not flip `mint` to a key absent from the *previous* version (that is K1 and K3 collapsed, and it mints tokens some healthy node cannot verify), and may not bring a retiring key's verify window forward | Nothing disturbed, in either direction — that is what the two rules exist to make true rather than hoped for |
+| Shard map | **drain, then switch** — the losing node stops accepting for a migrating shard, finishes what it holds, publishes `drained`; the gaining node starts only on that or on a bounded deadline. State table and transitions in spec §9.4 | No call is affected (shards own registrations, not dialogs). The at-risk work is an in-flight REGISTER write, and it cannot be split: a late write from the old owner fails its CAS against the per-AoR revision (`location-service` K3). The deadline can stall a handoff; it cannot corrupt one — and forcing is counted, because the usual reason a drain never finishes is that the old owner is gone, which is exactly when the shard must move |
+
+Everything else is `rollout`-class, and the class is a **property of the field** rather than a
+verdict reached by diffing — otherwise the operator and the node classify a change differently and
+the operator pushes something no node applies. A reload is atomic per document: one
+`rollout`-class field in it and the whole reload is refused, naming the field, with the last good
+configuration still running.
+
+**What the chart said, and what the schema says.** `deploy/helm/values.yaml` is a real proposal and
+most of it is adopted verbatim — `name`/`environment`/`zones`, `listener` with `bind`/`advertise`,
+`locationStore`, `destinationSet`, `routeRule`, `trunk`, `observability`, `probe`, `nat`,
+`security`. Where a spec disagreed, the spec won:
+
+| Chart | Schema | Why |
+|---|---|---|
+| `numbering:` — a flat global normaliser (`normalize`, `normalizeFields`, `ruriDigits*`) | `normalisation:` — named profiles bound at ingress scope and per trunk | [number-normalisation](../specs/number-normalisation.md) N23/N27: two binding points, no global default, no implicit `+`. The flat form is a second dialect for the same job |
+| `numbering.outbound.e164Plus` | an `ensure_prefix: "+"` in an egress profile | N28 — a `+` appears only because a declared rule put it there |
+| `numbering.outbound.anonymousFrom` | `privacy` policy, unowned here | RFC 5379 identity/privacy is RT-7's, not the normaliser's ([number-normalisation](../specs/number-normalisation.md) §2) |
+| `media:` — one global block with `codecs.{offer,transcode,mask}` | `TrunkMediaPolicy` per trunk; a `mediaPool[]` for pool facts | [media-relay](../specs/media-relay.md) §13.1 makes policy a field of the trunk and MP6 forbids selection derived from a domain or a pattern. `offer`/`strip`/`transcode` are §13.3's *NG wire keys*, and exposing them as configuration puts the protocol in the config file |
+| `media.codecs.offer: [PCMA, PCMU, …]`, `mask: all` | refused at load today | MP12/G-M6: until `CF-3` is green the only admissible policy is `{AsReceived, None, Disabled}`. As written, the default deployment set would not start |
+| `media.ngTimeout`, `ngRetries` | `T_ng`, `B_ng` and the five other named timers | [media-relay](../specs/media-relay.md) §8 K6 fixes seven values with defaults and a bound; the retransmission schedule is four fixed attempts and is not a knob |
+| `media.portRange`, `timeout`, `silentTimeout`, `strictSource`, `generateRtcp`, `rewrite` | `mediaPool[]` (KO-7) for the pool facts; the rest is not a platform surface | §14 assigns pool operation to KO-7, and E5 forbids emitting keys §7 does not list — a `rewrite` list is the relay's vocabulary, not this platform's |
+| `registrar.{maxExpires,minExpires,maxContacts,realm,authBackend}` | `tenant[]` | [location-service](../specs/location-service.md) §5.2/§5.5 and [registrar-auth](../specs/registrar-auth.md) §2 make every one of these **per tenant**. A node-wide spelling is a coarser policy the registrar's own spec cannot see |
+| `registrar.shards: 1` | `shardMap` | A count cannot express ownership, and drain-then-switch needs an owner per shard and a version to fence on |
+| `quirkProfile: []` (top level) | `quirks` / `quirkConfig` / `quirkOverrides` on `trunk[]` and `domain[]` | [extension-framework](extension-framework.md) G13, after EX-10: a binding declares what it binds and which profile wins a contested target; a profile names nowhere it applies |
+| `listener[].role: management`, `transport: http` | a `management:` section | `listener[]` is the SIP listener set, and every entry's advertised address is part of the node's SIP identity ([proxy-behavior](../specs/proxy-behavior.md) §5). An HTTP endpoint in that list makes the identity set wrong |
+| `listener[].role: <one>` | `listener[].roles: [<role>…]` | A listener shared by co-resident roles has to be expressible, or the co-located case cannot be configured |
+| `limit[]` and `limits:` | `rateLimit[]` and `timers:` | Two sections one letter apart, one a list and one a map, is a defect waiting for a mis-edit |
+| `limits.{frTimer,frInvTimer,timerC}` | `timers.{t1,timerB,timerF,timerC}` | RFC 3261 §17.1.1.2 / §17.1.2.2 name these; the chart's `timerC: 600s` carries the comment "the 180s default silently caps long calls", and Timer C cannot — it is cancelled by the final response (§16.6 step 11). The cap belongs to `maxCallDuration`, and a knob explained by a wrong reason is the one that gets tuned |
+| `security.maxForwards: 10` | default **70** | RFC 3261 §16.6 step 3, already fixed by [proxy-behavior](../specs/proxy-behavior.md) §5. It is the value inserted when a request carries none, not a hop budget |
+| `security.rejectUserAgents: [<tool names>]` | `security.userAgentDenyList`, no default | The mechanism is worth having; a shipped list of names is a default that goes stale and that nobody reviews |
+| `crd.{apiGroup,apiVersion}` | `apiVersion: sipx.dev/v1alpha1` on the document | One version field on the thing being versioned |
+| — (absent) | `profile:` | [hook-framework](../specs/hook-framework.md) §8 and KO-1 both require a deployment profile; the chart has nowhere to name one |
+
+**Membership, keys and the shard map are integrated by reference, not written here.** They are
+AF-6's sections; DP-1 fixes only the seam (spec §10): where they live in the tree, that they are
+versioned with the document and reloadable, that a `membership` entry must carry a node id meeting
+`affinity-token` §12.2 CT1's uniqueness — a correctness input, not a convention, and the *same* id
+[media-relay](../specs/media-relay.md) §6.2 C2 requires to be cluster-unique for NG cookies — plus
+its zone and role set for the startup cross-check, and that a `keys` entry carries §6's attributes
+with the secret supplied by reference. Deliberately left to AF-6 and named so it is not lost: the
+rotation runbook's wall-clock arithmetic, the persisted-incarnation option CT2 requires of a
+deployment whose clock may step backwards, the tenant name↔id assignment procedure, and what a
+dynamic membership service would later replace. Nothing in the spec's §1–§9 changes when AF-6
+lands; it writes into §7's rows.
+
+*Considered for upstream: no.* A configuration schema names this platform's own concepts — roles,
+zones, shards, tenants, trunks, media pools, profiles — and the kernel has no opinion about any of
+them. The single place it touches kernel surface, a listener's bind/advertise split, maps onto
+`sipx_transport::Config`'s existing fields rather than re-deriving them, as DP-5 already
+established below.
+
 **Reference topology** (DP-2): one region, three zones — 3+ edges, the PostgreSQL location
 store in HA, 2+ routing/policy instances, 2+ media nodes per media network, DNS SRV for external
 discovery, an L4 VIP or per-transport addresses. Exposure: UDP/TCP 5060 where required, TLS 5061,
@@ -91,6 +188,21 @@ recovers automatically, and in what time bound.
 
 - **Role-specific binaries.** Rejected: multiplies build/release surface; roles differ by wiring,
   not by code.
+- **A per-node configuration document** (DP-1). Rejected: the moment two nodes read different
+  bytes, "the configuration version" stops naming anything, and both `affinity-token` §6's key
+  rules and §12.2 CT1's id-uniqueness rule are statements about a version. One document plus a
+  small out-of-band identity keeps every cross-node invariant checkable by reading one file.
+- **Deriving the reload class by diffing** (DP-1). Rejected: the operator and the node would each
+  compute it, and the first time they disagreed the operator would push a change no node applies.
+  The class is declared per field, in the schema both of them read.
+- **A schema version alone, without a configuration version** (DP-1). Rejected: two specs already
+  say "at every configuration version", and a token's `policy version` field already needs the
+  number on the wire. One of the two was going to be invented anyway; better the one whose width
+  is already fixed.
+- **Tolerating unknown fields** (DP-1). Rejected: a misspelled key that is silently ignored is a
+  policy nobody is applying, and the first ones anybody misspells are `security` and quota fields.
+  Closed-world validation costs a restart on a typo and saves the failure mode where the config
+  file says one thing and the running node does another.
 - **Service mesh / HTTP ingress in front of signalling.** Rejected: SIP over UDP with Via/rport
   semantics and owned TCP flows is invisible to HTTP-shaped dataplanes; L4 with source
   preservation is the requirement.
@@ -102,16 +214,41 @@ recovers automatically, and in what time bound.
 
 - Kubernetes versus plain hosts as the *reference* (k8s manifests are DP-2's deliverable, but
   bare-metal/systemd must remain first-class for media nodes).
-- Config reload semantics for the shard map: what happens to in-flight REGISTER writes during a
-  resharding — likely "drain then switch," specified in DP-1.
+- ~~Config reload semantics for the shard map~~ — **settled** in
+  [cluster-config](../specs/cluster-config.md) §9.4: drain, then switch, with the losing node
+  stopping first and the gaining node starting on `drained` or on a bounded, counted deadline. An
+  in-flight REGISTER write is never split, because a late write from the old owner fails its CAS
+  against the per-AoR revision rather than landing beside the new owner's.
 - Whether the L4 VIP or DNS SRV is primary for edge discovery in the reference deployment.
+- **`nat:` has no owning spec.** The schema gives it a home and a reload class, and no more:
+  detection, `received`/`rport` handling (RFC 3261 §18.2.1, RFC 3581) and contact aliasing are
+  real behaviour with no normative text behind them, and the chart's field names came from
+  somewhere other than an RFC. It needs a story before it needs more schema.
+- **The listener set is keyed by transport, and needs to be keyed by arrival address.**
+  `Listeners::receiving` answers "which listener did this arrive on" from the transport alone,
+  which is right for one endpoint per node and wrong the moment two roles want separate ports on
+  one node. Until it keys on the receiving local address, [cluster-config](../specs/cluster-config.md)
+  §5 P6 refuses that projection at load rather than serving it wrongly — the same posture
+  `media-relay` MP12 takes toward a policy the relay cannot yet honour. Co-resident roles sharing
+  one listener are unaffected, so no role combination is blocked by it.
+- **The chart has to follow the schema** (KO-2 owns `deploy/helm/**`): the reconciliation table
+  above is the change list, and until it lands the default deployment set's `media.codecs` block
+  is a configuration `media-relay` G-M6 refuses to start on.
+- How many quirk bindings a large deployment really carries. §8 V8 sets declared ceilings — 8
+  profiles per binding, 4096 bindings per node — because startup validation is superlinear in
+  their product, and `extension-framework` left that bound here. The numbers are a first estimate
+  and are raised by a spec change, never by a config flag.
 - Whether a `Record-Route` on a TLS listener should be `sips:` rather than `sip:;transport=tls`.
   The transport parameter (§19.1.1) says "come back over TLS" about this hop and nothing more;
   `sips:` is a claim about the whole remaining path. DP-5 takes the narrower one deliberately and
   leaves the policy to whoever specifies the platform's TLS posture.
-- Serving a TLS listener at all: it needs a server identity (certificate and key), which is
-  configuration DP-1 owns. Its advertised address is already decided, so the listener is correct
-  the moment it can be bound.
+- Serving a TLS listener at all: it needs a server identity (certificate and key). **Settled in
+  shape** — `listener[].tls` names it, and by [cluster-config](../specs/cluster-config.md) §8 V9
+  the document carries a *reference* rather than the material, so the operator renders the
+  document into a ConfigMap and the references into Secrets and the safe shape is the only shape.
+  Resolving a reference is IO and therefore a start-up failure of the driver, not a load error.
+  Its advertised address is already decided, so the listener is correct the moment it can be
+  bound.
 
 ## Acceptance / done
 
