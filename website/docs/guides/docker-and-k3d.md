@@ -26,8 +26,9 @@ At runtime it drops to an unprivileged user, runs `tini` as PID 1, and exposes `
 UDP and TCP.
 
 ```bash
-docker run --rm -p 5060:5060/udp -p 5060:5060/tcp sipx-clstr \
-  run --listen 0.0.0.0:5060 --advertise 203.0.113.10:5060
+docker run --rm -p 5060:5060/udp -p 5060:5060/tcp \
+  -v "$PWD/cluster.yaml:/etc/sipx-clstr/cluster.yaml:ro" sipx-clstr \
+  run --config /etc/sipx-clstr/cluster.yaml --node 1 --zone a --roles edge,registrar
 ```
 
 Note that you must supply the command. The image's default is `--help`, not `run`, on purpose: a
@@ -35,8 +36,9 @@ node refuses to advertise an unspecified address, so every plausible default `ru
 would exit `2`. A default that always fails teaches nothing, so the image prints its usage
 instead.
 
-Set `--advertise` to the address **outside** the container — the host address and published
-port. See [Addressing](addressing.md).
+Set the listener's `advertise` to the address **outside** the container — the host address and
+published port. See [Addressing](addressing.md). The image builds with the `postgres` feature, so a
+container can join a cluster rather than only ever running alone.
 
 ## On k3d with devspace
 
@@ -49,25 +51,40 @@ The manifests live in `deploy/devspace/` and put the node in a `sipx-clstr-dev` 
 plain `Deployment` with one replica and a `ClusterIP` service. The container runs with a
 read-only root filesystem and all capabilities dropped, and is not on the host network.
 
-The interesting line is the advertise argument:
+The interesting part is that **both nodes read one document**, mounted from a `ConfigMap`, and each
+resolves its own address out of it:
 
 ```yaml
-args: [run, --listen, 0.0.0.0:5060, --advertise, $(POD_IP):5060, --tenant, default]
+args: [run, --config, /etc/sipx-clstr/cluster.yaml]
+env:
+  - name: SIPX_CLSTR_NODE
+    value: "1"
+  - name: SIPX_CLSTR_ZONE
+    value: a
+  - name: SIPX_CLSTR_ROLES
+    value: edge,registrar
+  - name: POD_IP
+    valueFrom:
+      fieldRef:
+        fieldPath: status.podIP
 ```
 
-The pod's own IP is not knowable before the pod exists, so it comes from the downward API and is
-expanded into the argument at start. This is the real-world version of the lesson in
-[Addressing](addressing.md): bind is local, advertise is what peers use.
+The pod's own IP is not knowable before the pod exists, so it comes from the downward API and the
+document's `advertise: ${POD_IP}:5060` resolves against it. Identity comes from the environment for the
+same reason it is not in the document: the document is shared, the identity is not.
 
 ## What this proves, and what it does not
 
-It stands up **one process**, on **UDP only** in practice, with the **in-memory** location store
-and no authentication.
+It stands up **two nodes and one PostgreSQL location service**, on **UDP only**, with no
+authentication. That is enough to be a cluster in the smallest honest sense: a user who registers
+through one node can be called through the other, and
+[Getting started](../getting-started.md) walks through hearing it answer.
 
-It does not prove clustering, zone spread, media, high availability of the store, TCP or TLS, or
-anything an operator would do — because there is no operator here. The Helm chart in
-`deploy/helm/` renders a custom resource that nothing currently serves; the controller that would
-reconcile it is designed but not built.
+It does not prove zone spread, media relaying, high availability of the store, TCP or TLS, or anything
+an operator would do — because there is no operator here. The Helm chart in `deploy/helm/` renders a
+custom resource that nothing currently serves; the controller that would reconcile it is designed but
+not built. It also does not prove mid-dialog routing behind a single Service: each node record-routes
+its own pod IP, so one address in front of both needs affinity tokens.
 
 For what that is supposed to become, see [Deploy](../operate/deploy.md) and
 [Scaling](../operate/scaling.md).

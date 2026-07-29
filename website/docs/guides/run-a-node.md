@@ -5,29 +5,48 @@ description: "The three flags, the two lines it prints, the exit codes, and how 
 
 # Run a node
 
-One process, one listener, one tenant. The whole surface is three flags.
+One process, one or more listeners, one tenant. What it does comes from a
+[configuration document](../reference/configuration.md); the command line says only which document and
+which node this is.
 
 ```bash
-sipx-clstr run --listen 0.0.0.0:5060 --advertise 203.0.113.10:5060
+sipx-clstr run --config cluster.yaml --node 1 --zone a --roles edge,registrar
 ```
 
-That binds **both UDP and TCP** on the given address. There is no flag to bind only one.
+## What the command line carries
 
-## The flags
-
-| Flag | Default | What it does |
+| Flag | Environment | Meaning |
 |---|---|---|
-| `--listen <addr>` | `0.0.0.0:5060` | The socket to bind. UDP and TCP both. |
-| `--advertise <host[:port]>` | *(none)* | What goes into `Via` and `Record-Route`. **Required** when `--listen` is unspecified (`0.0.0.0` or `::`). |
-| `--tenant <name>` | `default` | The tenant this node serves. One tenant per node, for now. |
+| `--config <PATH>` | — | The document: YAML, JSON or TOML. **Required.** |
+| `--node <1..65535>` | `SIPX_CLSTR_NODE` | This node's logical id. |
+| `--zone <NAME>` | `SIPX_CLSTR_ZONE` | Its failure domain. |
+| `--roles <A,B>` | `SIPX_CLSTR_ROLES` | What it runs. |
 
-`--advertise` is the one that will actually bite you. The node **refuses to start** on
-`0.0.0.0` without it, because "everywhere" answers where to listen and not where to be reached —
-a node that put `0.0.0.0` in a `Record-Route` would accept calls that could never be transferred
-or hung up. [Addressing](addressing.md) covers this properly.
+That is the whole surface. Identity is **not** in the document, because the document is the same on
+every node in the cluster — see [Configuration](../reference/configuration.md).
 
-`--tenant` sets a name and nothing else. It does not enable authentication, and it does not
-isolate anything from anything: this node has one tenant and no credentials.
+## What the document carries
+
+The listener is where bind and advertise are declared, independently of each other:
+
+```yaml
+listener:
+  - roles: [edge, registrar]
+    transport: udp
+    bind: 0.0.0.0:5060
+    advertise: 203.0.113.10:5060
+```
+
+`advertise` is the one that will actually bite you. A node **refuses to start** if it would advertise
+`0.0.0.0`, because "everywhere" answers where to listen and not where to be reached — a node that put
+it in a `Record-Route` would accept calls that could never be transferred or hung up.
+[Addressing](addressing.md) covers this properly.
+
+A `transport` this build cannot serve — `tls`, `ws`, `wss` — is **refused**, not quietly downgraded to
+cleartext.
+
+The tenant is a name and nothing else. It does not enable authentication: `tenant[].auth` is accepted
+by the loader and **not applied**, so this node has one tenant and no credentials.
 
 ## What it prints
 
@@ -42,11 +61,15 @@ These are printed *after* the socket is bound, deliberately, so a script can blo
 instead of sleeping:
 
 ```bash
-sipx-clstr run --listen 127.0.0.1:5060 --advertise 127.0.0.1:5060 |
+sipx-clstr run --config cluster.yaml --node 1 --zone a --roles edge,registrar |
   while read -r line; do
     case "$line" in "listening on"*) break ;; esac
   done
 ```
+
+They are printed only after **everything** that could refuse to start has declined to — the bind, the
+document, the location store. It was briefly the other way round, and a script waiting on that line
+proceeded against a node that was already exiting.
 
 Both addresses appear because they are allowed to differ, and an operator debugging "the phone
 registers but nothing rings" needs to see which one went into the messages.
@@ -57,7 +80,7 @@ Logs go to **stderr**, never stdout, so the two lines above stay parseable. Leve
 `RUST_LOG`, defaulting to `info`:
 
 ```bash
-RUST_LOG=debug sipx-clstr run --listen 127.0.0.1:5060 --advertise 127.0.0.1:5060
+RUST_LOG=debug sipx-clstr run --config cluster.yaml --node 1 --zone a --roles edge,registrar
 ```
 
 Colour is switched off on purpose — this log is read by scripts as often as by people, and
@@ -69,19 +92,13 @@ escape codes between a field name and its value defeat an honest `grep`.
 |---|---|
 | `0` | Clean exit. |
 | `1` | Runtime failure — the bind failed, or the runtime could not start. |
-| `2` | Usage or configuration error: an unknown flag, a flag with no value, an address that does not parse, or `0.0.0.0` with no `--advertise`. |
+| `2` | Anything wrong before the node ran: an unknown flag, a missing `--config` or identity, an unreadable document, a document that was refused, or a secret reference that did not resolve. |
 
 A node that cannot do what it was asked must not look like a node that did it, so a
 misconfiguration is `2` and never `0`.
 
 ## What it is not
 
-There is no config file, no reload, no management port, no metrics endpoint, and no way to
-enable authentication or point the registrar at a database. All of those are specified; none is
-implemented. See [Configuration](../reference/configuration.md) for what exists versus what is
-designed.
-
-The argument parser itself is explicitly provisional. The real configuration schema is a
-[normative spec](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/cluster-config.md)
-that will **replace** these flags rather than extend them, so do not build tooling that depends
-on their shape.
+There is no reload, no management port, and no metrics endpoint. A configuration change is a restart.
+Authentication is accepted by the document and not applied. All of those are specified; none is
+implemented — see [Configuration](../reference/configuration.md) for the section-by-section state.

@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://codewandler.github.io/sipx-clstr/"><img src="https://img.shields.io/badge/docs-codewandler.github.io%2Fsipx--clstr-E2622A" alt="Documentation"></a>
-  <a href="#where-this-actually-is"><img src="https://img.shields.io/badge/status-one%20node%20%C2%B7%20no%20cluster%20yet-2F3A45" alt="Status: one node, no cluster yet"></a>
+  <a href="#where-this-actually-is"><img src="https://img.shields.io/badge/status-two%20nodes%20%C2%B7%20one%20registrar-2F3A45" alt="Status: two nodes sharing one registrar"></a>
   <a href="docs/reference/conformance.md"><img src="https://img.shields.io/badge/vectors-77%2F98%20proved-2F3A45" alt="Conformance: 77 of 98 vector rows proved"></a>
   <a href="https://github.com/codewandler/sipx"><img src="https://img.shields.io/badge/built%20on-sipx-F98A3C" alt="Built on sipx"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F3A45" alt="MIT or Apache 2.0 license"></a>
@@ -27,22 +27,52 @@
 
 ---
 
-> **Read this first.** sipx-clstr is **early, and now real**. One node proxies and registers, and
-> two `sipx` CLI phones register through it and call each other with media flowing directly between
-> them — a scripted, repeatable proof, not a claim ([`scripts/e2e-call.sh`](scripts/e2e-call.sh)).
-> What does *not* exist yet is the cluster: no affinity tokens, no trunks, no media control, no
-> deployment surface. If you need a clustered proxy today, this is not it — but one node is a
-> foundation rather than a demo, and every rule it follows is written down first.
+> **Read this first.** sipx-clstr is **early, and now real**. Two nodes sharing one location service
+> are a cluster in the smallest honest sense: a user who registers through one node can be called
+> through the other, with audio. That is scripted and repeatable, locally
+> ([`two-node-call.sh`](scripts/two-node-call.sh)) and on Kubernetes
+> ([`k8s-two-node-call.sh`](scripts/k8s-two-node-call.sh)) — a proof, not a claim.
+>
+> What does *not* exist yet: affinity tokens, so **one address in front of both nodes will not work**
+> — each node record-routes its own address, and in-dialog requests must come back to it. Nor trunks,
+> media control, authentication, or the operator. If you need a production clustered proxy today, this
+> is not it.
 
 ## Five minutes to a forwarded call
 
-You need a [Rust toolchain](https://rustup.rs) and Python 3. No PBX, no account, no config file —
-there is no config file yet.
+You need a [Rust toolchain](https://rustup.rs) and Python 3. No PBX and no account; a node is
+configured by a document, in YAML, JSON or TOML.
 
 ```sh
 git clone https://github.com/codewandler/sipx-clstr && cd sipx-clstr
-cargo build --bin sipx-clstr
-./target/debug/sipx-clstr run --listen 127.0.0.1:5060 --advertise 127.0.0.1:5060
+cargo build --bin sipx-clstr --features postgres
+
+cat > cluster.yaml <<'YAML'
+apiVersion: sipx.dev/v1alpha1
+version: 1
+cluster:
+  name: local
+  environment: dev
+  zones: [a]
+  listener:
+    - roles: [edge, registrar]
+      transport: udp
+      bind: 127.0.0.1:5060
+      advertise: 127.0.0.1:5060
+  membership:
+    - node: 1
+      name: node-a
+      zone: a
+      roles: [edge, registrar]
+  locationStore:
+    backend: memory
+  tenant:
+    - name: default
+      id: 1
+      domains: [example.test]
+YAML
+
+./target/debug/sipx-clstr run --config cluster.yaml --node 1 --zone a --roles edge,registrar
 ```
 
 ```text
@@ -69,12 +99,17 @@ RESULT: PASS — registrar stored both bindings and the proxy forwarded between 
 ```
 
 > [!WARNING]
-> **The shipped binary is an open registrar and forgets everything on restart.** Digest
-> authentication is implemented and proved against the RFCs' own vectors, but no flag turns it on;
-> bindings live in memory only. Both follow from the configuration surface being three flags. Keep
-> it on loopback or a trusted network.
+> **This is an open registrar.** Digest authentication is implemented and proved against the RFCs'
+> own vectors, and the document's `tenant[].auth` section is accepted but **not applied** — so anyone
+> who can reach the port can register any address-of-record. With `backend: memory` a restart also
+> forgets every binding. Keep it on loopback or a trusted network.
 
-**→ [Full walkthrough, including a real call with audio](https://codewandler.github.io/sipx-clstr/docs/getting-started)**
+A node is configured by a document — YAML, JSON or TOML — not by flags. Two nodes sharing one
+PostgreSQL location service are a cluster: a user who registers through one can be called through the
+other. `scripts/two-node-call.sh` proves it locally and `scripts/k8s-two-node-call.sh` in Kubernetes,
+both ending in a call with audio.
+
+**→ [Full walkthrough: a node, a cluster, and dialling in to hear it answer](https://codewandler.github.io/sipx-clstr/docs/getting-started)**
 
 ## The problem
 
@@ -128,11 +163,11 @@ multi-node test is treated as a bug in the design, not in the test.
 
 | | |
 |---|---|
-| **Working** | One node that proxies and registers: RFC 3261 §16 forwarding with forking, `CANCEL` and Timer C; `REGISTER` over a compare-and-swap location store; UDP and TCP on one listener; media flowing directly between endpoints |
+| **Working** | **Two nodes sharing one registrar.** RFC 3261 §16 forwarding with forking, `CANCEL` and Timer C; `REGISTER` over a compare-and-swap location store, in memory or in PostgreSQL; configuration by one cluster-scoped document in YAML, JSON or TOML; UDP and TCP; media flowing directly between endpoints. Register through one node, be called through another — proved with independent `sipx` CLI phones, with audio, locally and on Kubernetes |
 | **Written** | **Ten specifications** with normative rules and byte-level test-vector tables — proxy behaviour, location service, registrar auth, affinity token, hook framework, cluster config, asserted identity, number normalisation, media relay, end-to-end probe |
 | **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against independent `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) is generated, not written: **77 of 98 vector rows proved**, 21 deferred, each naming a reason and an owner |
-| **Reachable but not wired** | Digest authentication and the PostgreSQL location store are both implemented and tested, and neither can be switched on from the binary — the configuration surface is three command-line flags |
-| **Not yet** | The cluster. Affinity tokens, trunk routing, media control, roles by config, the operator and chart |
+| **Accepted but not applied** | `tenant[].auth` and seventeen other sections of the schema load without error and change nothing. The node logs which ones at startup, and being made to refuse them rather than ignore them is open work |
+| **Not yet** | **One address in front of the cluster** — that needs affinity tokens, and without them in-dialog requests must be addressed to the node that forwarded them. Also: trunk routing, media control, applied authentication, registrar sharding, the operator and chart |
 | **Built on** | [sipx](https://github.com/codewandler/sipx) 0.7.0 — the SIP kernel this platform orchestrates, pinned to a tag rather than a branch. Protocol logic belongs there; this repo adds clustering |
 
 **Milestones.** M0 foundation on paper *(complete)* → M1 one node that proxies and registers

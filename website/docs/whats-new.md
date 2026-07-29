@@ -5,27 +5,27 @@ description: "Where sipx-clstr stands, release by release, and what is still mis
 
 # What's new
 
-The current release is **0.10.0**.
+The current release is **0.11.0**.
 
 ## Where this actually is
 
-**One node runs.** It registers users, forwards calls between them, and lets their media flow
-directly. That much is real, tested against independent client software, and you can have it
-working in about five minutes — see [Getting started](getting-started.md).
+**Two nodes sharing one registrar run.** They register users, forward calls between them — including
+calls that cross from one node to the other — and let media flow directly between the endpoints. That
+much is real, tested against independent client software, and you can have it working in about ten
+minutes, ending with a call you can hear: see [Getting started](getting-started.md).
 
-Everything else on this site is specification. The cluster does not exist yet: there is no second
-node, no affinity token in a `Record-Route`, no registrar shard, no trunk, no media relay, no
-operator.
+Everything past that is specification. There is no affinity token on the wire, no registrar shard, no
+trunk, no media relay, no operator.
 
-Two things about the shipped binary will bite you, and both are consequences of the same missing
-piece — the configuration surface is three command-line flags:
+Two things will bite you:
 
-- **It is an open registrar.** Digest authentication is implemented and vector-proved, and there
-  is no way to switch it on from the CLI. The binary accepts any `REGISTER` for any
-  address-of-record from anyone who can reach the port. Do not put it on a public address.
-- **Bindings are in memory only.** A restart loses every registration, and there is no second node
-  that kept them. The PostgreSQL location store is real, tested code sitting behind a cargo
-  feature that the binary does not reach.
+- **It is an open registrar.** Digest authentication is implemented and vector-proved, and the
+  document's `tenant[].auth` section is accepted and **not applied**. Anyone who can reach the port can
+  register any address-of-record. Do not put it on a public address.
+- **One address in front of both nodes does not work.** Each node writes its own address into
+  `Record-Route`, so in-dialog requests have to come back to the node that forwarded them. A single
+  Service or VIP will send a `BYE` to whichever node the balancer picks, and that node knows nothing
+  about the dialog. Affinity tokens are what fix this.
 
 [Does this fit?](guides/does-this-fit.md) is the long version of this paragraph.
 
@@ -35,14 +35,14 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 
 | | State |
 |---|---|
-| A second node cooperating with the first | specified, not shipped |
-| Affinity tokens and flow ownership on the wire | specified, not shipped |
+| One address in front of the cluster (needs affinity tokens) | specified, not shipped |
+| Flow ownership and the connection-owner RPC | specified, not shipped |
 | Registrar sharding | specified, not shipped |
 | Carrier trunks, number normalisation, asserted identity | specified, not shipped |
 | Media relay control | specified, not shipped |
 | Kubernetes operator, Helm, autoscaling | designed |
-| A configuration file — the schema exists, nothing reads it | specified, not shipped |
-| Digest auth reachable from the CLI, durable bindings in the binary | implemented, not wired |
+| Authentication actually applied — the document accepts it and nothing enforces it | implemented, not applied |
+| Eighteen of the schema's sections — accepted, validated only in part, applied not at all | partly shipped |
 
 One more gap that is easy to miss because it is about the measuring instrument rather than the
 product: **most of the platform's normative vector rows are not under the conformance gate yet.**
@@ -55,6 +55,31 @@ matters.
 Each entry leads with what changed for someone using this. The full detail — findings, rejected
 alternatives, the reasoning behind each decision — is in
 [CHANGELOG.md](https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md).
+
+### 0.11.0 — two nodes, one registrar, and a call you can hear
+
+**This is the release where "cluster" stops being a design document.** Two nodes sharing one
+PostgreSQL location service: a user who registers through one node can be called through the other,
+with audio. It is scripted both ways — `scripts/two-node-call.sh` for two local processes and
+`scripts/k8s-two-node-call.sh` for two pods on Kubernetes — and both scripts print what they do not
+prove.
+
+- **A node is configured by a document**, not by flags. YAML, JSON or TOML, all producing the same
+  configuration; the encoding is detected from the content. The old `--listen`/`--advertise`/`--tenant`
+  flags are **gone**, replaced rather than extended.
+- **Every mistake in a document is reported at once**, ordered by path, so five mistakes cost one
+  restart instead of five. An unknown key is an error naming the keys that are recognised.
+- **It refuses rather than improvises.** A location store it cannot reach stops the node instead of
+  falling back to memory. A `transport: tls` listener is refused instead of quietly binding cleartext.
+  A secret reference that does not resolve stops the node instead of being ignored.
+- **[Getting started](getting-started.md) now ends with dialling in and hearing a tone** — through a
+  node that never saw the answering phone register.
+- Fixed: the node used to print `listening on` and *then* exit if its store was unreachable, so a
+  script waiting for that line proceeded against a dying node.
+
+**What still does not work:** one address in front of both nodes. Each node record-routes its own
+address, so in-dialog requests must come back to it. Affinity tokens are what fix that and they are
+not implemented. Authentication is accepted by the document and not applied.
 
 ### 0.10.0 — documentation you can actually start from
 

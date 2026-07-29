@@ -44,29 +44,35 @@ directly between them. **The cluster is not built yet.**
 | **Registrar** | `REGISTER`, AoR canonicalisation, bindings, compare-and-swap location store | today |
 | **Transports** | UDP and TCP on one listener | today |
 | **Media** | Flows directly between endpoints; the platform never touches RTP | today |
-| **Digest authentication** | Implemented and vector-proved — but not reachable from the CLI | today, partly |
-| **Durable registrations** | PostgreSQL store exists behind a cargo feature, not wired to the binary | today, partly |
-| **Clustering** | Affinity tokens, flow ownership, registrar shards | specified, not shipped |
+| **Configuration** | One cluster-scoped document in YAML, JSON or TOML; refuses to start rather than apply half of it | today |
+| **Two nodes, one registrar** | A shared PostgreSQL location service: register through one node, be called through another | today |
+| **Digest authentication** | Implemented and vector-proved — the document accepts `tenant[].auth` and nothing applies it | today, partly |
+| **One address in front of the cluster** | Needs affinity tokens: each node record-routes its own address, so in-dialog requests must return to it | specified, not shipped |
+| **Registrar shards, flow ownership** | Rendezvous hashing, connection ownership, the owner RPC | specified, not shipped |
 | **Trunks** | Carrier interconnect, number normalisation, asserted identity and privacy | specified, not shipped |
 | **Media control** | External relay over the NG protocol; no RTP in the signalling process, ever | specified, not shipped |
 | **Kubernetes** | Operator, Helm chart, drained scale-in, SIP-shaped autoscaling | designed |
 
 ## The honest version
 
-Two things about the shipped binary will bite you, and neither is obvious from the outside.
+Three things will bite you, and none is obvious from the outside.
 
 **It is an open registrar.** Digest authentication is implemented and proved against the RFCs'
 own test vectors, but there is no command-line or configuration path that turns it on. The
 binary you build today accepts any `REGISTER` for any address-of-record, from anyone who can
 reach the port. Do not put it on a public address.
 
-**Registrations live in memory only.** The node holds bindings in a process-local store. A
-restart loses every registration, and there is no second node to have kept them. The PostgreSQL
-location store is real code with real tests, but it is behind a cargo feature and the binary
-does not reach it.
+**Registrations are only durable if you ask for them to be.** With `backend: memory` a restart loses
+every binding. `backend: postgres` shares them across nodes and survives a restart, and it needs the
+`postgres` cargo feature compiled in — the container image has it.
 
-Both are consequences of the same thing: the configuration surface is three command-line flags,
-and the real schema has not landed. See [Configuration](reference/configuration.md).
+**Two nodes are a cluster; one address in front of two nodes is not.** Each node writes its *own*
+address into `Record-Route`, so in-dialog requests come back to the node that forwarded them. Put a
+single Service or VIP in front and a `BYE` will land on whichever node the load balancer picks, which
+has no idea about the dialog. That is what affinity tokens are for, and they are not implemented.
+
+The first two are configuration; see [Configuration](reference/configuration.md). The third is
+architecture, and it is the next thing that has to be built.
 
 ## How it is built
 

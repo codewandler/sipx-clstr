@@ -312,3 +312,66 @@ spec:
       port: 5060
       targetPort: 5060
       protocol: UDP
+---
+# A phone that answers with audio, so calling in produces something you can hear.
+#
+# This is a `sipx` CLI phone, not a platform feature: the `echo` role in cluster-config §4 is
+# specified and the probe crate is a skeleton, so nothing in this binary answers a call. Being explicit
+# about that matters — a greeting you can hear is easy to mistake for the platform terminating a call,
+# and this platform is proxy-first and never terminates a dialog.
+#
+# It registers through **node-b** and is called through **node-a**, so hearing the tone is itself the
+# cross-node proof: the pod that forwards your call never saw this phone register.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sipx-clstr-greeting
+  labels:
+    app.kubernetes.io/name: sipx-clstr
+    app.kubernetes.io/component: greeting
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sipx-clstr
+      app.kubernetes.io/component: greeting
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sipx-clstr
+        app.kubernetes.io/component: greeting
+    spec:
+      containers:
+        - name: phone
+          image: sipx-phone:dev
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -u
+              # The nodes' Service addresses are stable across pod restarts; their pod IPs are not.
+              A="$(getent hosts sipx-clstr-node-a | awk '{print $1}')"
+              B="$(getent hosts sipx-clstr-node-b | awk '{print $1}')"
+              ME="$(hostname -i | awk '{print $1}')"
+              echo "greeting at $ME; registering via node-b ($B), reachable through node-a ($A)"
+              # `register` and `answer` MUST share a port: the Contact that registration stores is the
+              # address callers are sent to, so if `answer` listened elsewhere the proxy would forward
+              # to a socket nobody is on. That was the first version of this file and the call timed
+              # out with every other part of the system behaving correctly.
+              #
+              # So registration is one-shot rather than `--keep-alive`: it exits, freeing the port for
+              # `answer` to bind. The lease is 3600s and the loop re-registers well inside that, so
+              # the binding never lapses. Registered through node-b and called through node-a, which
+              # is what makes hearing the tone a cross-node proof rather than a local one.
+              while true; do
+                sipx register "sip:hello@$A" --target "$B:5060" --local "$ME:5060" --json
+                sipx answer --local "$ME:5060" --play /tone.wav --duration 20 --wait 1200 --json
+              done
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
