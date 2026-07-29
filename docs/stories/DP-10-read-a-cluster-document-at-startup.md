@@ -47,6 +47,31 @@ be configured at all.
 
 - (running log)
 
+### The blast radius, measured rather than guessed
+
+"Replace, not extend" reaches well past `main.rs`. Every one of these invokes the provisional flags
+today and has to move in the same change, or the repository ships two configuration surfaces:
+
+| File | What it does with them |
+|---|---|
+| `crates/sipx-clstr-node/src/main.rs` | parses `--listen`/`--tenant`/`--advertise` |
+| `scripts/e2e-call.sh` | starts the node under test — the M1 proof |
+| `deploy/devspace/manifests/node.yaml` | `args: [run, --listen, …, --advertise, $(POD_IP):5060]` |
+| `Dockerfile` | the `--help` default and its explanation |
+| `README.md` | the quick start, with pasted output |
+| `website/docs/getting-started.md` | the five-minute path, with pasted output |
+| `website/docs/guides/run-a-node.md` | the flag table and exit codes |
+| `website/docs/guides/addressing.md` | the whole page is about `--advertise` |
+| `website/docs/guides/docker-and-k3d.md` | container and pod invocation |
+| `website/docs/reference/cli.md` | the full documented surface |
+| `website/docs/reference/configuration.md` | says outright there is no configuration file |
+
+Two consequences worth deciding before starting. The published site is deployed from a **release**,
+so the site and the binary disagree between the merge and the next tag unless the two are cut
+together. And `addressing.md` does not survive a mechanical edit — it is an argument about bind
+versus advertise, and the document form has to make that argument in its own shape rather than
+rename the flags in place.
+
 ## Notes
 
 - `DP-8` implemented ten sections of the schema and reports the rest in `Config::deferred`. This
