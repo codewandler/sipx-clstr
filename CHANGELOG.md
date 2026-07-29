@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-07-29
+
 ### Added
 
 - **M1's own end-to-end proof** (`CX-3`) — `scripts/e2e-call.sh` brings up one node and two real
@@ -231,6 +233,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The kernel pin moves `v0.2.1` → `v0.7.0`**, in two steps and for two different reasons.
+  `v0.4.0` brought both sides of digest (`S-16`, `X-20`) and cleared every filed row in the
+  [upstream ledger](docs/upstream.md) at once. `v0.7.0` then closed the one row that reopened on
+  contact with the code: `TimerQueue` is now `TimerQueue<K, I = Instant>`, generic over its
+  **instant** rather than only its key, so a virtual clock can drive it — which `CF-7` needs and
+  `X-14` had not delivered. The default type parameter means no existing caller changed.
+  - Everything in the suite passes at the same seeds against `v0.7.0`; three kernel releases of
+    drift produced no behavioural change here.
+  - `KERNEL_VERSION` moves with it, and `kernel_pin.rs` fails the build if it ever does not —
+    an operator reading `--version` during an incident gets the tag the binary was actually
+    compiled against.
+- **`Path` is read as a typed header** (kernel `T-14`). `HeaderName::Other(b"Path")` matched
+  nothing once the kernel started typing it, so a REGISTER carrying a `Path` registered an *empty*
+  route set and the branch toward the callee silently lost its route. Caught by
+  `a_registered_path_becomes_the_route_set_the_invite_carries`, fixed at the lookup rather than by
+  re-recording the expectation.
 - **Via surgery is one upstream call instead of a collection rebuild** (`PX-3`). sipx `S-15`
   shipped `Headers::remove_first` in `v0.4.0`, so the two sites that built a fresh `Headers` and
   copied every header except the topmost `Via` into it — the proxy's `pop_via` and the harness

@@ -1396,7 +1396,7 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "sipx-clstr-node"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "postgres",
@@ -1414,7 +1414,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-probe"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "pretty_assertions",
@@ -1425,7 +1425,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-proxy"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "hmac 0.12.1",
@@ -1439,7 +1439,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-registrar"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "pretty_assertions",
@@ -1452,7 +1452,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-sim"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "bytes",
  "pretty_assertions",
@@ -1469,8 +1469,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-sip"
-version = "0.4.0"
-source = "git+https://github.com/codewandler/sipx?tag=v0.4.0#19b0ce94ac5d2747e888b057c4d30957375ff502"
+version = "0.7.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.7.0#67c21039eaada5bfb609d50bf2d5307ac899201b"
 dependencies = [
  "bytes",
  "thiserror",
@@ -1479,8 +1479,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-transport"
-version = "0.4.0"
-source = "git+https://github.com/codewandler/sipx?tag=v0.4.0#19b0ce94ac5d2747e888b057c4d30957375ff502"
+version = "0.7.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.7.0#67c21039eaada5bfb609d50bf2d5307ac899201b"
 dependencies = [
  "bytes",
  "futures-util",
@@ -1499,8 +1499,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-ua"
-version = "0.4.0"
-source = "git+https://github.com/codewandler/sipx?tag=v0.4.0#19b0ce94ac5d2747e888b057c4d30957375ff502"
+version = "0.7.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.7.0#67c21039eaada5bfb609d50bf2d5307ac899201b"
 dependencies = [
  "bytes",
  "hmac 0.12.1",

@@ -2,12 +2,12 @@
 id: CF-7
 title: Adopt the kernel timer queue and loopback link
 pillar: Platform
-status: blocked
-priority:
+status: ready
+priority: 1
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [harness]
-note: X-14 shipped but does not fit — both kernel pieces are keyed to tokio::time::Instant; BLOCKED on a new upstream ask
+note: unblocked by sipx v0.7.0 — the queue is generic over its instant now; the link stays local
 ---
 
 # Adopt the kernel timer queue and loopback link
@@ -52,11 +52,18 @@ from virtual time, and adopting either would cost more determinism than the conv
   around the kernel's clock and re-record the pins; the pins are the regression suite, and a
   re-recorded pin proves only that the new behaviour is the new behaviour.
 
-**What would unblock it** is an upstream change this repo has not filed yet: `TimerQueue` generic
-over its instant type (`TimerQueue<K, I: Ord>`, or a `Clock` associated type) so a virtual clock
-can drive it, and either an N-party link or an explicit decision that the mesh stays here and only
-the two-party primitive is shared. Until then `CF-5`'s local implementations are the correct code,
-and the fourth criterion it could not satisfy stays unsatisfied for a reason now written down.
+**Unblocked 2026-07-29 by sipx `v0.7.0`.** The kernel is now
+`TimerQueue<K, I = Instant>` with `I: Ord + Copy + Add<Duration, Output = I>` — generic over its
+instant, defaulting to the old type so no existing caller changed. `SimTime` satisfies those bounds
+with one `Add<Duration>` impl, so the harness can hand in its own clock and the module doc's claim
+("nothing here has an opinion about what an instant means") is finally true of the signature.
+
+**The link half is settled the other way, and stays local.** `testkit::Link` is unchanged in
+`v0.7.0`: still `Side::Left`/`Right` where the harness needs an N-node mesh, still no stream class
+for RFC 3261 §16.9, still drawing faults from its own generator rather than `SimRng`. Adopting it
+would change what every seed in the suite means, which this story's own third criterion forbids.
+`CF-1` reserved the right to decide the testkit split **per component**; this is that decision,
+recorded rather than left as an unmet checkbox — the queue converges, the mesh does not.
 
 ## Notes
 - Upstream story: sipx [X-14](https://github.com/codewandler/sipx/blob/main/docs/stories/X-14-testkit-timer-queue-and-loopback-link.md),

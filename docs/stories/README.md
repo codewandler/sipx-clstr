@@ -39,10 +39,13 @@ deployment · `ET` end-to-end call probe · `KO` Kubernetes operator/Helm · `CX
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · unblocked by sipx v0.4.0 — the spec and the decision core are in; the store wiring is not
 
 ## Next (ready — take the top one unless the user named a story)
-_None._
+
+### Conformance & deterministic harness
+_The north star made executable: seeded multi-node simulation, and coverage that is measured._
+- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · unblocked by sipx v0.7.0 — the queue is generic over its instant now; the link stays local
 
 ## Blocked
-- [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · X-14 shipped but does not fit — both kernel pieces are keyed to tokio::time::Instant; BLOCKED on a new upstream ask
+_None._
 
 ## Backlog
 
