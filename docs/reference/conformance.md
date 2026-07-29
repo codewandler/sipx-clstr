@@ -132,7 +132,7 @@ that will.
 | `RA-D-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-D-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-D-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
 | `RA-D-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-D-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-D-7` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
@@ -153,8 +153,8 @@ that will.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `RA-R-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-R-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-R-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
+| `RA-R-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
 | `RA-R-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |

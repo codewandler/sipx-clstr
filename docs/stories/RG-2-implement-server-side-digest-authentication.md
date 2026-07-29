@@ -2,12 +2,12 @@
 id: RG-2
 title: Implement server-side digest authentication
 pillar: Signalling
-status: in-progress
+status: done
 priority:
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, auth]
-note: M1 #9 · unblocked by sipx v0.4.0 — the spec and the decision core are in; the store wiring is not
+note: M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 ---
 
 # Implement server-side digest authentication
@@ -19,8 +19,8 @@ Implement the server side of digest: challenge emission, nonce minting with a re
 - [x] Challenge/verify vectors pass for the MD5 and SHA-256 families (RFC 8760), including `stale` handling and nonce-count replay rejection. — `RA-A-1…4` (algorithms and the downgrade refusal), `RA-D-8` (`stale`), `RA-R-2`/`RA-R-4` (replay, and a count that goes backwards).
 - [x] The nonce store's replay window is bounded and tested under retransmission. — `RA-R-1` (a retransmission is not a replay) and `RA-R-5` (the window does not grow with traffic).
 - [x] The primitive/policy split against sipx is recorded in the upstream ledger and honored. — [upstream](../upstream.md) rows `S-16`/`X-20` are `landed in 0.4.0`; the split is normative in [registrar-auth](../specs/registrar-auth.md) §2, and `tests/sans_io.rs` enforces the half that could regress silently.
-- [ ] Authentication runs **before** REGISTER processing and the principal it yields reaches the binding: `auth::Decision` is consumed on the path into `RegisterCommand`, and a binding written under an open tenant carries `principal: None` as a recorded fact.
-- [ ] A harness scenario proves the retransmission case end to end — a REGISTER replayed with an unchanged nonce-count still authenticates — which is M1's fifth exit criterion and the reason verification had to be reachable from the sans-IO side at all.
+- [x] Authentication runs **before** REGISTER processing and the principal it yields reaches the binding: `auth::Decision` is consumed on the path into `RegisterCommand`, and a binding written under an open tenant carries `principal: None` as a recorded fact. — `parse::admit` is the only door; `EdgeContext` no longer has a `principal` field to smuggle one through. Proved by `parse`'s seam tests and by `register_auth`'s `a_challenged_register_authenticates_and_binds_under_its_principal` / `an_open_tenant_binds_with_no_principal_recorded`.
+- [x] A harness scenario proves the retransmission case end to end — a REGISTER replayed with an unchanged nonce-count still authenticates — which is M1's fifth exit criterion and the reason verification had to be reachable from the sans-IO side at all. — `crates/sipx-clstr-sim/tests/register_auth.rs`, `ra_r_1_a_retransmitted_register_authenticates_again`, with `ra_r_2_…` as the twin that keeps it from passing vacuously. **It also found something** — see below.
 
 ## Progress
 **Unblocked 2026-07-29 by sipx `v0.4.0`, and the decision core is in.** The release carries both
@@ -47,12 +47,51 @@ kernel pieces this story waited on, so the remedy the previous entry insisted on
   indistinguishable from a wrong password, via a placeholder credential that keeps §3 A4's "same
   path" literal instead of aspirational.
 
-**What remains** is the wiring, which is the last two acceptance boxes: `Decision` is not yet
-consumed on the path into `RegisterCommand`, so nothing currently sets the `principal` that
-`binding.rs:125` and `command.rs:68` already carry, and there is no harness scenario for the
-retransmission case. That scenario is M1's fifth exit criterion, and it is why verification had to
-be reachable from the sans-IO side at all — if the crypto lived in the node, the deterministic
-harness could only observe the criterion, never assert it.
+**The wiring landed 2026-07-29, and the scenario with it.** All five boxes hold; the gate is green.
+
+- **`parse::admit` is the seam.** It runs `TenantAuth::decide` and, only on `Proceed`, builds the
+  command with the principal that decision produced — returning `Admission::{Command, Challenge,
+  Reject}`. Three outcomes rather than a `Result`, because a challenge is not a failure: it is the
+  first half of a round trip the client is expected to finish.
+- **`EdgeContext::principal` is gone.** An identity is not something an edge *knows*, it is what a
+  decision *produced*, and a settable field would have let a driver assert one nobody proved — the
+  single mistake in this area no downstream test could catch. `register_command` remains, and is now
+  explicitly the open-tenant path: it yields `principal: None`.
+- **`Timestamp::as_secs`** is the clock seam — the location service counts nanoseconds, digest counts
+  seconds. Truncating, so a nonce expires a moment late rather than a moment early and nobody is
+  told `stale` for a nonce that was still good.
+- **The node driver authenticates too**, via `NodeConfig::auth` (`AuthConfig`: realm, nonce secret,
+  credentials), open by default. One `Mutex<TenantAuth>` for the process, because the replay window
+  is the thing it holds and a per-request authenticator is a window that never says no. Scope note:
+  this is beyond the box's letter, but a registrar that could never be *configured* to challenge
+  would make M1's exit a claim about the harness rather than about the platform.
+- **The harness scenario is `crates/sipx-clstr-sim/tests/register_auth.rs`**, eight cases: the
+  challenge/answer round trip, the principal reaching the stored binding, RA-R-1's retransmission,
+  RA-R-2's forged twin, RA-D-4's foreign realm refused 403, a wrong password binding nothing, an open tenant recording `None`, and a
+  byte-for-byte replay sweep under jitter. The phone's half is `sipx_ua::auth::respond` — the
+  kernel's own client — so what it proves is that the two halves agree.
+
+## What the scenario found, and did not fix
+
+**A retransmitted REGISTER authenticates and is then refused `500` by the location service.** The
+`RG-2` half is correct: same nonce, same nonce-count, same digest, admitted twice. What answers it is
+[location-service](../specs/location-service.md) §5.3 B5, because B4's idempotency test —
+`process::already_holds` — reads "same granted expiry base" as the same **absolute deadline**. That
+is true only for a retry arriving at the very nanosecond of the original, which no retransmission
+ever does, so every one of them falls through to B5.
+
+This is [`RG-3`](RG-3-implement-register-processing-on-the-in-memory-store.md)'s recorded open
+question, pinned there by `a_re_presentation_at_a_later_instant_is_not_a_retry_and_is_refused` and
+deferred to `AF-*`/`RG-5` as a *cluster* concern — a re-presentation at another node stamping its own
+`now`. **It is not only that.** One node, one phone, no cluster, and the plainest event on a UDP
+network reaches it. Left unchanged here rather than improvised over: reversing a decision that is on
+the record belongs to the story that owns it, and it is a **spec** decision — §5.3 is normative, so
+the reading changes there before the code does.
+
+**Tracked as [`RG-8`](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md)**, priority 1,
+`ready`. `a_retransmission_that_authenticates_is_still_refused_by_the_ordering_rule` pins the current
+answer meanwhile, so the defect is something a build can fail on rather than a paragraph nobody
+reads.
 
 **Kept from the blocked period, because the reasoning still binds:** writing digest here was
 refused (it contradicts the design's primitive/policy split and the `AGENTS.md` upstream-first

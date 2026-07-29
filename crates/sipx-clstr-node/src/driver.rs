@@ -10,7 +10,7 @@
 //! that cannot be tested without a network, which is why it is small enough to read in one sitting.
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -19,8 +19,8 @@ use sipx_clstr_proxy::{
     targets_from_lookup,
 };
 use sipx_clstr_registrar::{
-    CanonicalAor, EdgeContext, InMemoryStore, LocationStore, TenantPolicy, Timestamp, apply,
-    register_command,
+    Admission, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore, LocationStore,
+    TenantAuth, TenantPolicy, Timestamp, admit, apply,
 };
 use sipx_sip::{
     HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
@@ -42,6 +42,27 @@ pub struct NodeConfig {
     pub tenant: String,
     /// The host this node puts in its `Via` and `Record-Route`.
     pub advertise: String,
+    /// How the tenant authenticates, or `None` for an open tenant (`RG-2`, registrar-auth §3 A1).
+    ///
+    /// Open by default. A default that quietly required credentials would make a node that answers
+    /// nothing look like a node that is up, and a default that quietly invented a realm would put a
+    /// protection space in the deployment that nobody configured.
+    pub auth: Option<AuthConfig>,
+}
+
+/// A tenant's digest policy: the realm it challenges in, its nonce key, and its credentials.
+///
+/// Provisional alongside [`NodeConfig`] — `DP-1` owns the real schema, and `RG-7` owns arriving at
+/// the credentials from a store rather than from a literal.
+#[derive(Debug, Clone)]
+pub struct AuthConfig {
+    /// The protection space (registrar-auth §3 A3).
+    pub realm: String,
+    /// The nonce key. Stable across restarts, or in-flight nonces do not survive one — clients
+    /// recover through `stale=true`, so the cost of an unstable one is a round trip, not a login.
+    pub secret: [u8; 32],
+    /// Who may register.
+    pub credentials: InMemoryCredentials,
 }
 
 impl NodeConfig {
@@ -52,7 +73,23 @@ impl NodeConfig {
             listen,
             tenant: "default".to_owned(),
             advertise: listen.to_string(),
+            auth: None,
         }
+    }
+
+    /// The tenant policy this configuration describes, ready to decide with.
+    fn tenant_auth(&self) -> TenantAuth {
+        match &self.auth {
+            Some(auth) => TenantAuth::required(&self.tenant, &auth.realm, auth.secret),
+            None => TenantAuth::open(&self.tenant),
+        }
+    }
+
+    fn credentials(&self) -> InMemoryCredentials {
+        self.auth
+            .as_ref()
+            .map(|auth| auth.credentials.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -74,6 +111,12 @@ pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
     let store = Arc::new(InMemoryStore::new());
     let policy = TenantPolicy::default();
     let proxy = proxy_config(&config);
+    // One authenticator for the node, because it holds the replay window: a per-request one would
+    // forget every nonce-count the moment it was created, which is a replay window that never says
+    // no. `std::sync::Mutex` rather than tokio's — `decide` is a hash and a lookup, and it is never
+    // held across an await.
+    let auth = Arc::new(Mutex::new(config.tenant_auth()));
+    let credentials = Arc::new(config.credentials());
     report_transactions_in_flight(handle.clone());
 
     while let Some(arrival) = incoming.recv().await {
@@ -81,12 +124,22 @@ pub async fn run(config: NodeConfig) -> Result<(), sipx_transport::Error> {
         let store = Arc::clone(&store);
         let config = config.clone();
         let proxy = proxy.clone();
+        let auth = Arc::clone(&auth);
+        let credentials = Arc::clone(&credentials);
 
         // One task per arrival. The accept loop must never do work inline: it is the single consumer
         // of the incoming channel, and the kernel delivers into that channel with `try_send`, so a
         // blocked loop drops requests silently (sipx `T-19`).
         tokio::spawn(async move {
-            if let Err(error) = serve(&handle, &store, &policy, &config, &proxy, arrival).await {
+            let edge = Edge {
+                store: &store,
+                policy: &policy,
+                config: &config,
+                proxy: &proxy,
+                auth: &auth,
+                credentials: &credentials,
+            };
+            if let Err(error) = serve(&handle, &edge, arrival).await {
                 tracing::warn!(%error, "request handling failed");
             }
         });
@@ -153,35 +206,38 @@ fn cookie_key() -> CookieKey {
     CookieKey::new(Bytes::from(format!("sipx-clstr/{seed}")))
 }
 
+/// Everything one arrival is served against. A struct rather than seven arguments, which is what it
+/// had become.
+struct Edge<'a> {
+    store: &'a InMemoryStore,
+    policy: &'a TenantPolicy,
+    config: &'a NodeConfig,
+    proxy: &'a ProxyConfig,
+    auth: &'a Mutex<TenantAuth>,
+    credentials: &'a InMemoryCredentials,
+}
+
 async fn serve(
     handle: &Handle,
-    store: &InMemoryStore,
-    policy: &TenantPolicy,
-    config: &NodeConfig,
-    proxy: &ProxyConfig,
+    edge: &Edge<'_>,
     arrival: Incoming,
 ) -> Result<(), sipx_transport::Error> {
     match arrival.request.method {
         Method::Register => {
-            let response = register(store, policy, config, &arrival);
+            let response = register(edge, &arrival);
             handle.respond(&arrival.key, response).await
         }
         // An ACK for a 2xx is a separate transaction end to end: forwarded, never answered.
-        Method::Ack => forward_statelessly(handle, store, config, &arrival).await,
-        _ => proxy_request(handle, store, config, proxy, arrival).await,
+        Method::Ack => forward_statelessly(handle, edge.store, edge.config, &arrival).await,
+        _ => proxy_request(handle, edge.store, edge.config, edge.proxy, arrival).await,
     }
 }
 
 // ---------------------------------------------------------------------------------- registrar ---
 
-fn register(
-    store: &InMemoryStore,
-    policy: &TenantPolicy,
-    config: &NodeConfig,
-    arrival: &Incoming,
-) -> Response {
-    let edge = EdgeContext {
-        tenant: config.tenant.clone(),
+fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
+    let context = EdgeContext {
+        tenant: edge.config.tenant.clone(),
         received: Some(sipx_clstr_registrar::SourceAddr {
             transport: arrival.transport.as_str().to_owned(),
             ip: arrival.source.ip(),
@@ -190,17 +246,45 @@ fn register(
         ..EdgeContext::default()
     };
 
-    let cmd = match register_command(&arrival.request, &edge, now()) {
-        Ok(cmd) => cmd,
-        Err(rejection) => {
-            return answer(&arrival.request, rejection.status(), "Bad Request");
+    // registrar-auth §2 — before processing, not inside it. The lock spans the decision only; the
+    // store work below is outside it, so one slow registration cannot stall every other tenant user.
+    let admission = {
+        let mut auth = edge.auth.lock().unwrap_or_else(PoisonError::into_inner);
+        admit(
+            &arrival.request,
+            &mut auth,
+            edge.credentials,
+            &context,
+            now(),
+        )
+    };
+
+    let cmd = match admission {
+        Admission::Command(cmd) => *cmd,
+        Admission::Challenge(challenge) => {
+            let mut response = answer(
+                &arrival.request,
+                challenge.status,
+                reason_for(challenge.status),
+            );
+            if let Ok(header) = sipx_sip::Header::build(challenge.header, challenge.value) {
+                response.headers.push(header);
+            }
+            return response;
+        }
+        Admission::Reject(rejection) => {
+            return answer(
+                &arrival.request,
+                rejection.status(),
+                reason_for(rejection.status()),
+            );
         }
     };
 
     let applied = apply(
-        store,
+        edge.store,
         &cmd,
-        policy,
+        edge.policy,
         sipx_clstr_registrar::store::DEFAULT_CAS_RETRIES,
     );
     let status = applied.outcome.status();
@@ -439,8 +523,10 @@ fn reason_for(status: u16) -> &'static str {
     match status {
         200 => "OK",
         400 => "Bad Request",
+        401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
+        407 => "Proxy Authentication Required",
         420 => "Bad Extension",
         421 => "Extension Required",
         423 => "Interval Too Brief",

@@ -43,6 +43,6 @@ pub use command::{
     TenantPolicy,
 };
 pub use lookup::{Target, order_targets};
-pub use parse::{EdgeContext, register_command};
+pub use parse::{Admission, EdgeContext, admit, register_command};
 pub use process::process;
 pub use store::{Applied, CasConflict, Change, InMemoryStore, LocationStore, apply};

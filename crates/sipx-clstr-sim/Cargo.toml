@@ -30,6 +30,11 @@ tracing.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# `RG-2`'s scenario needs a phone that can answer a digest challenge, and the phone's half is the
+# kernel's own responder rather than a fixture written here — a scenario that computed the digest
+# itself would prove the harness agrees with the harness. A dev-dependency, so the simulated
+# endpoint's client code never becomes something the harness library offers.
+sipx-ua.workspace = true
 # The constellation adapter (`examples/viz/`) encodes frames as JSON; the harness library itself
 # stays encoding-free on purpose (see `src/viz.rs`).
 serde_json.workspace = true

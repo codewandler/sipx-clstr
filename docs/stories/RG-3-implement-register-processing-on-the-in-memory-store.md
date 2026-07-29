@@ -74,6 +74,19 @@ retries re-present a command safely", and under the current definition they cann
 compare the granted *duration* rather than the absolute deadline, or to carry the originating `now`
 with the re-presented command. `AF-*`/`RG-5` will need one of them.
 
+**Update 2026-07-29 (`RG-2`): it is not only a cluster concern, and it is reachable in M1.** The
+deterministic harness now runs a phone that retransmits an authenticated REGISTER
+(`sipx-clstr-sim/tests/register_auth.rs`). One node, one phone, no cluster: the retransmission
+authenticates and is then refused `500` by B5, because it arrived a few hundred milliseconds after
+the original and B4 compares deadlines. A lost `200` over UDP produces exactly this, so the option
+chosen above is no longer only about re-presentation across nodes — it decides whether an ordinary
+retransmission is answered correctly. `a_retransmission_that_authenticates_is_still_refused_by_the_ordering_rule`
+pins the current answer and will fail when it changes.
+
+The question is therefore no longer deferred to `AF-*`/`RG-5`: it is
+[`RG-8`](RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md), which owns choosing between
+the two options above and changing §5.3 to say which one is normative.
+
 ## Notes
 - Design: [registrar-location](../designs/registrar-location.md).
 - `Timestamp` lives in this crate because it is the only crate that needs one. `std::time::Instant`

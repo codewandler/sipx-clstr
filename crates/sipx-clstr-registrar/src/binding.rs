@@ -45,6 +45,18 @@ impl Timestamp {
         self.0
     }
 
+    /// Whole seconds since the origin, truncated.
+    ///
+    /// The digest primitives count in seconds ([`crate::auth`], and `S-16` upstream), the location
+    /// service in nanoseconds, and [`crate::parse::admit`] is where the two meet. Truncating rather
+    /// than rounding is the safe direction: a nonce judged against a `now` that is at most one
+    /// second early expires a moment late, never a moment early, so no client is told `stale` for a
+    /// nonce that was still good.
+    #[must_use]
+    pub const fn as_secs(self) -> u64 {
+        self.0 / 1_000_000_000
+    }
+
     /// This instant plus a duration, saturating.
     #[must_use]
     pub fn saturating_add(self, after: Duration) -> Self {
