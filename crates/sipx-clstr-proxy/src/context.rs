@@ -742,4 +742,7 @@ fn next_hop_uri(request: &Request) -> Bytes {
 }
 
 /// Timer C's default, exposed so a driver and a test agree on it without repeating the number.
+// Seconds, to match F11's "Default 180 s" and `ProxyConfig::new`, which this constant exists to
+// agree with.
+#[allow(clippy::duration_suboptimal_units)]
 pub const DEFAULT_TIMER_C: Duration = Duration::from_secs(180);

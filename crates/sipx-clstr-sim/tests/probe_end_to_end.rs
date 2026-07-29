@@ -414,6 +414,9 @@ fn scenario(seed: u64, policy: LinkPolicy, marker: &Marker) -> Sim {
 }
 
 /// Run the scenario to completion.
+// One probe interval of virtual time, sized against the scheduler's 60 s cadence, so it stays in
+// the same unit as the cadence it is chosen to cover.
+#[allow(clippy::duration_suboptimal_units)]
 fn run(seed: u64, policy: LinkPolicy) -> Sim {
     let marker = Marker::from_token("e2e-marker");
     let mut sim = scenario(seed, policy, &marker);

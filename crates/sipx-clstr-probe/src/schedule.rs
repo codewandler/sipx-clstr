@@ -155,7 +155,16 @@ impl Scheduler {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// `duration_suboptimal_units` is off for the module rather than per row: every cadence here is
+// `from_secs(60)` read against other second-valued quantities in the same assertion — the 59/60
+// due boundary, dues spread at 20 and 40 across the interval, 60 + a 6 s jitter budget = 66, and
+// loops that step one second at a time. `from_mins(1)` would break each of those comparisons.
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::duration_suboptimal_units
+)]
 mod tests {
     use super::*;
 

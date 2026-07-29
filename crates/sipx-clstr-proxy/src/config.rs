@@ -114,6 +114,9 @@ pub struct ProxyConfig {
 impl ProxyConfig {
     /// A configuration for one identity, with the spec's defaults.
     #[must_use]
+    // Timer C stays in seconds: [proxy-behavior](../../../docs/specs/proxy-behavior.md) F11 states
+    // it as "Default 180 s", and `from_mins(3)` would no longer match the row it is checked against.
+    #[allow(clippy::duration_suboptimal_units)]
     pub fn new(host: &str, record_route_uri: impl Into<Bytes>, cookie_key: CookieKey) -> Self {
         Self {
             identities: vec![EdgeIdentity::host(host)],
@@ -156,6 +159,8 @@ impl ProxyConfig {
     /// A configuration that asked for 30 s would make the proxy cancel branches that RFC 3261
     /// considers healthy, so the floor is enforced here rather than trusted to the operator.
     #[must_use]
+    // As in `new`: F11's floor is written "≥ 180 s", so the floor here is too.
+    #[allow(clippy::duration_suboptimal_units)]
     pub fn effective_timer_c(&self) -> Duration {
         self.timer_c.max(Duration::from_secs(180))
     }
@@ -215,6 +220,9 @@ mod tests {
     }
 
     #[test]
+    // Every value in this test is a Timer C reading in seconds, and the 30 it starts from is not a
+    // whole minute: converting only some of them would hide that 180 is the floor 30 is raised to.
+    #[allow(clippy::duration_suboptimal_units)]
     fn timer_c_never_drops_below_the_rfc_floor() {
         let mut config = config();
         config.timer_c = Duration::from_secs(30);

@@ -29,6 +29,13 @@ fi
 step "features"
 scripts/check-features.sh
 
+# Here rather than only in CI, on this repository's own rule: green locally and red in CI is a bug
+# in this script. The declared floor is the one claim a current-stable machine structurally cannot
+# falsify, so leaving it to CI guarantees the failure is found after the push instead of before.
+# It is a `check` on its own target directory, so a warm run is seconds; only the first is slow.
+step "msrv"
+scripts/check-msrv.sh
+
 step "provenance"
 scripts/check-provenance.sh
 

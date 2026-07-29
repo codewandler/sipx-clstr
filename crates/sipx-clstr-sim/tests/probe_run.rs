@@ -287,6 +287,8 @@ fn the_named_failure_is_detected_across_the_network_too() {
 }
 
 #[test]
+// One probe interval of virtual time, sized against the scheduler's 60 s cadence.
+#[allow(clippy::duration_suboptimal_units)]
 fn a_platform_that_never_answers_times_out_rather_than_hanging() {
     // The probe must conclude within its own timer budget. A probe that hung would be a monitor that
     // stops reporting exactly when the thing it monitors has stopped working.

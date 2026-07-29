@@ -363,6 +363,9 @@ mod tests {
     }
 
     #[test]
+    // 1800 s is exactly half of the granted `register_expires`, which is a SIP `Expires` value in
+    // seconds; `from_mins(30)` would hide the halving this test exists to check.
+    #[allow(clippy::duration_suboptimal_units)]
     fn the_refresh_is_well_inside_the_granted_lifetime() {
         // Refreshing at the deadline means one lost REGISTER lapses the binding, and the echo goes
         // unreachable while looking healthy.

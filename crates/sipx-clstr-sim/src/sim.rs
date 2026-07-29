@@ -739,11 +739,8 @@ mod tests {
         let mut sim = round_trip(4, LinkPolicy::CLEAN);
         sim.run_until_idle().unwrap();
         let settled = sim.now();
-        sim.advance(Duration::from_secs(3_600)).unwrap();
-        assert_eq!(
-            sim.now(),
-            settled.saturating_add(Duration::from_secs(3_600))
-        );
+        sim.advance(Duration::from_hours(1)).unwrap();
+        assert_eq!(sim.now(), settled.saturating_add(Duration::from_hours(1)));
     }
 
     #[test]

@@ -59,6 +59,35 @@ jobs:
           SIPX_DENYLIST: ${{ secrets.SIPX_DENYLIST }}
         run: scripts/check-provenance.sh --history
 
+  # The declared floor, built on the floor. Its own job rather than a step in `gate`: it needs a
+  # different toolchain, and running it in parallel keeps it off the critical path — an MSRV check
+  # that slows every PR is one that gets deleted. `scripts/check-msrv.sh` reads the version from
+  # Cargo.toml, so this job cannot drift from the manifest the way a hardcoded version here would.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the declared floor's toolchain
+        run: |
+          floor="$(sed -n 's/^rust-version = "\([0-9.]*\)".*/\1/p' Cargo.toml | head -1)"
+          echo "declared floor: ${floor}"
+          rustup toolchain install "$floor" --profile minimal
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/msrv
+          key: cargo-msrv-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock') }}
+          restore-keys: cargo-msrv-${{ runner.os }}-
+
+      # The script clears RUSTFLAGS itself; the workflow-wide `-D warnings` would otherwise fail
+      # the floor on lints that simply differ between two compiler releases.
+      - name: The workspace on its declared rust-version
+        run: scripts/check-msrv.sh
+
   # The durable location store gets its own job, with a real database. `RG-4`'s promise is that the
   # PostgreSQL backend passes the *identical* suite the in-memory one does, and the only way to keep
   # that true is to run it.

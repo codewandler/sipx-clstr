@@ -237,6 +237,9 @@ fn ra_d_7_a_nonce_this_edge_never_minted_is_refused() {
 }
 
 #[test]
+// The lifetime stays in seconds so it can be read against the `T0 + 3_600` below, which is a raw
+// second count: in minutes the "is the nonce expired?" comparison needs converting in your head.
+#[allow(clippy::duration_suboptimal_units)]
 fn ra_d_8_an_expired_nonce_with_the_right_password_is_stale() {
     let mut auth = tenant().with_lifetime(std::time::Duration::from_secs(300));
     let value = challenge_value(&mut auth, T0);
