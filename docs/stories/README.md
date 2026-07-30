@@ -46,7 +46,6 @@ site · `FC` fail-closed configuration.
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [DP-11 — Give the node an admission bound, not only an inherited queue bound](DP-11-give-the-node-an-admission-bound.md) · Cluster · one tokio::spawn per new transaction with no semaphore — the only backpressure is the kernel's queue
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · the downgrade is closed (CC-V10); the tls sub-block and the published exposure row are left
-- [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
@@ -60,7 +59,7 @@ _The site a stranger lands on should say what this does and how to run it, not w
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 
 ## Blocked
-_None._
+- [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Backlog
 
