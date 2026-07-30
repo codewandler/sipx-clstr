@@ -1,0 +1,41 @@
+[package]
+name = "sipx-clstr-affinity"
+description = "Sans-IO affinity tokens: mint, encode, parse, verify, with key rotation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+# Nothing is published until M1's exit criteria hold, and this crate is M2's.
+publish = false
+
+[dependencies]
+bytes.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+# RFC 8439, for the `chacha20-poly1305` algorithm of affinity-token §4. Declared here rather than
+# in `[workspace.dependencies]` on purpose — see the crate docs; it is the only third-party crate
+# this workspace gains for the affinity epic, and it is RustCrypto, the same family `hmac` and
+# `sha2` already come from, so the workspace does not grow a second cipher stack.
+#
+# `default-features = false` is load-bearing rather than tidiness: the default feature set turns on
+# `getrandom`, which would put an operating-system entropy source inside a crate whose whole
+# contract (affinity-token §2, AGENTS.md rule 2) is that randomness enters as an injected value.
+# With the features off, `chacha20poly1305` is a pure in-place transform over caller-supplied
+# buffers, and the sans-IO rule is enforced by the dependency graph instead of by review.
+chacha20poly1305 = { version = "0.10", default-features = false }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+# The §10 negative vectors `AT-17` and `AT-18` are records `mint` refuses to produce — a lying
+# framing byte and an over-budget region — so the suite seals them itself from the plaintexts the
+# spec prints. Sealing them through a second, independent code path is worth more than a hex blob
+# copied twice: it is what makes "this fixture is what the spec describes" a checked claim.
+chacha20poly1305 = { version = "0.10", default-features = false }
+
+[lints]
+workspace = true

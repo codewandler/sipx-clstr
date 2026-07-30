@@ -414,6 +414,20 @@ ORIG, F=8: 0000000700030005010009000000296a69eb4008deadbeefcafef00d   (28 B)
 
 ### Round-trip vectors
 
+The six round-trip rows, tabulated — the byte blocks below are the same vectors at full width.
+`AF-4` added this table: the negative vectors were already rows and the round-trip ones were only
+prose, so `scripts/check-vectors.py` could read half of §10 and had no claim to hold the other half
+to. Nothing here restates a byte; it states what each vector must produce.
+
+| # | Given | Expect |
+|---|---|---|
+| AT-1 | mint, encrypted mode, ORIG, empty facts — key `0x01`, nonce `N1` | The 50 token bytes and the parameter below, byte-exact; `Valid` with the fixture claims, direction ORIG, empty facts region |
+| AT-2 | mint, encrypted mode, TERM, empty facts — key `0x01`, nonce `N2` | The 50 token bytes and the parameter below, byte-exact; `Valid`, direction TERM. The pair passes S9 in either pop order |
+| AT-3 | mint, authenticated-only mode, ORIG, empty facts — key `0x02`, nonce `N3` | The 46 token bytes and the parameter below, byte-exact, body cleartext; `Valid` with AT-1's claims |
+| AT-4 | AT-1's parameter value, decoded and re-encoded | Exactly the 50 token bytes; header, tag and ciphertext split as §3, plaintext body byte-exact; re-encoding reproduces the parameter character-exact |
+| AT-5 | mint with an 8-byte module-facts region — key `0x01`, nonce `N4`, `FACTS8` | The 58 token bytes and the parameter below, byte-exact; `Valid`, with the region returned verbatim |
+| AT-6 | mint at the facts ceiling, `F = 64` — key `0x01`, nonce `N5`, `FACTS64` | The 114 token bytes below; the parameter is 157 B, inside F4's 200 B budget; `Valid`, region verbatim |
+
 **AT-1 — mint, encrypted mode, ORIG, empty facts** (key 0x01, nonce N1):
 
 ```
