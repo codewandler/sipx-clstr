@@ -9,6 +9,43 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The affinity token can be minted and verified** (`AF-4`). `crates/sipx-clstr-affinity` implements
+  `affinity-token`'s mint/verify contract, and all **eighteen** of its §10 vectors now pass — the
+  first coverage M2's defining subsystem has ever had, taking the report from 136 to **154 of 583
+  rows proved**. M2's headline criterion is *mid-dialog requests route by token with zero cross-node
+  dialog lookups*; this is the token that makes it possible, and `PX-13` already made in-dialog
+  requests route by the `Route` set it will travel in.
+
+  **The vectors were derived twice, independently, by parties that never met.** The implementor
+  recomputed `AT-1`…`AT-18` against an independent ChaCha20-Poly1305 before writing any Rust; the
+  review then recomputed nine of them from **§3's field table** rather than §10's printed hex, using
+  OpenSSL rather than RustCrypto, and reproduced the plaintexts, tokens and base64url parameters
+  byte-identically. That agreement is only possible if header composition, field order, endianness
+  and the AAD all match — so the spec and the implementation were not bent toward each other.
+
+  **Sans-IO is enforced by the dependency graph, not by review.** `default-features = false` on the
+  AEAD is load-bearing: the default feature set pulls in `getrandom`, which would put an
+  operating-system entropy source inside a crate whose whole contract is that randomness arrives as an
+  *injected* value. `getrandom` reaches this crate for none of its three versions, checked again after
+  the dependency moved to `[workspace.dependencies]`.
+
+  **`CX-5`'s defect class is closed rather than avoided.** That finding — a nonce that is a pure
+  function of the second, the realm and the secret, so two clients challenged in the same second
+  collide — is the obvious failure mode for a minted token. The nonce here is 96 *injected* bits,
+  never derived; `AT-1` and `AT-2` share claims and differ in every byte after offset 1; and §8 `S9`
+  refuses a pair whose two entries share one.
+
+  The AAD is the whole 14-byte header **including version and key id**, so a token cannot be
+  relabelled to another key or replayed as a flow reference. Both AEAD failure modes collapse to a
+  single `Reason::Tag` — there is no padding and no distinguishable branch, so no oracle — and
+  `Reason` has neither a `Display` nor an `Error` impl, so it cannot be formatted into a response by
+  accident. Verification is stateless *structurally*: `verify` takes `&KeySet` and the crate contains
+  no interior mutability, so a replay ledger would not compile.
+
+  Robustness was measured rather than sampled: 200 000 random buffers, 260 000 structured mutants at
+  every facts length, and the `u32` corners, in **debug** with overflow checks on. No panic, and no
+  random input ever verified.
+
 - **Cluster membership, keys and the shard map are specified, and key rotation has a runbook**
   (`AF-6`). `docs/specs/cluster-membership.md` defines the `membership[]`, `keys[]` and `shardMap`
   sections, the reload contract, and the two-phase rotation an operator actually follows. It is M2's
