@@ -437,6 +437,30 @@ pub fn open_store(choice: &StoreChoice) -> Result<Arc<dyn LocationStore + Send +
 /// listeners cannot be served as declared. It also fails with [`NodeError::TransportGone`] if the
 /// transport driver stops delivering, which is the one way a *running* node ends today.
 pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
+    run_reporting(config, |_| {}).await
+}
+
+/// Run the node, and hand the address it **actually** bound to `bound` before serving anything.
+///
+/// [`run`] is this with a report that goes nowhere. The two exist because a node may be told to bind
+/// port 0 — the kernel picks the port, and there is then no way to address the node except to ask it.
+/// That is already the contract on stdout: `listening on <addr>` is printed after the bind precisely
+/// so a caller need not guess (`scripts/e2e-call.sh` and `website/docs/guides/run-a-node.md` both
+/// wait on that line). A caller *inside* the process cannot read stdout, so it gets the same fact
+/// through this instead — the same value, at the same moment, from the same place.
+///
+/// `bound` is called after the bind and after every startup refusal, for the reason the `listening
+/// on` line is printed there: a report that a node is up must not precede the last thing that can
+/// stop it coming up.
+///
+/// # Errors
+///
+/// Exactly [`run`]'s. A node that never binds never reports, which is what makes waiting on the
+/// report a sound readiness check rather than a hopeful one.
+pub async fn run_reporting(
+    config: NodeConfig,
+    bound: impl FnOnce(SocketAddr),
+) -> Result<(), NodeError> {
     let advertised = config
         .listeners
         .cleartext()
@@ -464,6 +488,10 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
     // phone registers but nothing rings" needs to see which one went into the messages.
     println!("listening on {}", handle.local_addr());
     println!("advertising {advertised}");
+    // The same announcement, for a caller that shares the process with the node rather than its
+    // stdout. Between the two `println!`s and the log line on purpose: whatever a reader of one of
+    // these learns, a reader of the other learns at the same point in the startup sequence.
+    bound(handle.local_addr());
     tracing::info!(
         listen = %handle.local_addr(),
         %advertised,

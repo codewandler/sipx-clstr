@@ -116,6 +116,34 @@ echo "  $(head -1 "$work/node.log")"
 
 # ------------------------------------------------------------------------------ the phones -----
 
+# The phones' ports are **asked for, not chosen** (`CF-13`). They used to be `15081` and `15071`,
+# which are also two of the numbers the node crate's integration suite used to bind, so running this
+# script while the suite ran produced `Address already in use` in whichever of the two was slower —
+# and the failure landed on whatever diff happened to be under test. The suite no longer picks any
+# port; neither does this.
+#
+# Each phone needs a *stable* port, so `--local 127.0.0.1:0` is not enough on its own: `register`
+# publishes a contact and `answer` has to be listening on the port that contact names, and those are
+# two separate processes. So the kernel is asked which port is free and that answer is used for both.
+#
+# The **node's** port is a different matter and stays as it is: `sipx dial` addresses the node
+# through the request-URI, and a request-URI with an explicit port is a *different* address-of-record
+# from one without it (location-service §3.2 N7) — so a node on an ephemeral port could not be dialled
+# at the AoR its phones registered under. It is `--port`'s to decide, and it never collided with the
+# suite.
+free_port() {
+    python3 -c 'import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()'
+}
+
+alice_port="$(free_port)" || fail "could not find a free port for alice"
+bob_port="$(free_port)" || fail "could not find a free port for bob"
+[[ -n "$alice_port" && -n "$bob_port" && "$alice_port" != "$bob_port" ]] \
+    || fail "could not find two distinct free ports (alice=$alice_port bob=$bob_port)"
+
 # A three-second 440 Hz tone. Audio is how this script proves media went *direct*: the node runs no
 # relay of any kind, so anything bob hears travelled straight from alice.
 python3 - "$work/tone.wav" <<'PY' || fail "could not write the test tone"
@@ -126,8 +154,8 @@ with wave.open(sys.argv[1], "w") as w:
                            for i in range(8000 * 3)))
 PY
 
-step "register both phones"
-for phone in bob:15081 alice:15071; do
+step "register both phones (alice on $alice_port, bob on $bob_port)"
+for phone in "bob:$bob_port" "alice:$alice_port"; do
     name="${phone%%:*}"; local_port="${phone##*:}"
     out="$(timeout 15 "$sipx" register "sip:$name@127.0.0.1" \
         --local "127.0.0.1:$local_port" --json 2>&1)" \
@@ -137,13 +165,13 @@ for phone in bob:15081 alice:15071; do
 done
 
 step "place the call"
-setsid timeout 40 "$sipx" answer --local 127.0.0.1:15081 \
+setsid timeout 40 "$sipx" answer --local "127.0.0.1:$bob_port" \
     --duration 4 --wait 30 --record "$work/heard.wav" --json \
     >"$work/bob.json" 2>"$work/bob.err" </dev/null &
 answer_pid=$!
 sleep 1
 
-dial="$(timeout 40 "$sipx" dial sip:bob@127.0.0.1 --local 127.0.0.1:15071 \
+dial="$(timeout 40 "$sipx" dial sip:bob@127.0.0.1 --local "127.0.0.1:$alice_port" \
     --duration 4 --timeout 20 --play "$work/tone.wav" --stats --json 2>&1)"
 echo "  alice: $dial"
 grep -q '"status":"answered"' <<<"$dial" || fail "the call was not answered: $dial"
