@@ -59,7 +59,7 @@ cluster:
   tenant:
     - name: default
       id: 1
-      domains: [example.test]
+      domains: [127.0.0.1]
 ```
 
 YAML, JSON and TOML are all accepted — the same document in any of the three produces exactly the
@@ -87,10 +87,18 @@ node writes into `Via` and `Record-Route`, which is what peers use to reach it b
 are the same. Anywhere else they usually are not, and getting it wrong is the most common way to make
 a node that registers phones but never rings them — see [Addressing](guides/addressing.md).
 
+`domains` is enforced: a `REGISTER` whose address-of-record is in a domain this tenant does not serve
+is answered **`403`**. The demo below registers `alice@127.0.0.1`, which is why the tenant declares
+that domain. Declare the domain your phones actually use, or leave `domains` out to serve any.
+
 :::caution This node is open
-There is no authentication. Anyone who can reach the port can register any address-of-record. With
-`backend: memory`, restarting the node also forgets every registration. Keep this on loopback or a
-trusted network.
+This tenant declares no `auth`, so anyone who can reach the port can register any address-of-record in
+a served domain. Declaring `tenant[].auth` does not close that: digest is implemented and applied, but
+there are no user credentials yet, so a node whose nonce `secretRef` resolves **refuses to start** and
+one whose reference does not resolve challenges every `REGISTER` into a `401` nobody can answer. There
+is no configuration today that gives you an authenticated registrar —
+[Configuration](reference/configuration.md) has the exact states. With `backend: memory`, restarting
+the node also forgets every registration. Keep this on loopback or a trusted network.
 :::
 
 ### Place a call through it
@@ -182,20 +190,21 @@ implementation:
 cargo build --bin sipx     # in a sipx checkout
 ```
 
-Find the address callers send to, and dial it from inside the cluster:
+Dial it from inside the cluster. The greeting's address-of-record is `hello@sipx-clstr-node-a` —
+node-a's Service name, which is also the domain the profile's tenant declares, because `domains` is
+enforced and a `REGISTER` outside it is answered `403`. A name rather than the Service's address:
+the document is written before any pod or Service has one:
 
 ```bash
-NODE_A=$(kubectl -n sipx-clstr-dev get svc sipx-clstr-node-a -o jsonpath='{.spec.clusterIP}')
-
 kubectl -n sipx-clstr-dev run caller --rm -i --restart=Never \
   --image=sipx-phone:dev --image-pull-policy=IfNotPresent --command -- \
   /bin/sh -c "ME=\$(hostname -i | awk '{print \$1}'); \
-    sipx dial sip:hello@$NODE_A --local \$ME:15080 \
+    sipx dial sip:hello@sipx-clstr-node-a --local \$ME:15080 \
       --duration 6 --record /tmp/heard.wav --stats --json"
 ```
 
 ```text
-{"status":"answered","peer":"sip:hello@10.43.179.99","duration_ms":3566,
+{"status":"answered","peer":"sip:hello@sipx-clstr-node-a","duration_ms":3566,
  "samples_recorded":24000,"heard_audio":true,"loss":0.0000,"jitter_ms":0,"mos":4.40}
 ```
 

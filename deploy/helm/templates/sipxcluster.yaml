@@ -14,10 +14,20 @@
   render it (Helm has no toToml, and a hand-rolled one would be a second,
   subtly different serializer).
 
-  PROVISIONAL: the API group and version come from values because KO-1 has not
-  pinned them yet. When it does, they become constants here.
+  The document's configuration version (cluster-config §3 D9) is not rendered
+  either: it is metadata.generation, which only the API server knows, so the
+  operator stamps it when it writes the node config.
+
+  `deploy/helm/check-values.sh` renders this template and loads the result
+  through the node's own loader, which is the only thing that checks that
+  `.Values.cluster` is the document cluster-config specifies.
+
+  PROVISIONAL: the API version comes from values because KO-1 has not pinned it
+  yet. When it does, it becomes a constant here. It is one value rather than an
+  apiGroup/apiVersion pair, because the resource's API version *is* the schema
+  version of the document it carries.
 */}}
-apiVersion: {{ .Values.crd.apiGroup }}/{{ .Values.crd.apiVersion }}
+apiVersion: {{ .Values.apiVersion }}
 kind: SipxCluster
 metadata:
   name: {{ .Release.Name | quote }}
