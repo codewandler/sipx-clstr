@@ -2,8 +2,7 @@
 id: CF-16
 title: Sweep for done stories that closed with named deltas unlanded
 pillar: Foundation
-status: in-progress
-priority: 2
+status: done
 epic: conformance-harness
 areas: [docs, ci]
 note: EX-8 was named for two deltas, closed having landed one, and nothing noticed for months

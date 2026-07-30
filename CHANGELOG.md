@@ -71,6 +71,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **How many `done` stories closed with work another document had named them for: three** (`CF-16`).
+  `EX-8` was named in writing as the owner of two changes, closed having landed one, and the orphaned
+  half sat unowned for months while a real capability was missing. A story's acceptance is only ever
+  checked against itself, so the board cannot tell "finished" from "finished the part it wrote down".
+  This is the sweep that asks how many others there are, over all 81 `done` stories, with the number
+  produced before anything was fixed:
+
+  - `CF-8` registered seven vector prefixes and put **none of their thirty families** in the
+    conformance report's render list, so **395 of the 533 rows the report counts appear in no table**
+    — while `CF-8` ticked both "families named" and "the report regenerates". Filed as `CF-17`.
+  - Three `hook-framework` rows still call the affinity-token budget "provisional until `AF-1`", and
+    `AF-1` landed — `affinity-token` §3 made the 64-byte budget normative. `EX-8` diagnosed this in
+    writing and recorded it as adjacent-not-mine; nobody owned it after. Filed as `EX-13`.
+  - Three specifications each defer a gap "for `CX-1` to file", and `docs/upstream.md` has **no row
+    for any of them**. Not `CX-1` failing — all three specs postdate its close. Filed as `CX-6`.
+
+  **The checker was deliberately not built, and the measurement is the argument.** Sixteen
+  delegation constructions over the corpus find 159 delegation-shaped mentions, 100 naming a `done`
+  story, 3 real — 3% precision. The 97 false alarms are unreachable by a better pattern because the
+  discriminator is *tense*, not vocabulary: "until `EX-12` landed the split" (resolved) and "until
+  `CF-8`, this table is unenforced" (open) are the same shape. A check at that precision gets deleted
+  by the third person it interrupts. Prevention is recorded instead, on `CX-6`: **a spec deferring
+  work names a ledger row or an epic, not a story** — a story closes, a row does not.
+
+  A separate defect family surfaced while measuring and is filed apart as `CF-18` rather than folded
+  in, because it would **not** have caught `EX-8`: nine `done` stories are cited nowhere in this file,
+  and three carry no ticked acceptance box at all.
+
+- **The deferral ledger says what it is** (`CF-16`). `docs/reference/vector-scope.toml` described
+  itself as "the narrow, `PB`-only ancestor" of the conformance registry. That was true when `PB` was
+  the only registered prefix, and it survived `CF-8`'s six registrations and `EX-12`'s seventh — by
+  which point `PB` was the third *smallest* family in the file, which now carries 389 deferrals over
+  eleven prefixes and 19 rows covered for shape only. A header describing a file as narrower than it is
+  invites the next reader to add a row without reading the discipline above it, and that discipline is
+  what keeps a coverage report honest.
+
 - **Which failure a caller sees when a fork fails two ways** (`PX-11`). Forking to a contact that is
   busy and one that is gone used to return `404 Not Found`, because the best final was picked by
   numeric order. It now returns `486 Busy Here`.
@@ -308,6 +344,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ### Known gaps
+
+- **The conformance report shows a quarter of the rows it counts** (`CF-17`, found by `CF-16`). Its
+  denominator is every registered vector row — 533 — and it renders only the five families in its
+  render list, so 395 rows are counted and never displayed. Anyone reading the report to see what is
+  covered is reading a table that silently omits `AI`, `AT`, `CC`, `FR`, `LS`, `MR` and `NN`. The
+  registry and the deferral ledger are correct; it is the *report* that is partial. Nothing green
+  contradicts it, because "a registered family also renders" was never a tested condition — which is
+  the same shape as the defect `CF-8` was written to close, one level further out.
 
 - **The digest replay window is `O(n)` per authenticated request** (`RG-15`). Measured on the pinned
   kernel: 7.5 µs against a one-entry window, 19.2 µs against its full 4096 — about 11.6 µs of pure
