@@ -982,3 +982,175 @@ fn ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound() {
         "the replay must not have refreshed CA"
     );
 }
+
+/// Every stored contact of this address-of-record, in stored order.
+fn stored_texts(store: &InMemoryStore) -> Vec<String> {
+    store
+        .read(TENANT, &aor())
+        .0
+        .all()
+        .iter()
+        .map(|binding| String::from_utf8_lossy(&binding.contact).into_owned())
+        .collect()
+}
+
+#[test]
+fn ls_r_24_two_removals_and_an_addition_commit_exactly_the_set_the_request_describes() {
+    // **`RG-16`'s failing-first test**, and B6 (§5.3.2). One REGISTER, three operations, the first
+    // of which *shortens* the set. A registrar that resolves every operation against one view
+    // captured before the first mutation has CB's removal pointing past the end of the set it is
+    // applied to, so CB is never removed and the request commits a binding set nobody described.
+    //
+    // Single-contact REGISTER cannot expose this: with one operation there is nothing to shift.
+    let store = InMemoryStore::new();
+    let policy = policy();
+    let (outcome, _) = run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(vec![ca(Some(3_600)), cb(Some(3_600))])
+            .build(),
+        &policy,
+    );
+    assert!(outcome.commits(), "the fixture registers CA and CB");
+
+    // A fresh Call-ID, so every operation is B2's — the ordering token is not what is under test.
+    let (outcome, revision) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .contacts(vec![ca(Some(0)), cb(Some(0)), cc(Some(3_600))])
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(outcome.status(), 200);
+    // The complete-set rule (§5.6) makes the response the first place a wrong set shows up.
+    assert_eq!(
+        contact_texts(outcome.accepted().expect("a 200")),
+        ["sip:alice@10.0.0.3:5060"],
+        "both removals and the addition, each against the set it was stated about"
+    );
+    // And the store agrees. A response describing a set that was never committed would be a
+    // different defect wearing the same symptom, so the committed set is read back rather than
+    // inferred from the answer.
+    assert_eq!(stored_texts(&store), ["sip:alice@10.0.0.3:5060"]);
+    assert_eq!(revision, Revision(2), "one request, one commit (K2)");
+}
+
+#[test]
+fn ls_r_25_a_removal_ahead_of_a_refresh_does_not_move_the_refresh_onto_another_binding() {
+    // The other half of B6, and the more damaging one: with a stale view the removal of CA leaves
+    // CB's operation resolving to the entry that slid into CB's index — so CB's refresh overwrites
+    // CC, the set loses a binding it was never asked to drop, and gains a duplicate of one it was.
+    let store = InMemoryStore::new();
+    let policy = policy();
+    run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(vec![ca(Some(3_600)), cb(Some(3_600)), cc(Some(3_600))])
+            .build(),
+        &policy,
+    );
+    let cc_before = store
+        .read(TENANT, &aor())
+        .0
+        .all()
+        .iter()
+        .find(|binding| binding.contact == Bytes::from_static(b"sip:alice@10.0.0.3:5060"))
+        .expect("CC is bound")
+        .clone();
+
+    let (outcome, _) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .contacts(vec![ca(Some(0)), cb(Some(7_200))])
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(outcome.status(), 200);
+    assert_eq!(
+        contact_texts(outcome.accepted().expect("a 200")),
+        ["sip:alice@10.0.0.2:5060", "sip:alice@10.0.0.3:5060"],
+        "CA gone, CB and CC still bound exactly once each"
+    );
+    // The refresh landed on CB, not on whatever the removal shifted into CB's former place.
+    assert_eq!(
+        outcome
+            .accepted()
+            .expect("a 200")
+            .contacts
+            .first()
+            .expect("CB is listed")
+            .expires,
+        7_200
+    );
+    // CC was named by no operation, so nothing about it may have moved.
+    assert_eq!(
+        store
+            .read(TENANT, &aor())
+            .0
+            .all()
+            .iter()
+            .find(|binding| binding.contact == Bytes::from_static(b"sip:alice@10.0.0.3:5060"))
+            .expect("CC is still bound"),
+        &cc_before,
+        "CC is untouched, down to its Call-ID and deadline"
+    );
+}
+
+#[test]
+fn a_losing_writer_re_reconciles_a_multi_contact_register_against_fresh_state() {
+    // §6 K1/K6 under B6. Reconciling against the set as each operation leaves it is a claim about
+    // one `process` call; the CAS contract is the claim that the *whole* sequence re-runs against
+    // what the winner committed. A writer that re-applied only its staged set would drop the
+    // interloper's binding — a lost update dressed as a retry.
+    let store = InMemoryStore::new();
+    let policy = policy();
+    run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(vec![ca(Some(3_600)), cb(Some(3_600))])
+            .build(),
+        &policy,
+    );
+
+    // The losing writer reads revision 1 and reconciles its three operations against that set.
+    let (stale, stale_revision) = store.read(TENANT, &aor());
+    let loser = Cmd::new("i2", 1, 10)
+        .contacts(vec![
+            ca(Some(0)),
+            cb(Some(0)),
+            contact("sip:alice@10.0.0.4:5060", Some(3_600)),
+        ])
+        .build();
+    let Outcome::Commit { set: staged, .. } = process(&loser, &stale, &policy) else {
+        panic!("the multi-contact command should commit");
+    };
+
+    // Meanwhile another node registers CC and wins the revision.
+    let (winner, winner_revision) = run(
+        &store,
+        &Cmd::new("i9", 1, 5).contacts(vec![cc(Some(3_600))]).build(),
+        &policy,
+    );
+    assert!(winner.commits());
+    assert_eq!(winner_revision, Revision(2));
+
+    // The loser's staged set is refused rather than overwriting — it was reconciled against a set
+    // that no longer exists.
+    let conflict = store
+        .commit(TENANT, &aor(), stale_revision, staged)
+        .expect_err("the spent revision must conflict");
+    assert_eq!(conflict.current, Revision(2));
+
+    // Its driver re-reads and re-runs the whole request against the winner's set: CA and CB gone,
+    // CD added, and CC — which this request never named — still bound.
+    let (outcome, revision) = run(&store, &loser, &policy);
+    assert!(outcome.commits());
+    assert_eq!(revision, Revision(3));
+    assert_eq!(
+        stored_texts(&store),
+        ["sip:alice@10.0.0.3:5060", "sip:alice@10.0.0.4:5060"],
+        "the retry committed against fresh state, not the stale set it staged"
+    );
+}

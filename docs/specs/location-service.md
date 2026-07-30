@@ -324,6 +324,28 @@ An expired binding is **absent** for every purpose — lookup, matching, and Cal
 comparison. A late REGISTER carrying an older CSeq after the binding expired therefore adds a
 fresh binding (B1): once a binding is gone, the RFC's model has nothing to compare against.
 
+#### 5.3.2 More than one contact in one REGISTER **[sipx-clstr]**
+
+| # | Rule |
+|---|---|
+| B6 | A request's contact operations are applied **in the order the request states them**, and each is matched (§5.3) against the binding set **as the preceding operations left it**. A binding an earlier operation removed is absent for every later operation, exactly as an expired one is; a binding an earlier operation added or replaced is present for them, with the value it was given |
+
+Why this needs saying. §10.3's atomicity requirement is about what a *reader* observes — the whole
+request commits or none of it does (K2) — and it is silent on what each operation is decided
+against, because the RFC describes one contact at a time. A registrar may therefore be tempted to
+resolve every operation against one view of the set captured before the first mutation, which is
+cheaper and, for a single-contact REGISTER, indistinguishable. It is wrong from the second contact
+onward: a removal shortens the set, so every later operation resolving through the captured view
+names an entry that has moved, and the request commits a binding set it never described. B6 fixes
+the resolution point so that the committed set is a function of the request, not of the order in
+which reconciliation happened to invalidate its own view.
+
+B6 costs neither of the guarantees around it. Atomicity is unaffected — the whole sequence is still
+one CAS commit or nothing (§6 K1/K2), and no reader sees an intermediate set. Nor is the CAS loop:
+a writer that loses the race re-reads the committed set and re-runs the **entire** sequence against
+it (§2, §5.1 S10), so a losing writer never commits a set reconciled against state it read before
+the winner wrote.
+
 ### 5.4 Wildcard removal (`Contact: *`)
 
 RFC 3261 §10.3 step 6:
@@ -519,6 +541,8 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-R-21 | CA expired at `now`, stored CSeq 9; REGISTER `i1`, CSeq 3, CA | added fresh (B1) — an expired binding is absent for every purpose (§5.3) |
 | LS-R-22 | LS-R-3's retry 500 ms later, but `CA;expires=7200` | abort, `500` (B5): the carve-out is B4.1's *duration* match, not the token alone; a same-token command asking for something else is a second write. Nothing commits and the revision does not move |
 | LS-R-23 | Set `{CA}` written by `i1`/1; REGISTER `i1`, CSeq 1, `CA` (same granted duration) **and** CB, 500 ms later | `200`, commits: CA untouched (B4 — same deadline, same `refreshed_at`), CB added (B1), revision bumped. B4.3 — the no-mutation guarantee is about the matched binding, not the request |
+| LS-R-24 | Set `{CA, CB}` written by `i1`/1; **one** REGISTER `i2`/1 carrying `CA;expires=0`, `CB;expires=0` and `CC;expires=3600` | `200`; the committed set is exactly `{CC}` and the response lists CC alone. B6 — CA's removal shortens the set, and CB's removal is still resolved against CB. A registrar resolving every operation against a view captured before the first mutation leaves CB bound |
+| LS-R-25 | Set `{CA, CB, CC}` written by `i1`/1; **one** REGISTER `i2`/1 carrying `CA;expires=0` and `CB;expires=7200` | `200`; the committed set is `{CB, CC}`, CB granted 7200 and CC untouched. B6 — the refresh lands on CB, not on whatever the removal shifted into CB's former place |
 
 **Consistency / CAS (LS-K).**
 

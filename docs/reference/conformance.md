@@ -9,9 +9,9 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**125 of 549 rows proved**; 19 covered for shape only; 405 deferred.
+**127 of 551 rows proved**; 19 covered for shape only; 405 deferred.
 
-Σ over the 58 sections below is 549, so every row counted above is shown in exactly one table.
+Σ over the 58 sections below is 551, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -326,6 +326,8 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `LS-R-21` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
 | `LS-R-22` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
 | `LS-R-23` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-24` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-25` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
 
 ## Location service — the consistency contract (§6)
 

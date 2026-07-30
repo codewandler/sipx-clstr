@@ -131,23 +131,8 @@ fn explicit(
 
     let mut set = current.clone();
     set.drop_expired(cmd.now);
+    let mut view = Reconciling::new(set);
     let mut changed = false;
-
-    // Parse each stored contact **once** for the whole reconciliation (`RG-14`). The hot loop used
-    // to re-parse every stored binding against every incoming op — `O(contacts · bindings · quota)`
-    // parses, and against an open registrar that is a CPU amplifier an attacker can tune. The parse
-    // is the expensive part; equivalence on two already-parsed URIs is not. A binding whose stored
-    // contact will not parse is left unparsed and will match nothing, which is the same answer the
-    // old code gave it.
-    let parsed: Vec<Option<sipx_sip::Uri>> = set
-        .all()
-        .iter()
-        .map(|binding| {
-            #[cfg(test)]
-            parse_meter::record();
-            sipx_sip::Uri::parse(binding.contact.clone()).ok()
-        })
-        .collect();
 
     // S8 — the quota, refused **before** the mutation loop but **after** the match view (`RG-14`).
     //
@@ -168,12 +153,7 @@ fn explicit(
     let additions = ops
         .iter()
         .zip(granted.iter())
-        .filter(|(op, grant)| {
-            **grant > 0
-                && !parsed
-                    .iter()
-                    .any(|stored| stored.as_ref().is_some_and(|s| s.equivalent(&op.uri)))
-        })
+        .filter(|(op, grant)| **grant > 0 && view.find(&op.uri).is_none())
         .count();
     if current_active + additions > policy.max_bindings_per_aor {
         return Outcome::Reject(Rejection::Forbidden(
@@ -184,28 +164,22 @@ fn explicit(
     for (op, granted) in ops.iter().zip(granted.iter().copied()) {
         // §5.3 — binding identity by §19.1.4 comparison. Equivalence is non-transitive, so an
         // incoming contact can match more than one stored binding; the first in creation order is
-        // the one updated, which is a deterministic choice a vector can assert.
-
-        // Equivalence is non-transitive, so an incoming contact can match more than one stored
-        // binding; the first in creation order is the one updated, which is a deterministic choice a
-        // vector can assert. Matching reads the parsed view computed above, so the cost per op is a
-        // scan of `equivalent` calls, not `bindings` parses.
-        let matched = parsed.iter().position(|stored| {
-            stored
-                .as_ref()
-                .is_some_and(|stored| stored.equivalent(&op.uri))
-        });
-
-        match matched {
+        // the one updated, which is a deterministic choice a vector can assert. Matching reads the
+        // view's parsed contacts, so the cost per op is a scan of `equivalent` calls, not
+        // `bindings` parses (`RG-14`).
+        //
+        // §5.3.2 B6 — and it is matched against the set **as the preceding operations left it**,
+        // which is the whole reason the view owns the set rather than sitting beside it.
+        match view.find(&op.uri) {
             None => {
                 if granted == 0 {
                     continue; // B1 — removing a contact that is not there is not an error.
                 }
-                set.insert(binding_for(op, cmd, granted, cmd.now));
+                view.insert(binding_for(op, cmd, granted, cmd.now), op.uri.clone());
                 changed = true;
             }
             Some(index) => {
-                let Some(stored) = set.all().get(index) else {
+                let Some(stored) = view.get(index) else {
                     continue;
                 };
 
@@ -227,16 +201,22 @@ fn explicit(
                 } // B2 — a different Call-ID applies regardless of CSeq: the UA restarted, and its
                 // sequence numbering restarted with it.
 
+                let registered_at = stored.registered_at;
                 if granted == 0 {
-                    set.remove(index);
+                    view.remove(index);
                 } else {
-                    let registered_at = stored.registered_at;
-                    set.replace(index, binding_for(op, cmd, granted, registered_at));
+                    view.replace(
+                        index,
+                        binding_for(op, cmd, granted, registered_at),
+                        op.uri.clone(),
+                    );
                 }
                 changed = true;
             }
         }
     }
+
+    let set = view.into_set();
 
     // S8 — the quota, checked against the *committed outcome* rather than the request, so a
     // refresh or a removal can never trip it.
@@ -251,6 +231,97 @@ fn explicit(
         Outcome::Commit { set, response }
     } else {
         Outcome::Noop { response }
+    }
+}
+
+/// The binding set under reconciliation, beside the parsed contacts §5.3 matches against.
+///
+/// One type rather than two locals, because the correctness of the whole loop is the invariant that
+/// the two stay the same length in the same order — and `RG-16` was that invariant belonging to
+/// nobody. The view was parsed once from the *original* vector and every operation resolved against
+/// it, so the first removal left every later operation naming an entry that had moved: one REGISTER
+/// carrying `CA;expires=0`, `CB;expires=0` and a new `CC` removed CA, resolved CB's removal past the
+/// end of the shortened set, and committed CB as though the request had never mentioned it. With a
+/// third binding present it was worse than a survivor — the refresh landed on whichever binding had
+/// slid into the index, overwriting a contact the request never named.
+///
+/// Single-contact REGISTER cannot reach any of that, which is why every existing proof was green.
+/// The fix is structural rather than a re-parse: only this type mutates the set, and every mutation
+/// moves the parsed view with it (§5.3.2 B6), so the per-reconciliation parse budget `RG-14` bought
+/// — one parse per stored binding, none per operation — is unchanged.
+struct Reconciling {
+    set: BindingSet,
+    /// `parsed[i]` is the contact URI of `set.all()[i]`, or `None` when those bytes do not parse.
+    ///
+    /// A binding whose stored contact will not parse matches nothing, which is the same answer a
+    /// comparison against it would have produced; it is kept in place rather than dropped so the
+    /// indices of everything after it are still the set's.
+    parsed: Vec<Option<sipx_sip::Uri>>,
+}
+
+impl Reconciling {
+    /// Parse each stored contact **once** for the whole reconciliation (`RG-14`).
+    ///
+    /// The loop this replaces re-parsed every stored binding for every incoming op —
+    /// `O(contacts · bindings)` parses, and against an open registrar that is a CPU amplifier an
+    /// attacker can tune. The parse is the expensive part; equivalence on two already-parsed URIs
+    /// is not.
+    fn new(set: BindingSet) -> Self {
+        let parsed = set
+            .all()
+            .iter()
+            .map(|binding| {
+                #[cfg(test)]
+                parse_meter::record();
+                sipx_sip::Uri::parse(binding.contact.clone()).ok()
+            })
+            .collect();
+        Self { set, parsed }
+    }
+
+    /// The first binding in creation order whose contact is §19.1.4-equivalent to `uri`.
+    ///
+    /// Equivalence is non-transitive, so more than one stored binding can match; §5.3 makes the
+    /// first the one that is updated.
+    fn find(&self, uri: &sipx_sip::Uri) -> Option<usize> {
+        self.parsed
+            .iter()
+            .position(|stored| stored.as_ref().is_some_and(|stored| stored.equivalent(uri)))
+    }
+
+    /// The binding at `index`, if the set still holds one there.
+    fn get(&self, index: usize) -> Option<&crate::binding::Binding> {
+        self.set.all().get(index)
+    }
+
+    /// Add a binding whose contact parsed to `uri`, keeping both halves in creation order.
+    fn insert(&mut self, binding: crate::binding::Binding, uri: sipx_sip::Uri) {
+        let at = self.set.insert_at(binding);
+        // `insert_at` returns an index into the set it just grew, so it is within the view's length
+        // too; clamped rather than trusted because a `Vec::insert` past the end panics, and nothing
+        // a REGISTER carries may reach a panic (AGENTS.md #3).
+        self.parsed.insert(at.min(self.parsed.len()), Some(uri));
+    }
+
+    /// Replace the binding at `index` with one whose contact parsed to `uri`.
+    fn replace(&mut self, index: usize, binding: crate::binding::Binding, uri: sipx_sip::Uri) {
+        if let Some(slot) = self.parsed.get_mut(index) {
+            *slot = Some(uri);
+            self.set.replace(index, binding);
+        }
+    }
+
+    /// Drop the binding at `index` from both halves.
+    fn remove(&mut self, index: usize) {
+        if index < self.parsed.len() {
+            let _ = self.parsed.remove(index);
+            self.set.remove(index);
+        }
+    }
+
+    /// The reconciled set. The parsed view has no life beyond the loop.
+    fn into_set(self) -> BindingSet {
+        self.set
     }
 }
 

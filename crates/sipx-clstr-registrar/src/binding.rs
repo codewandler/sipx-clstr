@@ -216,10 +216,23 @@ impl BindingSet {
 
     /// Add a binding, keeping creation order.
     pub fn insert(&mut self, binding: Binding) {
+        let _ = self.insert_at(binding);
+    }
+
+    /// Add a binding, keeping creation order, and report the index it landed at.
+    ///
+    /// Creation order means an insert is not an append, so a caller holding anything indexed
+    /// alongside `all()` cannot know where the set moved without being told. REGISTER
+    /// reconciliation holds exactly that — the parsed contact view it matches against
+    /// ([location-service §5.3.2](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/location-service.md)
+    /// B6) — and keeping the two in step is what makes a multi-contact request commit the set it
+    /// describes.
+    pub fn insert_at(&mut self, binding: Binding) -> usize {
         let position = self.bindings.partition_point(|existing| {
             (existing.registered_at, &existing.contact) <= (binding.registered_at, &binding.contact)
         });
         self.bindings.insert(position, binding);
+        position
     }
 
     /// Replace the binding at `index`, if it exists.
