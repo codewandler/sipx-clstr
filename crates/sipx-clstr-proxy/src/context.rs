@@ -13,8 +13,6 @@
 //! all — it is the driver's, and [proxy-transaction-driver](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/proxy-transaction-driver.md)
 //! says so.
 
-use std::time::Duration;
-
 use bytes::Bytes;
 use sipx_sip::headers::Address;
 use sipx_sip::{HeaderName, Method, Request, Response, ResponseBuilder, StatusCode};
@@ -742,7 +740,8 @@ fn next_hop_uri(request: &Request) -> Bytes {
 }
 
 /// Timer C's default, exposed so a driver and a test agree on it without repeating the number.
-// Seconds, to match F11's "Default 180 s" and `ProxyConfig::new`, which this constant exists to
-// agree with.
-#[allow(clippy::duration_suboptimal_units)]
-pub const DEFAULT_TIMER_C: Duration = Duration::from_secs(180);
+///
+/// Re-exported rather than restated: it lives beside the floor it has to satisfy
+/// ([`crate::config::TIMER_C_FLOOR`]), because two independently-written copies of this number are
+/// exactly how one of them came to sit on the floor (`PX-10`).
+pub use crate::config::DEFAULT_TIMER_C;

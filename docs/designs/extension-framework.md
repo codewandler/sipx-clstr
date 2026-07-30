@@ -157,7 +157,7 @@ arming point, is a function of a query's latency.**
 | Timer | Why the suspension cannot move it |
 |---|---|
 | Upstream INVITE retransmission (RFC 3261 §17.1.1.2, Timer A from T1) | E5 promotes the request to stateful, so an INVITE **server** transaction exists, and RFC 3261 §17.2.1 requires it to emit `100 (Trying)` unless a response is certain within 200 ms. The caller goes to `Proceeding` and stops retransmitting while we are suspended. The server transaction also absorbs retransmissions that do arrive — they never reach the engine, so they never start a second query |
-| Timer C (proxy spec F11, ≥ 180 s per RFC 3261 §16.8) | Armed at **F11**, which is after F10 `Forward`. The query concludes at H7, before `ResolveTargets`, before any branch exists. Timer C's deadline is `t_forward + 180 s` and never `t_invite + 180 s` |
+| Timer C (proxy spec F11, `> 180 s` per RFC 3261 §16.6 step 11) | Armed at **F11**, which is after F10 `Forward`. The query concludes at H7, before `ResolveTargets`, before any branch exists. Timer C's deadline is `t_forward + timerC` and never `t_invite + timerC` |
 | Branch timers (kernel client transactions) | Nothing is forwarded until the query concludes; there is no branch to time |
 | Session timers (RFC 4028), Timer B/F downstream | Downstream of F10, same argument |
 
@@ -312,7 +312,7 @@ become scenario data, and every one of these runs in virtual time with no wall-c
 |---|---|
 | `external_route_answer_under_deadline` | Answer at `timeout − ε`: the decision applies, `RewriteTargetQuery` carries the chosen pool, H9 patches `P-Asserted-Identity`, one `Query` effect in the trace |
 | `external_route_timeout_applies_declared_disposition` | Answer at `timeout + ε`: `QueryDeadline` fires first, the declared arm applies, **and the late answer is discarded** — exactly one disposition in the trace |
-| `external_route_timer_c_is_not_moved` | Timer C's queue entry is at `t_forward + 180 s` for both a fast and a slow oracle; the two runs differ in when F10 happens and not in Timer C's duration. The literal Acceptance-3 assertion |
+| `external_route_timer_c_is_not_moved` | Timer C's queue entry is at `t_forward + timerC` for both a fast and a slow oracle; the two runs differ in when F10 happens and not in Timer C's duration. The literal Acceptance-3 assertion |
 | `external_route_upstream_does_not_retransmit` | With the oracle at 5× the deadline, the caller receives `100` and sends no INVITE retransmission; and when one is injected anyway, the server transaction absorbs it and **no second `Query` effect appears** |
 | `external_route_client_error_fails_closed` | `ClientError` → `Reject(500)`, no `Forward` effect, no `ResolveTargets` |
 | `external_route_server_error_proceeds_with_default` | Same scenario, a manifest declaring `Proceed(fallback_pool)`: the call completes over the fallback trunk and the trace records which default was used |
@@ -1238,7 +1238,7 @@ test; and the demonstration that a syntax-only RFC lands as a registry entry wit
 parser code.
 
 EX-6 adds one more: an `external-route` module whose oracle is a harness `ResourceModel`, proving
-the timer claim (Timer C armed at `t_forward + 180 s` regardless of oracle latency), the capacity
+the timer claim (Timer C armed at `t_forward + timerC` regardless of oracle latency), the capacity
 claim (goodput flat and suspensions bounded against a 10×-slow oracle), and the declared failure
 semantics — the same scenario passing and failing purely by which `on` arms its manifest declares.
 

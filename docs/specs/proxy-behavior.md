@@ -159,7 +159,7 @@ guarantee; the passthrough vectors assert it):
 | F8 | Push Via | §6 branch; `rport` per kernel behavior |
 | F9 | `Content-Length` | Present on stream transports (kernel framing rule) |
 | F10 | Forward | `Effect::Forward` — one kernel client transaction per branch |
-| F11 | Timer C for INVITE branches | Default **180 s**, configurable ≥ 180 s (§16.8 "larger than 3 minutes"); reset on every 101–199 |
+| F11 | Timer C for INVITE branches | Default **240 s**, configurable **> 180 s** — RFC 3261 **§16.6 step 11**, "the timer MUST be larger than 3 minutes". The bound is strict and the default does not sit on it, which is the same rule [cluster-config](cluster-config.md) §8 V7 states for `timers.timerC`, the key an operator actually sets; the two must not be read separately. A configured value at or below the floor is **not** silently raised to the floor — the floor is the one value the RFC forbids — so the default stands instead. Reset on every 101–199 |
 
 ## 8. Response processing (§16.7, with RFC 6026)
 
@@ -250,7 +250,7 @@ the rows here are the normative behavior matrix.
 
 | # | Given | Expect |
 |---|---|---|
-| PB-F-1 | Dialog-forming INVITE, 1 target | Forward: Via pushed (cookie present), `Max-Forwards` decremented, Record-Route with token parameter ≤ 200 B, Timer C set 180 s |
+| PB-F-1 | Dialog-forming INVITE, 1 target | Forward: Via pushed (cookie present), `Max-Forwards` decremented, Record-Route with token parameter ≤ 200 B, Timer C armed at F11's default, **240 s**, and armed *after* the `Forward` |
 | PB-F-2 | 3 targets (q-ordered) | 3 branches, unique branch ids, same cookie field rules, `Max-Breadth` divided |
 | PB-F-3 | Unknown header `X-Vendor: a, b` in request | Byte-identical in every forwarded branch |
 | PB-F-4 | Next hop is a strict router | F6 swap: R-URI ↔ Route ends |
