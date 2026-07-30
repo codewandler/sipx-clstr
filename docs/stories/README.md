@@ -77,7 +77,6 @@ _One `values.yaml` to a running, healthy, resizable cluster — delivered and ke
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
-- [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
 - [PX-15 — Source per-process loop-cookie keys from operating-system randomness](PX-15-source-loop-cookie-keys-from-os-randomness.md) · Signalling · V-15 — the HMAC key is predictable text derived entirely from process startup time
 
 ### Registrar & location service
@@ -267,6 +266,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [PX-9 — Drive fork branches concurrently instead of draining them in order](PX-9-drive-fork-branches-concurrently.md) · Signalling · a user with one dead device waits for Timer B before their live device's 200 OK is relayed
 - [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · timerC now reaches the engine from the document and F11 defaults to 240 s; the rest of the timers section is reported unapplied rather than dropped
 - [PX-11 — Settle which 4xx wins when two branches fail, because the row and its test say different things](PX-11-settle-which-4xx-wins-when-two-branches-fail.md) · Platform · PB-R-5 claims 486 is forwarded; its own test asserts 404, and the spec settles neither
+- [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness

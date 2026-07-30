@@ -7,6 +7,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An accepted call could start a new one** (`PX-14`, validated review finding `V-04`). A 2xx, a 6xx
+  or an upstream `CANCEL` cancelled the branches that had been *launched* and left never-launched
+  targets sitting in the queue. When a cancelling branch later settled, the generic final-response
+  path saw a non-empty queue and called `fork_next_group` — originating a fresh `INVITE` to a
+  lower-`q` target **after** the transaction had been accepted, globally rejected, or cancelled. The
+  reproduction is three targets: A and B at `q=1.0`, C at `q=0.5`; A answers `200`, then B answers
+  `487`, and C gets dialled.
+
+  `conclude_target_set()` now clears the queue on all three terminal paths, and
+  `may_fork_next_group()` replaces three bare `!queued.is_empty()` tests, additionally refusing to
+  fork a context that is already `answered` or `finished` — so the rule is stated rather than implied
+  by a queue that happens to be empty.
+
+  **RFC 6026 is preserved, and that was falsified rather than assumed.** The clear touches `queued`
+  only and never `branches`, so a late 2xx from a branch that really was launched is still forwarded —
+  checked at review for both the "A 200 then B 200" and "6xx then late 200" orderings, and `pb_v_8`'s
+  `Max-Breadth` serialization still holds on the Timer C and transport-error paths its own test does
+  not reach.
+
+  It carries a second defect found in passing: `finish_if_settled` read the same predicate, so **a
+  6xx with a queue behind it could never terminate the context at all** — the base emits `[Respond]`
+  and stays unfinished where this emits `[Respond, Terminate]`.
+
+  The defect violated no written rule, because sequential forking was implemented and never
+  specified. So `proxy-behavior` gains **§7.1**, naming the queue the rules needed to refer to, plus
+  **R12** (§8) and **C7** (§9) bounding its lifetime — without §7.1 the new rules would have pointed
+  at nothing. New vector family `PB-T`, registered in `check-vectors.py` in the same commit that
+  writes the rows; the registration is load-bearing, and deleting it fails the gate.
+
 ### Added
 
 - **Five ledger rows three specs promised, and a gate against the dead letter that hid them**
