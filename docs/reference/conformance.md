@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12, [e2e-pr
 A row is *proved* when a test in the workspace covers it, and *deferred* when
 [vector-scope.toml](vector-scope.toml) says why and names the story that will.
 
-**134 of 492 rows proved**; 358 deferred.
+**136 of 493 rows proved**; 357 deferred.
 
 ## Proxy — request validation (§4)
 
