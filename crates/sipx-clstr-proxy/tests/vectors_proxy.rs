@@ -14,8 +14,8 @@
 
 use bytes::Bytes;
 use sipx_clstr_proxy::{
-    AckRefusal, AckRoute, BranchId, CookieKey, DEFAULT_TIMER_C, Effect, Input, Kind, ProxyConfig,
-    ProxyTimer, Refusal, ResponseContext, TIMER_C_FLOOR, Target, TokenVerdict, route_ack,
+    BranchId, CookieKey, DEFAULT_TIMER_C, Effect, Input, Kind, ProxyConfig, ProxyTimer,
+    ResponseContext, TIMER_C_FLOOR, Target, TokenVerdict,
 };
 use sipx_sip::{
     Header, HeaderName, Method, Request, RequestBuilder, Response, ResponseBuilder, StatusCode, Uri,
@@ -528,119 +528,6 @@ fn pb_f_4_a_strict_routing_next_hop_gets_the_f6_swap() {
         routes.last().map(String::as_str),
         Some("<sip:strict.example>"),
         "the original Request-URI moved to the end of the Route set: {routes:?}"
-    );
-    // F7 over the swap: the first `Route` no longer carries `lr`, so the next hop is the
-    // Request-URI. Following the `Route` instead would skip the very router the swap exists to
-    // traverse.
-    assert_eq!(
-        effects
-            .iter()
-            .find_map(Effect::next_hop)
-            .map(|uri| String::from_utf8_lossy(uri).into_owned()),
-        Some("sip:strict.example".to_owned())
-    );
-}
-
-#[test]
-fn pb_f_6_a_surviving_route_is_the_next_hop_and_the_remote_target_stays_the_request_uri() {
-    // The mid-dialog case with a second element still in the route set. F2 must not move, and F7
-    // must not follow the Request-URI: the copy is *addressed* to the far end and *sent* to the next
-    // hop, and a driver given only one of the two cannot do both.
-    let (_, effects) = run(
-        request(
-            &Method::Bye,
-            "sip:bob@10.0.0.1:5062",
-            vec![
-                (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
-                (HeaderName::Route, "<sip:edge-1.example;lr>"),
-                (HeaderName::Route, "<sip:p2.example;lr>"),
-            ],
-        ),
-        vec![],
-    );
-    let forwarded = effects
-        .iter()
-        .find_map(Effect::forwarded)
-        .expect("a forward");
-    assert_eq!(
-        String::from_utf8_lossy(&forwarded.uri.to_bytes()),
-        "sip:bob@10.0.0.1:5062",
-        "the dialog's remote target stays in the Request-URI"
-    );
-    assert_eq!(
-        effects
-            .iter()
-            .find_map(Effect::next_hop)
-            .map(|uri| String::from_utf8_lossy(uri).into_owned()),
-        Some("sip:p2.example;lr".to_owned()),
-        "our own Route was popped by P2; the next one is the hop"
-    );
-}
-
-#[test]
-fn pb_f_7_an_ack_for_a_2xx_is_routed_by_its_route_set_and_never_answered() {
-    // K3. The `ACK` takes the same validation, preprocessing and F1–F9 edits as any other forwarded
-    // request — through the same code — and it comes back as a request plus a hop, with no status
-    // anywhere in the outcome type to answer it with.
-    let ack = request(
-        &Method::Ack,
-        "sip:bob@10.0.0.1:5062",
-        vec![
-            (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
-            (HeaderName::Route, "<sip:edge-1.example;lr>"),
-            (HeaderName::MaxForwards, "70"),
-        ],
-    );
-    let outcome = route_ack(ack, &config());
-    let AckRoute::Forward { request, next_hop } = outcome else {
-        panic!("an ACK for a 2xx is a separately routed request: {outcome:?}");
-    };
-    assert_eq!(
-        String::from_utf8_lossy(&next_hop),
-        "sip:bob@10.0.0.1:5062",
-        "the dialog's remote target, reached after our own Route was popped"
-    );
-    assert_eq!(
-        header_text(&request, &HeaderName::Route),
-        None,
-        "P2 popped it"
-    );
-    assert_eq!(
-        header_text(&request, &HeaderName::MaxForwards).as_deref(),
-        Some("69"),
-        "F3 applies to an ACK like any other forwarded request"
-    );
-    assert_eq!(
-        header_text(&request, &HeaderName::RecordRoute),
-        None,
-        "RFC 6141: a mid-dialog Record-Route alters no established route set"
-    );
-    assert!(
-        header_text(&request, &HeaderName::Via).is_some_and(|via| via.contains(EDGE)),
-        "F8 pushes our Via even on a message nothing will answer"
-    );
-}
-
-#[test]
-fn pb_f_8_an_ack_that_cannot_be_forwarded_is_an_explicit_outcome_with_no_response() {
-    // The half of K3 that the merge base got wrong twice over: it dropped the ACK, and it said
-    // nothing. There is no status to send — `cluster-config` §8 V11 leans on the same fact — so the
-    // outcome carries a reason instead, and the type has nowhere to put a response.
-    let ack = request(
-        &Method::Ack,
-        "sip:bob@10.0.0.1:5062",
-        vec![
-            (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
-            (HeaderName::MaxForwards, "0"),
-        ],
-    );
-    let outcome = route_ack(ack, &config());
-    assert!(
-        matches!(
-            outcome,
-            AckRoute::Unroutable(AckRefusal::Refused(Refusal::TooManyHops))
-        ),
-        "an unroutable ACK settles as an explicit outcome, never as a silent drop: {outcome:?}"
     );
 }
 
@@ -1372,68 +1259,6 @@ fn pb_p_1_a_strict_routing_predecessor_put_our_record_route_in_the_request_uri()
         String::from_utf8_lossy(&query.uri),
         "sip:bob@b.example",
         "the last Route becomes the Request-URI"
-    );
-}
-
-#[test]
-fn pb_p_6_an_in_dialog_request_asks_nobody_where_to_go() {
-    // T1, and `V-03`'s whole subject. A remote contact is not an address of record, so asking the
-    // location service about one answers the empty set for every ordinary call — a `BYE` concluded
-    // `480` and an `ACK` (which has no response at all) simply lost.
-    let (_, effects) = run(
-        request(
-            &Method::Bye,
-            "sip:bob@10.0.0.1:5062",
-            vec![(HeaderName::To, "<sip:bob@b.example>;tag=bt")],
-        ),
-        vec![target("sip:bob@10.9.9.9", 1_000)],
-    );
-    assert!(
-        !effects.iter().any(|e| e.kind() == Kind::ResolveTargets),
-        "the target set is predetermined: there is nothing to resolve"
-    );
-    let forwarded = effects
-        .iter()
-        .find_map(Effect::forwarded)
-        .expect("the request is forwarded, not resolved");
-    assert_eq!(
-        String::from_utf8_lossy(&forwarded.uri.to_bytes()),
-        "sip:bob@10.0.0.1:5062",
-        "the Request-URI is the only target — the resolved contact above is never consulted"
-    );
-}
-
-#[test]
-fn pb_p_7_a_contact_at_our_own_host_is_not_a_record_route_value() {
-    // P1's condition is that the Request-URI *is a value this platform placed in a Record-Route*, not
-    // that it names an edge. An edge identity is port-agnostic by design (§5), so the weaker reading
-    // fires on every mid-dialog request whose remote target shares a host with the edge — a loopback
-    // deployment, or an edge beside a gateway — and consumes the route set while replacing the
-    // remote target with our own address. The request is then addressed to us, forever.
-    let (_, effects) = run(
-        request(
-            &Method::Bye,
-            "sip:bob@edge-1.example:5062",
-            vec![
-                (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
-                (HeaderName::Route, "<sip:edge-1.example;lr>"),
-            ],
-        ),
-        vec![],
-    );
-    let forwarded = effects
-        .iter()
-        .find_map(Effect::forwarded)
-        .expect("a forward");
-    assert_eq!(
-        String::from_utf8_lossy(&forwarded.uri.to_bytes()),
-        "sip:bob@edge-1.example:5062",
-        "the contact has a user part and no `lr`: it is not a value we ever placed"
-    );
-    assert_eq!(
-        header_text(forwarded, &HeaderName::Route),
-        None,
-        "P2 popped our own Route, and P1 did not consume it as a strict-routing recovery"
     );
 }
 

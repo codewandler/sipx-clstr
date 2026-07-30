@@ -110,32 +110,12 @@ started before its INVITE went out would be measuring the wrong interval.
 
 | Effect | Performed as | Notes |
 |---|---|---|
-| `Forward { branch, request, target, next_hop }` | `Handle::send` to `next_hop`'s address | The engine has already pushed the `Via` (with branch), decremented `Max-Forwards` and applied `Route`. The driver adds nothing to the message — a driver that edits a message is a rule the harness cannot see. It does not *choose* anything either: `next_hop` is the engine's F7 answer, and the driver only resolves it to an address. `PX-13` added the field, because the driver had been deriving the hop from `target.uri` — which is the URI the copy is *addressed* to, not the one it must be *sent* to, and the two differ for every route set and every registered `Path`. |
+| `Forward { branch, request, target }` | `Handle::send` | The engine has already pushed the `Via` (with branch), decremented `Max-Forwards` and applied `Route`. The driver adds nothing to the message — a driver that edits a message is a rule the harness cannot see. |
 | `Respond(response)` | `Handle::respond(server_key, …)` | The engine has already popped our `Via`. |
 | `CancelBranch(branch)` | mint a CANCEL, `Handle::send` | RFC 3261 §9.1: same Request-URI, `Call-ID`, `To`, `From` and `CSeq` number, method `CANCEL`, and **the same top `Via` branch** as the INVITE. We chose that branch, so we know it. A CANCEL is a non-INVITE client transaction of its own; the kernel retransmits and times it. |
 | `ResolveTargets(query)` | location service or `resolve` | **Off the response-context task.** The answer returns as a `TargetsResolved` input. `RT-1` decides whether the resolver stays the kernel's synchronous one or becomes the shared-cache variant filed as sipx `T-17`. |
 | `SetTimer` / `ClearTimer` | a `tokio` sleep per (timer, branch) | Timer C is ours, not the kernel's: RFC 3261 §16.8 puts it on the proxy, above the transaction. In the harness the same effect becomes an entry in the scheduler's queue. |
 | `Terminate` | drop the task | The kernel reaps its own transactions. `Handle::outstanding()` is how a test asserts nothing leaked. |
-
-## The `ACK`, which has no response context at all
-
-`PX-13` settled the one arrival this shape does not describe. An `ACK` for a 2xx is a request in its
-own right (RFC 3261 §17.1.1.3) and nothing answers it, so there is no server transaction to hold and
-no response to aggregate — a `ResponseContext` would have nothing to do, and every refusal it can
-reach (§7's `480`, §4's `483`) is a status that must not be sent.
-
-It is still a **decision**, so it is still sans-IO: `sipx_clstr_proxy::route_ack` is a pure function
-from the arriving `ACK` and the `ProxyConfig` to either a forwardable copy plus its next hop, or an
-explicit unroutable outcome carrying a reason. The driver performs the first with
-`Handle::send_directly` — no client transaction, because nothing will retransmit or time out an
-`ACK` — and records the second. It cannot answer either one: `Handle::respond` is not reachable from
-that path.
-
-The two other messages the method name covers never reach the driver, and the kernel is what
-guarantees it: the `ACK` for a non-2xx going downstream is minted by the client transaction that
-received the final response, and the one arriving from upstream is absorbed by the server transaction
-that sent it (`transaction/server.rs`, `Completed → Confirmed`). Only an `ACK` that matched no server
-transaction, or matched one in `Accepted`, is handed up — and both of those are ACKs for a 2xx.
 
 ## Failure handling, per branch
 

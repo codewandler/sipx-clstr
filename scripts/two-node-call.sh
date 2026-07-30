@@ -12,16 +12,6 @@
 # balancer or a shared VIP in front of these two and in-dialog requests will land on whichever node
 # the balancer picks, which is what affinity tokens (`AF-*`) exist for and is out of scope here.
 #
-# Since `PX-13` this proof also exercises the **in-dialog** path, and it always did without saying so.
-# The phones bind `127.0.0.1:15081` and `127.0.0.1:15091`, so a `Contact` here is
-# `sip:bob@127.0.0.1:15091` — and an explicit port is part of a canonical address of record
-# (location-service §3 N7), so that contact is a different key from the registered
-# `sip:bob@$DOMAIN`. The `2xx` ACK and the hang-up BYE are therefore routed by the dialog's route set
-# and remote target, which is the only way they can be: no lookup can resolve them. Before `PX-13`
-# the node asked the location service anyway, found nothing, and dropped the ACK — a call left
-# established at both ends, while this script still reported PASS because `sipx dial` had its `200 OK`.
-# That is why the proof's silence about the ACK is recorded here rather than left implicit.
-#
 # One document serves both nodes through `${VAR}` substitution (cluster-config §8 V4) — the schema's
 # own mechanism for exactly this, and the reason there is no per-node file.
 #

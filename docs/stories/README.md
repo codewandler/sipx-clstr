@@ -100,6 +100,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ## Blocked
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
+- [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · merged then reverted — the fix works but leaks transactions; CI e2e reports outstanding=3 that never drains
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · blocked by RG-25 — the quota cannot be measured on the outcome alone until the contact count is bounded
 
 ## Backlog
@@ -269,7 +270,6 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [PX-9 — Drive fork branches concurrently instead of draining them in order](PX-9-drive-fork-branches-concurrently.md) · Signalling · a user with one dead device waits for Timer B before their live device's 200 OK is relayed
 - [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · timerC now reaches the engine from the document and F11 defaults to 240 s; the rest of the timers section is reported unapplied rather than dropped
 - [PX-11 — Settle which 4xx wins when two branches fail, because the row and its test say different things](PX-11-settle-which-4xx-wins-when-two-branches-fail.md) · Platform · PB-R-5 claims 486 is forwarded; its own test asserts 404, and the spec settles neither
-- [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
 - [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found

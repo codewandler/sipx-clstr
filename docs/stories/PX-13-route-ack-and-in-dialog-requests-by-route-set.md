@@ -2,12 +2,12 @@
 id: PX-13
 title: Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
 pillar: Signalling
-status: done
+status: blocked
 priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
 areas: [proxy, node]
-note: release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
+note: merged then reverted — the fix works but leaks transactions; CI e2e reports outstanding=3 that never drains
 ---
 
 # Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
@@ -39,6 +39,38 @@ Request-URI as an address of record and asking the location service about it.
 - [x] `scripts/gate.sh` is green.
 
 ## Progress
+- **MERGED AND REVERTED, 2026-07-30.** Merged as `6651043` with the full gate green and the local
+  two-node proof passing, then reverted because CI's `e2e` job failed on the merge. **The revert is
+  not a judgement on the work** — the fix is correct and the defect it closes is real; it leaks
+  transactions, and that has to be closed before it can land.
+- **The failure, quoted.** `scripts/e2e-call.sh` — the proof behind the release's headline claim, run
+  by CI and *not* part of `scripts/gate.sh`, which is why nothing local caught it:
+
+  ```
+  ✓ bob heard audio
+  ✓ bob recorded 24000 samples
+  ✓ the node holds one socket — signalling only, so the media was direct
+  ── wait for the transaction store to drain (RFC 3261's 64·T1 absorption window)
+  e2e-call: FAIL — the node still reports outstanding=3 after 50s — a leaked transaction
+  ```
+
+  **The call itself is entirely healthy** — audio flowed, media went direct, every call assertion
+  passed. What fails is the drain check afterwards. `outstanding` climbs 6 → 11 → 16, falls 10 → 5 → 3,
+  and then stops at 3 rather than reaching 0.
+- **Attribution is certain, not inferred.** `e2e` passed on `f949336` (the commit immediately before
+  this merge), on `2cb22dd` and on `86e6b10`; it fails on `5d19ff6`. One merge changed.
+- **Where to look first.** This story made a 2xx `ACK` a separately routed request. The prime suspect
+  is a server transaction that is created or retained for that `ACK` and never concluded — RFC 3261
+  §17.2.1's `Accepted` state is what `TuEvent::Ack` is delivered from, and nothing in this diff
+  concludes it. Three leaked per call is consistent with one per transaction across the INVITE's
+  lifecycle. Note the gate cannot see this class at all: no gate step starts a node and watches
+  `outstanding` drain, which is its own gap.
+- **What survives the revert, all still valid** — do not re-derive it on the next attempt: the
+  failing-first socket proof with its zero-hit trap sockets, the `P1` narrowing (reviewed in both
+  directions), the three ACK semantics checked against the pinned kernel's own transaction code, the
+  `BranchTransportError` settlement, and the independent review's `PASS` on everything except this,
+  which it had no way to see. The branch `impl/PX-13` is preserved at `234ab7b`.
+
 - **The two-node proof was run at integration and passes** on the merged tree, against the `sipx` CLI
   built from the pinned `v0.10.0` tag: two nodes on `127.0.0.1:5060` and `127.0.0.2:5060`, one
   PostgreSQL store holding two binding rows written by different nodes, `RESULT: PASS`. That satisfies
