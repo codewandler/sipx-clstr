@@ -9,7 +9,7 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**120 of 498 rows proved**; 20 covered for shape only; 358 deferred.
+**125 of 502 rows proved**; 19 covered for shape only; 358 deferred.
 
 ## What these words mean
 
@@ -74,12 +74,16 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-R-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-R-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `200` |
 | `PB-R-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-5` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `486`; not compared |
+| `PB-R-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `486` |
 | `PB-R-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `407` |
 | `PB-R-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `600` |
 | `PB-R-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `500` |
 | `PB-R-9` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `503`; not compared |
 | `PB-R-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `408` |
+| `PB-R-11` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `484` |
+| `PB-R-12` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `486` |
+| `PB-R-13` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `500` |
+| `PB-R-14` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `600` |
 
 ## Proxy — CANCEL and Timer C (§9)
 

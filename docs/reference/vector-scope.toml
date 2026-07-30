@@ -2569,7 +2569,9 @@ Number normalisation. There is no trunk object and no ingress scope to bind a pr
 # Read the reasons: they are not all the same defect. Some are a missing assertion and nothing more
 # (`RA-D-5`, `LS-R-20`). Some are the check reaching the edge of what it can decide — a value that
 # is illustrative rather than pinned (`LS-K-1`), or stated at a layer the test does not reach
-# (`LS-R-10`). One, `PB-R-5`, is a row and a test that flatly disagree.
+# (`LS-R-10`). One, `PB-R-5`, was a row and a test that flatly disagreed — the only entry the sweep
+# found where both halves ran and stated opposite outcomes. `PX-11` settled it in `proxy-behavior`
+# §8.1 rather than by assertion, and it has left this list.
 # ---------------------------------------------------------------------------------------------
 
 [[unasserted]]
@@ -2588,16 +2590,6 @@ armed at 240 s; the test compares the armed duration against `DEFAULT_TIMER_C` a
 never against 240, and measures no header length at all. Comparing the code's own constant is not
 comparing the row: were the constant to move, the test would still pass and the row would still say
 240 s — which is exactly how it came to say 180 s.
-"""
-
-[[unasserted]]
-id = "PB-R-5"
-reason = """
-**The row and its test disagree.** The row says that with A at `486` and B at `404` the best
-response is `486`; `pb_r_5_the_best_of_two_failures_is_the_lowest_class_then_the_lowest_code`
-asserts `404`, and §8 R7 says only "the lowest class among received finals", settling nothing within
-4xx. One of the two is wrong and this check cannot say which — it can only say they were never
-compared. Needs a decision in `proxy-behavior` §8, not an assertion.
 """
 
 [[unasserted]]
