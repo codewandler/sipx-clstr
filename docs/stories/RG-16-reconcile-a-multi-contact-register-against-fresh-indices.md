@@ -35,6 +35,25 @@ carries more than one contact.
       green.
 
 ## Progress
+- **`RG-25` landed (2026-07-30) and it changes round 4's instruction.** The triangle is broken from
+  the third side, and round 3's approach turns out to have been **correct and complete** — it was the
+  missing input bound, not the removed pre-check, that made it look wrong.
+
+  Round 4 should **delete `RG-14`'s quota pre-check without replacement** and measure §5.5 on the
+  committed outcome alone. The pre-check existed only to bound work; its premise
+  (`current_active + genuine_additions`) was invalidated by this story's B6/B7; there is no sound
+  *lower* bound to replace it with. That work is now bought by bounding the **input** instead, where
+  no premise about reconciliation is needed: `location-service` §5.5.1 caps a REGISTER at 64 contact
+  operations, so one 64 KB datagram carries ≤64 rather than ~3500 and the quadratic term is bounded
+  by policy rather than by message size. The amplifier round 3 was accused of restoring is closed.
+  **Cite §5.5.1 when you delete it.**
+
+  One mechanical note from `RG-25`: round 4 must re-site `op_meter::record()`. It currently lives in
+  `granted_expiries`, and this story's tree has a `Reconciling::new` that `RG-25`'s tree does not.
+
+  The second finding — B8's `net_grant` resolving the future against the current view — is untouched
+  by any of this and still open.
+
 
 - **Parked after round 3, blocked by [RG-25](RG-25-bound-the-contact-operations-one-register-may-carry.md).**
   Three branches preserved, none merged: `impl/RG-16` (r1), `impl/RG-16-rework` (r2),

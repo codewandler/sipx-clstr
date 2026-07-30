@@ -57,6 +57,7 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
+- [CF-23 — A blank line silently truncates a normative table, and the gate reads it as clean](CF-23-a-blank-line-silently-truncates-a-normative-table.md) · Foundation · RG-25 orphaned a hook-phase row into literal pipe text; check-docs.py passed it, and the spec's own sentence still claimed both rows
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
@@ -88,7 +89,6 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
-- [RG-25 — Bound the contact operations one REGISTER may carry, in the spec and not only in code](RG-25-bound-the-contact-operations-one-register-may-carry.md) · Registrar · RG-14 item 2, never landed — one 64 KB datagram costs ~0.2 s of a core, and RG-16 cannot be finished without it
 - [RG-24 — Reap expired bindings even when the REGISTER changes nothing else](RG-24-reap-expired-bindings-even-when-nothing-else-changes.md) · Registrar · drop_expired runs on a clone that a Noop outcome discards, so an AoR that only ever queries grows without bound
 
 ### Outbound routing & trunks
@@ -286,6 +286,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [RG-13 — Bound the location store's growth — the change log and the row set both grow forever](RG-13-bound-the-location-stores-growth.md) · Signalling · changes is a Vec nothing in the shipped path ever drains, in both backends
 - [RG-14 — Make the REGISTER contact path linear, and bound the work before the quota decides](RG-14-make-the-register-contact-path-linear.md) · Signalling · one 64 KB REGISTER costs millions of URI parses, and the quota is checked after the work is done
 - [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
+- [RG-25 — Bound the contact operations one REGISTER may carry, in the spec and not only in code](RG-25-bound-the-contact-operations-one-register-may-carry.md) · Registrar · RG-14 item 2, never landed — one 64 KB datagram costs ~0.2 s of a core, and RG-16 cannot be finished without it
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling · two rework rounds — the user privacy level was advertised as performed while a third of it was not

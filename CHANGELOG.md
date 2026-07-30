@@ -9,6 +9,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **One REGISTER could buy a fifth of a second of a core** (`RG-25`). Nothing capped how many contact
+  operations a single REGISTER may carry. Roughly 3500 fit inside the 64 KB message limit once
+  `Address::parse_list` flattens comma lists, and reconciliation is quadratic in that count, so
+  against an address of record at its quota one datagram cost **211 ms** where a bounded one costs
+  1.15 ms. `REGISTER` is deliberately exempt from the node's admission bound — a registration storm
+  *is* the overload, and shedding refreshes turns a spike into an outage — so nothing upstream limited
+  it either, and the registrar is open.
+
+  `location-service` **§5.5.1** now states the bound normatively as rules `Q1`–`Q5`, anchored into
+  §5.1's step order as **S6.1**, with an over-limit request answered `403`. The refusal sits before
+  the wildcard/explicit split, so no stored binding is read, cloned, parsed or compared — position is
+  the rule rather than an optimisation, because a bound applied *after* reconciliation refuses the
+  same requests and prevents nothing.
+
+  **The failing-first proof is 65 removals**, and the choice is the point: a removal never grows the
+  set, so §5.5's binding quota cannot refuse such a request however long it is. That is why a second
+  bound has to exist at all, and why `RG-14`'s quota pre-check could never have covered this class
+  wherever it sat. The proof is measured, not timed — a new `op_meter` counts the request's own
+  operations, because the existing `parse_meter` counts *stored* contacts and so reads `0` against an
+  empty address of record whether the request carries one operation or three thousand.
+
+  The bound is a per-tenant policy field rather than a constant, since a flat constant would collide
+  with a configurable `maxBindingsPerAor`; §5.5.1 states the consistency rule and `FC-7` enforces it
+  at load, because enforcement belongs to a configuration surface and not to a pure decision function.
+
+  **Considered for upstream and declined, with the reason recorded in the spec rather than only in a
+  commit:** a parser-level element cap *is* protocol-generic, and it would buy nothing this does not.
+  Flattening is linear and the kernel already bounds 64 KB per message, 8 KB per header and 256
+  headers, so the amplification is entirely in our reconciliation. Independently, §5.7's
+  `BeforeRegistrarUpdate` may *adjust* the contact operations after parsing — so a parser-only bound
+  is one a module could walk past.
+
+  This is `RG-14`'s Acceptance item 2, which never landed. `RG-14` is `done` with **zero** of its five
+  boxes ticked and no changelog entry; its parse-once view genuinely shipped and this did not.
+
 - **A node answered every method, whatever roles it was given** (`DP-13`, validated review finding
   `V-01`, filed as `FC-6` before the review backlog renumbered it). The projected role set was read,
   validated, and used to select listeners and the location store — and then **dropped** before

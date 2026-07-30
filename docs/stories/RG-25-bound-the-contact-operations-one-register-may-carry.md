@@ -2,7 +2,7 @@
 id: RG-25
 title: Bound the contact operations one REGISTER may carry, in the spec and not only in code
 pillar: Registrar
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
