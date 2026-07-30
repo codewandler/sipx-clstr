@@ -6,8 +6,9 @@
 #
 # This is the project's whole deferral ledger, not a corner of it. Two tables:
 #
-#   [[deferred]]    389 rows over eleven prefixes, naming twelve stories — `AI` 97, `MR` 90, `CC` 52,
-#                   `NN` 52, `QP` 31, `FR` 22, `AT` 18, `HF` 13, `PB` 8, `LS` 5, `RA` 1.
+#   [[deferred]]    405 rows over twelve prefixes, naming thirteen stories — `AI` 97, `MR` 90,
+#                   `CC` 52, `NN` 52, `QP` 31, `FR` 22, `AT` 18, `SC` 16, `HF` 13, `PB` 8, `LS` 5,
+#                   `RA` 1.
 #   [[unasserted]]   19 rows — `LS` 9, `RA` 5, `PB` 4, `CC` 1 — covered by a test that never compares
 #                   the value the row states. `CF-12` added these; they do not count as proved.
 #
@@ -2830,6 +2831,167 @@ story = "EX-3"
 reason = """
 G13 — a three-way contest resolved by one entry naming one winner, with both losers' rules dropped
 and the override recorded once. Needs the validator and `EX-5`'s bindings.
+"""
+
+# ---------------------------------------------------------------------------------------------
+# `SC` — the `SipxCluster` resource, deferred entire to `KO-3`.
+#
+# `KO-1` specified the resource and registered the prefix in the same commit, which is `EX-12`'s
+# lesson; it did not implement it, and the two things a row here executes against — the validating
+# webhook and the reconcile loop — are both `KO-3`'s. So the whole family defers, and the spec's §10
+# says so in the table's own preamble rather than leaving a reader to find it here.
+#
+# The alternative was worse than the deferral. A row asserting what `sipx-cluster-crd.md` *says*
+# would pass against a file and fail against nothing, and the rows exist to test an operator's
+# verdicts. `SC-A` rows are admission — a rejection, and the objects that must not exist after it.
+# `SC-S` rows are observation — a condition read off an observed fleet, never off intent. Neither
+# has anything to compare against until code produces a verdict.
+# ---------------------------------------------------------------------------------------------
+
+[[deferred]]
+id = "SC-A-1"
+story = "KO-3"
+reason = """
+A1/A2: an unrecognised key under `spec.registrar` is refused with the error `cluster-config` §8 already
+produces, in `path` order, and nothing is created. The loader that produces that error exists
+(`DP-8`); what does not is the webhook that runs it before admission and turns its result into a
+rejection. Testable when a verdict has a producer.
+"""
+
+[[deferred]]
+id = "SC-A-2"
+story = "KO-3"
+reason = """
+A4: two zones, `edge` placed in only one, rejected naming the other. This is the row that proves the
+cluster-scope half of §8 — no single node's projection can see it, because a node projects its own
+zone and a zone with no edge is a fact about the set. It needs the admission path specifically, not
+a loader test.
+"""
+
+[[deferred]]
+id = "SC-A-3"
+story = "KO-3"
+reason = """
+A5: a declared role with no listener naming it is refused at admission, naming the role — rather than
+becoming a pod that fails `cluster-config` `P4` after being created. The row's whole content is
+*when* the failure happens, so it cannot be proved anywhere but the webhook.
+"""
+
+[[deferred]]
+id = "SC-A-4"
+story = "KO-3"
+reason = "A6: a `managed` media pool without a `portRange` is refused, naming the pool. Needs the webhook."
+
+[[deferred]]
+id = "SC-A-5"
+story = "KO-3"
+reason = """
+A7: a profile whose role flags contradict a declared role is refused, naming both. The flags are
+`hook-framework` §8's and `EX-5`'s compatibility check is what reads them; the row asserts the
+operator refusing on their verdict, which is `KO-3`'s.
+"""
+
+[[deferred]]
+id = "SC-A-6"
+story = "KO-3"
+reason = """
+A8: a profile absent from the operator's catalog is refused, naming the profile and the catalog. The
+catalog is a property of the running operator — there is no such object today, so there is nothing
+for the row to name.
+"""
+
+[[deferred]]
+id = "SC-A-7"
+story = "KO-3"
+reason = """
+A9: a key that is not one of `cluster-config` §4 R1's six role names is refused, listing all six. The
+six are already normative and already enforced by the loader; the row is about the webhook echoing
+the closed set back, which needs the webhook.
+"""
+
+[[deferred]]
+id = "SC-A-8"
+story = "KO-3"
+reason = """
+A3/K6: a second `SipxCluster` in a namespace that already holds one is refused, naming the existing
+resource. Singleton-per-namespace is a statement about API-server state, so the row needs a real API
+server — `KO-3`'s Acceptance already requires envtest-class or k3s tests, which is where this lands.
+"""
+
+[[deferred]]
+id = "SC-A-9"
+story = "KO-3"
+reason = """
+A2: a rejected *update* against a resource already reconciling leaves `status` and every managed
+object untouched, and the last accepted generation keeps running. Needs both halves at once — a
+webhook to reject and a running reconcile loop to observe as undisturbed — so it is the last of the
+`SC-A` rows to become testable, not the first.
+"""
+
+[[deferred]]
+id = "SC-S-1"
+story = "KO-3"
+reason = """
+S1/S3: freshly accepted, no pod ready — `Ready: False`, and every role's ready count is the observed
+one rather than the declared one. The distinction is the entire `SC-S` family's premise and it only
+exists once something observes a fleet.
+"""
+
+[[deferred]]
+id = "SC-S-2"
+story = "KO-3"
+reason = """
+S3/S8: every role at its declared count and the last probe `Pass` — `Ready: True` carrying the run
+id. Needs the reconcile loop and a probe result to read; `ET-4`'s control API supplies the latter and
+`KO-3` is what reads it into `status`.
+"""
+
+[[deferred]]
+id = "SC-S-3"
+story = "KO-3"
+reason = """
+S4: a pod that reports nothing within the operator's interval drives its condition to `Unknown`
+naming the node — never to `True` by omission. The interval is the operator's, so the row cannot be
+stated against anything else.
+"""
+
+[[deferred]]
+id = "SC-S-4"
+story = "KO-3"
+reason = """
+S5: with a shard still draining, `ShardMapConverged: False` names the shard, `observedShardMap` stays
+at `n`, and `observedGeneration` stays behind `metadata.generation`. `observedGeneration` is an
+API-machinery fact; the drain is `KO-4`'s sequencing, and this row's verdict is `KO-3`'s status
+reconciliation reporting it.
+"""
+
+[[deferred]]
+id = "SC-S-5"
+story = "KO-3"
+reason = """
+S6: a key added with `mint: false` and not yet held everywhere gives `KeysDistributed: False` naming
+the key id and the lagging nodes, flipping `True` only when every verifier holds it. The
+`mint: false`-first ordering is `affinity-token` §6 K1 and is proved there; what defers is the
+operator observing which nodes have caught up.
+"""
+
+[[deferred]]
+id = "SC-S-6"
+story = "KO-3"
+reason = """
+S8: a `Fail { step: Invite }` probe surfaces as the verdict with its step and `Ready: False`, and the
+operator does nothing else — no rollback, no restart, no scale change. Half the row is an assertion
+about actions *not* taken, which needs a loop that could have taken them.
+"""
+
+[[deferred]]
+id = "SC-S-7"
+story = "KO-3"
+reason = """
+S7: a node refusing a profile that admission accepted gives `ProfileCompatible: False` naming the
+node and the refusing rule. This is the image-skew case — admission judged the operator's catalog,
+the node judged its own build, and nothing else in the system surfaces the gap. Needs a fleet whose
+nodes can disagree with the operator, so it is an envtest/k3s row.
 """
 
 # ---------------------------------------------------------------------------------------------

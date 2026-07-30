@@ -31,6 +31,14 @@ jobs:
       - name: Every spec vector is proved or deferred with a reason
         run: scripts/check-vectors.py --check
 
+      # `KO-1`. The SipxCluster resource and cluster-config §7 are one definition; this fails when the
+      # two drift. It reads the chart's `cluster:` keys, so unlike the checks around it, it needs a
+      # YAML parser and has no weaker reading to fall back on.
+      - name: The custom resource and the config schema are one definition
+        run: |
+          python3 -m pip install --quiet pyyaml
+          scripts/check-crd-drift.py
+
       # `FC-5`. The end-to-end proofs are what the release's cluster claim rests on, and nothing else
       # in CI reads them — they need a database, a `sipx` CLI and in one case a Kubernetes cluster,
       # so they are run by hand. `FC-4` changed the node underneath them and three of them answered

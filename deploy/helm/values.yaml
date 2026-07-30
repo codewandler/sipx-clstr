@@ -30,18 +30,29 @@
 # milliseconds (RFC 3261 §17). A `3600s` string is refused — the loader reads
 # integers, and a unit inside the value would be a second syntax to validate.
 #
-# NOTHING HERE RUNS YET. There is no operator image and no CRD — KO-1 pins the
-# custom resource and KO-3 implements the reconcile loop. Until then the chart
-# renders a resource nothing serves. What KO-14 fixed is the document, not
-# whether anything reads it: `deploy/helm/check-values.sh` renders this file and
-# feeds the result to the real loader, which is the only way any of the rules
-# above is checked rather than asserted.
+# NOTHING HERE RUNS YET. The custom resource is now specified — KO-1 pinned it
+# in docs/specs/sipx-cluster-crd.md — but there is still no operator image and no
+# CRD manifest, so the chart renders a resource nothing serves until KO-3
+# implements the reconcile loop. What KO-14 fixed is the document, not whether
+# anything reads it: `deploy/helm/check-values.sh` renders this file and feeds
+# the result to the real loader, which is the only way any of the rules above is
+# checked rather than asserted. `scripts/check-crd-drift.py` is the other half —
+# it checks the `cluster:` keys below against the section registry the resource
+# carries, so a section this file grows or drops is a red gate.
 ########################################################################
 
 # The schema version of the document below, and therefore the API version of the
 # resource that carries it: one version field on the thing being versioned,
-# rather than a `crd:` block spelling the same string in two halves.
-# Provisional until KO-1 pins the custom resource.
+# rather than a `crd:` block spelling the same string in two halves
+# (sipx-cluster-crd §3 G2).
+#
+# PINNED, no longer provisional: KO-1 fixed the group and the version as
+# `sipx.dev/v1alpha1` (sipx-cluster-crd §3 G1) — the value cluster-config §3
+# already declared and the loader already implements as API_VERSION, so pinning
+# removed the word "provisional" rather than choosing a new string.
+# `scripts/check-crd-drift.py` compares this value against all three of those,
+# which is what makes the four spellings one fact. v1alpha1 carries no
+# compatibility promise at all (§3 U3, cluster-config §3 D8).
 #
 # The document's *configuration* version (cluster-config §3 D9) is deliberately
 # absent: it is a u32 the operator sets from the resource's metadata.generation,
