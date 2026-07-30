@@ -59,8 +59,12 @@ protocol core that has since been corrected, and so the next upgrade is one step
   1.91 because the image pins that number.
 - **`docs/upstream.md` re-read row by row against the kernel at `v0.10.0`**, each cited symbol
   opened. Two rows changed: the `TimerQueue` `Default` row to **landed in 0.10.0** (closed by the
-  kernel without ever being filed), and the `Path`/`Service-Route` citation, which had drifted from
-  `address.rs:264,271` to `271,280`. `CX-5` and `RG-15` stay open, now proved rather than assumed:
+  kernel without ever being filed), and the `Path`/`Service-Route` citation, corrected from
+  `address.rs:264,271` to `271,280` — **wrong when filed, not stale**: that file is one blob
+  (`14817570`) at `v0.4.0`, `v0.7.0` and `v0.10.0`, and 264 is `Path`'s doc comment while 271 is
+  `Path`'s match arm, so the old pair described `Path` twice and `Service-Route` never. My first
+  write-up called this a drift, which would have meant the kernel moved and the ledger fell behind;
+  it did not, and the ledger's own rule is aimed at exactly the other case. `CX-5` and `RG-15` stay open, now proved rather than assumed:
   `challenge.rs` is one blob (`30e1d290`) at `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and `main`.
 - **The e2e proof ran against a `sipx` CLI built from `v0.10.0`** (`sipx 0.10.0`), which is also
   what CI's `e2e` job now builds — its `sed` extraction reads `v0.10.0` off the bumped manifest.
