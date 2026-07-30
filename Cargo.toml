@@ -49,16 +49,16 @@ sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.11.0" }
 # transaction machines, RFC 3263 resolution, **both** sides of digest, and a `TimerQueue` generic
 # over its instant type — the last of which is what lets the harness stop keeping its own
 # generation counters (`CF-7`).
-sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.7.0" }
-sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.7.0" }
-sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.7.0" }
+sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
+sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
+sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
 # `default-features = false` is load-bearing, not tidiness: it drops sipx-ua's `runtime` feature
 # and with it `tokio`, so the sans-IO registrar can use the kernel's digest verification without a
 # runtime in its decision core. Upstream `X-20` created that seam for exactly this dependency; the
 # gate's own rule — no `tokio` outside sipx-clstr-node — is what would otherwise force this repo to
 # write digest a second time, and two implementations of one algorithm eventually disagree about
 # who is authenticated.
-sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v0.7.0", default-features = false }
+sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0", default-features = false }
 
 # Core
 bytes = "1"
