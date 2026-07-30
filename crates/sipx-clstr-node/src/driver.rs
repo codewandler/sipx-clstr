@@ -10,6 +10,7 @@
 //! that cannot be tested without a network, which is why it is small enough to read in one sitting.
 
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -65,6 +66,12 @@ pub struct NodeConfig {
     /// nodes is not a cluster, it is two registrars each answering only for whoever happened to
     /// reach it.
     pub store: StoreChoice,
+    /// How many proxied transactions this node will hold at once (`DP-11`).
+    ///
+    /// From `cluster.admission.maxInFlightTransactions`; see [`crate::config::AdmissionSpec`] for
+    /// why the knob lives where it does, and [`AdmissionBound`] for what the bound does and does not
+    /// cover.
+    pub max_in_flight_transactions: usize,
 }
 
 /// Which location service backs this node (`RG-12`, location-service §6.2).
@@ -121,6 +128,7 @@ impl NodeConfig {
             policy: TenantPolicy::default(),
             domains: Vec::new(),
             store: StoreChoice::InMemory,
+            max_in_flight_transactions: crate::config::DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS,
         }
     }
 
@@ -170,6 +178,151 @@ impl NodeConfig {
     }
 }
 
+// ---------------------------------------------------------------------------------- admission ---
+
+/// The node's admission bound: how much work it will take on at once (`DP-11`).
+///
+/// **What it bounds, and what it deliberately does not.** The kernel's 1024-message queue plus
+/// `503`-on-full is real backpressure, and it bounds the *queue*. The driver drains that queue as
+/// fast as it can and spawns a task per new server transaction, and a **proxied** task lives for the
+/// whole transaction — up to Timer B, or the 180-second unanswered backstop. So offered load
+/// converted directly into resident tasks, and this is what stops that.
+///
+/// **Why REGISTER is exempt, and why that cannot starve.** A registration storm *is* the overload,
+/// and REGISTER is the request a node most needs to answer while one is happening: a refused refresh
+/// is a phone that becomes unreachable, so a node that shed REGISTERs would convert a spike into a
+/// permanent outage and then get a second spike as every phone retried. A REGISTER never takes a
+/// permit, never waits on one, and never observes this type at all — its path is `admit`, `apply`,
+/// `respond`, with no acquisition anywhere in it. What bounds the *cost* of one REGISTER is `RG-14`;
+/// what bounds how many proxied calls are resident is here, and the two compose.
+///
+/// An **ACK** is exempt for a different and harder reason: there is no response to an ACK in SIP, and
+/// an ACK for a 2xx is a transaction of its own (RFC 3261 §17.1.1.3). "Refusing" one can only mean
+/// dropping it, which leaves both ends in a dialog no timer reaps — the leak the kernel counts
+/// separately as `ShedCounts::acks`. A bound that could not refuse must not gate.
+///
+/// Everything else on the proxy path — INVITE, BYE, CANCEL, OPTIONS — is gated. Exempting BYE and
+/// CANCEL was considered, on the argument that shedding the messages that *end* work makes overload
+/// self-sustaining; it was rejected because an unbounded method is an unbounded node, and a `503`
+/// with `Retry-After` to a BYE is a retry, whereas an unbounded BYE flood is the defect this story
+/// closes wearing a different method name.
+///
+/// **The counters are instance state, not process state.** They live in this struct, one per running
+/// node, rather than in a global: the test suite runs in parallel, and a sibling scenario's flood
+/// must not appear in this node's numbers.
+#[derive(Debug)]
+pub struct AdmissionBound {
+    /// The bound itself.
+    max: usize,
+    /// Permits currently held — the gauge the scaling design calls decisive.
+    in_flight: AtomicUsize,
+    /// How many gated transactions have been admitted since the node started.
+    admitted: AtomicU64,
+    /// How many have been refused. **Counted, never logged per message**: the input that triggers
+    /// the refusal is the input that would pay for the log line, and per-message logging under
+    /// overload is a cost multiplier on exactly the wrong path. [`report_load`] samples this.
+    refused: AtomicU64,
+}
+
+/// A permit held for as long as a transaction is in flight.
+///
+/// The bound is enforced by this value existing: it is taken at the moment of admission and released
+/// when the task that serves the transaction ends, whether that is a final response, a timeout or a
+/// panic in a spawned task.
+#[derive(Debug)]
+pub struct Admitted {
+    gate: Arc<AdmissionBound>,
+}
+
+impl Drop for Admitted {
+    fn drop(&mut self) {
+        // `saturating_sub` rather than `fetch_sub`: an underflow here would print a gauge of
+        // 18 quintillion in-flight transactions during an incident, and a wrong number is worse
+        // than a slightly defensive one.
+        let _ = self
+            .gate
+            .in_flight
+            .fetch_update(Ordering::Release, Ordering::Acquire, |held| {
+                Some(held.saturating_sub(1))
+            });
+    }
+}
+
+/// What the bound decided about one arrival.
+#[derive(Debug)]
+enum Verdict {
+    /// Not subject to the bound — see [`AdmissionBound`] for which methods, and why.
+    Exempt,
+    /// Admitted; the permit is released when it drops.
+    Admitted(Admitted),
+    /// Over the bound. Answered `503`, not dropped.
+    Refused,
+}
+
+impl AdmissionBound {
+    /// A bound of `max` concurrent proxied transactions.
+    ///
+    /// A declared `0` is refused at load (`cluster-config` §8 V8), and clamped here as well rather
+    /// than trusted: a bound of zero is a node that answers `503` to every call, and this layer is
+    /// reached by configuration from more than one direction.
+    #[must_use]
+    pub fn new(max: usize) -> Self {
+        Self {
+            max: max.max(1),
+            in_flight: AtomicUsize::new(0),
+            admitted: AtomicU64::new(0),
+            refused: AtomicU64::new(0),
+        }
+    }
+
+    /// Whether the bound applies to `method`.
+    fn gates(method: &Method) -> bool {
+        !matches!(method, Method::Register | Method::Ack)
+    }
+
+    /// Decide whether to take on one arrival.
+    ///
+    /// A compare-and-swap and nothing else — no allocation, no lock, no `await` — because this runs
+    /// on the accept loop, and the accept loop is the single consumer of a channel the kernel fills
+    /// with `try_send` (sipx `T-19`).
+    fn admit(self: &Arc<Self>, method: &Method) -> Verdict {
+        if !Self::gates(method) {
+            return Verdict::Exempt;
+        }
+        let taken = self
+            .in_flight
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |held| {
+                (held < self.max).then_some(held + 1)
+            });
+        if taken.is_ok() {
+            self.admitted.fetch_add(1, Ordering::Relaxed);
+            return Verdict::Admitted(Admitted {
+                gate: Arc::clone(self),
+            });
+        }
+        self.refused.fetch_add(1, Ordering::Relaxed);
+        Verdict::Refused
+    }
+
+    /// How many proxied transactions are in flight right now.
+    #[must_use]
+    pub fn in_flight(&self) -> usize {
+        self.in_flight.load(Ordering::Acquire)
+    }
+
+    /// How many have been refused over the bound since the node started.
+    #[must_use]
+    pub fn refused(&self) -> u64 {
+        self.refused.load(Ordering::Relaxed)
+    }
+
+    /// How many have been admitted since the node started.
+    #[must_use]
+    pub fn admitted(&self) -> u64 {
+        self.admitted.load(Ordering::Relaxed)
+    }
+}
+
 /// What stops a node from starting.
 #[derive(Debug, thiserror::Error)]
 pub enum NodeError {
@@ -190,6 +343,20 @@ pub enum NodeError {
     /// see — which is worse than not starting, because nothing would say so.
     #[error("the configured location store could not be reached: {0}")]
     LocationStoreUnreachable(String),
+    /// The transport driver stopped delivering (`DP-11`).
+    ///
+    /// `incoming.recv()` returning `None` means the kernel's endpoint loop is gone, and with it the
+    /// socket, the timers and every transaction being held. This used to return `Ok(())`, so the
+    /// process exited `0` and a node whose socket layer had died was indistinguishable from one that
+    /// was asked to stop — a supervisor reading exit codes would not restart it, and nothing anywhere
+    /// said what had happened. Contrast the care taken over refusing to *start*: the same event at
+    /// the other end of the process deserves the same honesty.
+    ///
+    /// This node has no graceful-shutdown path, so there is no legitimate way to reach it. If one is
+    /// added, it must close the loop through a signal it owns rather than by letting the channel
+    /// close, or this error will report an intentional stop as a failure.
+    #[error("the transport driver stopped delivering requests; this node can no longer serve")]
+    TransportGone,
 }
 
 /// Open the location service this node was configured for (`RG-12`).
@@ -239,7 +406,8 @@ pub fn open_store(choice: &StoreChoice) -> Result<Arc<dyn LocationStore + Send +
 ///
 /// Fails if the listener cannot be bound — the one error worth refusing to start over, since a node
 /// that silently listened nowhere would look healthy and answer nothing — and if the declared
-/// listeners cannot be served as declared.
+/// listeners cannot be served as declared. It also fails with [`NodeError::TransportGone`] if the
+/// transport driver stops delivering, which is the one way a *running* node ends today.
 pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
     let advertised = config
         .listeners
@@ -286,13 +454,43 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
     // held across an await.
     let auth = Arc::new(Mutex::new(config.tenant_auth()));
     let credentials = Arc::new(config.credentials());
-    report_transactions_in_flight(handle.clone());
+    let admission = Arc::new(AdmissionBound::new(config.max_in_flight_transactions));
+    tracing::info!(
+        max_in_flight_transactions = admission.max,
+        "admission bound"
+    );
+    report_load(handle.clone(), Arc::clone(&admission));
 
     // The cookie key is the node's, not the request's: it must be the same for every message this
     // process forwards, or a loop through this node would not be detectable across two of them.
     let cookie_key = cookie_key();
 
     while let Some(arrival) = incoming.recv().await {
+        // The admission decision (`DP-11`) is taken **here**, before anything is cloned and before a
+        // task exists, because that is where "how much is in flight" is a fact. It is a
+        // compare-and-swap and nothing else — the accept loop must never do work inline: it is the
+        // single consumer of the incoming channel, and the kernel delivers into that channel with
+        // `try_send`, so a blocked loop drops requests silently (sipx `T-19`).
+        let permit = match admission.admit(&arrival.request.method) {
+            Verdict::Exempt => None,
+            Verdict::Admitted(permit) => Some(permit),
+            Verdict::Refused => {
+                let handle = handle.clone();
+                // Refused from a task of its own, for two reasons: sending is IO and IO does not
+                // happen on this loop, and a request the node has already decided not to serve
+                // should not cost it a clone of the whole serving context first.
+                tokio::spawn(async move {
+                    // An error here means the endpoint is gone, which [`report_load`] says once
+                    // rather than once per message. This is precisely the path that must not log
+                    // per message: the input that triggers the refusal would be paying for it.
+                    let _ = handle
+                        .respond(&arrival.key, overloaded(&arrival.request))
+                        .await;
+                });
+                continue;
+            }
+        };
+
         let handle = handle.clone();
         let store = Arc::clone(&store);
         let config = config.clone();
@@ -300,9 +498,7 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
         let credentials = Arc::clone(&credentials);
         let cookie_key = cookie_key.clone();
 
-        // One task per arrival. The accept loop must never do work inline: it is the single consumer
-        // of the incoming channel, and the kernel delivers into that channel with `try_send`, so a
-        // blocked loop drops requests silently (sipx `T-19`).
+        // One task per admitted arrival.
         tokio::spawn(async move {
             // Which listener it arrived on decides which address goes back into it (`DP-5`). Built
             // per arrival because that answer is per arrival: a node that advertises one address on
@@ -329,34 +525,136 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
             if let Err(error) = serve(&handle, &edge, arrival).await {
                 tracing::warn!(%error, "request handling failed");
             }
+            // Released here — when the transaction is done with, not when its request arrived.
+            // Dropped by name so that the release point is something a reader can see.
+            drop(permit);
         });
     }
-    Ok(())
+
+    // Not `Ok(())`. The channel closing means the kernel's endpoint loop is gone, which is a failure
+    // of the node and not a shutdown of it.
+    Err(NodeError::TransportGone)
 }
 
-/// Report how many transactions the kernel is holding, whenever that number changes.
+/// The refusal for a request the node will not take on: `503` with `Retry-After`.
+///
+/// **The same shape the kernel uses** when its own queue is full (`sipx-transport`'s
+/// `Endpoint::refuse`), down to the `Retry-After` value, so a client sees one behaviour regardless of
+/// which layer shed it. A node-level refusal that looked different would make the two limits two
+/// protocols, and an operator correlating a client's retry pattern with a server's counters would
+/// have to know which one had fired to read either.
+fn overloaded(request: &Request) -> Response {
+    let mut response = answer(request, 503, reason_for(503));
+    if let Ok(header) = sipx_sip::Header::build(HeaderName::RetryAfter, RETRY_AFTER) {
+        response.headers.push(header);
+    }
+    response
+}
+
+/// The kernel's `Retry-After` on a queue-full refusal, adopted rather than restated differently.
+const RETRY_AFTER: &[u8] = b"5";
+
+/// What the node's load instruments read at one instant.
+///
+/// A struct so that "has anything moved?" is one comparison rather than five, and so that adding an
+/// instrument cannot forget to add it to the change test.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct Load {
+    /// Transactions the kernel is holding, including the ones it keeps for Timer J.
+    outstanding: usize,
+    /// Proxied transactions this node has admitted and not yet finished (`DP-11`).
+    in_flight: usize,
+    /// Admitted over the node's admission bound, cumulative. Reported because a shed *rate* needs a
+    /// denominator: "32 refused" says something very different beside 40 admitted than beside 4000.
+    admitted: u64,
+    /// Refused over the node's admission bound, cumulative.
+    refused: u64,
+    /// Requests the kernel shed because this application was not keeping up, cumulative.
+    shed_requests: u64,
+    /// ACKs the kernel shed. The serious one: an ACK cannot be refused, so each of these is a
+    /// dialog no timer will reap.
+    shed_acks: u64,
+    /// Requests that matched no transaction and could not be handed over.
+    shed_unmatched: u64,
+}
+
+/// Report the node's load whenever it changes — the kernel's instruments and this node's own.
 ///
 /// A proxy that leaks one transaction per call is a slow, quiet outage: nothing looks wrong until
 /// the process does. This is the cheapest instrument that would notice, and it is `DP-3`'s gauge in
 /// embryo.
 ///
+/// **`Handle::shed()` is read here** (`DP-11`), split the way the kernel splits it — requests, ACKs,
+/// unmatched — because the three are different failures. `website/docs/operate/scaling.md` names
+/// overload shed rate as the one number that says the platform is past its limit, and that number
+/// existed in-process and was discarded. `ShedCounts::acks` gets a line of its own when it moves: an
+/// ACK cannot be answered with a `503`, so shedding one leaks a call, and "calls are leaking" is not
+/// a field on a routine gauge line.
+///
 /// **On change, not on a schedule.** A number logged every second is noise nobody reads; a number
 /// logged when it moves is a record of what the node did. It also has to be sampled rather than
 /// emitted per request: the count that matters is the one *after* the last request, and a per-request
 /// line can never show that, which is exactly how the first version of this failed to observe the
-/// store draining at all.
-fn report_transactions_in_flight(handle: Handle) {
+/// store draining at all. Sampling is also what keeps overload logging off the per-message path —
+/// the node **counts** refusals and this reports the count, so a flood costs one line per sampling
+/// interval rather than one line per refused request.
+fn report_load(handle: Handle, admission: Arc<AdmissionBound>) {
     tokio::spawn(async move {
-        let mut previous = usize::MAX;
+        let mut previous = Load::default();
+        // An idle node's first sample equals `Load::default()`, so "report on change" alone would
+        // never say anything at all about a node that is up and quiet. The first sample always goes
+        // out; after that, only movement does.
+        let mut reported = false;
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
+
+            // Read the shed counters **first**. They come off a shared atomic rather than from the
+            // event loop, so they are available in exactly the situation that makes them
+            // interesting; `outstanding()` has to ask the loop, and the loop is busy then.
+            let shed = handle.shed();
             let Ok(outstanding) = handle.outstanding().await else {
-                // The endpoint is gone, and so is the reason to keep counting.
+                // The endpoint is gone. Say so with the final counts rather than vanishing, because
+                // these are the numbers that describe how it ended.
+                tracing::warn!(
+                    shed_requests = shed.requests,
+                    shed_acks = shed.acks,
+                    shed_unmatched = shed.unmatched,
+                    refused = admission.refused(),
+                    "the transport endpoint is gone; final load counters"
+                );
                 return;
             };
-            if outstanding != previous {
-                previous = outstanding;
-                tracing::info!(outstanding, "transactions in flight");
+            let sample = Load {
+                outstanding,
+                in_flight: admission.in_flight(),
+                admitted: admission.admitted(),
+                refused: admission.refused(),
+                shed_requests: shed.requests,
+                shed_acks: shed.acks,
+                shed_unmatched: shed.unmatched,
+            };
+
+            if sample.shed_acks > previous.shed_acks {
+                tracing::error!(
+                    shed_acks = sample.shed_acks,
+                    since_last = sample.shed_acks - previous.shed_acks,
+                    "the kernel shed ACKs: each one is a dialog no timer will reap, and calls are \
+                     leaking"
+                );
+            }
+            if sample != previous || !reported {
+                previous = sample;
+                reported = true;
+                tracing::info!(
+                    outstanding = sample.outstanding,
+                    in_flight = sample.in_flight,
+                    admitted = sample.admitted,
+                    refused = sample.refused,
+                    shed_requests = sample.shed_requests,
+                    shed_acks = sample.shed_acks,
+                    shed_unmatched = sample.shed_unmatched,
+                    "node load"
+                );
             }
         }
     });
@@ -809,6 +1107,124 @@ mod tests {
         // which is `RT-1`'s — and returning `None` here is what makes that a visible gap rather than
         // a call that fails somewhere further along.
         assert!(destination_of(&Bytes::from_static(b"sip:alice@phone.example")).is_none());
+    }
+
+    /// A request the test can hand to the refusal path.
+    fn a_request(method: &Method) -> Request {
+        sipx_sip::RequestBuilder::new(
+            method.clone(),
+            Uri::parse(Bytes::from_static(b"sip:bob@b.example")).unwrap(),
+        )
+        .header(HeaderName::CallId, "dp11")
+        .and_then(|b| b.cseq(1, method))
+        .and_then(|b| b.header(HeaderName::From, "<sip:alice@a.example>;tag=a"))
+        .and_then(|b| b.header(HeaderName::To, "<sip:bob@b.example>"))
+        .and_then(|b| b.header(HeaderName::Via, "SIP/2.0/UDP a.example;branch=z9hG4bK-1"))
+        .map(sipx_sip::RequestBuilder::build)
+        .expect("a well-formed request")
+    }
+
+    /// The bound admits up to itself and then refuses — and a released permit is capacity again.
+    #[test]
+    fn dp11_the_bound_admits_up_to_itself_and_then_refuses() {
+        let bound = Arc::new(AdmissionBound::new(2));
+        let first = bound.admit(&Method::Invite);
+        let second = bound.admit(&Method::Invite);
+        assert!(matches!(first, Verdict::Admitted(_)));
+        assert!(matches!(second, Verdict::Admitted(_)));
+        assert_eq!(bound.in_flight(), 2);
+
+        assert!(matches!(bound.admit(&Method::Invite), Verdict::Refused));
+        assert_eq!(bound.refused(), 1);
+        assert_eq!(bound.in_flight(), 2, "a refusal takes no permit");
+
+        // A transaction that finished is capacity again — the bound is on concurrency, not on a
+        // total. A permit that leaked here would turn a busy minute into a permanent refusal.
+        drop(first);
+        assert_eq!(bound.in_flight(), 1);
+        assert!(matches!(bound.admit(&Method::Invite), Verdict::Admitted(_)));
+        assert_eq!(bound.admitted(), 3);
+    }
+
+    /// REGISTER is never held behind the bound, however spent it is.
+    ///
+    /// The trap this pins: a registration storm *is* the overload, so a blanket cap would refuse the
+    /// one request a node under load most needs to answer, and a refused refresh is a phone that
+    /// becomes unreachable. `RG-14` bounds what one REGISTER costs; this bounds how many calls are
+    /// resident, and neither may become the other.
+    #[test]
+    fn dp11_register_is_never_refused_by_the_bound() {
+        let bound = Arc::new(AdmissionBound::new(1));
+        let held = bound.admit(&Method::Invite);
+        assert!(matches!(held, Verdict::Admitted(_)));
+        assert!(matches!(bound.admit(&Method::Invite), Verdict::Refused));
+
+        for _ in 0..1000 {
+            assert!(
+                matches!(bound.admit(&Method::Register), Verdict::Exempt),
+                "a REGISTER must not wait behind proxied calls"
+            );
+        }
+        assert_eq!(bound.in_flight(), 1, "an exempt method takes no permit");
+        assert_eq!(bound.refused(), 1, "and is never counted as refused");
+    }
+
+    /// An ACK is exempt too, and for a harder reason: there is no response to an ACK in SIP, so
+    /// "refusing" one can only mean dropping it — RFC 3261 §17.1.1.3 makes an ACK for a 2xx its own
+    /// transaction with nothing to answer, and dropping it leaves a dialog no timer reaps. That is the
+    /// leak the kernel counts apart as `ShedCounts::acks`, and this node must not add to it.
+    #[test]
+    fn dp11_an_ack_is_never_refused_because_it_cannot_be() {
+        let bound = Arc::new(AdmissionBound::new(1));
+        let _held = bound.admit(&Method::Invite);
+        assert!(matches!(bound.admit(&Method::Ack), Verdict::Exempt));
+    }
+
+    /// The refusal is the kernel's own shape: `503` with `Retry-After`.
+    #[test]
+    fn dp11_a_refusal_is_a_503_with_retry_after() {
+        let response = overloaded(&a_request(&Method::Invite));
+        assert_eq!(response.status.code(), 503);
+        let retry_after = response
+            .headers
+            .get(&HeaderName::RetryAfter)
+            .expect("a Retry-After, as the kernel sends");
+        assert_eq!(retry_after.value().as_ref(), RETRY_AFTER);
+    }
+
+    /// Losing the transport is a failure, and says so.
+    ///
+    /// The behaviour itself — `run` returning `Err` rather than `Ok(())` when `incoming.recv()` goes
+    /// `None` — is the single `Err(NodeError::TransportGone)` at the end of the accept loop, which is
+    /// now the only way out of it. It cannot be *induced* from outside `run`, because the handle that
+    /// could shut the endpoint down never leaves it; what is pinned here is that the variant exists
+    /// and reads as a failure, so a refactor cannot quietly make it a success again.
+    #[test]
+    fn dp11_a_lost_transport_reads_as_a_failure() {
+        let message = NodeError::TransportGone.to_string();
+        assert!(message.contains("stopped delivering"), "{message}");
+        assert!(
+            !message.contains("shutdown"),
+            "this is not a shutdown, and must not read as one: {message}"
+        );
+    }
+
+    /// Everything else on the proxy path is gated, including the methods that end work.
+    ///
+    /// Exempting BYE and CANCEL was considered — shedding what ends work makes overload
+    /// self-sustaining — and rejected: an unbounded method is an unbounded node, and a `503` with
+    /// `Retry-After` to a BYE is a retry, where an unbounded BYE flood is this story's defect wearing
+    /// a different method name.
+    #[test]
+    fn dp11_the_methods_that_end_work_are_still_gated() {
+        for method in [Method::Bye, Method::Cancel, Method::Options] {
+            let bound = Arc::new(AdmissionBound::new(1));
+            let _held = bound.admit(&Method::Invite);
+            assert!(
+                matches!(bound.admit(&method), Verdict::Refused),
+                "{method:?} must be subject to the bound"
+            );
+        }
     }
 
     #[test]
