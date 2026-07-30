@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The `timers` section was accepted, validated, projected — and armed nothing** (`PX-10`). An
+  operator who set `timers.timerC` in the cluster document got the proxy crate's private 180 s,
+  silently, because nothing ever assigned it: `grep timer_c` over the driver returned no matches.
+  `timerC` is now wired from the document to the engine, and the four keys that still are not wired
+  (`t1`, `timerB`, `timerF`, `maxCallDuration`) are reported as unapplied instead of dropped.
+
+  `proxy-behavior.md` F11 carried the same self-refuting default `DP-12` had just removed from the
+  configuration schema — a floor of `≥ 180 s` under an RFC bound that is strictly greater, with the
+  default sitting exactly on it — and cited §16.8, which states no bound at all. The bound is
+  §16.6 step 11. Both specs now say the same thing, which is what stops this from happening a third
+  time.
+
+  **The caveat, because it qualifies the headline:** the driver still performs no timer effect —
+  `SetTimer` and `ClearTimer` are dropped in the same arm as `CancelBranch`, as they always have
+  been. What changed is the deadline the engine *puts in* the effect. A Timer C is now armed with the
+  right value and still does not fire; making it fire belongs with branch cancellation, since a fired
+  Timer C's first act is to cancel the branch.
+
 - **The two-node cluster proofs answered `403`** (`FC-5`). `FC-4` made a `REGISTER` for a domain the
   tenant does not serve a `403` — closing a real hole — and `scripts/e2e-call.sh` was updated with
   it. The two-node proofs were not: they registered in `127.0.0.1` and a Service IP against documents

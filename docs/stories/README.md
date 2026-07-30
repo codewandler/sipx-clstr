@@ -49,7 +49,6 @@ site · `FC` fail-closed configuration.
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Next (ready — take the top one unless the user named a story)
-- [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · the whole timers section is parsed, projected, and read by nothing — the armed Timer C is always 180 s
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
@@ -198,6 +197,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [PX-7 — Run proxy torture vectors in the harness](PX-7-run-proxy-torture-vectors-in-the-harness.md) · Signalling · M1 #8 · the PB table as a generated, checked report — and it found a deleted test
 - [PX-8 — Decide whether topology hiding is in scope, and how it survives a node change](PX-8-decide-whether-topology-hiding-is-in-scope.md) · Signalling · a real deployment's current implementation is the defect the cluster design exists to fix
 - [PX-9 — Drive fork branches concurrently instead of draining them in order](PX-9-drive-fork-branches-concurrently.md) · Signalling · a user with one dead device waits for Timer B before their live device's 200 OK is relayed
+- [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · timerC now reaches the engine from the document and F11 defaults to 240 s; the rest of the timers section is reported unapplied rather than dropped
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
