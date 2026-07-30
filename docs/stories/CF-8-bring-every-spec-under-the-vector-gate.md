@@ -2,7 +2,7 @@
 id: CF-8
 title: Bring every spec's vector table under the vector gate
 pillar: Platform
-status: ready
+status: done
 priority: 1
 design: docs/designs/conformance-harness.md
 epic: conformance-harness
@@ -18,7 +18,7 @@ nobody executes fails the gate wherever it lives. Today it knows three specs out
 means most of the platform's normative vectors are prose the gate has never read.
 
 ## Acceptance
-- [ ] `LS` (location-service) and `MR` (media-relay) are registered in `SPECS`, `ROW`, `TEST_NAME`
+- [x] `LS` (location-service) and `MR` (media-relay) are registered in `SPECS`, `ROW`, `TEST_NAME`
       and `COVERS`, with their families named in `FAMILIES`. Both already use the three-part
       `XX-Y-n` row shape, so they need registration only — no renumbering.
 - [x] The two-part row shape is resolved for `affinity-token` (`AT-n`, `FR-n`) and `hook-framework`
@@ -29,20 +29,20 @@ means most of the platform's normative vectors are prose the gate has never read
       (`\b({PREFIXES})-(?:([A-Z])-)?(\d+)\b`) and recorded the reason in the module docstring:
       renumbering would churn every citation in the spec that owns the rows. `AT`/`FR` inherit the
       decision and need registration only.
-- [ ] `CC` (cluster-config, 48 rows, `DP-1`) and `AI` (asserted-identity, 97 rows, `RT-7`) are
+- [x] `CC` (cluster-config, 48 rows, `DP-1`) and `AI` (asserted-identity, 97 rows, `RT-7`) are
       registered too, along with `NN` (number-normalisation). Both `CC` and `AI` arrived **after**
       this story was filed, which is the argument for doing it now rather than later: each wave
       that ships a spec adds rows the gate cannot see, so the unenforced set grows faster than the
       enforced one.
-- [ ] Every newly-registered row is either covered by a test or carries a `vector-scope.toml`
+- [x] Every newly-registered row is either covered by a test or carries a `vector-scope.toml`
       deferral with a reason and a story — the existing three-way discipline, including that a
       deferred row which *is* covered stays an error.
-- [ ] `docs/reference/conformance.md` regenerates to include the new families, and
+- [x] `docs/reference/conformance.md` regenerates to include the new families, and
       `scripts/check-vectors.py --check` is green in `scripts/gate.sh`.
-- [ ] The gate's summary line reports the true denominator. At filing it read `75/83 rows proved`
+- [x] The gate's summary line reports the true denominator. At filing it read `75/83 rows proved`
       while silently excluding four specs; it now reads `77/98` and excludes six. After this story
       that number covers everything or the excluded set is explicit.
-- [ ] **A fabricated row fails the gate, proved by trying it.** This is the acceptance that matters:
+- [x] **A fabricated row fails the gate, proved by trying it.** This is the acceptance that matters:
       the defect is not that the count is low, it is that an unregistered prefix is invisible.
 
 ## Progress

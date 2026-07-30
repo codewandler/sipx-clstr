@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://codewandler.github.io/sipx-clstr/"><img src="https://img.shields.io/badge/docs-codewandler.github.io%2Fsipx--clstr-E2622A" alt="Documentation"></a>
   <a href="#where-this-actually-is"><img src="https://img.shields.io/badge/status-two%20nodes%20%C2%B7%20one%20registrar-2F3A45" alt="Status: two nodes sharing one registrar"></a>
-  <a href="docs/reference/conformance.md"><img src="https://img.shields.io/badge/vectors-77%2F98%20proved-2F3A45" alt="Conformance: 77 of 98 vector rows proved"></a>
+  <a href="docs/reference/conformance.md"><img src="https://img.shields.io/badge/vectors-134%2F492%20proved-2F3A45" alt="Conformance: 134 of 492 vector rows proved"></a>
   <a href="https://github.com/codewandler/sipx"><img src="https://img.shields.io/badge/built%20on-sipx-F98A3C" alt="Built on sipx"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-2F3A45" alt="MIT or Apache 2.0 license"></a>
 </p>
@@ -165,7 +165,7 @@ multi-node test is treated as a bug in the design, not in the test.
 |---|---|
 | **Working** | **Two nodes sharing one registrar.** RFC 3261 §16 forwarding with forking, `CANCEL` and Timer C; `REGISTER` over a compare-and-swap location store, in memory or in PostgreSQL; configuration by one cluster-scoped document in YAML, JSON or TOML; UDP and TCP; media flowing directly between endpoints. Register through one node, be called through another — proved with independent `sipx` CLI phones, with audio, locally and on Kubernetes |
 | **Written** | **Ten specifications** with normative rules and byte-level test-vector tables — proxy behaviour, location service, registrar auth, affinity token, hook framework, cluster config, asserted identity, number normalisation, media relay, end-to-end probe |
-| **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against independent `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) is generated, not written: **77 of 98 vector rows proved**, 21 deferred, each naming a reason and an owner |
+| **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against independent `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) is generated, not written: **134 of 492 vector rows proved**, 358 deferred, each naming a reason and an owner. The denominator quadrupled when `CF-8` brought every spec under the gate — the report got more honest, not worse |
 | **Accepted but not applied** | `tenant[].auth` and seventeen other sections of the schema load without error and change nothing. The node logs which ones at startup, and being made to refuse them rather than ignore them is open work |
 | **Not yet** | **One address in front of the cluster** — that needs affinity tokens, and without them in-dialog requests must be addressed to the node that forwarded them. Also: trunk routing, media control, applied authentication, registrar sharding, the operator and chart |
 | **Built on** | [sipx](https://github.com/codewandler/sipx) 0.7.0 — the SIP kernel this platform orchestrates, pinned to a tag rather than a branch. Protocol logic belongs there; this repo adds clustering |

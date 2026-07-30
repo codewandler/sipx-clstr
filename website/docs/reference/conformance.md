@@ -89,21 +89,35 @@ That table is deliberately **not** reproduced on this page. It is regenerated fr
 every gate run, and a copy here would be a second set of numbers to keep in sync — which is the
 failure this whole mechanism exists to prevent. Read it at the link, where it is checked.
 
-## What the gate does not see yet
+## Every specification is under the gate
 
-Four specifications are registered with the checker today: proxy behaviour (`PB`), the end-to-end
-probe (`EP`), registrar auth (`RA`) and the hook framework (`HF`). Their rows are the ones the
-report accounts for.
+All ten specifications are registered with the checker: proxy behaviour (`PB`), the end-to-end probe
+(`EP`), registrar auth (`RA`), the hook framework (`HF`), location service (`LS`), media relay (`MR`),
+number normalisation (`NN`), affinity token (`AT`, `FR`), cluster config (`CC`) and asserted identity
+(`AI`).
 
-The rest of the platform's specs carry vector tables the checker has **no registration for** —
-location service (`LS`), media relay (`MR`), number normalisation (`NN`), affinity token (`AT`,
-`FR`), cluster config (`CC`) and asserted identity (`AI`). Those rows are normative, they are
-cited, and no gate has ever read them. The gap grows on its own: a release that ships a new
-specification adds rows the checker cannot see.
+That was not always true, and how it failed is worth knowing, because it is the failure mode this whole
+page exists to guard against. Six of those specs used to carry vector tables the checker had **no
+registration for** — roughly 340 normative rows that were cited, reviewed and executed by nothing. The
+gap grew on its own: every release that shipped a specification added rows the gate could not see.
 
-That was demonstrated rather than assumed — a fabricated row in an unregistered family passes the
-gate untouched — and closing it is open work. Until then, treat the report as complete for the four
-specs it names and as silent about the others.
+It was demonstrated rather than argued. A fabricated row was added to an unregistered family and the
+gate passed it untouched, exit `0`. After registration the same fabricated row fails. That is the only
+kind of evidence worth having about a checker: not that it passes, but that it can fail.
+
+**Registering them moved the numbers a long way, in both directions.** The denominator quadrupled,
+because rows that were invisible are now counted. The proportion proved fell, because most of those
+rows describe subsystems that do not exist yet — trunks, media control, sharding, affinity. And the
+*numerator rose too*: several dozen rows turned out to be already covered by tests the report simply
+could not credit.
+
+A falling percentage that reflects reality is worth more than a high one that was measuring a subset.
+
+**How a deferral for an unbuilt subsystem stays honest.** Every one of those rows is deferred with a
+reason that says *what is specifically missing* and the story that closes it — "there is no trunk
+object to route through", not "not implemented". They are grouped by that story, so when it lands its
+rows move from deferred to proved as a set, and a deferral that outlives its subsystem is visible as a
+group rather than buried as one line among hundreds.
 
 ## What this does not measure
 

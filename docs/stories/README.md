@@ -52,7 +52,6 @@ site · `FC` fail-closed configuration.
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · proved at wave 4 — a fabricated AI row passes the gate, so 145 rows are unenforced prose
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
 
 ### Roles, topology & operations
@@ -82,7 +81,6 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-14 — Make the REGISTER contact path linear, and bound the work before the quota decides](RG-14-make-the-register-contact-path-linear.md) · Signalling · one 64 KB REGISTER costs millions of URI parses, and the quota is checked after the work is done
 - [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
 
 ## Blocked
@@ -172,6 +170,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · the schedule half; the sim-vs-real fidelity row moved to CF-3, which owns the sockets
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
 - [CF-7 — Adopt the kernel timer queue and loopback link](CF-7-adopt-the-kernel-timer-queue-and-loopback-link.md) · Platform · the queue converged on sipx v0.7.0; the link is decided local per CF-1's per-component split
+- [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · proved at wave 4 — a fabricated AI row passes the gate, so 145 rows are unenforced prose
 - [CF-9 — Make the declared rust-version true, and gate on it](CF-9-make-the-declared-rust-version-true.md) · Foundation · found building the container image — the workspace does not build on its own declared floor
 - [CF-10 — check-docs must only see the repository, not whatever sits under it](CF-10-check-docs-must-only-see-the-repository.md) · Foundation · the gate's verdict currently depends on whether an agent worktree happens to exist
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
@@ -225,6 +224,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-11 — Prove that a replayed credential empties the AoR through the wildcard path](RG-11-prove-the-wildcard-replay-empties-the-aor.md) · Signalling · RA-R-7 is deferred to this story — it is the only unproved row in the RA family
 - [RG-12 — Reach a shared location store from a running node](RG-12-reach-a-shared-location-store-from-a-node.md) · Signalling · the store is selectable and refuses to fall back; reading a document at startup is DP-10
 - [RG-13 — Bound the location store's growth — the change log and the row set both grow forever](RG-13-bound-the-location-stores-growth.md) · Signalling · changes is a Vec nothing in the shipped path ever drains, in both backends
+- [RG-14 — Make the REGISTER contact path linear, and bound the work before the quota decides](RG-14-make-the-register-contact-path-linear.md) · Signalling · one 64 KB REGISTER costs millions of URI parses, and the quota is checked after the work is done
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling · two rework rounds — the user privacy level was advertised as performed while a third of it was not

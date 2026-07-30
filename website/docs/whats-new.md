@@ -44,11 +44,14 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 | Authentication actually applied — the document accepts it and nothing enforces it | implemented, not applied |
 | Eighteen of the schema's sections — accepted, validated only in part, applied not at all | partly shipped |
 
-One more gap that is easy to miss because it is about the measuring instrument rather than the
-product: **most of the platform's normative vector rows are not under the conformance gate yet.**
-Six of the specifications carry tables the checker has no registration for, so those rows are
-prose that nothing executes. [Conformance](reference/conformance.md) says which, and why it
-matters.
+**The measuring instrument now measures everything.** Six specifications used to carry vector tables
+the checker had no registration for — roughly 340 normative rows that nothing executed, and a
+fabricated row in one of those families passed the gate untouched. All ten specs are now registered:
+**134 of 492 rows proved, 358 deferred**, each deferral naming what is specifically missing and the
+story that closes it. The denominator quadrupled and the percentage fell, which is the report
+becoming honest rather than the platform regressing — and 57 rows turned out to be *already covered*
+by tests the report simply could not see. [Conformance](reference/conformance.md) has the live
+numbers.
 
 ## Releases
 

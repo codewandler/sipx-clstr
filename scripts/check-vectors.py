@@ -45,11 +45,27 @@ REPORT = ROOT / "docs" / "reference" / "conformance.md"
 
 # Every spec that carries a vector table, with the prefix its rows use and the section the table
 # lives in — the section is quoted in the generated report, so it cannot drift from this table.
+# Every spec that carries a vector table, and the section its table lives in.
+#
+# A prefix is owned by exactly one spec, and `spec_rows` reads rows only from the owner — so a design
+# doc citing `PB-F-1`, or this script's own docstring, cannot invent a row somebody has to prove. The
+# convention that makes this safe: a spec's *rules* are named bare (`V1`, `D3`) and only its *vectors*
+# carry the prefix (`CC-V-1`). A rule citation like `CC-V2` has no second hyphen and does not match.
+#
+# Six of these were unregistered until `CF-8`, which meant ~394 normative rows were prose nothing
+# executed. Demonstrated rather than inferred: a fabricated `LS-R-999` passed the gate untouched.
 SPECS = {
     "PB": (ROOT / "docs" / "specs" / "proxy-behavior.md", "§12"),
     "EP": (ROOT / "docs" / "specs" / "e2e-probe.md", "§10"),
     "RA": (ROOT / "docs" / "specs" / "registrar-auth.md", "§8"),
     "HF": (ROOT / "docs" / "specs" / "hook-framework.md", "§9"),
+    "LS": (ROOT / "docs" / "specs" / "location-service.md", "§9"),
+    "MR": (ROOT / "docs" / "specs" / "media-relay.md", "§12"),
+    "NN": (ROOT / "docs" / "specs" / "number-normalisation.md", "§11"),
+    "AT": (ROOT / "docs" / "specs" / "affinity-token.md", "§10"),
+    "FR": (ROOT / "docs" / "specs" / "affinity-token.md", "§10"),
+    "CC": (ROOT / "docs" / "specs" / "cluster-config.md", "§12"),
+    "AI": (ROOT / "docs" / "specs" / "asserted-identity.md", "§13"),
 }
 
 PREFIXES = "|".join(SPECS)
@@ -179,7 +195,13 @@ def render(rows: set[str], proofs: dict[str, list[str]], waived: dict[str, dict]
         "A row is *proved* when a test in the workspace covers it, and *deferred* when",
         "[vector-scope.toml](vector-scope.toml) says why and names the story that will.",
         "",
-        f"**{len(rows) - len(waived)} of {len(rows)} rows proved**; {len(waived)} deferred.",
+        # Counted, not derived. This used to read `len(rows) - len(waived)`, which is only correct
+        # while *every* non-deferred row is covered — true by accident, because the gate refused any
+        # row that was neither. `CF-8` registered six more specs and the assumption broke: the report
+        # claimed 471 proved while 337 rows had no test at all. A headline number that cannot be
+        # wrong is a headline number that is not measuring anything.
+        f"**{len([row for row in rows if row in proofs])} of {len(rows)} rows proved**; "
+        f"{len(waived)} deferred.",
         "",
     ]
     for family_key, title in FAMILIES.items():
@@ -245,7 +267,7 @@ def main() -> int:
         return 1
 
     print(
-        f"vectors: {len(rows) - len(waived)}/{len(rows)} rows proved, "
+        f"vectors: {len([row for row in rows if row in proofs])}/{len(rows)} rows proved, "
         f"{len(waived)} deferred with a reason"
     )
     return 0

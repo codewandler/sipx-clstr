@@ -454,7 +454,7 @@ fn cc_p4_a_node_with_no_listener_of_its_own_is_refused() {
 
 /// §3 — the schema version is checked, because a document written for another schema is not this one.
 #[test]
-fn cc_3_a_foreign_api_version_is_refused() {
+fn a_foreign_api_version_is_refused() {
     let document = good().replace("sipx.dev/v1alpha1", "sipx.dev/v2");
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");

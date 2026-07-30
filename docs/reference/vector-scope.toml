@@ -157,3 +157,2384 @@ reason = """
 A default naming a pool that is no configured trunk fails the boot (G8, the closed-world clause).
 Needs the runtime and the configured trunk set to check the default against.
 """
+
+
+# ---------------------------------------------------------------------------------------------
+# CF-8 registered six more specs with the gate. Nearly every row below describes a subsystem
+# that does not exist yet, so it is deferred rather than covered — and the reason says what is
+# specifically missing rather than repeating "not implemented". Grouped by the story that
+# closes each family; when that story lands, its rows move from here to a test, not the other way.
+# ---------------------------------------------------------------------------------------------
+
+# AI — 97 rows, closed by RT-7.
+
+[[deferred]]
+id = "AI-A-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-8"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-9"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-10"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-11"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-12"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-13"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-14"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-15"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-16"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-17"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-18"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-19"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-20"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-21"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-22"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-23"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-A-24"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-8"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-9"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-10"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-11"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-C-12"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-D-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-N-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-8"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-9"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-10"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-P-11"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-8"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-9"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-10"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-11"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-S-12"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-8"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-9"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-10"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-11"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-12"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-13"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-14"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-15"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-16"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-T-17"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-1"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-2"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-3"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-4"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-5"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-6"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+[[deferred]]
+id = "AI-X-7"
+story = "RT-7"
+reason = """
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+"""
+
+# AT — 18 rows, closed by AF-4.
+
+[[deferred]]
+id = "AT-1"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-2"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-3"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-4"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-5"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-6"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-7"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-8"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-9"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-10"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-11"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-12"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-13"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-14"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-15"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-16"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-17"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+[[deferred]]
+id = "AT-18"
+story = "AF-4"
+reason = """
+The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
+"""
+
+# CC — 53 rows, closed by DP-8.
+
+[[deferred]]
+id = "CC-D-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-5"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-6"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-7"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-8"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-D-9"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-I-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-I-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-I-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-I-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-K-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-K-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-K-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-K-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-K-5"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-K-6"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-5"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-6"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-7"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-8"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-9"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-R-10"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-5"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-6"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-7"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-8"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-S-9"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-T-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-T-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-T-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-T-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-1"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-2"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-3"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-4"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-5"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-6"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-7"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-8"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-9"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-10"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+[[deferred]]
+id = "CC-V-11"
+story = "DP-8"
+reason = """
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+"""
+
+# FR — 22 rows, closed by AF-7.
+
+[[deferred]]
+id = "FR-1"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-2"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-3"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-4"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-5"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-6"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-7"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-8"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-9"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-10"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-11"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-12"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-13"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-14"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-15"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-16"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-17"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-18"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-19"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-20"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-21"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+[[deferred]]
+id = "FR-22"
+story = "AF-7"
+reason = """
+Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC.
+"""
+
+# LS — 5 rows, closed by RG-5.
+
+[[deferred]]
+id = "LS-C-6"
+story = "RG-5"
+reason = """
+The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them.
+"""
+
+[[deferred]]
+id = "LS-H-1"
+story = "RG-5"
+reason = """
+The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them.
+"""
+
+[[deferred]]
+id = "LS-K-4"
+story = "RG-5"
+reason = """
+The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them.
+"""
+
+[[deferred]]
+id = "LS-L-2"
+story = "RG-5"
+reason = """
+The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them.
+"""
+
+[[deferred]]
+id = "LS-L-8"
+story = "RG-5"
+reason = """
+The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them.
+"""
+
+# MR — 90 rows, closed by ME-1.
+
+[[deferred]]
+id = "MR-C-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-C-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-9"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-10"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-11"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-12"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-13"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-14"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-15"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-16"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-17"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-18"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-19"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-E-20"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-F-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-9"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-H-10"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-N-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-N-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-N-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-N-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-N-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-9"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-10"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-11"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-12"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-13"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-14"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-15"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-P-16"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-9"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-10"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-11"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-12"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-T-13"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-1"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-2"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-3"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-4"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-5"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-6"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-7"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-8"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-9"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+[[deferred]]
+id = "MR-X-10"
+story = "ME-1"
+reason = """
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+"""
+
+# NN — 52 rows, closed by RT-2.
+
+[[deferred]]
+id = "NN-B-1"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-2"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-3"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-4"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-5"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-6"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-7"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-B-8"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-C-1"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-C-2"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-C-3"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-C-4"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-C-5"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-C-6"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-E-1"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-E-2"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-E-3"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-E-4"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-E-5"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-1"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-2"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-3"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-4"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-5"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-6"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-7"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-8"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-9"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-10"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-G-11"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-1"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-2"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-3"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-4"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-5"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-6"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-7"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-8"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-9"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-10"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-11"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-T-12"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-1"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-2"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-3"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-4"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-5"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-6"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-7"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-8"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-9"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+[[deferred]]
+id = "NN-X-10"
+story = "RT-2"
+reason = """
+Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
