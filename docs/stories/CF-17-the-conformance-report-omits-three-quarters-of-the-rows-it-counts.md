@@ -2,7 +2,7 @@
 id: CF-17
 title: The conformance report omits three quarters of the rows it counts
 pillar: Foundation
-status: ready
+status: in-progress
 priority: 1
 epic: conformance-harness
 areas: [conformance, specs]
@@ -47,23 +47,63 @@ them, which is why nothing caught it — `check-vectors.py --check` is green, be
 
 ## Acceptance
 
-- [ ] **Failing-first**: a check asserts that every `(prefix, letter)` pair occurring in
+- [x] **Failing-first**: a check asserts that every `(prefix, letter)` pair occurring in
       `spec_rows()` is a key of `FAMILIES`, and it is red on the thirty pairs above before it is
       green. Being registered in `SPECS` but unrepresentable in the report must become a gate
       failure, not a silent skip — that is the defect, not the missing titles.
-- [ ] All thirty families are named in `FAMILIES`, with section titles in the established form
+      → `unrepresented_families()`, `scripts/check-vectors.py:310`, wired into the gate at `:868`.
+      Red on **36** pairs at the merge base (the count below is 30; the list is 36 — see Progress).
+- [x] All thirty families are named in `FAMILIES`, with section titles in the established form
       (subsystem — what the family covers, and the owning spec section).
-- [ ] `docs/reference/conformance.md` regenerates and every one of the 533 rows it counts appears in
+      → all 36 enumerated families, `scripts/check-vectors.py:189`–`:245`.
+- [x] `docs/reference/conformance.md` regenerates and every one of the 533 rows it counts appears in
       exactly one table. The proved/shape-only/deferred split per row is unchanged — this story adds
       no coverage and must not appear to.
-- [ ] The headline number is checked against the rendered tables rather than only computed:
+      → 56 sections, 533 rows, none duplicated, none missing; split still 125/19/389.
+- [x] The headline number is checked against the rendered tables rather than only computed:
       Σ rows over the emitted sections equals `len(rows)`, or the report says which rows it excluded
       and why. A denominator that counts what the document does not show is the bug being fixed.
-- [ ] `scripts/gate.sh` green.
+      → `render()` returns the rows it emitted, compared at `scripts/check-vectors.py:924`; the
+      report states the Σ in its own words (`:707`), and names what it dropped when it drops any.
+- [x] `scripts/gate.sh` green.
 
 ## Progress
 
-- (running log)
+- **The count is 36 families, not 30.** The prose above says "Thirty families are missing" and then
+  lists thirty-six; the list is right and the number was a miscount. Measured at the merge base:
+  36 of 56 families unrepresented, stranding exactly the 395 rows the per-prefix table names. The
+  per-prefix figures in that table are all correct. Left the body text as filed and recorded the
+  correction here rather than editing the evidence after the fact.
+- Failing-first: the predicate of item 1 run against the merge base printed all 36 pairs with their
+  row counts and `stranding 395 of 533 rows`; the same predicate is now `unrepresented_families()`
+  and is green.
+- Family titles are taken from each spec's own family labels (`**Selection (AI-S).**`,
+  `### 12.2 Encoding (MR-E) — byte-exact`, …), and each cites the section that *governs* the family
+  rather than the section its vector table sits in — the convention the existing `PB`/`RA` entries
+  already follow (`PB-V` → §4, not §12).
+- Section order: the five existing prefixes keep their positions, so no section in the report moved;
+  the seven new prefixes append in `SPECS` registration order, and within a prefix the families
+  appear in the order that prefix's own spec tabulates them. `FAMILIES` order is load-bearing twice
+  (`render` emits in it, `sort_key` reads row order from it), so this is noted in the code.
+- Item 4 is not redundant with item 1, and this was checked rather than assumed: with a plausible
+  future `render()` regression injected (skip a family whose rows are all deferred) while every
+  family still had a title, `unrepresented_families` stayed silent and the Σ check failed with
+  `the report counts 533 rows and its tables show 161`. That is the class the story's risks name.
+- The split did not move: `vectors: 125/533 rows proved, 19 covered for shape only, 389 deferred
+  with a reason` before and after, byte-identical.
+- Cross-checked against `vector-scope.toml`'s `CF-16` header independently (parsing the rendered
+  document, not the script's bookkeeping): its per-prefix deferral counts sum to 389 and reconcile
+  exactly with the rendered totals — 125 + 19 + 389 = 533. **The header is correct.**
+- The three spec paragraphs the Notes name are corrected. They claimed registration was deferred to
+  `CF-8`; registration had in fact landed, and this story's diff is what makes their last true
+  clause (`conformance.md` carries no such rows) false. Rewritten to say registration landed and
+  coverage is what remains deferred, so the reason the rows are deferred survives. Prose only — no
+  row IDs added or removed, verified by the row count staying at 533.
+- Coordinator-routed: the stale `pinned v0.7.0` → `v0.10.0`. The source is
+  `docs/reference/vector-scope.toml` (`RA-R-8`'s reason); `conformance.md` is generated from it, so
+  the two had to move together — a hand-edit of the output alone fails the gate with
+  `conformance.md is out of date`. `upstream.md` confirms `challenge.rs` is byte-identical between
+  the tags, so only the version word was stale and the row's substance is unchanged.
 
 ## Notes
 
