@@ -101,6 +101,11 @@ pub fn run_location_store_suite(
     ls_r_a_refresh_ahead_of_a_removal(&mut suite);
     ls_r_a_removal_of_what_this_request_added(&mut suite);
     ls_r_a_second_operation_on_what_this_request_added(&mut suite);
+    // B8/B9 and §5.5 — what B6/B7 leave to decide once several operations can reach one binding: the
+    // quota measured on the outcome, and the retransmission of such a request being a retry.
+    ls_r_quota_measures_the_committed_outcome(&mut suite);
+    ls_r_a_retransmission_of_a_contact_named_twice(&mut suite);
+    ls_r_operations_that_cancel_out_commit_nothing(&mut suite);
     ls_k_cas_conflict(&mut suite);
     ls_k_revision_survives_empty(&mut suite);
     ls_k_changes(&mut suite);
@@ -827,6 +832,217 @@ fn ls_r_a_second_operation_on_what_this_request_added(suite: &mut Suite<'_>) {
         .map(|binding| binding.refreshed_at.until(binding.expires_at).as_secs());
     suite.check("LS-R-29", granted == Some(7_200), || {
         format!("the later operation's grant is the one that holds: got {granted:?}s")
+    });
+}
+
+/// The nine contacts that fill the default quota to one short of its limit.
+const NINE: [&str; 9] = [
+    "sip:n1@10.0.0.11",
+    "sip:n2@10.0.0.12",
+    "sip:n3@10.0.0.13",
+    "sip:n4@10.0.0.14",
+    "sip:n5@10.0.0.15",
+    "sip:n6@10.0.0.16",
+    "sip:n7@10.0.0.17",
+    "sip:n8@10.0.0.18",
+    "sip:n9@10.0.0.19",
+];
+
+/// LS-R-30 — §5.5. The quota is a test on the committed outcome, so a chain B6/B7 collapses onto one
+/// binding is measured by what it commits and not by the candidates it carries.
+fn ls_r_quota_measures_the_committed_outcome(suite: &mut Suite<'_>) {
+    let fill = |suite: &mut Suite<'_>, who: &str| {
+        let applied = apply(
+            suite.store,
+            &command(
+                &suite.tenant,
+                who,
+                "i1",
+                1,
+                0,
+                NINE.iter()
+                    .map(|text| contact(text, Some(3_600), None))
+                    .collect(),
+            ),
+            &policy(),
+            RETRIES,
+        );
+        suite.check("LS-R-30", applied.outcome.status() == 200, || {
+            format!(
+                "nine bindings fit a quota of ten, got {}",
+                applied.outcome.status()
+            )
+        });
+    };
+
+    // `a, b, c` — `a ≡ b` and `b ≡ c`, but `a ≢ c`. B6 resolves each operation against the set the
+    // preceding ones left, so `b` replaces what `a` added and `c` replaces it again: one binding.
+    let who = "r30";
+    fill(suite, who);
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:c@10.0.0.3;line=1", Some(3_600), None),
+                contact("sip:c@10.0.0.3", Some(3_600), None),
+                contact("sip:c@10.0.0.3;line=2", Some(3_600), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-30", applied.outcome.status() == 200, || {
+        format!(
+            "the committed outcome is ten bindings, which the quota permits; got {}",
+            applied.outcome.status()
+        )
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-30", stored.len() == 10, || {
+        format!(
+            "three operations collapse onto one binding, got {}",
+            stored.len()
+        )
+    });
+
+    // And the other direction: a chain that genuinely commits two bindings is still refused, so the
+    // fix is not "stop asking". `line=1` and `line=2` both carry `line`, so they must agree on it and
+    // do not — neither replaces the other.
+    let other = "r30b";
+    fill(suite, other);
+    let refused = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            other,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:c@10.0.0.3;line=1", Some(3_600), None),
+                contact("sip:c@10.0.0.3;line=2", Some(3_600), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-30", refused.outcome.status() == 403, || {
+        format!(
+            "two operations committing two bindings do exceed the quota, got {}",
+            refused.outcome.status()
+        )
+    });
+    let untouched = stored_contacts(suite, other);
+    suite.check("LS-R-30", untouched.len() == 9, || {
+        format!("a refusal commits nothing, got {}", untouched.len())
+    });
+}
+
+/// LS-R-31 — B8. A verbatim retransmission of LS-R-29's request is B4's retry, because the outcome
+/// the command asks of that binding is the *later* operation's grant, which is what the store holds.
+fn ls_r_a_retransmission_of_a_contact_named_twice(suite: &mut Suite<'_>) {
+    let who = "r31";
+    let first = command(
+        &suite.tenant,
+        who,
+        "i2",
+        1,
+        10,
+        vec![cc(), contact("sip:c@10.0.0.3", Some(7_200), None)],
+    );
+    let applied = apply(suite.store, &first, &policy(), RETRIES);
+    suite.check("LS-R-31", applied.outcome.status() == 200, || {
+        format!(
+            "the first delivery is a 200, got {}",
+            applied.outcome.status()
+        )
+    });
+
+    let mut again = first.clone();
+    again.now = Timestamp::from_nanos(first.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
+    let again = apply(suite.store, &again, &policy(), RETRIES);
+    suite.check("LS-R-31", again.outcome.status() == 200, || {
+        format!(
+            "a retransmission of this request is a retry, not a stale sequence; got {}",
+            again.outcome.status()
+        )
+    });
+    suite.check(
+        "LS-R-31",
+        !again.outcome.commits() && again.revision == applied.revision,
+        || {
+            format!(
+                "B4.2 — a retry commits nothing and leaves the revision: commits={} {:?} → {:?}",
+                again.outcome.commits(),
+                applied.revision,
+                again.revision
+            )
+        },
+    );
+    let granted = suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .first()
+        .map(|binding| binding.refreshed_at.until(binding.expires_at).as_secs());
+    suite.check("LS-R-31", granted == Some(7_200), || {
+        format!("the retry must not rewrite the binding: got {granted:?}s")
+    });
+}
+
+/// LS-R-32 — B9. LS-R-28's request cancels itself out, so neither delivery writes and the revision
+/// stays put; the two deliveries are indistinguishable from the durable state.
+fn ls_r_operations_that_cancel_out_commit_nothing(suite: &mut Suite<'_>) {
+    let who = "r32";
+    // Both deliveries built up front: the second is the first with a later `now`, which is what a
+    // retransmission is, and building them here keeps `suite` free to be checked against.
+    let delivery = command(
+        &suite.tenant,
+        who,
+        "i2",
+        1,
+        10,
+        vec![cc(), contact("sip:c@10.0.0.3;line=7", Some(0), None)],
+    );
+    let mut retransmission = delivery.clone();
+    retransmission.now = Timestamp::from_nanos(delivery.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
+    let before = suite.store.read(&suite.tenant, &aor(who)).1;
+
+    let first = apply(suite.store, &delivery, &policy(), RETRIES);
+    suite.check(
+        "LS-R-32",
+        first.outcome.status() == 200 && first.revision == before,
+        || {
+            format!(
+                "the reconciled set is the set that was read, so nothing commits: status {} revision {:?} → {:?}",
+                first.outcome.status(),
+                before,
+                first.revision
+            )
+        },
+    );
+
+    let retry = apply(suite.store, &retransmission, &policy(), RETRIES);
+    suite.check(
+        "LS-R-32",
+        retry.outcome.status() == 200 && retry.revision == before,
+        || {
+            format!(
+                "and the retransmission is answered identically: status {} revision {:?}",
+                retry.outcome.status(),
+                retry.revision
+            )
+        },
+    );
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-32", stored.is_empty(), || {
+        format!("nothing is bound either way, got {stored:?}")
     });
 }
 

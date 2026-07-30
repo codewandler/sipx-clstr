@@ -107,7 +107,11 @@ fn explicit(
     // S7 — expiry selection for every contact, before any mutation. E6 fails the *whole* request,
     // so it has to be decided for all contacts before the first one is applied; otherwise a
     // too-brief second contact would leave the first one committed.
-    let mut granted = Vec::with_capacity(ops.len());
+    //
+    // `grants[i]` is what operation `i` is granted, and it is kept as a whole vector rather than
+    // consumed one element at a time because B8 has to read the *other* entries: whether an
+    // operation is the command's last word on a binding depends on the ones after it.
+    let mut grants = Vec::with_capacity(ops.len());
     for op in ops {
         let requested = op
             .expires // E1
@@ -115,7 +119,7 @@ fn explicit(
             .unwrap_or(policy.default_expires); // E3
 
         if requested == 0 {
-            granted.push(0); // E4 — removal, never subject to E5 or E6.
+            grants.push(0); // E4 — removal, never subject to E5 or E6.
             continue;
         }
         if requested < policy.min_expires {
@@ -126,56 +130,42 @@ fn explicit(
         }
         // E5 — silently lowered. §10.3 step 7 allows shortening, and the response states what was
         // actually granted, so the UA is not misled about when to refresh.
-        granted.push(requested.min(policy.max_expires));
+        grants.push(requested.min(policy.max_expires));
     }
 
     let mut set = current.clone();
     set.drop_expired(cmd.now);
+    // Whether reaping expired bindings already made the set differ from the durable one. Needed at
+    // the end, where a reconciled set equal to `current` means there is nothing to commit — which is
+    // only true if nothing was reaped on the way in.
+    let reaped = set.all().len() != current.all().len();
     let mut view = Reconciling::new(set);
     let mut changed = false;
 
-    // S8 — the quota, refused **before** the mutation loop but **after** the match view (`RG-14`).
+    // §5.5 is decided **after** the loop, on the reconciled set, and there is deliberately no
+    // pre-check ahead of it any more.
     //
-    // Why this is sound, and why a cheaper version of it is not. A binding is added only by an op
-    // with a positive granted expiry that matches **no** stored binding; an op that matches is a
-    // refresh, and a refresh cannot grow the set — the LS-R-15 vector pins exactly that ("the quota
-    // refuses a new binding but never a refresh"). So the *maximum* number of active bindings this
-    // request can end with is `current_active + genuine_additions`, and if even that fits the quota,
-    // the committed set cannot exceed it. If it does not fit, the final check rejects with the
-    // identical `Forbidden`, because at least one addition necessarily survives.
+    // The rule is a test on the *committed outcome* — "a REGISTER whose committed outcome would
+    // exceed it fails `403 Forbidden`" — and it says in terms that "refreshes, replacements and
+    // removals never grow the set and never trip the quota". Nothing computed before this loop knows
+    // that outcome, because deciding whether an operation adds a binding or lands on one *is* the
+    // loop: B6 resolves each operation against the set the preceding ones left, so several operations
+    // can collapse onto one binding (B7) and a later removal can take back an earlier addition.
     //
-    // That makes the two checks the same test at two costs. The first draft of this ran *before*
-    // the match view and counted every positive-expiry op as an addition — which refused a refresh
-    // it could not yet tell from a new contact, and LS-R-15 caught it. Distinguishing a refresh from
-    // an addition *is* the reconciliation, so the cheapest sound place for this is right here: one
-    // parse per stored binding, and no per-op re-parse.
+    // Two pre-checks have now been wrong in the same direction, which is why there is not a third.
+    // The first counted every positive-expiry operation as an addition and refused refreshes
+    // (LS-R-15). The second counted a candidate unless it was equivalent to one already counted —
+    // an *upper* bound on additions, so `x;line=1, x, x;line=2` against nine held bindings was
+    // answered `403` where the committed outcome is ten (LS-R-30). Both were conservative, and
+    // conservative is the wrong direction here: a `403` is a policy refusal a UA cannot retry out of,
+    // so refusing what the quota permits is worse than costing one more pass over the operations.
     //
-    // Two ops of one request can also name the same contact (B7), and then only the first is an
-    // addition — the second lands on the binding the first added. Counting both would refuse at the
-    // quota boundary a request the mutation loop then commits within it, which is the one way this
-    // check could differ from the final one. So a candidate is compared against the additions
-    // already counted, and never against ones that were skipped: §19.1.4 equivalence is
-    // non-transitive, so `a ≡ b`, `b ≡ c`, `a ≢ c` really does commit two bindings, and comparing
-    // against the skipped `b` would under-count it. Equivalence over already-parsed URIs — the
-    // parse budget is untouched.
-    let current_active = current.active_count(cmd.now);
-    let mut adding: Vec<&sipx_sip::Uri> = Vec::new();
-    for (op, grant) in ops.iter().zip(granted.iter()) {
-        if *grant > 0
-            && view.find(&op.uri).is_none()
-            && !adding.iter().any(|counted| counted.equivalent(&op.uri))
-        {
-            adding.push(&op.uri);
-        }
-    }
-    let additions = adding.len();
-    if current_active + additions > policy.max_bindings_per_aor {
-        return Outcome::Reject(Rejection::Forbidden(
-            "the address-of-record already holds its maximum bindings",
-        ));
-    }
-
-    for (op, granted) in ops.iter().zip(granted.iter().copied()) {
+    // No cheap bound rescues it either. Counting a candidate unless it is equivalent to *any*
+    // preceding one is exact for that chain — §19.1.4 equivalence is non-transitive, so `a ≡ b`,
+    // `b ≡ c`, `a ≢ c` genuinely commits one binding in that order and two in the order `a, c, b` —
+    // but it is still an upper bound once the request also carries a removal of something it added.
+    // The reconciled set is the only exact answer, so it is the only one asked.
+    for (op, granted) in ops.iter().zip(grants.iter().copied()) {
         // §5.3 — binding identity by §19.1.4 comparison. Equivalence is non-transitive, so an
         // incoming contact can match more than one stored binding; the first in creation order is
         // the one updated, which is a deterministic choice a vector can assert. Matching reads the
@@ -219,6 +209,23 @@ fn explicit(
                         if already_holds(stored, cmd, granted) {
                             continue;
                         }
+                        // §5.3.2 B8 — and "what this command asks for" is stated per *binding*, not
+                        // per operation. Once B6 lets several operations of one request resolve to
+                        // one binding, the command's requested outcome for it is the **last** of
+                        // them; the earlier ones are writes this same request overwrites before it
+                        // commits anything. Comparing this operation's own grant instead answered a
+                        // verbatim retransmission of `CC;expires=3600, CC;expires=7200` with B5's
+                        // `500` — the stored binding holds 7200, exactly what the command asks — so
+                        // the one request B7 exists to legalise was the one a UA could not
+                        // retransmit (LS-R-31).
+                        //
+                        // Asked only after the cheap comparison fails, and only when a later
+                        // operation supersedes this one, so the ordinary single-operation
+                        // retransmission pays nothing for it.
+                        let net = net_grant(&view, ops, &grants, index).unwrap_or(granted);
+                        if net != granted && already_holds(stored, cmd, net) {
+                            continue;
+                        }
                         return Outcome::Reject(Rejection::StaleSequence);
                     }
                     // B3 — newer CSeq, same Call-ID: apply.
@@ -242,8 +249,10 @@ fn explicit(
 
     let set = view.into_set();
 
-    // S8 — the quota, checked against the *committed outcome* rather than the request, so a
-    // refresh or a removal can never trip it.
+    // S8 — the quota (§5.5), and the only place it is asked: on the reconciled set, which is the
+    // "committed outcome" the rule names. A refresh, a replacement or a removal cannot grow the set,
+    // so none of them can trip it, and a request whose operations collapse onto fewer bindings than
+    // it names is measured by what it commits rather than by what it carries.
     if set.active_count(cmd.now) > policy.max_bindings_per_aor {
         return Outcome::Reject(Rejection::Forbidden(
             "the address-of-record already holds its maximum bindings",
@@ -251,7 +260,17 @@ fn explicit(
     }
 
     let response = describe(&set, cmd.now);
-    if changed {
+    // §5.3.2 B9 — a request whose reconciled set is the set it read commits nothing, so the revision
+    // does not move (B4.2). `changed` records that an operation *mutated the view*, which is not the
+    // same question: an addition a later operation of the same request takes back leaves the durable
+    // set exactly as it was (LS-R-28's shape), and committing it would spend a revision and publish a
+    // change event describing no change. The two deliveries of such a request are also
+    // indistinguishable from the store — nothing survives to carry the ordering token — so the only
+    // way the retransmission can be idempotent is for neither delivery to write.
+    //
+    // Only ever a downgrade: `reaped` keeps a set that lost expired bindings on the way in from
+    // comparing equal to the durable one.
+    if changed && (reaped || set != *current) {
         Outcome::Commit { set, response }
     } else {
         Outcome::Noop { response }
@@ -426,6 +445,35 @@ pub(crate) mod parse_meter {
     pub(crate) fn count() -> usize {
         STORED_PARSES.with(Cell::get)
     }
+}
+
+/// The grant this command's **net** outcome gives the binding at `index` — §5.3.2 B8's comparison
+/// base for B4.
+///
+/// §5.3 states idempotency per *binding*, against "the command's requested outcome". For a single
+/// operation those are the same thing, which is why the distinction stayed invisible until B6 let
+/// several operations of one request resolve to one binding. When they do, the last of them is the
+/// outcome the command requests: the earlier writes are ones this same request overwrites before
+/// anything commits, so a stored binding holding the *later* grant is a binding that already is what
+/// the command asks for.
+///
+/// `None` when no operation resolves here, which the caller cannot actually reach — it is asked from
+/// inside the branch where one just did — so the caller falls back to that operation's own grant and
+/// the answer is unchanged rather than guessed at.
+///
+/// Resolution is `Reconciling::find`, not `Uri::equivalent` against the operation, so this asks
+/// exactly the question the loop asks: §19.1.4 equivalence is non-transitive and more than one stored
+/// binding can match, so "an operation equivalent to this binding's contact" and "an operation that
+/// would land on this binding" are different sets, and only the second one supersedes anything.
+///
+/// Every comparison is over already-parsed URIs, so `RG-14`'s parse budget — one parse per stored
+/// binding, none per operation — is untouched.
+fn net_grant(view: &Reconciling, ops: &[ContactOp], grants: &[u32], index: usize) -> Option<u32> {
+    ops.iter()
+        .zip(grants.iter().copied())
+        .rev()
+        .find(|(op, _)| view.find(&op.uri) == Some(index))
+        .map(|(_, grant)| grant)
 }
 
 /// Whether the stored binding already is what this command asks for — B4's precise condition.

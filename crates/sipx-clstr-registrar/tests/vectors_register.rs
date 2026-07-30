@@ -1298,7 +1298,11 @@ fn ls_r_28_a_removal_of_a_contact_this_request_just_added_applies_rather_than_ab
         Vec::<&str>::new(),
         "the response enumerates the set that actually holds (§5.6)"
     );
-    assert_eq!(revision, Revision(1));
+    // B9 — the two operations cancel, so the reconciled set is the set that was read and there is
+    // nothing to commit. LS-R-32 is why the revision has to stay put here rather than at 1: the
+    // retransmission of this request is indistinguishable from its first delivery, so a revision bump
+    // on either one is a bump on every one.
+    assert_eq!(revision, Revision::INITIAL);
 }
 
 #[test]
@@ -1336,4 +1340,239 @@ fn ls_r_29_a_second_operation_on_a_contact_this_request_added_replaces_it() {
         "the later operation's grant is the one that holds"
     );
     assert_eq!(revision, Revision(1));
+}
+
+/// Nine contacts, so the default quota of ten has room for exactly one more binding.
+///
+/// Spelled out rather than generated because `contact` takes a `&'static str`: these are the bytes a
+/// request would carry, and a row pinning a quota boundary should show the set that fills it.
+const NINE: [&str; 9] = [
+    "sip:alice@10.0.0.11:5060",
+    "sip:alice@10.0.0.12:5060",
+    "sip:alice@10.0.0.13:5060",
+    "sip:alice@10.0.0.14:5060",
+    "sip:alice@10.0.0.15:5060",
+    "sip:alice@10.0.0.16:5060",
+    "sip:alice@10.0.0.17:5060",
+    "sip:alice@10.0.0.18:5060",
+    "sip:alice@10.0.0.19:5060",
+];
+
+/// Fill `store` with [`NINE`] — one binding short of the default quota.
+fn fill_to_one_short_of_the_quota(store: &InMemoryStore, policy: &TenantPolicy) {
+    let (outcome, _) = run(
+        store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(NINE.iter().map(|text| contact(text, Some(3_600))).collect())
+            .build(),
+        policy,
+    );
+    assert_eq!(outcome.status(), 200, "nine bindings fit a quota of ten");
+    assert_eq!(stored_texts(store).len(), 9, "the fixture holds nine");
+}
+
+/// The lifetime the one stored binding was granted, in seconds — B4.1's comparison base.
+fn only_granted_secs(store: &InMemoryStore) -> u64 {
+    let (set, _) = store.read(TENANT, &aor());
+    let binding = set.all().first().expect("the stored binding");
+    binding.refreshed_at.until(binding.expires_at).as_secs()
+}
+
+#[test]
+fn ls_r_30_the_quota_is_a_test_on_the_committed_outcome_not_on_the_candidates() {
+    // §5.5 makes the quota a test on the **committed outcome** — "a REGISTER whose committed outcome
+    // would exceed it fails `403 Forbidden`", and "refreshes, replacements and removals never grow
+    // the set and never trip the quota". A check computed before §5.3's operations are applied cannot
+    // know that outcome, and the one this row retired was an *upper* bound on additions: it counted a
+    // candidate unless it was equivalent to one already counted, so a chain B6 collapses onto a
+    // single binding was counted as several. The answer was a `403` no UA can retry out of, for a
+    // request the outcome permits.
+    //
+    // The premise is §19.1.4's non-transitivity, so pin it rather than assume it. `line` is not in
+    // §19.1.4's user/ttl/method/maddr/transport list, so a `line` present in only one of two URIs is
+    // ignored — the bare spelling is equivalent to both tagged ones — while two URIs that both carry
+    // `line` must agree on it, so the tagged spellings are not equivalent to each other.
+    let tagged_one = Uri::parse(Bytes::from_static(b"sip:alice@10.0.0.3:5060;line=1"))
+        .expect("a valid contact URI");
+    let bare = Uri::parse(Bytes::from_static(b"sip:alice@10.0.0.3:5060")).expect("a valid URI");
+    let tagged_two = Uri::parse(Bytes::from_static(b"sip:alice@10.0.0.3:5060;line=2"))
+        .expect("a valid contact URI");
+    assert!(tagged_one.equivalent(&bare), "a ≡ b");
+    assert!(bare.equivalent(&tagged_two), "b ≡ c");
+    assert!(
+        !tagged_one.equivalent(&tagged_two),
+        "a ≢ c — equivalence is not transitive, which is the whole difficulty"
+    );
+
+    let store = InMemoryStore::new();
+    let policy = policy();
+    fill_to_one_short_of_the_quota(&store, &policy);
+
+    // The chain `a, b, c`. B6 resolves each operation against the set the preceding ones left, so
+    // `b` replaces the binding `a` added and `c` replaces it again: three operations, one binding.
+    let (outcome, _) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .contacts(vec![
+                contact("sip:alice@10.0.0.3:5060;line=1", Some(3_600)),
+                contact("sip:alice@10.0.0.3:5060", Some(3_600)),
+                contact("sip:alice@10.0.0.3:5060;line=2", Some(3_600)),
+            ])
+            .build(),
+        &policy,
+    );
+    assert_ne!(
+        outcome.status(),
+        403,
+        "the committed outcome is ten active bindings, which the quota permits"
+    );
+    assert_eq!(outcome.status(), 200);
+    assert_eq!(
+        stored_texts(&store).len(),
+        10,
+        "three operations collapsed onto one binding, so the set grew by one"
+    );
+
+    // The other direction, and why a lower bound cannot simply be assumed: a chain that genuinely
+    // commits two bindings must still be refused at the boundary. `a` and `c` are not equivalent, so
+    // neither replaces the other and the outcome would be eleven.
+    let full = InMemoryStore::new();
+    fill_to_one_short_of_the_quota(&full, &policy);
+    let (refused, revision) = run(
+        &full,
+        &Cmd::new("i2", 1, 10)
+            .contacts(vec![
+                contact("sip:alice@10.0.0.3:5060;line=1", Some(3_600)),
+                contact("sip:alice@10.0.0.3:5060;line=2", Some(3_600)),
+            ])
+            .build(),
+        &policy,
+    );
+    assert_eq!(
+        refused.status(),
+        403,
+        "two operations that commit two bindings do exceed the quota"
+    );
+    assert_eq!(
+        stored_texts(&full).len(),
+        9,
+        "a refusal commits nothing (K2)"
+    );
+    assert_eq!(revision, Revision(1), "and does not move the revision");
+}
+
+#[test]
+fn ls_r_31_a_retransmission_of_a_contact_named_twice_is_a_retry_not_a_stale_sequence() {
+    // LS-R-29's own shape, delivered twice. §5.3's idempotency rule is stated per **binding** against
+    // "the command's requested outcome", and under B6 the outcome this command requests for that
+    // binding is the *later* operation's grant — 7200, which is exactly what the first delivery
+    // stored. So the re-presentation is B4's retry: `200` with the current set, nothing committed,
+    // the revision where it was.
+    //
+    // Deciding B4 against each operation's own grant instead compares the first operation's 3600
+    // against a stored 7200, calls that a second write under a spent token and aborts the whole
+    // request `500` — which would make the one request B7 exists to legalise the one request a UA
+    // cannot retransmit.
+    let store = InMemoryStore::new();
+    let policy = policy();
+
+    let (first, revision) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .contacts(vec![cc(Some(3_600)), cc(Some(7_200))])
+            .build(),
+        &policy,
+    );
+    assert_eq!(first.status(), 200);
+    assert_eq!(revision, Revision(1));
+    assert_eq!(
+        only_granted_secs(&store),
+        7_200,
+        "the later operation's grant is what holds"
+    );
+
+    let (retry, after) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .delayed_by_millis(500)
+            .contacts(vec![cc(Some(3_600)), cc(Some(7_200))])
+            .build(),
+        &policy,
+    );
+    assert_eq!(
+        retry.status(),
+        200,
+        "a retransmission of this request is a retry, not a stale sequence"
+    );
+    assert!(!retry.commits(), "B4's remedy is no mutation");
+    assert_eq!(
+        after, revision,
+        "a retry leaves the revision as it is (B4.2)"
+    );
+    assert_eq!(
+        stored_texts(&store),
+        ["sip:alice@10.0.0.3:5060"],
+        "still one binding"
+    );
+    assert_eq!(
+        only_granted_secs(&store),
+        7_200,
+        "and it was not rewritten by the retry"
+    );
+}
+
+#[test]
+fn ls_r_32_operations_that_cancel_out_commit_nothing_and_leave_the_revision_alone() {
+    // LS-R-28's shape: an addition and a removal of one contact in a single request. The reconciled
+    // set is the set that was read, so there is nothing to commit — and B4.2's "a retry leaves the
+    // revision as it is" has to hold for the *second* delivery as well.
+    //
+    // The two deliveries are indistinguishable from the store's side: the set is empty before and
+    // after each, and no binding survives to carry the ordering token, so nothing exists that could
+    // tell them apart. The revision therefore has to stay put on both, which is what makes this
+    // request idempotent rather than a revision bump per retransmission.
+    let store = InMemoryStore::new();
+    let policy = policy();
+    let shape = || {
+        vec![
+            cc(Some(3_600)),
+            contact("sip:alice@10.0.0.3:5060;line=7", Some(0)),
+        ]
+    };
+
+    let (first, after_first) = run(
+        &store,
+        &Cmd::new("i2", 1, 10).contacts(shape()).build(),
+        &policy,
+    );
+    assert_eq!(first.status(), 200);
+    assert!(
+        !first.commits(),
+        "the reconciled set is the set that was read"
+    );
+    assert_eq!(
+        after_first,
+        Revision::INITIAL,
+        "nothing durable changed, so no revision bump and no change event"
+    );
+
+    let (again, after_second) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .delayed_by_millis(500)
+            .contacts(shape())
+            .build(),
+        &policy,
+    );
+    assert_eq!(again.status(), 200);
+    assert_eq!(
+        after_second,
+        Revision::INITIAL,
+        "and the retransmission is answered identically"
+    );
+    assert_eq!(
+        stored_texts(&store),
+        Vec::<String>::new(),
+        "nothing is bound either way"
+    );
 }
