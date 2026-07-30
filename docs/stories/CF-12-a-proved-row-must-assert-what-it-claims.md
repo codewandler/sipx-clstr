@@ -2,7 +2,7 @@
 id: CF-12
 title: A row counted as proved must assert what it claims
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 epic: conformance-harness
 areas: [ci, build, docs]

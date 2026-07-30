@@ -49,12 +49,12 @@ site · `FC` fail-closed configuration.
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Next (ready — take the top one unless the user named a story)
+- [PX-11 — Settle which 4xx wins when two branches fail, because the row and its test say different things](PX-11-settle-which-4xx-wins-when-two-branches-fail.md) · Platform · PB-R-5 claims 486 is forwarded; its own test asserts 404, and the spec settles neither
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-12 — A row counted as proved must assert what it claims](CF-12-a-proved-row-must-assert-what-it-claims.md) · Foundation · PB-F-1 said "Timer C set 180 s" and its test compared only effect kinds — the row and the code never met
 - [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
 - [CF-13 — Driver tests bind fixed ports, so two checkouts cannot be tested at once](CF-13-driver-tests-bind-fixed-ports-and-cannot-run-in-parallel.md) · Foundation · observed twice in one afternoon — "Address already in use" and a load-sensitive flake, neither caused by the diff under test
 
@@ -149,6 +149,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-8 — Bring every spec's vector table under the vector gate](CF-8-bring-every-spec-under-the-vector-gate.md) · Platform · proved at wave 4 — a fabricated AI row passes the gate, so 145 rows are unenforced prose
 - [CF-9 — Make the declared rust-version true, and gate on it](CF-9-make-the-declared-rust-version-true.md) · Foundation · found building the container image — the workspace does not build on its own declared floor
 - [CF-10 — check-docs must only see the repository, not whatever sits under it](CF-10-check-docs-must-only-see-the-repository.md) · Foundation · the gate's verdict currently depends on whether an agent worktree happens to exist
+- [CF-12 — A row counted as proved must assert what it claims](CF-12-a-proved-row-must-assert-what-it-claims.md) · Foundation · PB-F-1 said "Timer C set 180 s" and its test compared only effect kinds — the row and the code never met
 - [CF-14 — A checker must not read prose about its own directive as the directive](CF-14-a-checker-must-not-read-prose-about-its-directive-as-the-directive.md) · Foundation · documenting check-proof-domains.py's directive inside a proof turns the gate red on a correct script
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate

@@ -9,6 +9,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The conformance report counted rows it could not vouch for** (`CF-12`). A row was called
+  *proved* when a test **name** mapped to it, whatever that test asserted. Swept across the 140 rows
+  that carried the label: 61 state a value in their expectation, **41 compare it, and 20 never do**.
+  The published figure moves from 140 to **120 of 498 proved**, with 20 reclassified *shape only*.
+  No test was changed to improve that number — the count is the finding.
+
+  A proved row must now compare the value it claims. The checker reads the row's expectation minus
+  its citations, and the *compared arguments* of the test's assertions — not comments, not the test's
+  own name, not an assertion's message — so quoting a row near a test cannot buy a proof. Rows that
+  state no value are unaffected: ordering, shape and refusal rows are not asked for a number they
+  never had.
+
+  Three of the twenty are worth naming. Five registrar-auth rows state `401` and none compares it, so
+  a challenge wrongly issued as `407` would pass every one. `PB-F-1` — the row that started this — is
+  *still* shape only, because its test compares the armed timer against the code's own constant
+  rather than the value the row states, so moving the constant keeps the test green while the row
+  goes quietly wrong. And `PB-R-5` says the best of a `486` and a `404` is `486` while its own test
+  asserts `404`: a row and its proof that have contradicted each other for the project's whole life.
+  That one needs a specification decision and is filed, not patched.
+
 - **Two gate checkers read prose about their own directives as directives** (`CF-14`). Both took the
   first match anywhere in a file, so a comment *explaining* a directive was parsed as one — and a
   correct declaration could be outvoted by an earlier mention of the token. `check-proof-domains.py`
