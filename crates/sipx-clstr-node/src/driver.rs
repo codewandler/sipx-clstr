@@ -20,8 +20,8 @@ use sipx_clstr_proxy::{
     targets_from_lookup,
 };
 use sipx_clstr_registrar::{
-    Admission, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore, LocationStore,
-    TenantAuth, TenantPolicy, Timestamp, admit, apply,
+    Admission, AuthOutcome, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore,
+    LocationStore, TenantAuth, TenantPolicy, Timestamp, admit_audited, apply,
 };
 use sipx_sip::{
     HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
@@ -106,7 +106,8 @@ impl StoreChoice {
 ///
 /// Provisional alongside [`NodeConfig`] — `DP-1` owns the real schema, and `RG-7` owns arriving at
 /// the credentials from a store rather than from a literal.
-#[derive(Debug, Clone)]
+/// `Debug` is hand-written and prints **no nonce secret** — see the impl below.
+#[derive(Clone)]
 pub struct AuthConfig {
     /// The protection space (registrar-auth §3 A3).
     pub realm: String,
@@ -115,6 +116,23 @@ pub struct AuthConfig {
     pub secret: [u8; 32],
     /// Who may register.
     pub credentials: InMemoryCredentials,
+}
+
+/// The realm, never the secret.
+///
+/// `NodeConfig` derives `Debug` and is the sort of thing that ends up in a startup dump, so a
+/// derived impl here would print the 32-byte nonce key that every outstanding nonce is minted from
+/// — the one value in this struct that lets a reader forge a challenge. `cluster-config` §8 V9
+/// keeps it out of the *document* by reference; this keeps it out of the *output*, which is the
+/// same argument at the other end. Same shape as `sipx-clstr-proxy`'s `CookieKey`.
+impl std::fmt::Debug for AuthConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthConfig")
+            .field("realm", &self.realm)
+            .field("secret", &"<redacted>")
+            .field("credentials", &self.credentials)
+            .finish()
+    }
 }
 
 impl NodeConfig {
@@ -757,82 +775,70 @@ async fn serve(
 /// process. With no rate limiting and a 300-second nonce lifetime, that is what made brute force
 /// against a tenant undetectable as well as unbounded.
 ///
-/// **Nothing the far end sent may ride into a record** (§9 L2). The reason comes from
-/// `ChallengeResponse::describe` and `Rejection`'s `Display`, both of which are `&'static str` and
-/// therefore structurally incapable of carrying a nonce, a `cnonce`, a response digest, a presented
-/// username or a password. The far end is identified by the address the socket observed, which is
-/// the one field in the record that no attacker chooses.
-fn record_authentication(edge: &Edge<'_>, arrival: &Incoming, admission: &Admission) {
+/// **It takes an [`AuthOutcome`] and not an `Admission`, and that is the fix for the hole `RG-15`'s
+/// first pass left.** An `Admission::Reject` cannot say what §3 decided: a correct digest followed
+/// by a malformed `Contact` arrives there with the proven principal already dropped, so a driver
+/// reading the `Admission` recorded nothing at all — precisely the state §9 L3 forbids, since "an
+/// absent record and an unauthenticated one are different facts". `admit_audited` keeps the record.
+///
+/// **Nothing the far end sent may ride into a record** (§9 L2). Every reason comes from
+/// [`AuthOutcome::describe`], which returns `&'static str` and is therefore structurally incapable
+/// of carrying a nonce, a `cnonce`, a response digest, a presented username or a password. The one
+/// runtime value in a record is §5's principal, which is the identity the digest *proved* and is
+/// already what the binding is stored under — and it is rendered quoted, because an
+/// operator-provisioned username containing CR/LF would otherwise split a record across lines, and
+/// log injection in an audit trail is worth a pair of quotes. The far end is identified by the
+/// address the socket observed, which is the one field in a record no attacker chooses.
+fn record_authentication(edge: &Edge<'_>, arrival: &Incoming, outcome: &AuthOutcome) {
     let tenant = edge.config.tenant.as_str();
     let source = arrival.source;
-    match admission {
-        // §9 L3 — a success is a record too. `principal: None` is the trail *saying*
-        // unauthenticated (§3 A1) rather than failing to say anything, which is the distinction
-        // A1 gives the open-tenant principal its shape to preserve.
-        Admission::Command(cmd) => {
-            if let Some(principal) = &cmd.principal {
-                tracing::info!(
-                    tenant,
-                    %source,
-                    // §5's principal: the identity the digest **proved**, and already what the
-                    // binding is stored under. Naming it here adds no exposure, and it is the
-                    // question an audit trail exists to answer.
-                    principal = %String::from_utf8_lossy(principal),
-                    "authentication succeeded"
-                );
-            } else {
-                tracing::info!(
-                    tenant,
-                    %source,
-                    "authentication not required: proceeding unauthenticated"
-                );
-            }
-        }
+    let because = outcome.describe();
+    match outcome {
+        // §9 L3 — a success is a record too, and `Unauthenticated` is the trail *saying* nobody was
+        // authenticated (§3 A1) rather than failing to say anything.
+        AuthOutcome::Authenticated(principal) => tracing::info!(
+            tenant,
+            %source,
+            principal = ?String::from_utf8_lossy(principal),
+            because,
+            "authentication succeeded"
+        ),
+        AuthOutcome::Unauthenticated => tracing::info!(
+            tenant,
+            %source,
+            because,
+            "authentication not required: proceeding unauthenticated"
+        ),
         // A2 is **not** a refusal — it is the first half of a round trip the client is expected to
         // complete, and every phone's ordinary first REGISTER takes it. Recording it as trouble
-        // would bury the real thing. A6 and A7 are refusals, and are `warn`.
-        Admission::Challenge(challenge) if challenge.because.is_none() && !challenge.stale => {
-            tracing::info!(
-                tenant,
-                %source,
-                status = challenge.status,
-                because = challenge.describe(),
-                "authentication challenged"
-            );
-        }
-        Admission::Challenge(challenge) => {
-            tracing::warn!(
-                tenant,
-                %source,
-                status = challenge.status,
-                stale = challenge.stale,
-                because = challenge.describe(),
-                "authentication refused"
-            );
-        }
-        // §3 A3's `403`, and only that. `admit` produces `Forbidden` from A3 alone — everything
-        // else it can reject with comes from the message failing to become a command
-        // (`parse::command` yields `BadRequest` and nothing else), which authenticated fine and
-        // then turned out to be malformed. Recording that as an authentication refusal would fill
-        // the trail an operator reads to find an attack with ordinary client bugs.
-        Admission::Reject(rejection @ sipx_clstr_registrar::Rejection::Forbidden(_)) => {
-            tracing::warn!(
-                tenant,
-                %source,
-                status = rejection.status(),
-                because = %rejection,
-                "authentication refused"
-            );
-        }
-        Admission::Reject(rejection) => {
-            tracing::debug!(
-                tenant,
-                %source,
-                status = rejection.status(),
-                because = %rejection,
-                "a REGISTER could not become a command"
-            );
-        }
+        // would bury the real thing. The split itself is `AuthOutcome`'s, not this driver's.
+        AuthOutcome::Challenged { status } => tracing::info!(
+            tenant,
+            %source,
+            status,
+            because,
+            "authentication challenged"
+        ),
+        AuthOutcome::Refused {
+            status,
+            stale,
+            because: _,
+        } => tracing::warn!(
+            tenant,
+            %source,
+            status,
+            stale,
+            because,
+            "authentication refused"
+        ),
+        // §3 A3.
+        AuthOutcome::Forbidden => tracing::warn!(
+            tenant,
+            %source,
+            status = 403,
+            because,
+            "authentication refused"
+        ),
     }
 }
 
@@ -849,7 +855,7 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
 
     // registrar-auth §2 — before processing, not inside it. The lock spans the decision only; the
     // store work below is outside it, so one slow registration cannot stall every other tenant user.
-    let admission = {
+    let (admission, outcome) = {
         let mut auth = match edge.auth.lock() {
             Ok(guard) => guard,
             // **The poison bypass is deliberate, and `RG-15` re-argued it rather than inheriting
@@ -879,7 +885,10 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
                 poisoned.into_inner()
             }
         };
-        admit(
+        // `admit_audited`, not `admit`: the §3 outcome has to survive a `Proceed` that then fails
+        // to become a command, or a correctly authenticated REGISTER with a malformed `Contact`
+        // records nothing at all (§9 L3).
+        admit_audited(
             &arrival.request,
             &mut auth,
             edge.credentials,
@@ -891,8 +900,9 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
     // registrar-auth §9 — the audit trail. Emitted here, from the driver, and not from the decision
     // that produced it: the registrar is sans-IO, and a decision function that logs does an effect
     // the harness cannot replay from a seed. The registrar's job is to produce the fact; this
-    // layer's job is to emit it.
-    record_authentication(edge, arrival, &admission);
+    // layer's job is to emit it. Unconditional and before the branch below, so that no path out of
+    // this function can be one that recorded nothing.
+    record_authentication(edge, arrival, &outcome);
 
     let cmd = match admission {
         Admission::Command(cmd) => *cmd,
@@ -908,6 +918,26 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             return response;
         }
         Admission::Reject(rejection) => {
+            // **Not** an authentication record — §3's outcome was written above, unconditionally.
+            // This is the parse diagnostic for a request that authenticated (or needed no
+            // authentication) and then failed to become a command, and it is `debug` because a
+            // malformed REGISTER is a client bug rather than a security event.
+            //
+            // `detail` is bound out of `BadRequest`, whose payload is `&'static str` **by type**,
+            // which is what makes printing it safe. Do not replace this with `%rejection`:
+            // `Rejection` as a whole is not static-only — `BadExtension(Vec<String>)` formats
+            // attacker-supplied option tags with `{0:?}` and `IntervalTooBrief` formats a number —
+            // and only reachability keeps those out of `admit` today.
+            let detail = match &rejection {
+                sipx_clstr_registrar::Rejection::BadRequest(detail) => *detail,
+                _ => "the message could not become a command",
+            };
+            tracing::debug!(
+                tenant = %edge.config.tenant,
+                status = rejection.status(),
+                detail,
+                "a REGISTER could not become a command"
+            );
             return answer(
                 &arrival.request,
                 rejection.status(),

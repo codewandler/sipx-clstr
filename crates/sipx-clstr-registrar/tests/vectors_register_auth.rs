@@ -11,8 +11,9 @@
 
 use bytes::Bytes;
 use sipx_clstr_registrar::auth::{
-    Algorithm, CredentialStore, Decision, InMemoryCredentials, Reason, TenantAuth,
+    Algorithm, AuthOutcome, CredentialStore, Decision, InMemoryCredentials, Reason, TenantAuth,
 };
+use sipx_clstr_registrar::{Admission, EdgeContext, Timestamp, admit_audited};
 use sipx_sip::{HeaderName, Method, Request, RequestBuilder, Uri};
 use sipx_ua::auth::{Challenge, Credentials, respond};
 
@@ -598,4 +599,149 @@ fn a_credential_store_is_consulted_per_tenant() {
     assert_eq!(store.password(TENANT, USER).as_deref(), Some(PASSWORD));
     assert_eq!(store.password("t2", USER), None);
     assert_eq!(store.password(TENANT, "mallory"), None);
+}
+
+/// The first password recorded for a `(tenant, username)` wins, which is what the `Vec` this store
+/// used to be did with `find`. Pinned rather than assumed: keying it by map makes last-wins the
+/// natural accident, and silently changing which credential a doubly-declared user authenticates
+/// against is not a change to make while nobody is looking.
+#[test]
+fn a_duplicated_credential_keeps_the_first_password() {
+    let store = InMemoryCredentials::new()
+        .with(TENANT, USER, PASSWORD)
+        .with(TENANT, USER, "the second declaration");
+    assert_eq!(store.password(TENANT, USER).as_deref(), Some(PASSWORD));
+}
+
+// ------------------------------------------------------------------ the audit trail (§9, RA-L) ---
+
+/// **`RA-L-4`.** A REGISTER whose credentials verify and whose `Contact` then fails to parse must
+/// still report that §3 authenticated it, and under which principal.
+///
+/// The regression this pins is structural rather than cosmetic, and `RG-15`'s first pass shipped
+/// with it. A `Decision::Proceed` that goes on to fail command construction reaches the caller as
+/// `Admission::Reject(BadRequest)` with the principal already dropped, so a driver reading only the
+/// `Admission` recorded *nothing at all* for a correctly authenticated request. §9 L3: "an absent
+/// record and an unauthenticated one are different facts". This is the layer the fact used to be
+/// lost at, so this is the layer that proves it survives.
+#[test]
+fn ra_l_4_a_success_is_still_reported_when_the_message_then_fails_to_parse() {
+    let mut auth = tenant();
+    let value = challenge_value(&mut auth, T0);
+    let authorization = answer(&value, USER, PASSWORD, "REGISTER", 1);
+
+    // Correct credentials, and a `Contact` that cannot become one. The digest covers neither the
+    // `Contact` nor anything else the binding is made of (§7), so verification succeeds and
+    // construction is what fails — exactly the ordering that used to lose the record.
+    let request = register_binding(&authorization, "<<<not a contact>>>", "1 REGISTER", "3600");
+
+    let (admission, outcome) = admit_audited(
+        &request,
+        &mut auth,
+        &credentials(),
+        &EdgeContext::default(),
+        Timestamp::from_secs(T0),
+    );
+
+    assert!(
+        matches!(
+            admission,
+            Admission::Reject(sipx_clstr_registrar::Rejection::BadRequest(_))
+        ),
+        "the message must fail to become a command, or this vector is not testing what it says: \
+         got {admission:?}"
+    );
+    assert_eq!(
+        outcome,
+        AuthOutcome::Authenticated(Bytes::from(format!("{TENANT}:{USER}"))),
+        "§3 decided A5, and its outcome must not depend on what happened after it"
+    );
+    // §9 L2 — and the words of the record carry nothing the far end sent.
+    assert_eq!(outcome.describe(), "the digest matched");
+}
+
+/// The same shape one step down: an **open** tenant (§3 A1) whose message then fails to parse still
+/// reports *unauthenticated* rather than nothing. The two halves of L3 fail independently.
+#[test]
+fn ra_l_4_an_open_tenant_still_reports_unauthenticated_when_the_message_fails_to_parse() {
+    let mut open = TenantAuth::open(TENANT);
+    let request = register_binding("", "<<<not a contact>>>", "1 REGISTER", "3600");
+
+    let (admission, outcome) = admit_audited(
+        &request,
+        &mut open,
+        &credentials(),
+        &EdgeContext::default(),
+        Timestamp::from_secs(T0),
+    );
+
+    assert!(matches!(admission, Admission::Reject(_)), "{admission:?}");
+    assert_eq!(outcome, AuthOutcome::Unauthenticated);
+}
+
+/// Every §3 outcome maps to exactly one audit record (§9 L1), and every one describes itself with a
+/// `&'static str` (§9 L2) — successes included, so the guarantee covers the whole trail and not
+/// only its refusals.
+// covers: RA-L-2
+#[test]
+fn ra_l_1_every_outcome_of_the_decision_has_a_record_and_a_static_reason() {
+    let mut auth = tenant();
+
+    // A2 — challenged, and deliberately not a refusal.
+    let challenged = auth.decide(&register(None), &credentials(), T0).outcome();
+    assert_eq!(challenged, AuthOutcome::Challenged { status: 401 });
+    assert!(!challenged.is_refusal(), "A2 is not trouble");
+    assert_eq!(challenged.describe(), "no credentials were offered");
+
+    // A6 — refused, with the kernel's reason.
+    let value = challenge_value(&mut auth, T0);
+    let wrong = answer(&value, USER, "not the password", "REGISTER", 1);
+    let refused = decide_with(&mut auth, &wrong, T0).outcome();
+    assert_eq!(
+        refused,
+        AuthOutcome::Refused {
+            status: 401,
+            stale: false,
+            because: Some(Reason::Mismatch),
+        }
+    );
+    assert!(refused.is_refusal());
+    assert_eq!(refused.describe(), "the credentials did not match");
+
+    // A7 — an expiry is not a bad password, which is the confusion `stale` exists to prevent.
+    let value = challenge_value(&mut auth, T0);
+    let late = answer(&value, USER, PASSWORD, "REGISTER", 1);
+    assert_eq!(
+        decide_with(&mut auth, &late, T0 + 1_000)
+            .outcome()
+            .describe(),
+        "the nonce had expired"
+    );
+
+    // A3 — another protection space.
+    let mut elsewhere = TenantAuth::required(TENANT, "elsewhere.example", SECRET);
+    let foreign = answer(
+        &challenge_value(&mut elsewhere, T0),
+        USER,
+        PASSWORD,
+        "REGISTER",
+        1,
+    );
+    let forbidden = decide_with(&mut auth, &foreign, T0).outcome();
+    assert_eq!(forbidden, AuthOutcome::Forbidden);
+    assert!(forbidden.is_refusal());
+
+    // A5, and A1 — both are records rather than silences.
+    let value = challenge_value(&mut auth, T0);
+    let right = answer(&value, USER, PASSWORD, "REGISTER", 1);
+    assert!(matches!(
+        decide_with(&mut auth, &right, T0).outcome(),
+        AuthOutcome::Authenticated(_)
+    ));
+    assert_eq!(
+        TenantAuth::open(TENANT)
+            .decide(&register(None), &credentials(), T0)
+            .outcome(),
+        AuthOutcome::Unauthenticated
+    );
 }

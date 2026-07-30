@@ -308,6 +308,7 @@ vector in this specification lives.
 | RA-L-1 | A REGISTER refused under A6 | One record, at `warn`, naming the status and the reason §3 already computed (§9 L1). None of the presented password, nonce, `cnonce`, response digest or username appears in it (§9 L2) |
 | RA-L-2 | A REGISTER challenged under A2 | One record, and **not** as a refusal: nothing was wrong, nothing was offered (§9 L1) |
 | RA-L-3 | A REGISTER that proceeds under A1 | One record saying *unauthenticated*, rather than no record (§9 L3) |
+| RA-L-4 | A REGISTER whose credentials verify under A5, and whose `Contact` then fails to parse | The success record is still emitted, naming §5's principal. §3's outcome does not depend on what happened after §3 (§9 L1) — and the same holds one step down for an A1 proceed that then fails to parse |
 
 ## 9. The audit trail
 
@@ -325,6 +326,13 @@ anywhere.
    under every phone's ordinary first REGISTER. This is the only defence §6's exposure has: with no
    rate limiting and a 300-second nonce lifetime, a refusal nobody can count makes brute force
    against a tenant both undetectable and unbounded.
+
+   **The record is owed for the decision, not for what follows it.** A request that A5 authenticates
+   and that then fails to become a `RegisterCommand` — a malformed `Contact`, a missing `Call-ID` —
+   has still had an outcome under §3, and it is recorded with the principal §3 proved. An
+   implementation that reads the outcome off whatever the *whole* admission returned will lose
+   exactly this case, because the rejection it ends at looks identical to one that never
+   authenticated. `RG-15` shipped that bug and `RA-L-4` is why it cannot come back.
 2. **L2.** A record carries **no credential material**: not the password, not the nonce, not the
    `cnonce`, not the response digest, and not the presented username. Nothing has been proved about
    a request that failed, so every string in its record comes from a closed set this platform owns.

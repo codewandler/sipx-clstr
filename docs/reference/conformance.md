@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12, [e2e-pr
 A row is *proved* when a test in the workspace covers it, and *deferred* when
 [vector-scope.toml](vector-scope.toml) says why and names the story that will.
 
-**137 of 495 rows proved**; 358 deferred.
+**138 of 496 rows proved**; 358 deferred.
 
 ## Proxy — request validation (§4)
 
@@ -173,9 +173,10 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `RA-L-1` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs` |
-| `RA-L-2` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs` |
+| `RA-L-1` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-L-2` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-L-3` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs` |
+| `RA-L-4` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 
 ## Hook framework — startup graph validation (§9)
 

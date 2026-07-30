@@ -39,9 +39,28 @@ pub trait CredentialStore {
 /// credentials were empty, and a throughput ceiling the moment one is not. Two maps rather than one
 /// keyed on a pair, because a `HashMap<(String, String), _>` cannot be probed with `(&str, &str)`
 /// without allocating a key per lookup, on the hot path, to answer a question about cost.
-#[derive(Debug, Default, Clone)]
+/// `Debug` is hand-written and prints **no passwords** — see the impl below.
+#[derive(Default, Clone)]
 pub struct InMemoryCredentials {
     tenants: HashMap<String, HashMap<String, String>>,
+}
+
+/// Counts, never contents.
+///
+/// A derived `Debug` here would put every plaintext password one `{:?}` away from a log line, and
+/// §9 L2's whole point is that the guarantee should not depend on nobody ever writing that `{:?}`.
+/// Same shape as `sipx-clstr-proxy`'s `CookieKey`, which redacts for the same reason. The counts are
+/// kept because "the store has 0 users" is the diagnostic an operator actually needs, and it is not
+/// a secret.
+impl std::fmt::Debug for InMemoryCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let users: usize = self.tenants.values().map(HashMap::len).sum();
+        f.debug_struct("InMemoryCredentials")
+            .field("tenants", &self.tenants.len())
+            .field("users", &users)
+            .field("passwords", &"<redacted>")
+            .finish()
+    }
 }
 
 impl InMemoryCredentials {
@@ -92,6 +111,16 @@ impl CredentialStore for InMemoryCredentials {
 /// A lookup whose count grows with the store is `O(users)` **under the node-wide authenticator
 /// lock**, which is a throughput ceiling the moment a deployment has users.
 ///
+/// **What this meter does and does not prove, stated plainly.** It caught the linear scan — the
+/// call site was inside the `find` closure and reported 4096 against a store of 4096. It does
+/// **not** prove the current implementation is `O(1)`: `record` is now called once per `password`,
+/// before a single hash probe, so the tests below compare one with one and would do so for any
+/// implementation that leaves the call where it is. The `O(1)` property rests on the [`HashMap`]
+/// in the type, which is checkable by reading it; what the meter is worth now is that
+/// reintroducing a per-entry scan at this call site turns red rather than silent. A meter that
+/// counted a `HashMap`'s internal probes is not something the standard library exposes, and
+/// inventing one would measure the meter rather than the store.
+///
 /// **A thread-local rather than an atomic.** `password` runs synchronously on its caller's thread,
 /// so a thread-local lets each test see only its own lookups; a global atomic does not, because the
 /// suite runs tests in parallel and a sibling's lookups leak into the delta.
@@ -137,6 +166,119 @@ pub enum Decision {
     Forbidden,
 }
 
+impl Decision {
+    /// This decision as the audit record §9 L1 requires, taken **before** the decision is consumed.
+    ///
+    /// A [`Decision`] is spent on the way to a `RegisterCommand`, and the record has to outlive
+    /// that. `RG-15` shipped its first pass without this and left exactly the hole §9 L3 names: a
+    /// REGISTER whose digest was correct and whose `Contact` then failed to parse produced no
+    /// record at all, so a *proven* principal was indistinguishable from silence.
+    #[must_use]
+    pub fn outcome(&self) -> AuthOutcome {
+        match self {
+            // A5, and A1 — the difference is the whole of §9 L3.
+            Decision::Proceed {
+                principal: Some(principal),
+            } => AuthOutcome::Authenticated(principal.clone()),
+            Decision::Proceed { principal: None } => AuthOutcome::Unauthenticated,
+            // A2 is not a refusal: nothing was wrong, because nothing had been offered. The split
+            // lives here rather than in a driver so that every caller draws the line in one place.
+            Decision::Challenge(challenge) if challenge.because.is_none() && !challenge.stale => {
+                AuthOutcome::Challenged {
+                    status: challenge.status,
+                }
+            }
+            // A6 and A7.
+            Decision::Challenge(challenge) => AuthOutcome::Refused {
+                status: challenge.status,
+                stale: challenge.stale,
+                because: challenge.because,
+            },
+            // A3.
+            Decision::Forbidden => AuthOutcome::Forbidden,
+        }
+    }
+}
+
+/// One entry of the authentication audit trail — [registrar-auth](
+/// https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9.
+///
+/// Every outcome of §3 has a variant, so "exactly one record per outcome" (L1) is a property of the
+/// type rather than of a driver remembering to write one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthOutcome {
+    /// §3 A5 — the digest proved this principal (§5).
+    Authenticated(Bytes),
+    /// §3 A1 — the tenant does not require authentication, so nobody was authenticated and the
+    /// trail says so out loud (L3).
+    Unauthenticated,
+    /// §3 A2 — challenged, with nothing yet offered to be wrong.
+    Challenged {
+        /// `401` for a registrar, `407` for a proxy.
+        status: u16,
+    },
+    /// §3 A6 and A7 — refused, and challenged again with a fresh nonce.
+    Refused {
+        /// `401` for a registrar, `407` for a proxy.
+        status: u16,
+        /// Whether the fresh challenge carries `stale=true` (§3 A7).
+        stale: bool,
+        /// Why, from the kernel. `None` with `stale` is A7.
+        because: Option<Reason>,
+    },
+    /// §3 A3 — the credentials named another protection space. `403`.
+    Forbidden,
+}
+
+impl AuthOutcome {
+    /// This outcome in the words the audit trail is allowed to use (§9 L2).
+    ///
+    /// **The return type is the guarantee.** `&'static str` cannot carry a nonce, a `cnonce`, a
+    /// response digest, a presented username or a password, because none of those exist at compile
+    /// time — so a driver that logs this cannot leak them however carelessly it writes the line.
+    /// That is `StoreChoice::describe()`'s discipline, which returns a backend's name and never its
+    /// resolved DSN, applied to the other end of the same problem: a log line is the artefact most
+    /// likely to be copied into an issue, and here every input is attacker-controlled.
+    ///
+    /// It is defined for a *success* as well, so the guarantee covers the whole trail and not only
+    /// its refusals.
+    ///
+    /// The match is exhaustive over the kernel's [`Reason`] on purpose. A `_` arm would make a
+    /// variant added upstream silently render as "refused", and a reason that stops being reported
+    /// is how an audit trail starts lying; this way the pin bump does not compile.
+    #[must_use]
+    pub fn describe(&self) -> &'static str {
+        match self {
+            AuthOutcome::Authenticated(_) => "the digest matched",
+            AuthOutcome::Unauthenticated => "the tenant does not require authentication",
+            AuthOutcome::Challenged { .. } => "no credentials were offered",
+            // A7 before A6: an expiry arrives as `stale` with no reason attached, and reporting it
+            // as a bad password is the confusion §3 A7 exists to prevent — users answer that by
+            // changing passwords that were fine.
+            AuthOutcome::Refused { stale: true, .. } => "the nonce had expired",
+            AuthOutcome::Refused { because, .. } => match because {
+                None => "refused without a stated reason",
+                Some(Reason::Mismatch) => "the credentials did not match",
+                Some(Reason::ForeignNonce) => "a nonce this edge did not mint",
+                Some(Reason::Replay) => "a nonce-count that had already been used",
+                Some(Reason::QopMismatch) => "credentials answered without qop=auth",
+                Some(Reason::Algorithm) => "an algorithm this edge did not offer",
+            },
+            AuthOutcome::Forbidden => "the credentials named another protection space",
+        }
+    }
+
+    /// Whether this outcome is one an operator should be alerted by, rather than merely recorded.
+    ///
+    /// A2 is **not**: it is the first half of a round trip the client is expected to complete, and
+    /// every phone's ordinary first REGISTER takes it. Recording it as trouble buries the real
+    /// thing under it.
+    #[must_use]
+    pub fn is_refusal(&self) -> bool {
+        matches!(self, AuthOutcome::Refused { .. } | AuthOutcome::Forbidden)
+    }
+}
+
 /// The challenge to put in a response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChallengeResponse {
@@ -150,40 +292,6 @@ pub struct ChallengeResponse {
     pub because: Option<Reason>,
     /// Whether the value carries `stale=true` (§3 A7).
     pub stale: bool,
-}
-
-impl ChallengeResponse {
-    /// Why this challenge was issued, in the words the audit trail is allowed to use
-    /// ([registrar-auth](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9 L2).
-    ///
-    /// **The return type is the guarantee.** `&'static str` cannot carry a nonce, a `cnonce`, a
-    /// response digest, a presented username or a password, because none of those exist at compile
-    /// time — so a driver that logs this cannot leak them however carelessly it writes the line.
-    /// That is `StoreChoice::describe()`'s discipline, which returns a backend's name and never its
-    /// resolved DSN, applied to the other end of the same problem: a log line is the artefact most
-    /// likely to be copied into an issue, and here every input is attacker-controlled.
-    ///
-    /// The match is exhaustive over the kernel's [`Reason`] on purpose. A `_` arm would make a
-    /// variant added upstream silently render as "refused", and a reason that stops being reported
-    /// is how an audit trail starts lying; this way the pin bump does not compile.
-    #[must_use]
-    pub fn describe(&self) -> &'static str {
-        // A7 before A6: an expiry arrives as `stale` with no reason attached, and reporting it as a
-        // bad password is the confusion §3 A7 exists to prevent — users answer that by changing
-        // passwords that were fine.
-        if self.stale {
-            return "the nonce had expired";
-        }
-        match self.because {
-            // A2 — nothing was wrong, because nothing was offered.
-            None => "no credentials were offered",
-            Some(Reason::Mismatch) => "the credentials did not match",
-            Some(Reason::ForeignNonce) => "a nonce this edge did not mint",
-            Some(Reason::Replay) => "a nonce-count that had already been used",
-            Some(Reason::QopMismatch) => "credentials answered without qop=auth",
-            Some(Reason::Algorithm) => "an algorithm this edge did not offer",
-        }
-    }
 }
 
 /// One tenant's authentication policy, and the kernel authenticator that enforces it.
@@ -404,6 +512,9 @@ mod tests {
     /// what makes an `O(users)` scan a ceiling on the whole node rather than on one request. Both
     /// lookups ask for the **last** user in the store, so a linear scan pays its worst case and a
     /// lookup pays the same thing twice.
+    ///
+    /// It was red at the merge base — 1 against 4096 — and it is a **regression guard** now rather
+    /// than a proof: see [`lookup_meter`] for exactly what it does and does not establish.
     #[test]
     fn the_credential_lookup_does_not_scan_the_tenant() {
         let small = a_store_of(1, "zoe");
@@ -419,9 +530,12 @@ mod tests {
         );
     }
 
-    /// A username the store does not hold must cost the same as one it does — §3 A4's "same path"
-    /// measured rather than asserted. A scan that returns early on a hit makes an absent user the
-    /// *expensive* case, which is the enumeration oracle pointing the other way.
+    /// A username the store does not hold must cost the same as one it does — §3 A4's "same path".
+    /// A scan that returns early on a hit makes an absent user the *expensive* case, which is the
+    /// enumeration oracle pointing the other way.
+    ///
+    /// A guard and never a failing-first test: it passed at the merge base too, where both sides
+    /// were 4096. See [`lookup_meter`] for its limits.
     #[test]
     fn an_absent_user_costs_what_a_present_one_costs() {
         let store = a_store_of(MANY, "zoe");

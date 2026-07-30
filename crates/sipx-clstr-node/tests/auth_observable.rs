@@ -148,6 +148,25 @@ fn a_wrong_answer(nonce: &str) -> String {
     )
 }
 
+/// A REGISTER that gets past §3 and then cannot become a command: the `Contact` will not parse.
+///
+/// `RA-L-4`. Everything else about it is well-formed, so the failure happens *after* the decision
+/// rather than instead of it.
+fn a_register_that_cannot_parse(from_port: u16) -> String {
+    format!(
+        "REGISTER sip:example.test SIP/2.0\r\n\
+         Via: SIP/2.0/UDP 127.0.0.1:{from_port};branch=z9hG4bK-rg15-4\r\n\
+         Max-Forwards: 70\r\n\
+         From: <sip:{USERNAME}@example.test>;tag=rg154\r\n\
+         To: <sip:{USERNAME}@example.test>\r\n\
+         Call-ID: rg15-4\r\n\
+         CSeq: 5 REGISTER\r\n\
+         Contact: <<<not a contact>>>\r\n\
+         Content-Length: 0\r\n\
+         \r\n"
+    )
+}
+
 /// The `nonce` a `WWW-Authenticate` offered.
 fn nonce_of(challenge: &str) -> String {
     let (_, after) = challenge
@@ -193,7 +212,7 @@ fn auth_records(log: &str) -> Vec<&str> {
 
 /// **The failing-first test for `RG-15`.** A refusal must be observable, with its reason.
 ///
-// covers: RA-L-2, RA-L-3
+// covers: RA-L-2, RA-L-3, RA-L-4
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
     let capture = Capture::default();
@@ -241,6 +260,21 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
         "an open tenant registers without credentials; got:\n{accepted}"
     );
 
+    // `RA-L-4` — §3 decided, and *then* the message failed to become a command. The record is
+    // owed for the decision, not for what happened after it. The first pass of `RG-15` routed this
+    // whole case to a `debug!` about parsing and wrote no authentication record at all, so at the
+    // default level a request that got past §3 was indistinguishable from one that never arrived.
+    //
+    // The open tenant carries this end to end because a *correct* digest cannot be computed here —
+    // `sipx-ua` is not in this crate's dependency graph. The authenticated half of the same
+    // structural claim is `ra_l_4_a_success_is_still_reported_when_the_message_then_fails_to_parse`
+    // in the registrar's own vectors, which is the layer the principal used to be dropped at.
+    let malformed = exchange(&phone, OPEN_PORT, &a_register_that_cannot_parse(phone_port)).await;
+    assert!(
+        malformed.starts_with("SIP/2.0 4"),
+        "a malformed Contact must be refused, or this case is not what it says; got:\n{malformed}"
+    );
+
     challenging.abort();
     open.abort();
 
@@ -278,6 +312,19 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
             .iter()
             .any(|line| line.contains("unauthenticated") && line.contains(OPEN_TENANT)),
         "an open tenant's REGISTER must record that nobody was authenticated. The log was:\n{log}"
+    );
+
+    // `RA-L-4` — two REGISTERs reached §3 on the open tenant, and both are owed a record: one
+    // became a command and one failed to parse afterwards. Counting them is the assertion, because
+    // the defect was a *missing* record and a test that only looks for one line cannot see it.
+    let proceeded = records
+        .iter()
+        .filter(|line| line.contains("unauthenticated") && line.contains(OPEN_TENANT))
+        .count();
+    assert_eq!(
+        proceeded, 2,
+        "every REGISTER that got past §3 is owed a record, including the one that then failed to \
+         become a command (§9 L1). The log was:\n{log}"
     );
 
     // `RA-L-2`'s other half: nothing the far end sent may ride into the record with it. A log line
