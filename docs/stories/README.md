@@ -53,6 +53,7 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
+- [CF-22 — The gate cannot see a leaked transaction](CF-22-the-gate-cannot-see-a-leaked-transaction.md) · Foundation · PX-13 passed the full gate and the local two-node proof, then leaked three transactions per call in CI
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
@@ -70,6 +71,7 @@ _The site a stranger lands on should say what this does and how to run it, not w
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
 - [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 — four ingress controls load as applied, validate no values, and change no runtime decision
+- [FC-7 — Expose the contact-operation bound beside the quota it must not contradict](FC-7-expose-the-contact-operation-bound-beside-the-quota-it-must-not-contradict.md) · Cluster · RG-25 made max_contact_ops a per-tenant policy field with no document key — raise maxBindingsPerAor past it and whole-set refreshes start answering 403
 
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
