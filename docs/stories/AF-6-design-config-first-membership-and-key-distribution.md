@@ -2,8 +2,8 @@
 id: AF-6
 title: Design config-first membership and key distribution
 pillar: Cluster
-status: backlog
-priority: 
+status: in-progress
+priority: 1
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity, deploy]
