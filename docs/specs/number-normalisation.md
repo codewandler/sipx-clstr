@@ -310,9 +310,11 @@ in sight — that is most of NN-T, NN-G and NN-E. A row whose values are URIs or
 the harness — all of NN-X, NN-C and NN-B, plus the rows below that turn on a host or on a
 non-number. Every row is normative.
 
-Registration of these rows in the vector registry (`scripts/check-vectors.py`,
-`docs/reference/vector-scope.toml`) is deferred to `CF-8`, which tracks the same gap for every
-spec written after `PX-1`.
+These rows **are** registered in the vector registry: `CF-8` registered the `NN` prefix in
+`scripts/check-vectors.py` and listed the rows in `docs/reference/vector-scope.toml`, and `CF-17`
+gave this spec's six families their sections in `docs/reference/conformance.md`. What is still
+deferred is coverage, row by row and with a reason each, in that same file — so a row added here and
+left uncovered fails the gate rather than passing unnoticed.
 
 **Extraction and URI forms (NN-X)** — profile `strip` is `[{ replace_prefix: { "+": "" } }]` on
 the named field unless stated otherwise.

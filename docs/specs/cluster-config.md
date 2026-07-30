@@ -322,9 +322,11 @@ Every row is normative and executes against `load` or `reload` (§2) — bytes a
 in, a `Config` or an ordered `Vec<ConfigError>` out, with no socket and no clock. `E(path, rule)`
 abbreviates "one error at `path` citing `rule`".
 
-Registration of these rows in the vector registry (`scripts/check-vectors.py`,
-`docs/reference/vector-scope.toml`) is **deferred to `CF-8`**, which tracks the same gap for every
-spec written after `PX-1`; `number-normalisation` defers its `NN` rows for the same reason.
+These rows **are** registered in the vector registry: `CF-8` registered the `CC` prefix in
+`scripts/check-vectors.py` and listed the rows in `docs/reference/vector-scope.toml`, and `CF-17`
+gave this spec's seven families their sections in `docs/reference/conformance.md`. What is still
+deferred is coverage, row by row and with a reason each, in that same file — the gate enforces the
+table rather than waiting on it. `number-normalisation` stands in the same place with its `NN` rows.
 
 **The document, versioning and substitution (CC-D).**
 
