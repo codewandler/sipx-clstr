@@ -295,8 +295,9 @@ to prevent is two nodes accepting writes for one shard at once.
 sections**, and this spec neither writes nor duplicates their fields. What it fixes is the seam, so
 that AF-6 can be written against something. AF-6 has since written it:
 [cluster-membership](cluster-membership.md) holds the three sections' fields, the rotation runbook
-A5 leaves here, and the record of what a dynamic membership service would replace. Nothing in §1–§9
-moved when it landed, which is what A6 asked for; the §7 rows now name that document instead of the
+A5 leaves here, and the record of what a dynamic membership service would replace. **No rule of
+§1–§9 moved when it landed**, which is what A6 asked for; three pointers did — §7's owner cells,
+this paragraph, and one sentence of §1's out-of-scope list now name that document instead of the
 story.
 
 | # | Rule |
