@@ -2,7 +2,7 @@
 id: PX-9
 title: Drive fork branches concurrently instead of draining them in order
 pillar: Signalling
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/proxy-engine.md
 epic: proxy-engine

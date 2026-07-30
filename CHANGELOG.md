@@ -7,6 +7,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A dead contact no longer holds a live contact's answer for half a minute** (`PX-9`). Forking to
+  two registered contacts at equal `q` drove the branches *in order*: a branch's response stream only
+  ends when its transaction does, so a device that never answers held the request task until the
+  kernel's Timer B — 64·T1, about thirty seconds — while the other device's `200 OK` sat unread in a
+  stream nobody was polling. The ordinary two-phone registration is the case that hits it.
+
+  Branches are now read concurrently and reduced serially: a `JoinSet` per fork group yields one
+  event at a time into the proxy engine, so the sans-IO core still sees a single total order of
+  inputs and RFC 3261 §16.7 response selection is untouched. Measured on the failing case, the
+  answer reaches the caller in 1.4 ms rather than 32.0 s.
+
+  One consequence is worth stating because it is observable: aggregated finals are now ordered by
+  arrival rather than by drain order. The selected status is a minimum over the set and so cannot
+  change, but *which* of two equal-status branch responses is relayed, and the order of aggregated
+  `401`/`407` challenges, now depend on which branch answered first. §16.7 prescribes no order among
+  equal-status finals, and preserving the old order would mean preserving the head-of-line blocking
+  that was the defect.
+
 ## [0.11.0] — 2026-07-30
 
 The release where "cluster" stops being a design document. Two nodes sharing one PostgreSQL location
