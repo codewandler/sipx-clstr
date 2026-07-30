@@ -16,6 +16,18 @@ cargo fmt --all --check
 step "clippy"
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+# `CF-22`. A step of its own, ahead of the suite that also contains it, and both halves of that are
+# deliberate. **Ahead**, because a proxy that leaks one transaction per call is a slow, quiet outage
+# and this is the cheapest thing in the gate that would notice — it is one crate's test binary and it
+# runs in virtual time, so thirty-two seconds of RFC 3261 absorption cost nothing. **Named**, because
+# the failure it exists for is a resource lifetime rather than a wrong answer: `PX-13` passed this
+# whole file twice and an adversarial review, and CI's `e2e` job then found it holding three
+# transactions fifty seconds after the call. A red here has to say *which resource*, and "tests" does
+# not. `cargo test --workspace` below runs it a second time for a few milliseconds; that is the price
+# of the step naming itself, and it is worth paying.
+step "transaction drain"
+cargo test -p sipx-clstr-sim --test transaction_drain
+
 step "tests"
 cargo test --workspace --all-features
 
