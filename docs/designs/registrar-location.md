@@ -1,7 +1,7 @@
 # Design: Registrar & location service
 
 **Status:** proposed · **Pillar:** Signalling · **Epic:** `registrar-location` ·
-**Stories:** RG-1 … RG-21
+**Stories:** RG-1 … RG-23
 
 ## Why
 

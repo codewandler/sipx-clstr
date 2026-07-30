@@ -58,9 +58,13 @@ Medium corrections remain explicit rather than being promoted in severity: `RG-1
   with Outbound through an edge and is reachable; a push wakes an unregistered client into an
   answered call; session timers reap dead dialogs; overload sheds load in the simulated cluster
   without collapse.
-- **M4 — Service families.** SUBSCRIBE/NOTIFY framework (RFC 6665), REFER and transfer, presence,
-  STIR/PASSporT, SIPREC, IMS profile options, and the B2BUA service (queues, IVR, conference).
-  Scope is selected when M3 nears completion, not now.
+- **M4 — Operational capability baseline.** The released endpoint/kernel capability set; completed
+  proxy, registrar, modern reachability, trunks, external media control and three-zone operations;
+  an optional two-dialog bridge and conference focus; immutable packages; and one executable release
+  proof. *Done means:* every prerequisite in
+  [`operational-capability-baseline.md`](specs/operational-capability-baseline.md) is released and
+  `OB-1` … `OB-12` pass against the exact artifacts that are published. Presence, SIPREC, IMS,
+  queues and IVR stay after M4 rather than entering through an unbounded “service families” label.
 
 ### M1 in detail
 
@@ -141,6 +145,24 @@ But an ordinary lost `200` over UDP reaches this, so it was a defect M1 shipped 
 it was free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/RG-8-settle-b4-idempotency-so-a-retransmission-is-a-retry.md)
 **closed it** — B4's base is the granted duration, not the absolute deadline — and it was the first
 thing after M1 rather than an M2 subject.
+
+### M4 in detail
+
+M4 is a **release gate**, not a feature-count milestone. M2 and M3 remain independently
+demonstrable prerequisites; M4 holds them together with the endpoint paths, session-service slice,
+evidence and distribution required to make an end-to-end capability claim.
+
+The canonical story membership, repository boundary and twelve proof scenarios are in
+[`docs/specs/operational-capability-baseline.md`](specs/operational-capability-baseline.md).
+`CX-8` stays open for the lifetime of the milestone. `CX-9` accepts only a tagged kernel release,
+`CX-10` proves immutable candidate artifacts, and `CX-11` publishes those same artifacts. This
+ordering prevents a local checkout, an unreleased fix or a post-proof rebuild from satisfying the
+gate.
+
+The only M4 dialog-terminating service is the bridge/conference slice in
+[`session-service.md`](specs/session-service.md). It is opt-in and separate from the proxy. Queues,
+IVR, presence, SIPREC and IMS remain explicit later work; transcription and endpoint ICE
+restart/relay candidates are likewise not smuggled into this milestone.
 
 ## Delivered
 
@@ -289,9 +311,11 @@ real deployment. A dev tool, never part of the deployment surface.
 
 ### B2BUA services
 
-Deferred placeholder, recorded so the layers below are designed with it in mind: call queues,
-IVR, conference focus and other dialog-terminating features, as a separate service consuming the
-platform. Not scheduled before M3 nears completion. [Design](designs/services-b2bua.md).
+The optional dialog-terminating path, as a separate service consuming the platform and released
+kernel call primitives — never as a proxy mode. M4 scopes it to a two-leg bridge and three-party
+conference focus with all media controlled through the external relay; queues and IVR remain later
+consumers. Done when `SS-1` … `SS-12` pass and disabling the service leaves the proxy path unchanged.
+[Spec](specs/session-service.md) · [Design](designs/services-b2bua.md).
 
 ### The public documentation site
 

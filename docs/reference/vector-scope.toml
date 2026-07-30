@@ -6,9 +6,9 @@
 #
 # This is the project's whole deferral ledger, not a corner of it. Two tables:
 #
-#   [[deferred]]    405 rows over twelve prefixes, naming thirteen stories — `AI` 97, `MR` 90,
+#   [[deferred]]    429 rows over fourteen prefixes, naming sixteen stories — `AI` 97, `MR` 90,
 #                   `CC` 52, `NN` 52, `QP` 31, `FR` 22, `AT` 18, `SC` 16, `HF` 13, `PB` 8, `LS` 5,
-#                   `RA` 1.
+#                   `RA` 1, `SS` 12, `OB` 12.
 #   [[unasserted]]   19 rows — `LS` 9, `RA` 5, `PB` 4, `CC` 1 — covered by a test that never compares
 #                   the value the row states. `CF-12` added these; they do not count as proved.
 #
@@ -3168,3 +3168,127 @@ reason = """
 States `420` plus `Unsupported: nothing-we-know`. The test compares the unsupported tags against
 `["nothing-we-know"]`, never the status.
 """
+
+# ── optional session service (`SS`) ─────────────────────────────────────────────────────────────
+
+[[deferred]]
+id = "SS-1"
+story = "BS-2"
+reason = "The two-leg service runtime does not exist; BS-2 implements and proves the basic answered call."
+
+[[deferred]]
+id = "SS-2"
+story = "BS-2"
+reason = "Reliable provisional response and early-media coupling belong to the BS-2 implementation."
+
+[[deferred]]
+id = "SS-3"
+story = "BS-2"
+reason = "CANCEL fan-out and relay cleanup require the two-leg service implemented by BS-2."
+
+[[deferred]]
+id = "SS-4"
+story = "BS-2"
+reason = "Final-response mapping is part of the two-leg state machine implemented by BS-2."
+
+[[deferred]]
+id = "SS-5"
+story = "BS-2"
+reason = "Coupled BYE and bounded cleanup require the two-leg service implemented by BS-2."
+
+[[deferred]]
+id = "SS-6"
+story = "BS-2"
+reason = "Glare settlement and bounded retry require the two-leg service implemented by BS-2."
+
+[[deferred]]
+id = "SS-7"
+story = "BS-2"
+reason = "The signalling-only effect boundary is proved when BS-2 supplies the service runtime."
+
+[[deferred]]
+id = "SS-8"
+story = "BS-2"
+reason = "Anchored offer updates require the service and relay integration implemented by BS-2."
+
+[[deferred]]
+id = "SS-9"
+story = "BS-2"
+reason = "Pre-answer relay failure requires the service and relay integration implemented by BS-2."
+
+[[deferred]]
+id = "SS-10"
+story = "BS-3"
+reason = "The conference focus and three-participant audio proof are implemented by BS-3."
+
+[[deferred]]
+id = "SS-11"
+story = "BS-3"
+reason = "Independent conference-leg removal requires the focus implemented by BS-3."
+
+[[deferred]]
+id = "SS-12"
+story = "BS-2"
+reason = "The documented owner-loss boundary is exercised when BS-2 deploys the service runtime."
+
+# ── operational capability baseline (`OB`) ──────────────────────────────────────────────────────
+
+[[deferred]]
+id = "OB-1"
+story = "CX-10"
+reason = "CX-10 runs the released endpoint registration, call, audio and teardown proof."
+
+[[deferred]]
+id = "OB-2"
+story = "CX-10"
+reason = "CX-10 runs the released signalling-transport matrix."
+
+[[deferred]]
+id = "OB-3"
+story = "CX-10"
+reason = "CX-10 runs the released codec and media-security matrix."
+
+[[deferred]]
+id = "OB-4"
+story = "CX-10"
+reason = "CX-10 runs the released early-media continuity proof."
+
+[[deferred]]
+id = "OB-5"
+story = "CX-10"
+reason = "CX-10 runs the released NAT, Outbound and ICE path proof."
+
+[[deferred]]
+id = "OB-6"
+story = "CX-10"
+reason = "CX-10 runs the released GRUU and push-wake proof."
+
+[[deferred]]
+id = "OB-7"
+story = "CX-10"
+reason = "CX-10 runs the released trunk-policy proof."
+
+[[deferred]]
+id = "OB-8"
+story = "CX-10"
+reason = "CX-10 runs the released cross-zone media-anchoring proof."
+
+[[deferred]]
+id = "OB-9"
+story = "CX-10"
+reason = "CX-10 runs the released two-leg and conference service proof."
+
+[[deferred]]
+id = "OB-10"
+story = "CX-10"
+reason = "CX-10 runs the released three-zone failure proof."
+
+[[deferred]]
+id = "OB-11"
+story = "CX-10"
+reason = "CX-10 runs the bounded overload and cleanup proof."
+
+[[deferred]]
+id = "OB-12"
+story = "CX-10"
+reason = "CX-10 reproduces the smoke proof from immutable published artifacts."

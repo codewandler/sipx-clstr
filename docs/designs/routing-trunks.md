@@ -1,7 +1,7 @@
 # Design: Outbound routing & trunks
 
 **Status:** accepted (RT-1) · **Pillar:** Signalling · **Epic:** `routing-trunks` ·
-**Stories:** RT-1 … RT-12
+**Stories:** RT-1 … RT-15
 
 ## Why
 
