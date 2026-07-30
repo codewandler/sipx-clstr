@@ -20,6 +20,11 @@
 #
 # Usage:  scripts/k8s-two-node-call.sh [--sipx <path>] [--namespace <ns>]
 # Exit:   0 the cross-node call completed · 1 a step failed · 2 environment not ready
+#
+# Unlike the local proof this script embeds no cluster document — it registers against one that is
+# already deployed. This line names it so `scripts/check-proof-domains.py` can hold the two to the
+# same `domains`, which is machine-read, not decoration:
+# proof-document: deploy/devspace/manifests/node.yaml
 
 set -uo pipefail
 
@@ -81,13 +86,19 @@ step "two phones, registering through different pods"
 # arrangement a real client would be in.
 kubectl -n "$NS" delete pod sipx-phones --ignore-not-found --wait=true >/dev/null 2>&1
 
-# The address-of-record domain is node-a's address for *both* users, while bob is registered
+# The address-of-record domain is node-a's *Service name* for both users, while bob is registered
 # *through* node-b with `--target`. That is what makes this a cross-node test: bob's binding is
 # written by node-b, and the INVITE that finds it is resolved by node-a. `sipx dial` takes no
-# `--target` — the URI it is given is the destination — so the AoR domain has to be an address, and
-# using one shared address keeps both AoRs in the same namespace for the lookup. No port in the
-# AoR — `register` refuses one there, and `dial` defaults to 5060, which is where the node listens.
-DOMAIN="$NODE_A"
+# `--target` — the URI it is given is the destination — so the AoR domain has to be something that
+# resolves to node-a, and one shared domain keeps both AoRs in the same namespace for the lookup.
+# No port in the AoR — `register` refuses one there, and `dial` defaults to 5060, which is the
+# Service port.
+#
+# The Service name rather than the pod IP `$NODE_A`, which is what this used to be. `FC-4` made a
+# REGISTER outside the tenant's served domains a `403`, and `domains` is a literal list in a
+# ConfigMap that is written before any pod has an IP — so a runtime address can never be in it. A
+# per-node ClusterIP is stable, is in the document, and resolves to exactly the pod the IP named.
+DOMAIN="sipx-clstr-node-a"
 cat > "$work/phones.sh" <<SCRIPT
 set -u
 ME="\$(hostname -i | awk '{print \$1}')"

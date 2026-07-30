@@ -182,20 +182,21 @@ implementation:
 cargo build --bin sipx     # in a sipx checkout
 ```
 
-Find the address callers send to, and dial it from inside the cluster:
+Dial it from inside the cluster. The greeting's address-of-record is `hello@sipx-clstr-node-a` —
+node-a's Service name, which is also the domain the profile's tenant declares, because `domains` is
+enforced and a `REGISTER` outside it is answered `403`. A name rather than the Service's address:
+the document is written before any pod or Service has one:
 
 ```bash
-NODE_A=$(kubectl -n sipx-clstr-dev get svc sipx-clstr-node-a -o jsonpath='{.spec.clusterIP}')
-
 kubectl -n sipx-clstr-dev run caller --rm -i --restart=Never \
   --image=sipx-phone:dev --image-pull-policy=IfNotPresent --command -- \
   /bin/sh -c "ME=\$(hostname -i | awk '{print \$1}'); \
-    sipx dial sip:hello@$NODE_A --local \$ME:15080 \
+    sipx dial sip:hello@sipx-clstr-node-a --local \$ME:15080 \
       --duration 6 --record /tmp/heard.wav --stats --json"
 ```
 
 ```text
-{"status":"answered","peer":"sip:hello@10.43.179.99","duration_ms":3566,
+{"status":"answered","peer":"sip:hello@sipx-clstr-node-a","duration_ms":3566,
  "samples_recorded":24000,"heard_audio":true,"loss":0.0000,"jitter_ms":0,"mos":4.40}
 ```
 

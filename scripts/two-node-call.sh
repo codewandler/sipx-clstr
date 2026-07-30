@@ -62,6 +62,10 @@ fail() { printf '[FAIL] %s\n' "$1" >&2; exit 1; }
 # concerned, which is what the deployed shape looks like. 127.0.0.0/8 is all local on Linux.
 NODE_A_ADDR="127.0.0.1:5060"
 NODE_B_ADDR="127.0.0.2:5060"
+# The address-of-record domain, and it **must** appear in the document's `tenant.domains` below:
+# `FC-4` made a REGISTER outside the tenant's served domains a `403` (location-service §5.1 S1), so a
+# `DOMAIN` the document does not serve fails at the first registration. `scripts/check-proof-domains.py`
+# is the gate that keeps these two lines agreeing; it is not a convention to remember.
 DOMAIN="127.0.0.1"
 
 step "the shared location store"
@@ -105,7 +109,9 @@ cluster:
   tenant:
     - name: default
       id: 1
-      domains: [example.test]
+      # Must equal `$DOMAIN` above — see the note there. Not `[]`: an empty list means "any", which
+      # is the fail-open `FC-4` exists to remove, and would make this proof prove less than it does.
+      domains: [127.0.0.1]
 YAML
 pass "the same bytes will configure both nodes"
 
