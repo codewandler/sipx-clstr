@@ -196,6 +196,11 @@ fn node_config(
 
     config.store = store_choice(projected, env)?;
 
+    // `DP-11`. Applied here and therefore **absent from `unapplied`**: the loader records that list
+    // where it recognises a section, so a key that reaches the driver must not appear on it or the
+    // startup warning below would say the node ignores a bound it is enforcing.
+    config.max_in_flight_transactions = projected.admission.max_in_flight_transactions;
+
     // Said out loud at startup rather than discovered as behaviour that never happens — and said by
     // **path**, because the keys that matter are not top level. A set of section names could not have
     // named `cluster.tenant[0].auth`, which is the one an operator most needs to hear about.

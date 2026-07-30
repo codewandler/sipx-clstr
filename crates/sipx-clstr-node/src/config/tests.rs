@@ -638,3 +638,80 @@ fn cc_v2_an_unknown_transport_names_the_closed_set() {
         "must spell the set: {error}"
     );
 }
+
+// ------------------------------------------------------------------ DP-11: the admission bound ---
+
+/// The bound is configuration, not a constant.
+#[test]
+fn dp11_the_admission_bound_is_read_from_the_document() {
+    let document = with_admission("maxInFlightTransactions: 64");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env()).expect("should load");
+    assert_eq!(config.admission.max_in_flight_transactions, 64);
+
+    // And it survives projection onto the node, which is the only shape the driver ever sees.
+    let projected = project(&config, &who);
+    assert_eq!(projected.admission.max_in_flight_transactions, 64);
+}
+
+/// A document that says nothing about overload gets the declared default — not zero, and not "no
+/// bound", which the schema deliberately cannot spell.
+#[test]
+fn dp11_an_absent_admission_section_is_the_declared_default() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(good().as_bytes(), &who, &env()).expect("should load");
+    assert_eq!(
+        config.admission.max_in_flight_transactions,
+        DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS
+    );
+}
+
+/// The bound is **applied**, so it must not be reported as ignored — `FC-2`'s warning would then lie
+/// in the other direction, which is the mistake that story's own note calls out.
+#[test]
+fn dp11_the_admission_section_is_not_reported_as_unapplied() {
+    let document = with_admission("maxInFlightTransactions: 16");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env()).expect("should load");
+    let paths: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
+    assert!(
+        !paths.iter().any(|path| path.contains("admission")),
+        "a key this build applies must not be listed as unapplied: {paths:?}"
+    );
+}
+
+/// Zero is refused. It is not a smaller limit, it is a node that answers `503` to every call, and
+/// §8 V10's posture is to refuse a configuration rather than to honour something else.
+#[test]
+fn dp11_an_admission_bound_of_zero_is_refused() {
+    let document = with_admission("maxInFlightTransactions: 0");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    let error = errors
+        .iter()
+        .find(|e| e.path.to_string() == "cluster.admission.maxInFlightTransactions")
+        .expect("an admission error");
+    assert_eq!(error.rule.to_string(), "CC-V8");
+    assert_eq!(error.found.as_deref(), Some("0"));
+}
+
+/// §8 V2 still holds one level down: a typo inside the section is an error, not a silent default.
+#[test]
+fn cc_v2_an_unknown_key_under_admission_is_refused() {
+    let document = with_admission("maxInFlightTransaction: 16");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    assert!(
+        errors.iter().any(|e| e.rule.to_string() == "CC-V2"
+            && e.path.to_string() == "cluster.admission.maxInFlightTransaction"),
+        "a near-miss key must be refused: {errors:#?}"
+    );
+}
+
+/// The good document with an `admission` section carrying one line.
+fn with_admission(line: &str) -> String {
+    good().replace(
+        "  zones: [a, b, c]",
+        &format!("  zones: [a, b, c]\n  admission:\n    {line}"),
+    )
+}

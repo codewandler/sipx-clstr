@@ -44,6 +44,21 @@ pub const API_VERSION: &str = "sipx.dev/v1alpha1";
 /// RFC 3261 §16.6 step 3's value, which §8 V6 refuses to make a knob.
 pub const MAX_FORWARDS: u8 = 70;
 
+/// How many proxied transactions a node admits at once when the document does not say (`DP-11`).
+///
+/// The same number as the kernel's own queue capacity (`sipx_transport::Config::capacity`), and
+/// deliberately so: the node's admission bound and the queue bound it inherits are the two limits a
+/// request passes through, and two unrelated numbers would make "which one refused this?" a question
+/// nobody can answer from configuration. A node holding 1024 in-flight proxied transactions is
+/// bounded in memory; a node holding as many as arrive is not.
+pub const DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS: usize = 1024;
+
+/// The largest admission bound a document may declare.
+///
+/// A ceiling in the spirit of §8 V8: past this the value stops describing a limit and starts
+/// describing the absence of one, and an operator who wants that has misread what the knob is for.
+pub const MAX_IN_FLIGHT_CEILING: usize = 65_536;
+
 /// The closed role set of §4 R1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Role {
@@ -177,6 +192,33 @@ impl Default for SecuritySpec {
     }
 }
 
+/// How much work a node will take on at once (`DP-11`).
+///
+/// **Where this key lives, and why it is not `security`.** The bound is per-node overload control,
+/// consumed by every role that sits on the call path — `edge`, `inbound-proxy`, `outbound-proxy`.
+/// `security` is the `edge`'s section and its members (`unknownSource`, `sanityCheck`,
+/// `userAgentDenyList`, `internalZone`) all answer "who may talk to us", which this does not; and
+/// `rateLimit[]` is `RT-3`'s, whose subject is arrival *rate* per source rather than resident
+/// concurrency. So it is its own section. It is emphatically **not** `security.maxForwards`, which
+/// RFC 3261 §16.6 step 3 fixes at 70 and which §8 V6 refuses to make a knob at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AdmissionSpec {
+    /// How many proxied transactions may be in flight at once.
+    ///
+    /// Proxied, not all: a REGISTER is answered from the node's own store and never waits behind
+    /// this, because a registration storm *is* the overload and a node that refused REGISTERs under
+    /// load would make the storm permanent.
+    pub max_in_flight_transactions: usize,
+}
+
+impl Default for AdmissionSpec {
+    fn default() -> Self {
+        Self {
+            max_in_flight_transactions: DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS,
+        }
+    }
+}
+
 /// RFC 3261 §17's timers, by their RFC names (§8 V7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimersSpec {
@@ -211,6 +253,7 @@ pub struct Config {
     pub location_store: Option<LocationStoreSpec>,
     pub tenants: Vec<TenantSpec>,
     pub security: SecuritySpec,
+    pub admission: AdmissionSpec,
     pub timers: TimersSpec,
     /// Every path this document declared that the build **recognised and did not apply**.
     ///
@@ -236,6 +279,9 @@ pub struct ProjectedConfig {
     pub location_store: Option<LocationStoreSpec>,
     pub tenants: Vec<TenantSpec>,
     pub security: SecuritySpec,
+    /// Carried onto every node rather than projected away: the bound protects the process, and the
+    /// process is the same binary whatever roles it was given.
+    pub admission: AdmissionSpec,
     pub timers: TimersSpec,
 }
 
@@ -269,6 +315,7 @@ const CLUSTER_KEYS: &[&str] = &[
     "locationStore",
     "tenant",
     "security",
+    "admission",
     "timers",
 ];
 
@@ -366,6 +413,7 @@ pub fn project(config: &Config, identity: &NodeIdentity) -> ProjectedConfig {
         location_store,
         tenants: config.tenants.clone(),
         security: config.security.clone(),
+        admission: config.admission,
         timers: config.timers.clone(),
     }
 }
@@ -756,6 +804,7 @@ fn read_document(
     let location_store = read_location_store(cluster, &cluster_path, errors);
     let tenants = read_tenants(cluster, &cluster_path, errors, &mut unapplied);
     let security = read_security(cluster, &cluster_path, errors);
+    let admission = read_admission(cluster, &cluster_path, errors);
     let timers = read_timers(cluster, &cluster_path, errors);
 
     check_role_combination(
@@ -777,6 +826,7 @@ fn read_document(
         location_store,
         tenants,
         security,
+        admission,
         timers,
         unapplied,
     })
@@ -1302,6 +1352,59 @@ fn read_security(
         ));
     }
     SecuritySpec::default()
+}
+
+/// Read the admission bound (`DP-11`).
+///
+/// Absent is the declared default, not zero: a node whose document says nothing about overload is a
+/// node with the default bound, and a bound of zero would be a node that answers `503` to every call.
+/// Which is why zero is refused rather than accepted — the value that turns the feature off is not a
+/// smaller limit, it is an outage, and §8 V10's posture is to refuse rather than to honour it.
+fn read_admission(
+    cluster: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> AdmissionSpec {
+    let at = path.field("admission");
+    let mut admission = AdmissionSpec::default();
+    let Some(value) = cluster.get(Value::from("admission")) else {
+        return admission;
+    };
+    let Some(map) = as_mapping(value, &at, errors) else {
+        return admission;
+    };
+    closed_world(map, &["maxInFlightTransactions"], &at, errors);
+
+    let key = "maxInFlightTransactions";
+    if let Some(value) = map.get(Value::from(key)) {
+        let ceiling = u64::try_from(MAX_IN_FLIGHT_CEILING).unwrap_or(u64::MAX);
+        match value.as_u64() {
+            Some(declared) if declared >= 1 && declared <= ceiling => {
+                // Bounded by the check above, so the conversion cannot fail on any target this
+                // builds for; expressed as a conversion rather than a cast so the bound is the
+                // compiler's business and not a comment's.
+                if let Ok(declared) = usize::try_from(declared) {
+                    admission.max_in_flight_transactions = declared;
+                }
+            }
+            Some(declared) => errors.push(ConfigError::new(
+                at.field(key),
+                "CC-V8",
+                Some(declared.to_string()),
+                &format!(
+                    "an integer in 1..={MAX_IN_FLIGHT_CEILING}; 0 is a node that answers 503 to \
+                     every call, and there is no way to spell \"no bound\""
+                ),
+            )),
+            None => errors.push(ConfigError::new(
+                at.field(key),
+                "CC-V8",
+                Some(type_of(value).to_owned()),
+                "a count of concurrent transactions",
+            )),
+        }
+    }
+    admission
 }
 
 fn read_timers(
