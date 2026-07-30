@@ -9,6 +9,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A rule the extension design asserted turns out to be false** (`EX-11`). The design said the
+  composed quirk set for one attachment point is every trunk-bound and domain-bound profile's rules
+  taken together, and `QP-C-2` was written to match. Derived from the premises the surrounding specs
+  already fix — a quirk applies only on an egress leg toward one peer, and that peer is identified by
+  the route, which names a trunk **or** a domain and never both — the two sets **never intersect**.
+
+  This mattered in practice, not only on paper: under the union reading, one domain-bound profile and
+  one trunk-bound profile writing the same header produced a startup error naming both, and the only
+  documented repair was rejected by the rule governing repairs, because neither binding had a contest
+  at its own attachment point. A two-line configuration was both illegal and unfixable. A new rule
+  `G14` settles what a trunk-valued rule means at a domain binding, and the case the old reading
+  rejected now has a vector.
+
 - **The default Helm chart could not start a single node** (`KO-14`). Its `values.yaml` predated the
   configuration schema, and nothing checked one against the other: rendering the chart and loading
   the result produced **22 refusals for every one of the six roles it deploys**. A `media:` block the

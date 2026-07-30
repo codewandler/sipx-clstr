@@ -61,10 +61,6 @@ _The site a stranger lands on should say what this does and how to run it, not w
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 - [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
 
-### Extension framework & RFC registry
-_Extensions become declared modules over typed hook phases, never edits to the core._
-- [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
-
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
 - [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
@@ -187,6 +183,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [EX-8 — Make the async query declaration normative in the hook-framework spec](EX-8-make-the-async-query-declaration-normative.md) · Platform · filed by EX-6 — the design is accepted, the spec does not yet say it
 - [EX-9 — Reconcile the quirk-profile media seam with the type ME-6 actually landed](EX-9-reconcile-the-quirk-profile-seam-with-ME-6.md) · Extensions · found reviewing EX-7 — it is written against SrtpMode; ME-6 landed SrtpPolicy
 - [EX-10 — Give `overrides` a schema, or remove it from the composition rule](EX-10-give-overrides-a-schema-or-remove-it.md) · Extensions · found reviewing EX-7 — the one construct that resolves a contested target is in no schema
+- [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
 - [FC-2 — Make unapplied configuration visible at startup, at the depth the keys actually live](FC-2-make-unapplied-configuration-visible-at-startup.md) · Cluster · the warning exists, is correct, and reaches nobody — it is logged before the subscriber is installed
 - [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
 - [FC-4 — Apply or refuse the per-tenant policy fields — domains, expiry and maxBindingsPerAor](FC-4-apply-or-refuse-the-per-tenant-policy-fields.md) · Cluster · domains parses into a struct field nothing reads — a REGISTER for an undeclared domain is accepted

@@ -2,7 +2,7 @@
 id: EX-11
 title: Derive when trunk-bound and domain-bound rule sets actually intersect
 pillar: Extensions
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/extension-framework.md
 epic: extension-framework
