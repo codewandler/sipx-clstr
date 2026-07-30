@@ -9,6 +9,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A node bounds how much work it holds at once** (`DP-11`). The accept loop was
+  `while let Some(arrival) = incoming.recv().await { … tokio::spawn(…) }` with no limit: the only
+  backpressure was the kernel's *incoming queue*, which bounds arrivals rather than residency, and a
+  node drains that queue as fast as it can while a proxied transaction lives until Timer B. So offered
+  load and resident concurrency were the same number, and the ceiling was whatever ran out first.
+
+  `AdmissionBound::admit` is now taken on the accept loop, before anything is cloned and before a task
+  exists, and the knob is `cluster.admission.maxInFlightTransactions` — default **1024**, matching the
+  kernel's own queue capacity so the two limits are one number rather than two that can disagree; `0`
+  is refused, and the ceiling is 65536. Refusing over the bound is a SIP answer, not a drop: `503` with
+  `Retry-After`, the same shape the kernel sends when *its* queue is full, so a client sees one
+  behaviour whichever layer shed it.
+
+  **`REGISTER` and `ACK` are outside the bound**, and that is the load-bearing decision rather than an
+  omission. A registration storm *is* the overload, and a shed refresh is a phone that becomes
+  unreachable — shedding REGISTER turns a spike into an outage. An ACK for a 2xx has no response in SIP
+  at all (RFC 3261 §17.1.1.3), so "refusing" one could only mean dropping it, which is the call-leaking
+  failure the kernel already counts apart. Every other gated method is subject to the bound, `BYE` and
+  `CANCEL` included: exempting the requests that *end* work is tempting, because shedding them makes
+  overload self-sustaining, but an unbounded method is an unbounded node, and a `503` with `Retry-After`
+  to a `BYE` is a retry rather than a loss.
+
+  The reasoning lives in [cluster-config](docs/specs/cluster-config.md) `V11`, not only in a doc
+  comment, because the person who needs it is an operator reading the schema.
+
+  The kernel's shed counters are also read for the first time: `Handle::shed()` separates shed requests,
+  ACKs and unmatched messages, and nothing in this repository called it — `outstanding()` was the only
+  kernel instrument used. `report_load` now samples all three beside `outstanding`, `in_flight`,
+  `admitted` and `refused`. It is still a log line rather than a metric; a metrics endpoint is `DP-3`'s,
+  and this is its input.
+
 - **The end-to-end call proof runs on every push** (`CF-15`). `scripts/e2e-call.sh` — the evidence
   `website/docs/guides/registrations-and-calls.md` offers for the headline claim that a call
   completes with audio — now runs in CI, in its own `e2e` job, against the kernel's own `sipx` CLI
