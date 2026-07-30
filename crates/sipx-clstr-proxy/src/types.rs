@@ -108,6 +108,16 @@ pub enum Effect {
         request: Box<Request>,
         /// Where to send it.
         target: Target,
+        /// The URI whose address this copy must actually reach — F7, computed from the copy after
+        /// F6: the first `Route` if it is loose, else the Request-URI.
+        ///
+        /// **Not the same thing as `target.uri`,** which is what goes *into* the Request-URI (F2).
+        /// The two coincide for a bare contact and diverge whenever a `Route` survived preprocessing
+        /// or the target carries a `Path`: then the copy is addressed to the far end and sent to the
+        /// route set's first hop. A driver that resolved `target.uri` instead would skip that hop —
+        /// which is what sent every in-dialog request to a location lookup (`V-03`), because the
+        /// only URI it had was the one it was addressed to.
+        next_hop: Bytes,
     },
     /// Cancel a branch that has not concluded.
     CancelBranch(BranchId),
@@ -189,6 +199,15 @@ impl Effect {
     pub fn forwarded(&self) -> Option<&Request> {
         match self {
             Self::Forward { request, .. } => Some(request),
+            _ => None,
+        }
+    }
+
+    /// The URI this effect's next hop is, if it forwards anything (F7).
+    #[must_use]
+    pub fn next_hop(&self) -> Option<&Bytes> {
+        match self {
+            Self::Forward { next_hop, .. } => Some(next_hop),
             _ => None,
         }
     }

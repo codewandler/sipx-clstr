@@ -196,9 +196,14 @@ impl Edge {
                 ProxyEffect::Forward {
                     branch,
                     request,
-                    target,
+                    next_hop,
+                    ..
                 } => {
-                    let key = String::from_utf8_lossy(&target.uri).into_owned();
+                    // F7's next hop, the way the real driver reads it: the target is what went into
+                    // the Request-URI, and the hop is where the copy actually goes. They differ as
+                    // soon as a `Route` survives or a registration carries a `Path`, and a harness
+                    // that keyed on the target would model a driver nobody ships.
+                    let key = String::from_utf8_lossy(&next_hop).into_owned();
                     let Some(node) = self.reachable.get(&key).copied() else {
                         out.push(Effect::Note(format!("unreachable {key}")));
                         continue;
@@ -497,6 +502,20 @@ fn scenario(
     let mut reachable = HashMap::new();
     for (offset, contact) in bob_contacts.iter().enumerate() {
         reachable.insert((*contact).to_owned(), NodeId::from_index(2 + offset));
+    }
+    // RFC 3327 §5.3: a registration's `Path` is the route that must be *traversed* to reach the
+    // contact, so the branch's first hop is the path's topmost value and not the contact — F7, since
+    // `PX-13`. The simulated network therefore has to be able to reach it; here it is co-located with
+    // the device, which is how a co-hosted edge proxy looks from the far end of the route set. Before
+    // `PX-13` the driver sent to the contact and the path hop was never addressed by anybody, which
+    // is why this map did not need the entry.
+    if let Some(path) = bob_path {
+        reachable.insert(
+            path.trim_start_matches('<')
+                .trim_end_matches('>')
+                .to_owned(),
+            NodeId::from_index(2),
+        );
     }
 
     sim.add_node(Box::new(Edge::new("edge", reachable)));

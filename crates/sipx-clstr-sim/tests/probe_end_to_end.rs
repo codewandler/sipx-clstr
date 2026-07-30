@@ -131,9 +131,14 @@ impl Edge {
                 ProxyEffect::Forward {
                     branch,
                     request,
-                    target,
+                    next_hop,
+                    ..
                 } => {
-                    let key = String::from_utf8_lossy(&target.uri).into_owned();
+                    // F7's next hop, the way the real driver reads it: the target is what went into
+                    // the Request-URI, and the hop is where the copy actually goes. They differ as
+                    // soon as a `Route` survives or a registration carries a `Path`, and a harness
+                    // that keyed on the target would model a driver nobody ships.
+                    let key = String::from_utf8_lossy(&next_hop).into_owned();
                     let Some(node) = self.reachable.get(&key).copied() else {
                         continue;
                     };
