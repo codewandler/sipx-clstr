@@ -52,6 +52,11 @@ site · `FC` fail-closed configuration.
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
+### Conformance & deterministic harness
+_The north star made executable: seeded multi-node simulation, and coverage that is measured._
+- [CF-12 — A row counted as proved must assert what it claims](CF-12-a-proved-row-must-assert-what-it-claims.md) · Foundation · PB-F-1 said "Timer C set 180 s" and its test compared only effect kinds — the row and the code never met
+- [CF-13 — Driver tests bind fixed ports, so two checkouts cannot be tested at once](CF-13-driver-tests-bind-fixed-ports-and-cannot-run-in-parallel.md) · Foundation · observed twice in one afternoon — "Address already in use" and a load-sensitive flake, neither caused by the diff under test
+
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
