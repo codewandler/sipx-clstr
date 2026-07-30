@@ -2,7 +2,7 @@
 id: KO-15
 title: One media-pool fact has two spellings in the chart
 pillar: Cluster
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator

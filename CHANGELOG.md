@@ -9,6 +9,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **One switch decides whether the deployment runs its own rtpengine** (`KO-15`).
+  `deploy/helm/values.yaml` stated that fact **twice** — a `deployment.rtpengine.enabled` flag beside
+  the media pool's own `mode` — so a chart could be installed saying both yes and no, and nothing
+  objected. Resolved by **removal rather than derivation**: deriving the flag from the mode would have
+  left a values key an overlay can still `--set`, which is still two places to write one fact. The
+  media pool's `mode` is now the only switch, and `templates/_helpers.tpl` carries the one condition.
+
+  Held mechanically by a fifth axis on `KO-1`'s `check-crd-drift.py` rather than a second checker: the
+  `deployment:` half of the chart is now **closed and declared**, so a `deployment:` key with no
+  `SipxCluster` field must be a chart-local one the spec declares *with a reason*, or it is a defect
+  (`sipx-cluster-crd` §4 `M7`, table in §5). That turns a sentence the spec already contained into
+  something a gate can enforce — the same declared-inclusion mechanism `KO-1` chose for the other four
+  axes, and the reason it is not "the two keys must agree": an agreement rule is what the story
+  forbade, because it keeps both spellings alive.
+
+  The failing-first proof has two halves, and the second is the load-bearing one: the new axis is red
+  on the duplication, **and the previous checker was green on it** — which is what shows that nothing
+  in the gate had ever objected. Falsified again at integration by putting the duplicate key back.
+
 - **A documented version banner is now held to the one the binary prints** (`CF-19`). `check-site.py`
   verified the *flags* a documented command names against `--help` and never what a command is shown
   as **printing**, so `website/docs/whats-new.md`, `reference/cli.md` and `getting-started.md` all

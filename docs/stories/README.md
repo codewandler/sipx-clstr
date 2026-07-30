@@ -73,7 +73,6 @@ _Accepted means applied, or refused — there is no third state._
 
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
-- [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
 - [KO-16 — Make the Helm skeleton advertise only what it actually installs](KO-16-make-the-helm-skeleton-advertise-only-what-it-installs.md) · Cluster · V-19 — metadata promises a full install; the chart emits one unserved custom resource
 
 ### Proxy engine
@@ -254,6 +253,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [KO-1 — Specify the SipxCluster CRD and the values.yaml contract](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) · Cluster · the CR spec *is* the config schema, and a check holds it there
 - [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 - [KO-14 — Bring the chart's values to the config schema, starting with the media block that cannot boot](KO-14-bring-the-chart-to-the-config-schema.md) · Cluster · DP-1 found the shipped default set declares a media policy G-M6 refuses to start on
+- [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
 - [ME-6 — Specify per-trunk codec and SRTP policy](ME-6-specify-per-trunk-codec-and-srtp-policy.md) · Media
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
