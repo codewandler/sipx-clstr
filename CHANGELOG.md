@@ -9,6 +9,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The `SipxCluster` resource is specified, and it is the config schema rather than a copy of it**
+  (`KO-1`). [sipx-cluster-crd](docs/specs/sipx-cluster-crd.md) defines the custom resource the
+  operator will serve: its `spec` is [cluster-config](docs/specs/cluster-config.md) §7's `cluster:`
+  tree **verbatim**, beside a closed operator half of exactly four fields — `image`, `roles`,
+  `nodeSelector`, `tolerations`. The spec names sections and restates no field, type, default or
+  ceiling, which is what makes it a single source rather than a second document to keep in step.
+
+  The group and version are pinned as **`sipx.dev/v1alpha1`**, Namespaced, plural `sipxclusters`.
+  That was already the string cluster-config §3 declares and the loader already implements as
+  `API_VERSION`, so pinning it *removed* the word "provisional" from `deploy/helm/values.yaml`
+  rather than choosing a new value — a new one would have broken the site, both node proofs and the
+  loader constant to buy nothing a reader can see. `v1alpha1` carries no compatibility promise at
+  all, and §3 says so rather than implying it.
+
+  The single-source mechanism is **one shared definition with a declared inclusion, not generation
+  in either direction**, with the reasoning in §4. Neither artefact is machine-readable today — §7
+  is a prose registry whose owner column is the load-bearing part, and there is no CRD manifest
+  until `KO-3` — so either direction of generation would have turned the file contributors actually
+  read into derived output. Because the inclusion is total and verbatim, the only thing that *can*
+  drift is which sections exist, and that is exactly what is now checked.
+
+  `scripts/check-crd-drift.py` is that check, on five axes: the schema version's four spellings must
+  be byte-identical; §7's sections and the spec's rows must match in **both** directions; the
+  operator half must agree across the spec, `node-document.py`'s `OPERATOR_KEYS` and the keys the
+  template writes into `spec`; and the `values.yaml` mapping must be 1:1 both ways. Each axis was
+  demonstrated red before being made green, and it self-tests on every run. It reads **names only** —
+  contents stay `deploy/helm/check-values.sh`'s, which feeds the rendered tree to the real loader.
+
+  It is wired into `scripts/gate.sh` **and into `.github/workflows/docs.yml`**, because that workflow
+  enumerates its checks rather than calling the gate: a step added only to `gate.sh` would never run
+  on a pull request.
+
+  Admission is specified in full as §8 (`A1`–`A10`), including the rules **no single node's
+  projection can reach** — a zone with no edge is the case that proves the point, because a node
+  projects its own zone and a zone with no edge is a fact about the set. `status` is specified as
+  observation only (`S1`–`S9`): what the fleet is observed to be, never what was asked for. The
+  sixteen `SC-*` vector rows are registered in `check-vectors.py` in the same commit that wrote them
+  — `EX-12`'s lesson — and deferred, per row, to `KO-3`, which implements the webhook and the
+  reconcile loop they execute against. Deferral rather than a weaker row: a vector asserting what a
+  *document* says would test a file, and these rows exist to test an operator's verdicts.
+
 - **A node bounds how much work it holds at once** (`DP-11`). The accept loop was
   `while let Some(arrival) = incoming.recv().await { … tokio::spawn(…) }` with no limit: the only
   backpressure was the kernel's *incoming queue*, which bounds arrivals rather than residency, and a

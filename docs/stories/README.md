@@ -104,8 +104,7 @@ _Extensions become declared modules over typed hook phases, never edits to the c
 
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
-- [KO-1 — Specify the SipxCluster CRD and the values.yaml contract](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) · Cluster · blocked by DP-1; the CR spec *is* the config schema
-- [KO-3 — Implement the operator reconcile loop](KO-3-implement-the-operator-reconcile-loop.md) · Cluster · blocked by KO-1
+- [KO-3 — Implement the operator reconcile loop](KO-3-implement-the-operator-reconcile-loop.md) · Cluster · unblocked — KO-1 specified the resource; it owns the 16 SC vector rows
 - [KO-4 — Implement SIP-aware rollout, draining and key rotation](KO-4-implement-sip-aware-rollout-and-shard-handoff.md) · Cluster · blocked by KO-3; the reason an operator exists
 - [KO-5 — Design metric-driven autoscaling on SIP signals](KO-5-design-metric-driven-autoscaling.md) · Cluster · phase 2; blocked by DP-3
 - [KO-6 — Implement autoscaling with drain-aware scale-in](KO-6-implement-autoscaling-with-drain-aware-scale-in.md) · Cluster · phase 2; blocked by KO-4, KO-5
@@ -197,6 +196,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
 - [FC-4 — Apply or refuse the per-tenant policy fields — domains, expiry and maxBindingsPerAor](FC-4-apply-or-refuse-the-per-tenant-policy-fields.md) · Cluster · domains parses into a struct field nothing reads — a REGISTER for an undeclared domain is accepted
 - [FC-5 — Repair the two-node proofs FC-4 broke, and make a mismatched domain impossible to ship](FC-5-repair-the-two-node-proofs-fc-4-broke.md) · Foundation · the repository's headline cluster proof answers 403 — the script registers in a domain its own document does not serve
+- [KO-1 — Specify the SipxCluster CRD and the values.yaml contract](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) · Cluster · the CR spec *is* the config schema, and a check holds it there
 - [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 - [KO-14 — Bring the chart's values to the config schema, starting with the media block that cannot boot](KO-14-bring-the-chart-to-the-config-schema.md) · Cluster · DP-1 found the shipped default set declares a media policy G-M6 refuses to start on
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media

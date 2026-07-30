@@ -7,7 +7,7 @@ priority:
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
 areas: [k8s, deploy]
-note: blocked by KO-1
+note: unblocked — KO-1 specified the resource; it owns the 16 SC vector rows
 ---
 
 # Implement the operator reconcile loop

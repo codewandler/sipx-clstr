@@ -2,12 +2,11 @@
 id: KO-1
 title: Specify the SipxCluster CRD and the values.yaml contract
 pillar: Cluster
-status: in-progress
-priority: 
+status: done
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
 areas: [k8s, deploy]
-note: blocked by DP-1; the CR spec *is* the config schema
+note: the CR spec *is* the config schema, and a check holds it there
 ---
 
 # Specify the SipxCluster CRD and the values.yaml contract
@@ -53,11 +52,13 @@ Specify one desired-state document: a `SipxCluster` custom resource whose spec i
   It self-tests on every run.
 - Dropping the `admission` row (the section `DP-11` added to §7) reproduces exactly the drift class
   this check exists for and is reported with the fix in the message.
-- **Not landed here:** the sixteen `SC-*` vector rows of §10 are registered in
-  `scripts/check-vectors.py` but their deferrals to `KO-3` belong in `docs/reference/vector-scope.toml`,
-  which this story was fenced out of; `docs/reference/conformance.md` is regenerated with them. Both
-  are handed to the integrator. Verified in a scratch mirror: with the sixteen deferrals in place the
-  vectors step reports `125/549 rows proved … 405 deferred` and exits 0.
+- **Landed on integration:** the sixteen `SC-*` deferrals to `KO-3` are in
+  `docs/reference/vector-scope.toml` and `docs/reference/conformance.md` is regenerated with them.
+  This story was fenced out of that file, so the rows landed registered-and-undeferred and the
+  integrator filed them — with a reason per row rather than sixteen copies of one, because the rows
+  do not defer for one reason. The vectors step reports `125/549 rows proved, 19 covered for shape
+  only, 405 deferred with a reason`, exactly what the scratch mirror predicted.
+- **Closed 2026-07-30.** Gate green at the merge tip, `crd drift` included.
 - Two findings recorded in §11 rather than fixed here: `deployment.rtpengine.enabled` is a second
   spelling of `cluster.mediaPool[].mode: managed` and belongs to `KO-7`/`KO-2`; the template's
   `apiVersion` may become a constant now that G1 pins it, which is `KO-2`'s.
