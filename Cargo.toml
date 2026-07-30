@@ -13,19 +13,29 @@ edition = "2024"
 # the kernel's floor" and was never checked, so it was simply false — on 1.88 the workspace does
 # not compile at all.
 #
-# 1.94 is the lowest release that works, established by bisecting 1.88 → 1.97: 1.88, 1.92 and
-# 1.93 fail; 1.94 and 1.95 pass. The boundary is in the kernel rather than here. sipx-transport's
-# `impl<K, I> Default for TimerQueue<K, I>` calls `BinaryHeap::new()`, and `BinaryHeap::<T>::new`
-# carried a `T: Ord` bound that rustc only relaxed in 1.94:
+# 1.91 is the lowest release that works, re-derived on the `v0.10.0` pin below by bisecting
+# 1.88 → 1.94: 1.88 and 1.90 fail; 1.91, 1.93 and 1.94 pass. **The floor came down by three
+# releases and the reason it exists moved**, so the previous derivation is recorded here rather
+# than only in the changelog, because "why 1.91" is the question this line gets asked.
 #
-#   error[E0277]: the trait bound `I: Ord` is not satisfied
-#   note: required by a bound in `BinaryHeap::<T>::new`
+# It used to be the kernel's: sipx-transport's `impl<K, I> Default for TimerQueue<K, I>` called
+# `BinaryHeap::new()` on an unbounded type parameter, and `BinaryHeap::<T>::new` carried a
+# `T: Ord` bound that rustc only relaxed in 1.94, so every consumer inherited 1.94 for a `Default`
+# impl. `v0.10.0` bounds it (`impl<K: Eq, I: Ord>`) — which is exactly what the upstream ledger
+# row asked for — so that constraint is gone.
 #
-# So this floor is a property of the pinned kernel tag, and it must be re-derived — not carried
-# forward — whenever the `sipx-*` pin below moves. Bounding that `Default` impl upstream would let
-# both projects go back down; until then, raising ours is the only honest option, because a floor
-# that names a compiler the code cannot be built with is worth less than no floor at all.
-rust-version = "1.94"
+# What is left is **ours**, which is why the floor is 1.91 and not the kernel's own 1.88:
+# `sipx-clstr-proxy/src/from_registrar.rs` calls `Duration::from_hours(1)`, stable since 1.91.
+#
+#   error[E0658]: use of unstable library feature `duration_constructors_lite`
+#   --> crates/sipx-clstr-proxy/src/from_registrar.rs:53:25
+#
+# The floor must still be re-derived — not carried forward — whenever the `sipx-*` pin below moves,
+# and `CX-4` is the story that proved why: carrying 1.94 forward would have left a true number
+# attached to a false reason, and the next person to read it would have gone looking upstream for a
+# bound that is no longer there. A floor that names a compiler the code cannot be built with is
+# worth less than no floor at all; one that names the wrong cause costs an afternoon.
+rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/codewandler/sipx-clstr"
 authors = ["Timo Friedl <timofriedlberlin@gmail.com>"]
@@ -45,10 +55,24 @@ sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.11.0" }
 # makes a build reproducible, and what makes "which kernel version is this claim true of?" a
 # question with an answer. Bumping it is a deliberate act with a changelog entry.
 #
-# Pinned at 0.7.0, which contains UDP, TCP, TLS, WebSocket and WSS transports, all four
+# Pinned at 0.10.0, which contains UDP, TCP, TLS, WebSocket and WSS transports, all four
 # transaction machines, RFC 3263 resolution, **both** sides of digest, and a `TimerQueue` generic
 # over its instant type — the last of which is what lets the harness stop keeping its own
 # generation counters (`CF-7`).
+#
+# `CX-4` moved this from 0.7.0, and what it found is worth knowing before the next bump. Nothing in
+# this workspace needed a source change: it reaches the kernel through constructors rather than
+# struct literals, so `Target` and `ConnectionKey` gaining a `path` field (the WebSocket resource
+# now keys the connection pool) is source-compatible here, and the one breaking `sipx-ua` change in
+# the range — `Config`/`Registration` dropping `outbound`, and `registrar::interpret`'s signature —
+# is in surface this workspace does not use. It takes `challenge`, `auth` and `Algorithm`.
+#
+# Two things this bump deliberately does **not** do. It does not fix the nonce-uniqueness defect
+# (`CX-5`) or the replay window's scan (`RG-15`): `sipx-ua/src/challenge.rs` is byte-identical at
+# `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and kernel `main`, verified by blob hash rather than by
+# reading a release note. And it does not touch media: the SRTP keying fix in `v0.9.0` is
+# wire-breaking between kernel versions, but this workspace pins no media crate and relays no
+# media, so it reaches nothing here.
 sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
 sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
 sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }

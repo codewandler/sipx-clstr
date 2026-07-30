@@ -2,7 +2,7 @@
 id: CX-4
 title: Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0
 pillar: Platform
-status: ready
+status: in-progress
 priority: 2
 epic:
 areas: [build, transport]
@@ -18,20 +18,20 @@ protocol core that has since been corrected, and so the next upgrade is one step
 
 ## Acceptance
 
-- [ ] Every `sipx-*` dependency in the root `Cargo.toml` moves from `tag = "v0.7.0"` to
+- [x] Every `sipx-*` dependency in the root `Cargo.toml` moves from `tag = "v0.7.0"` to
       `tag = "v0.10.0"` — **all of them together**. A workspace holding two kernel versions is a
       protocol core disagreeing with itself.
-- [ ] `sipx_clstr_node::KERNEL_VERSION` reports `0.10.0`, and `sipx-clstr --version` prints it.
-- [ ] The full gate is green: `scripts/gate.sh`, including `check-features.sh` and `check-msrv.sh`.
+- [x] `sipx_clstr_node::KERNEL_VERSION` reports `0.10.0`, and `sipx-clstr --version` prints it.
+- [x] The full gate is green: `scripts/gate.sh`, including `check-features.sh` and `check-msrv.sh`.
       The kernel may have raised its own MSRV; if the declared floor moves, that is part of this
       story and the README/docs claims move with it.
-- [ ] The end-to-end proof still passes against a `sipx` CLI **built from the same tag**:
+- [x] The end-to-end proof still passes against a `sipx` CLI **built from the same tag**:
       `scripts/e2e-call.sh`. Pinning the library and testing against a different client build would
       make the proof meaningless.
-- [ ] `docs/upstream.md` is re-read row by row, not assumed. Its own rule says so: "Re-read the
+- [x] `docs/upstream.md` is re-read row by row, not assumed. Its own rule says so: "Re-read the
       kernel before trusting a row." Any row that these releases closed is updated; any row that
       reopened is filed.
-- [ ] The published site's version strings are regenerated from the built binary, not edited —
+- [x] The published site's version strings are regenerated from the built binary, not edited —
       `website/docs/getting-started.md` and `website/docs/reference/cli.md` both quote
       `sipx-clstr <v> (sipx kernel <v>)`.
 - [ ] Behavioural changes that reach this platform are named in the CHANGELOG entry, not just the
@@ -39,7 +39,33 @@ protocol core that has since been corrected, and so the next upgrade is one step
 
 ## Progress
 
-- (running log)
+- **The bump needed no source change.** All four pins moved together to `v0.10.0`; the workspace
+  reaches the kernel through constructors (`Target::new`, `TimerQueue::new`) rather than struct
+  literals, so `Target`/`ConnectionKey` gaining a `path` field is source-compatible, and the one
+  breaking `sipx-ua` change in the range (`Config`/`Registration` dropping `outbound`,
+  `registrar::interpret`'s signature) is in surface this workspace does not use — it takes
+  `challenge`, `auth` and `Algorithm`. `tests/sans_io.rs` still passes, so the
+  `default-features = false` seam that keeps `tokio` out of the registrar survived.
+- **Failing-first**: `kernel_pin.rs`'s `the_reported_kernel_is_the_release_this_workspace_moved_to`
+  asserts the literal `0.10.0`, which the pre-existing manifest/constant consistency test cannot —
+  that one passes just as well when both say `0.7.0`. A second test runs the binary and reads
+  `--version`, which is where the two site pages' strings now come from.
+- **The MSRV floor moved *down*, 1.94 → 1.91,** and the reason it exists moved with it. `v0.10.0`
+  bounds `impl<K: Eq, I: Ord> Default for TimerQueue<K, I>`, which is exactly what the upstream
+  ledger row asked for, so the kernel no longer forces 1.94 on its consumers. Re-derived by
+  bisecting 1.88 → 1.94 on this tag: 1.88 and 1.90 fail, 1.91 and up pass. What holds it at 1.91 is
+  now local — `sipx-clstr-proxy/src/from_registrar.rs:53`'s `Duration::from_hours`. `Cargo.toml`'s
+  comment, the `Dockerfile` `ARG` and the ledger row all say so; the release build was verified on
+  1.91 because the image pins that number.
+- **`docs/upstream.md` re-read row by row against the kernel at `v0.10.0`**, each cited symbol
+  opened. Two rows changed: the `TimerQueue` `Default` row to **landed in 0.10.0** (closed by the
+  kernel without ever being filed), and the `Path`/`Service-Route` citation, which had drifted from
+  `address.rs:264,271` to `271,280`. `CX-5` and `RG-15` stay open, now proved rather than assumed:
+  `challenge.rs` is one blob (`30e1d290`) at `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and `main`.
+- **The e2e proof ran against a `sipx` CLI built from `v0.10.0`** (`sipx 0.10.0`), which is also
+  what CI's `e2e` job now builds — its `sed` extraction reads `v0.10.0` off the bumped manifest.
+- Not done here: the CHANGELOG entry, which is the integrator's. The behavioural deltas that reach
+  this platform were handed over for it.
 
 ## Notes
 

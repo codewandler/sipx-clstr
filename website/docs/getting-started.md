@@ -23,7 +23,7 @@ cargo build --bin sipx-clstr --features postgres
 ```
 
 ```text
-sipx-clstr 0.11.0 (sipx kernel 0.7.0)
+sipx-clstr 0.11.0 (sipx kernel 0.10.0)
 ```
 
 The `postgres` feature is what lets a node share its registrations with another one. Leave it out and
