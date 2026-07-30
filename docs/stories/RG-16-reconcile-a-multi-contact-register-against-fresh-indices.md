@@ -2,12 +2,12 @@
 id: RG-16
 title: Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
 pillar: Registrar
-status: blocked
+status: in-progress
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar]
-note: V-05 is fixed on impl/RG-16-rework, but the fix trades it for a 403 that refuses a REGISTER the quota permits — needs a §5.5 ruling first
+note: round 3 — §5.5 settles the quota question against the code; the fix is process.rs, not an amendment
 ---
 
 # Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
@@ -35,6 +35,13 @@ carries more than one contact.
       green.
 
 ## Progress
+
+- **Unparked for round 3.** The blocker I recorded — "needs a §5.5 ruling" — was already answered by
+  §5.5's own text and I had over-deferred it: "a REGISTER whose **committed outcome** would exceed it
+  fails `403`" and "refreshes, replacements and removals never grow the set and never trip the quota".
+  The committed outcome is authoritative, so a conservative pre-check may not refuse what the outcome
+  permits. **No amendment; the fix is in `process.rs`.** Round 3 dispatched from
+  `impl/RG-16-rework` with that ruling and both findings.
 
 - **Parked 2026-07-30 after two rework rounds. Both branches are preserved and neither is merged:
   `impl/RG-16` (round 1) and `impl/RG-16-rework` (round 2, `16480fe`).** The original V-05 defect *is*

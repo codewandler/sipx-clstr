@@ -2,7 +2,7 @@
 id: PX-13
 title: Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
 pillar: Signalling
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
