@@ -45,4 +45,11 @@ scripts/check-vectors.py --check
 step "docs"
 scripts/check-docs.sh
 
+# `FC-5`. The end-to-end proofs are the evidence behind the release's cluster claim, and they are the
+# one part of the gate that nothing else compiles or runs — `FC-4` changed the node underneath them
+# and three of them answered `403` for a release cycle while everything here stayed green. Cheap
+# enough to sit in the fast half: it reads four files and compares strings.
+step "proof domains"
+scripts/check-proof-domains.py
+
 printf '\n\033[1;32mgate: green\033[0m\n'

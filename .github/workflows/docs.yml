@@ -31,6 +31,13 @@ jobs:
       - name: Every spec vector is proved or deferred with a reason
         run: scripts/check-vectors.py --check
 
+      # `FC-5`. The end-to-end proofs are what the release's cluster claim rests on, and nothing else
+      # in CI reads them — they need a database, a `sipx` CLI and in one case a Kubernetes cluster,
+      # so they are run by hand. `FC-4` changed the node underneath them and three of them answered
+      # `403` for a release cycle with every job green. This is the part of them a runner can check.
+      - name: Every proof registers in a domain its own document serves
+        run: scripts/check-proof-domains.py
+
       - name: The board is in sync with story frontmatter
         run: |
           # The board is generated; a hand-edited or stale one is a defect. This asserts the
