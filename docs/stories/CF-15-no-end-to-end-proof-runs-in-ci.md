@@ -67,6 +67,14 @@ proof anywhere; the moment one does, the test starts passing for the wrong reaso
   was "not verified".
 - `two-node-call.sh` needs PostgreSQL, which a CI service container supplies; that one is closer to
   runnable than it looks, and it is the proof for the `0.11.0` headline.
+- **Ports, before you wire anything in.** `CF-13` removed the fixed ports from the node test suites
+  but deliberately left the proof scripts: `scripts/two-node-call.sh` and
+  `scripts/k8s-two-node-call.sh` still hard-code `15081`/`15091`, and `scripts/e2e-call.sh` still
+  defaults its node to `5060`, so two concurrent runs of the script collide with each other. That is
+  harmless while nothing runs them automatically and becomes a flaky CI job the moment something
+  does. `e2e-call.sh`'s node port is constrained: `sipx dial` addresses the node through the
+  request-URI, and a request-URI with an explicit port is a different address-of-record from one
+  without it (location-service §3.2 N7), so it cannot simply become ephemeral.
 - Do not close this by wiring the scripts in and letting them be flaky. `CF-13` is fixing the fixed
   ports that make the driver suites unsafe to run concurrently; a proof that fails one run in five
   in CI will be muted within a week, which is worse than not running it.

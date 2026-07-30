@@ -9,6 +9,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two checkouts could not be tested at the same time** (`CF-13`). The node's socket suites bound
+  hard-coded ports, so concurrent runs collided with `Address already in use` — and the failure
+  landed on whichever diff happened to be under test rather than on the one at fault. It cost two
+  separate pieces of work real effort to prove a negative. Every node in the suite now binds port
+  zero and is asked what it got, through the same `listening on` report the node already emits after
+  binding, so no second readiness contract was invented.
+
+  Four tests also waited on a fixed 1500 ms sleep for an event that usually arrived sooner. They now
+  wait on the event: `startup_warns` went from 1.50 s to 0.02 s, and none of them can lose a race
+  against a clock. A test that fails one run in five under load teaches people to re-run instead of
+  read, which costs more than the test is worth.
+
 - **The conformance report counted rows it could not vouch for** (`CF-12`). A row was called
   *proved* when a test **name** mapped to it, whatever that test asserted. Swept across the 140 rows
   that carried the label: 61 state a value in their expectation, **41 compare it, and 20 never do**.

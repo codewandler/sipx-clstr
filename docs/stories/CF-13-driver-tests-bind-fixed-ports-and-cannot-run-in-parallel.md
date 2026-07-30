@@ -2,7 +2,7 @@
 id: CF-13
 title: Driver tests bind fixed ports, so two checkouts cannot be tested at once
 pillar: Foundation
-status: in-progress
+status: done
 priority: 2
 epic: conformance-harness
 areas: [ci, build, node]
