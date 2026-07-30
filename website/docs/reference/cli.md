@@ -128,7 +128,7 @@ sipx-clstr: cannot read /etc/sipx/cluster.yaml: No such file or directory (os er
 ## `sipx-clstr --version`
 
 ```text
-sipx-clstr 0.11.0 (sipx kernel 0.7.0)
+sipx-clstr 0.11.0 (sipx kernel 0.10.0)
 ```
 
 The second version is the [sipx](https://github.com/codewandler/sipx) protocol kernel this binary was
