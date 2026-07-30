@@ -16,6 +16,22 @@ cargo fmt --all --check
 step "clippy"
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+# `CF-22`. A step of its own, ahead of the suite that also contains it, and both halves of that are
+# deliberate. **Ahead**, because a node holding a transaction no timer will collect is a slow, quiet
+# outage and this is the cheapest thing in the gate that would notice — one crate's test binary, run
+# in virtual time, so RFC 3261's full 128·T1 costs nothing. **Named**, because the failure it exists
+# for is a resource lifetime rather than a wrong answer, and a red here has to say *which resource*;
+# "tests" does not. `cargo test --workspace` below runs it a second time for a few milliseconds, and
+# that is the price of the step naming itself.
+#
+# It also carries the number `scripts/e2e-call.sh` got wrong. Its bound is **128·T1**, derived and
+# measured rather than assumed: a proxied request to a silent next hop spends Timer F (or B) on the
+# client transaction before §16.7 has a final response to forward, and only then does Timer J (or H)
+# start on the server transaction. A one-window bound rejects correct code — it is what reverted
+# `PX-13` — so the test that measures the worst case goes red if this bound is halved.
+step "transaction drain"
+cargo test -p sipx-clstr-sim --test transaction_drain
+
 step "tests"
 cargo test --workspace --all-features
 

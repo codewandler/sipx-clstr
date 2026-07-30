@@ -271,23 +271,44 @@ if [[ "$sockets" -gt 1 ]]; then
 fi
 echo "  ✓ the node holds one socket — signalling only, so the media was direct"
 
-# A proxy that leaks one transaction per call is a slow, quiet outage, so the node logs how much
-# state the kernel still holds for it and this waits for that to reach zero.
+# A proxy that holds a transaction no timer will collect is a slow, quiet outage, so the node logs
+# how much state the kernel still holds for it and this waits for that to reach zero.
 #
-# **It takes about half a minute, and that is correct.** RFC 3261 keeps a concluded transaction alive
-# for its absorption timer — 64·T1, thirty-two seconds — so that a retransmission arriving after the
-# final response is answered from the transaction rather than delivered to the application a second
-# time. Asserting "empty immediately" would be asserting a bug. What this catches is the count that
-# never returns to zero at all.
-step "wait for the transaction store to drain (RFC 3261's 64·T1 absorption window)"
+# **It takes up to a minute and that is correct — and this waited fifty seconds, which was wrong.**
+# `CF-22`, after `PX-13` was merged, failed here, reverted, and then found to have been right all
+# along. The arithmetic that mattered:
+#
+#   - RFC 3261 §17 holds a concluded transaction for its absorption timer, 64·T1 = 32 s at the
+#     default T1, so that a retransmission arriving after the final response is answered from the
+#     transaction rather than delivered to the application a second time. Asserting "empty
+#     immediately" would be asserting a bug — that much the old comment had right.
+#   - But this is a **proxy**, and one absorption window is not the worst case for a proxied
+#     request whose next hop says nothing. §17.1.2.2 gives the client transaction Timer F (or B)
+#     = 64·T1, and §16.8 confines Timer C to INVITE so nothing concludes a non-INVITE branch
+#     sooner. §16.7 requires the *best* final response, which does not exist until that branch
+#     concludes, and §17.2.2 gives a server transaction in Trying **no timer at all** — so the
+#     server transaction's own 64·T1 (Timer J, or H) starts only once the first window has already
+#     elapsed. **128·T1 = 64 s**, and every second of it is the RFC's.
+#   - `seq 1 100` × `sleep 0.5` is 50 s: strictly between one window and two. A dialog whose far
+#     end had gone away — `sipx dial` exits when its `--duration` elapses, so this script produces
+#     exactly that — drained at 64.000 s and was reported as a leak. It was not one, and the
+#     revert cost a release cycle.
+#
+# So the budget is past 128·T1, with room for the node's 500 ms sampling tick and for a loaded
+# runner. What this catches is what it always should have: a count that does not come back to zero.
+# `crates/sipx-clstr-sim/tests/transaction_drain.rs` is the same assertion in virtual time, where
+# the same 128·T1 is derived rather than guessed, and it is in `scripts/gate.sh`.
+drain_budget_s=100
+step "wait for the transaction store to drain (RFC 3261's worst case is 128·T1 = 64s; waiting ${drain_budget_s}s)"
 drained=""
-for _ in $(seq 1 100); do
+for _ in $(seq 1 $((drain_budget_s * 2))); do
     last="$(grep -o 'outstanding=[0-9]*' "$work/node.log" | tail -1)"
     if [[ "$last" == "outstanding=0" ]]; then drained="yes"; break; fi
     sleep 0.5
 done
 [[ -n "$drained" ]] \
-    || fail "the node still reports ${last:-nothing} after 50s — a leaked transaction"
+    || fail "the node still reports ${last:-nothing} ${drain_budget_s}s after the call — past
+  RFC 3261's own worst case of 128·T1 (64s), so something is held that no §17 timer will collect"
 echo "  ✓ the node holds no transactions afterwards"
 
 printf '\n\033[1;32me2e-call: the call completed, with media flowing directly between the phones\033[0m\n'
