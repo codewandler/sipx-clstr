@@ -45,4 +45,18 @@ scripts/check-vectors.py --check
 step "docs"
 scripts/check-docs.sh
 
+# `FC-5`. The end-to-end proofs are the evidence behind the release's cluster claim, and they are the
+# one part of the gate that nothing else compiles or runs — `FC-4` changed the node underneath them
+# and three of them answered `403` for a release cycle while everything here stayed green. Cheap
+# enough to sit in the fast half: it reads four files and compares strings.
+step "proof domains"
+scripts/check-proof-domains.py
+
+# `DX-12`. Deliberately **after** the build, because that is what makes it worth more here than in
+# CI: `target/debug/sipx-clstr` exists by now, so the CLI reference is checked against the binary's
+# own `--help` rather than against a static reading of `main.rs`. The `docs` workflow has no Rust
+# toolchain and gets the static reading; the script says which one it used on every run.
+step "site"
+scripts/check-site.py
+
 printf '\n\033[1;32mgate: green\033[0m\n'

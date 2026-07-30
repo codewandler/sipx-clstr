@@ -13,6 +13,16 @@
 #
 # The `sipx` CLI is not vendored: it is the kernel's own phone, built from the sipx checkout. Pass
 # `--sipx`, or set SIPX, or have it on PATH.
+#
+# **One run at a time, per machine** — see the note above `preflight` for why that is a constraint
+# rather than an omission, and why it does not make the CI job flaky.
+#
+# **This runs in CI** — `.github/workflows/ci.yml`, the `e2e` job, which builds the `sipx` CLI from
+# the kernel tag this workspace pins and then runs exactly this script. It is deliberately not in
+# `scripts/gate.sh`: the gate must stay runnable without a second checkout. `CF-15` wired it in after
+# `DX-12` recorded the opposite decision, because the reason for that decision — that the CLI comes
+# from another repository — turned out to cost about forty seconds of `cargo build`, while the cost of
+# *not* running it was `FC-4` breaking this proof for a whole release with nothing watching.
 
 set -uo pipefail
 
@@ -20,13 +30,14 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 sipx="${SIPX:-}"
+host=127.0.0.1
 port=5060
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --sipx) sipx="${2:-}"; shift 2 ;;
         --port) port="${2:-}"; shift 2 ;;
-        -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -61,12 +72,65 @@ fail() {
 
 step() { printf '\n\033[1m── %s\033[0m\n' "$1"; }
 
+# --------------------------------------------------------------------------- where it listens ---
+
+# **This proof runs one at a time per machine, and that is a constraint rather than an oversight**
+# (`CF-15`, settling the residue `CF-13` left here).
+#
+# `CF-13` gave the *phones* ephemeral ports, and the node kept `127.0.0.1:5060`. The obvious next
+# step — make the node's address or port unique per run, so two runs never collide — is closed off
+# from three directions at once, and it is worth writing down so the next reader does not spend the
+# afternoon rediscovering it:
+#
+#   1. The **port** cannot vary. `sipx dial` derives the callee's transport address from the
+#      request-URI, and location-service §3.2 N7 makes an absent port and an explicit one *distinct*
+#      AoR keys (RFC 3261 §19.1.4: "a URI omitting any component with a default value will not match
+#      a URI explicitly containing that component with its default value"). A node on `:41337` could
+#      only be dialled as `sip:bob@127.0.0.1:41337`, which is not the AoR bob registered under.
+#   2. The **address** cannot vary either, for a second reason that only shows up once you try it.
+#      `sipx register` takes `--target`, so registration could be aimed at any address while the AoR
+#      stayed literal — but `sipx dial` has no `--target`, so the call leg must reach the node
+#      through the request-URI, which drags the *domain* along with the address.
+#   3. And a runtime domain is refused on purpose. `scripts/check-proof-domains.py` (`FC-5`) requires
+#      the domain a proof registers in to be a **static literal** it can compare against the tenant
+#      document — "decided at runtime is not statically provable, and is refused rather than
+#      skipped". That check is why `FC-4`'s `403`s cannot happen again silently, and it is worth
+#      more than parallel local runs of this script.
+#
+# So the node's address stays literal, and concurrency is handled by refusing to start rather than by
+# failing halfway through. **The CI job is unaffected**: `.github/workflows/ci.yml` runs `e2e` on its
+# own `ubuntu-latest` VM, one run per machine, with nothing else on it binding `5060` — the collision
+# CF-13 warned about is a developer's second terminal, not a CI condition. What this turns that
+# developer's confusing mid-run failure into is an immediate exit 2, "the environment is not ready",
+# which is the contract the header already declares.
+preflight() {
+    python3 - "$host" "$port" <<'PY'
+import socket, sys
+probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    probe.bind((sys.argv[1], int(sys.argv[2])))
+except OSError as error:
+    print(error, file=sys.stderr)
+    sys.exit(1)
+finally:
+    probe.close()
+PY
+}
+
+if ! held="$(preflight 2>&1)"; then
+    echo "e2e-call: $host:$port is not available — $held" >&2
+    echo "  Something already holds it: another run of this script, a previous node that did not" >&2
+    echo "  exit, or a real SIP service. This proof needs that exact address (see the note above" >&2
+    echo "  \`preflight\`), so it stops here rather than failing halfway through." >&2
+    exit 2
+fi
+
 # ------------------------------------------------------------------------------- the node ------
 
 step "build"
 cargo build --quiet --bin sipx-clstr || fail "the node does not build"
 
-step "start the node on 127.0.0.1:$port"
+step "start the node on $host:$port"
 # Configured by a document, not by flags: `DP-10` made the schema the only configuration surface, and
 # a proof script still passing `--listen` would be testing an interface that no longer exists.
 cat > "$work/cluster.yaml" <<YAML
@@ -79,8 +143,8 @@ cluster:
   listener:
     - roles: [edge, registrar]
       transport: udp
-      bind: 127.0.0.1:$port
-      advertise: 127.0.0.1:$port
+      bind: $host:$port
+      advertise: $host:$port
   membership:
     - node: 1
       name: node-a
@@ -91,6 +155,9 @@ cluster:
   tenant:
     - name: default
       id: 1
+      # A literal, deliberately: `scripts/check-proof-domains.py` compares this against the
+      # address-of-record the phones register below, and only a literal can be compared before the
+      # script runs. See the note above `preflight`.
       domains: [127.0.0.1]
 YAML
 setsid ./target/debug/sipx-clstr run --config "$work/cluster.yaml" \
@@ -103,10 +170,38 @@ for _ in $(seq 1 50); do
     grep -q "listening on" "$work/node.log" 2>/dev/null && break
     sleep 0.1
 done
-grep -q "listening on" "$work/node.log" 2>/dev/null || fail "the node never bound $port"
+grep -q "listening on" "$work/node.log" 2>/dev/null || fail "the node never bound $host:$port"
 echo "  $(head -1 "$work/node.log")"
 
 # ------------------------------------------------------------------------------ the phones -----
+
+# The phones' ports are **asked for, not chosen** (`CF-13`). They used to be `15081` and `15071`,
+# which are also two of the numbers the node crate's integration suite used to bind, so running this
+# script while the suite ran produced `Address already in use` in whichever of the two was slower —
+# and the failure landed on whatever diff happened to be under test. The suite no longer picks any
+# port; neither does this.
+#
+# Each phone needs a *stable* port, so `--local 127.0.0.1:0` is not enough on its own: `register`
+# publishes a contact and `answer` has to be listening on the port that contact names, and those are
+# two separate processes. So the kernel is asked which port is free and that answer is used for both.
+#
+# The **node's** port stays fixed, for the N7 reason set out above; its *address* is what makes the
+# run unique. These are on that same address, so the two mechanisms do not have to agree about
+# anything beyond `$host`.
+free_port() {
+    python3 - "$host" <<'PY'
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind((sys.argv[1], 0))
+print(s.getsockname()[1])
+s.close()
+PY
+}
+
+alice_port="$(free_port)" || fail "could not find a free port for alice"
+bob_port="$(free_port)" || fail "could not find a free port for bob"
+[[ -n "$alice_port" && -n "$bob_port" && "$alice_port" != "$bob_port" ]] \
+    || fail "could not find two distinct free ports (alice=$alice_port bob=$bob_port)"
 
 # A three-second 440 Hz tone. Audio is how this script proves media went *direct*: the node runs no
 # relay of any kind, so anything bob hears travelled straight from alice.
@@ -118,24 +213,24 @@ with wave.open(sys.argv[1], "w") as w:
                            for i in range(8000 * 3)))
 PY
 
-step "register both phones"
-for phone in bob:15081 alice:15071; do
+step "register both phones (alice on $alice_port, bob on $bob_port)"
+for phone in "bob:$bob_port" "alice:$alice_port"; do
     name="${phone%%:*}"; local_port="${phone##*:}"
-    out="$(timeout 15 "$sipx" register "sip:$name@127.0.0.1" \
-        --local "127.0.0.1:$local_port" --json 2>&1)" \
+    out="$(timeout 15 "$sipx" register "sip:$name@$host" \
+        --local "$host:$local_port" --json 2>&1)" \
         || fail "$name could not register: $out"
     grep -q '"status":"registered"' <<<"$out" || fail "$name did not register: $out"
     echo "  $name: $out"
 done
 
 step "place the call"
-setsid timeout 40 "$sipx" answer --local 127.0.0.1:15081 \
+setsid timeout 40 "$sipx" answer --local "$host:$bob_port" \
     --duration 4 --wait 30 --record "$work/heard.wav" --json \
     >"$work/bob.json" 2>"$work/bob.err" </dev/null &
 answer_pid=$!
 sleep 1
 
-dial="$(timeout 40 "$sipx" dial sip:bob@127.0.0.1 --local 127.0.0.1:15071 \
+dial="$(timeout 40 "$sipx" dial "sip:bob@$host" --local "$host:$alice_port" \
     --duration 4 --timeout 20 --play "$work/tone.wav" --stats --json 2>&1)"
 echo "  alice: $dial"
 grep -q '"status":"answered"' <<<"$dial" || fail "the call was not answered: $dial"

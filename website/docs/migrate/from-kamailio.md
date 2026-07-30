@@ -5,8 +5,9 @@ description: "An honest concept map: what moves across today, what is still spec
 
 # Migrating from Kamailio
 
-**The role is the same — this is a SIP proxy and registrar, so it replaces one — but the floor
-today is a single node, and the reason to look at it is architectural rather than featural.**
+**The role is the same — this is a SIP proxy and registrar, so it replaces one — but the floor today
+is two nodes that share a registrar and must be addressed individually, and the reason to look at it
+is architectural rather than featural.**
 
 You already run a proxy. This page is the concept map: which of the things in front of you have a
 home here, which of those homes are built, and which of your assumptions this platform declines to
@@ -17,15 +18,21 @@ qualification page and it is blunter than this one.
 
 Nothing below is hedged, so start here.
 
-- **One node.** More than one node cooperating is specified and normative, and not shipped. There
-  is no clustering in the binary you can build today.
-- **No trunks.** There is no carrier egress: a call routes between users registered to this node,
+- **Two nodes, addressed separately.** A shared PostgreSQL location service makes two nodes one
+  registrar — register through one, be called through the other — and that is scripted and
+  repeatable. What is *not* shipped is one address in front of them: each node record-routes its own
+  address, so in-dialog requests must come back to the node that forwarded them. A VIP or a single
+  Service in front of the two will break calls, and affinity tokens are what fix it.
+- **No trunks.** There is no carrier egress: a call routes between users registered to this cluster,
   or it does not route.
-- **An open registrar.** Digest authentication is implemented and proved against the RFCs' own
-  test vectors, and no command-line or configuration path turns it on. The binary accepts any
-  `REGISTER` for any address-of-record from anyone who can reach the port.
-- **Bindings live in memory.** A restart loses every registration, and there is no second node
-  that kept them.
+- **An open registrar.** Digest authentication is implemented, proved against the RFCs' own test
+  vectors, and applied from the document — but there is no user-credential store, so declaring
+  `tenant[].auth` makes the node refuse to start or challenge everyone into a `401` nobody can answer.
+  A node that runs accepts any `REGISTER` for any address-of-record in a served domain, from anyone who
+  can reach the port.
+- **Bindings are durable only if you ask.** `backend: memory` loses every registration on restart;
+  `backend: postgres` keeps them and shares them, and needs the non-default `postgres` cargo feature
+  compiled in.
 - **UDP and TCP, one listener.** No TLS listener, no WebSocket listener.
 
 That is a small floor and it is the true one. The rest of this page is what the map looks like
@@ -37,8 +44,10 @@ anyway.
 |---|---|---|
 | Request forwarding, stateful and stateless | The proxy core: RFC 3261 §16 forwarding, forking, `CANCEL`, Timer C, loop detection (RFC 5393) | today |
 | A registrar and its location table | The registrar: `REGISTER`, address-of-record canonicalisation, bindings, a compare-and-swap location store | today |
-| That location table kept in a database | A PostgreSQL location store — real code with real tests, behind a cargo feature the shipped binary does not reach | today, partly |
-| A digest challenge on `REGISTER` | The registrar-auth rules, vector-proved, with no flag that switches them on | today, partly |
+| That location table kept in a database | A PostgreSQL location store, named in the document — behind the non-default `postgres` cargo feature, without which a node asking for it refuses to start | today |
+| Registrations spread across nodes, readable by all of them | One shared location service behind two nodes. Sharding by rendezvous hash is the next step and is not shipped | today, partly |
+| A digest challenge on `REGISTER` | The registrar-auth rules, vector-proved and applied from `tenant[].auth` — with no user-credential store behind them yet | today, partly |
+| Per-domain and per-user limits on registration | The tenant's served `domains` (`403` for any other), its `maxBindingsPerAor` quota, and its `expiry` bounds | today |
 | UDP and TCP listeners | One listener carrying both | today |
 | The request-routing script | Typed modules with declared hook phases, dependencies and conflicts; a deployment profile selects a provably compatible set | specified, not shipped |
 | Per-customer branches inside that script | Nothing. Routing policy is composed from modules, and a routing configuration language is a stated non-goal | not planned |
@@ -46,7 +55,7 @@ anyway.
 | Number rewriting on the way out | Declarative number normalisation, fenced to exactly two points in the request path and to the number position alone | specified, not shipped |
 | A state store every node reads on the hot path | Nothing, deliberately — routing state rides in the message instead. This is the section below | specified, not shipped |
 | Per-edge tracking of NAT'd client connections | Flow references: a signed reference naming both the flow and the node that owns it, plus an RPC to that owner | specified, not shipped |
-| Registrations spread across nodes | Registrar shards by rendezvous hash, compare-and-swap per binding | specified, not shipped |
+| Registrations *partitioned* across nodes, one owner per key | Registrar shards by rendezvous hash, compare-and-swap per binding | specified, not shipped |
 | An RTP relay the proxy controls | An external relay driven over a network control protocol; RTP never enters the signalling process | specified, not shipped |
 | The whole thing under Kubernetes | An operator, a Helm chart, drained scale-in, autoscaling on SIP-shaped signals | designed |
 | Queues, IVR and conference alongside the proxy | An optional B2BUA service built *with* the platform rather than inside it | not planned |

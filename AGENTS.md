@@ -22,8 +22,10 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `CHANGELOG.md` | closed stories roll up here | hand-written |
 
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
-criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the whole
-[upstream ledger](docs/upstream.md), so nothing here waits on the kernel. The gate is green, and
+criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the
+[upstream ledger](docs/upstream.md) as it then stood — but two rows are open again: `CF-9`'s MSRV row,
+and `CX-5`'s nonce-uniqueness defect, which the pinned kernel still has and which the `v0.10.0` bump
+does **not** fix. The gate is green, and
 M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
 duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
 Check the board before assuming any of that is current.
@@ -109,8 +111,18 @@ two trees and they are published differently:
 
 - Every story's frontmatter is complete and the board regenerated (`/track:board`).
 - New specs carry normative references and test-vector tables, not prose alone.
-- Every page under `website/docs/` is reachable from `website/sidebars.js`; the site build fails
-  on a broken link rather than shipping one.
+- Every page under `website/docs/` is reachable from `website/sidebars.js`, and every doc id the
+  sidebar names exists; the site build fails on a broken link rather than shipping one.
+  `check-site.py` enforces both — an orphan page builds fine and is reachable by nobody, which is
+  the one site defect a green build cannot see.
+- **Every command the documentation shows is checked against the binary**, not proof-read.
+  `check-site.py` reads the fenced blocks that `check-docs.py` deliberately strips, and holds every
+  `sipx-clstr` invocation in `README.md` and the site — and the flag table in `reference/cli.md`, in
+  **both** directions — to the flags `--help` actually reports. It exists because no gate had ever
+  read a documented command, so when `DP-8` replaced the three provisional flags, roughly thirty
+  commands went on naming flags the binary had stopped accepting, through a release, with
+  everything green. Commands needing Docker, Kubernetes or the external `sipx` CLI are not executed;
+  they are listed by name in the script's output rather than silently skipped.
 - **A site page never relative-links into `docs/`.** Nothing under `docs/` is published, so
   `](../../docs/specs/proxy-behavior.md)` resolves on disk and 404s on the site — link the
   **GitHub URL** instead. `check-docs.py` enforces this. It is the inverse of the rule it

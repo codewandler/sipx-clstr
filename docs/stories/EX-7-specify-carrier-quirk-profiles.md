@@ -18,8 +18,8 @@ Give per-peer protocol quirks — header injection and SDP body rewriting — a 
 ## Acceptance
 - [x] A quirk profile is data: which peers it applies to, which headers it adds on which methods, and which SDP rewrites it performs. — [extension-framework](../designs/extension-framework.md) § *The profile — data, and only data* (`QuirkProfile`, `HeaderRule`, `SdpRule`, `MessageClass`) and § *Binding — which peers, and several at once*.
 - [x] The vocabulary is bounded — it must not become general scripting embedded in config. — § *The bound — stated so it can be checked rather than believed* (B1–B4 with the check per property, the anti-catalogue table, and rule P3 in § *The catalogues*).
-- [x] Profiles attach to a trunk or a domain, and several may apply. — § *Binding*: two attachment points, disjoint union over the composed set, `overrides` as the only escape (G10; vectors QP-C-1, QP-C-2, QP-G-2, QP-G-3).
-- [x] Each shipped profile carries a test vector; adding one is a config change plus a vector. — § *The shipped catalogue, and its vectors*: two shipped profiles, 22 `QP` rows, and the stated asymmetry — a peer is config + a vector, a new *kind* of quirk is a catalogue row + a spec change + a vector.
+- [x] Profiles attach to a trunk or a domain, and several may apply. — § *Binding*: two attachment points, the composed set taken **per attachment object** — never a trunk's rules together with a domain's — and a binding-level override as the only escape (G10, G13; vectors QP-C-1, QP-C-2, QP-G-2, QP-G-3). This read "disjoint union over the composed set" until `EX-11` derived that the two sets never intersect at all, which makes a union over them not merely imprecise but a description of a composition that does not exist; `EX-12` corrected the sentence.
+- [x] Each shipped profile carries a test vector; adding one is a config change plus a vector. — [hook-framework](../specs/hook-framework.md) §8.1 and §9.1: two shipped profiles, 31 `QP` rows, and the stated asymmetry — a peer is config + a vector, a new *kind* of quirk is a catalogue row + a spec change + a vector.
 - [x] Interaction with media policy (e.g. a quirk that also implies SRTP) is specified. — § *Media policy — a quirk asserts, and never configures*: `requires_media`, G11, and the named ME-6 boundary.
 
 ## Progress
@@ -44,9 +44,12 @@ Give per-peer protocol quirks — header injection and SDP body rewriting — a 
 - **One structural spec change is required, and it is not a phase**:
   `SyntaxDecl.media_types_rewritten` must split into `BodyClaim::{Replace, Field}`, because
   `media-anchor` replaces the whole body (media-relay §3.2 O3) while a quirk writes a named field,
-  and G2's media-type exclusivity currently makes anchoring + an SDP quirk a startup conflict.
+  and G2's media-type exclusivity made anchoring + an SDP quirk a startup conflict.
   Handed to [EX-8](EX-8-make-the-async-query-declaration-normative.md) with G9/G10/G11 rather than
-  edited into the closed `hook-framework` spec.
+  edited into the closed `hook-framework` spec — but `EX-8` closed on `EX-6`'s half only, so the
+  delta was orphaned until
+  [EX-12](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) landed it in
+  `hook-framework` §6, §7 (G9–G14), §8.1 and §9.1.
 - **Media policy**: a quirk cannot configure media (no `m=` proto, `a=crypto`, ICE or transport
   address is a catalogue row). It may *assert* — `requires_media: [Srtp(..)]`, checked at startup
   against the bound trunk's `ME-6` policy (G11). EX-7 owns the assertion and the check; ME-6 owns
@@ -58,8 +61,11 @@ Give per-peer protocol quirks — header injection and SDP body rewriting — a 
   implied — a field-addressable SDP model — and it is ME-4's to file, on media-control's own stated
   trigger; the requirement is written out in the design so ME-4 inherits it.
 - **Not filed by this story, for the coordinator:** an `sec-agree` *negotiation* module (RFC 3329
-  §2/§5 is behaviour, not a quirk); registering the `QP` prefix in the vector gate is
-  [CF-8](CF-8-bring-every-spec-under-the-vector-gate.md)'s.
+  §2/§5 is behaviour, not a quirk); registering the `QP` prefix in the vector gate was expected to be
+  [CF-8](CF-8-bring-every-spec-under-the-vector-gate.md)'s, but `CF-8` could only register prefixes
+  owned by a *spec* — so it fell to
+  [EX-12](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md), which had to move the rows
+  into one first.
 
 ## Notes
 - One deployment has a live example needing `mediasec` headers on REGISTER and INVITE plus an SDP `a=sendrecv` rewrite. It is currently an inline domain test in the routing script.

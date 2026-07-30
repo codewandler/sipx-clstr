@@ -34,9 +34,11 @@ needs in order to route the next request travels in the message itself, signed, 
 
 ## Where this actually is
 
-One node registers users and proxies calls between them. That is real and it is tested — two
-independent phones register, call each other through the node, and hang up, with audio flowing
-directly between them. **The cluster is not built yet.**
+A node registers users and proxies calls between them, and **two nodes sharing one PostgreSQL
+location service share their registrations** — a user who registers through one can be called
+through the other, with audio flowing directly between the phones. That is real and it is scripted,
+as two local processes and as two pods on Kubernetes. **What is not built is one address in front of
+the two**, and that is the next thing that has to exist.
 
 | | | |
 |---|---|---|
@@ -45,8 +47,9 @@ directly between them. **The cluster is not built yet.**
 | **Transports** | UDP and TCP on one listener | today |
 | **Media** | Flows directly between endpoints; the platform never touches RTP | today |
 | **Configuration** | One cluster-scoped document in YAML, JSON or TOML; refuses to start rather than apply half of it | today |
+| **Tenant policy** | Served domains (`403` for any other), the per-AoR binding quota, the expiry bounds, and a bound on in-flight transactions (`503` above it) | today |
 | **Two nodes, one registrar** | A shared PostgreSQL location service: register through one node, be called through another | today |
-| **Digest authentication** | Implemented and vector-proved — the document accepts `tenant[].auth` and nothing applies it | today, partly |
+| **Digest authentication** | Implemented, vector-proved, and applied from `tenant[].auth` — but there is no user-credential store, so a document asking for it is refused or challenges nobody | today, partly |
 | **One address in front of the cluster** | Needs affinity tokens: each node record-routes its own address, so in-dialog requests must return to it | specified, not shipped |
 | **Registrar shards, flow ownership** | Rendezvous hashing, connection ownership, the owner RPC | specified, not shipped |
 | **Trunks** | Carrier interconnect, number normalisation, asserted identity and privacy | specified, not shipped |
@@ -57,10 +60,13 @@ directly between them. **The cluster is not built yet.**
 
 Three things will bite you, and none is obvious from the outside.
 
-**It is an open registrar.** Digest authentication is implemented and proved against the RFCs'
-own test vectors, but there is no command-line or configuration path that turns it on. The
-binary you build today accepts any `REGISTER` for any address-of-record, from anyone who can
-reach the port. Do not put it on a public address.
+**It is an open registrar.** Digest authentication is implemented, proved against the RFCs' own test
+vectors, and reachable from the document — and it still cannot protect this node, because there is no
+user-credential store yet. Declare `tenant[].auth` and the node either **refuses to start** (if its
+nonce `secretRef` resolves) or challenges every `REGISTER` into a `401` nobody can answer (if it does
+not). Declare nothing and the node accepts any `REGISTER` for any address-of-record in a served
+domain, from anyone who can reach the port. There is no third option today. Do not put it on a public
+address.
 
 **Registrations are only durable if you ask for them to be.** With `backend: memory` a restart loses
 every binding. `backend: postgres` shares them across nodes and survives a restart, and it needs the

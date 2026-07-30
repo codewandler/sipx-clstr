@@ -17,6 +17,19 @@ It does not prove media: no RTP flows, the SDP is carried opaquely. `ME-2` is wh
 
 Usage:  python3 sip_demo.py [host:port]
         NODE=host:port python3 sip_demo.py
+
+not-in-ci: needs a node already listening on a UDP port — it is the *client* half of a proof, not a
+self-contained one, and on its own it would time out rather than fail meaningfully.
+
+What would change it (`CF-15`): the script would have to start a node itself and choose its own
+address, at which point it *is* `scripts/e2e-call.sh` with strictly less coverage — no media, no
+transaction-drain assertion — and that one runs on every push since `CF-15` wired it into
+`.github/workflows/ci.yml`. So this one is not merely unrun, it is deliberately redundant in CI, and
+the thing that would change that is a reason to test the raw-SIP client path *specifically*, which
+nothing has needed yet. The behaviour it demonstrates is covered per push twice over: by the driver's
+own tests through the deterministic harness, and by the `e2e` job over real sockets. It stays as the
+thing a reader runs by hand against the node they just started, which is what `README.md` offers it
+as. `DX-12` recorded this deliberately and `CF-15` re-confirmed it against a real alternative.
 """
 
 from __future__ import annotations

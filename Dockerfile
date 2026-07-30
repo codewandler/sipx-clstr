@@ -74,8 +74,12 @@ EXPOSE 5060/udp 5060/tcp
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/sipx-clstr"]
 
-# Help, not `run`. Since DP-5 a node refuses to start when it would advertise an unspecified
-# address, so `run --listen 0.0.0.0:5060` — the only default a container image could reasonably
-# pick — now exits 2. A default that always fails teaches nothing; the usage text names the flag
-# that is missing. Every real invocation passes `--advertise`, as the manifests do.
+# Help, not `run`. A node is configured by a document and `run` refuses without `--config`, so a
+# default `run` would exit 2 on `error: the following required arguments were not provided:
+# --config <PATH>` — and no default path could be right, because the image ships no document: the
+# document is mounted, and which one it is belongs to the deployment. A default that always fails
+# teaches nothing; the usage text names what is missing instead. Every real invocation supplies the
+# command, as the manifests do (`args: [run, --config, /etc/sipx-clstr/cluster.yaml]`), with the
+# node's identity from SIPX_CLSTR_NODE/ZONE/ROLES because a Deployment's replicas cannot carry
+# distinct ids.
 CMD ["--help"]

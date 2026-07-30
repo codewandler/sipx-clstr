@@ -58,10 +58,30 @@ id = "PB-A-3"
 story = "AF-5"
 reason = "Transaction affinity — a 2xx ACK routed by token at a foreign edge. Multi-node, M2."
 
+# ── registrar-auth (`RA`) ────────────────────────────────────────────────────────────────────────
+#
 # `RA-R-7` was deferred here by `RG-10` — a documentation-only pass that added the row without a
 # test — and is now proved by `RG-11`:
 # `crates/sipx-clstr-sim/tests/register_auth.rs::ra_r_7_…`. Removed rather than left in place,
 # because a deferral that names a covered row is the stale entry this file's header calls out.
+
+[[deferred]]
+id = "RA-R-8"
+story = "CX-5"
+reason = """
+`N1`, nonce uniqueness per challenge — registrar-auth §6.1. Deferred because it cannot be covered
+from this repository *and* because it does not hold: nonce minting is `sipx-ua::challenge`'s (an auth
+primitive, AGENTS.md #6), and at the pinned `v0.7.0` its mint is `<issued-at in hex>.<HMAC over
+issued-at and realm>` — a pure function of the second, the realm and the secret. Two users of one
+tenant challenged in the same second hold one nonce and therefore one replay counter, and the second
+correct credential is refused as `RA-R-2` with a `401` carrying no `stale`. The row states the
+requirement rather than the current behaviour, so it fails today by construction; that is the point of
+writing it. Filed as an `open` row in docs/upstream.md with the reproduction. Coverage is CX-5's
+remaining acceptance — a kernel that mints per-challenge entropy, a pinned release carrying it, and
+the harness scenario that challenges two users within one simulated second and requires both to
+authenticate. CX-5 therefore stays open: closing it would leave this deferral naming a story nobody
+will act on.
+"""
 
 # ── hook-framework (`HF`) ────────────────────────────────────────────────────────────────────────
 #
@@ -1328,13 +1348,6 @@ Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10`
 """
 
 [[deferred]]
-id = "CC-V-9"
-story = "DP-8"
-reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
-"""
-
-[[deferred]]
 id = "CC-V-10"
 story = "DP-8"
 reason = """
@@ -2537,4 +2550,446 @@ id = "NN-X-10"
 story = "RT-2"
 reason = """
 Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
+"""
+
+# ── carrier quirk profiles (`QP`) ────────────────────────────────────────────────────────────────
+#
+# Registered by `EX-12`, which had to land the `EX-7` spec deltas first: these 31 rows sat in
+# `docs/designs/extension-framework.md`, and the check reads rows only out of the spec that owns a
+# prefix, so no gate could see them. They are `hook-framework` §9.1 now.
+#
+# Every one is deferred, and the honest reason is the same for all of them: **nothing executes a
+# quirk profile.** There is no `carrier-quirks` module, no hook runtime to run it (`EX-3`), and no
+# profile catalogue to carry the bindings and overrides the rows are stated over (`EX-5`, via §8.1).
+# That is the same position `HF-1` … `HF-13` are in and it is recorded the same way — `EX-3` as the
+# story, a per-row reason so a row proved early shows up as a stale deferral rather than vanishing
+# into a group.
+#
+# What deferral here does *not* mean: that the rows are unproved because they are vague. They are
+# stated against §8.1's types and §7's G9–G14 and were derived rather than sketched — `EX-11`
+# corrected `QP-C-2` and added `QP-C-4`, `QP-G-16` … `QP-G-18` from a derivation. The gap is an
+# implementation, not a specification.
+
+[[deferred]]
+id = "QP-A-1"
+story = "EX-3"
+reason = """
+`sec-agree-headers` writing both `Security-*` headers from trunk configuration on a bound branch.
+Needs the `carrier-quirks` module, the runtime that invokes it at H9, and a trunk binding to carry
+`quirk_config` — `EX-5`'s catalogue.
+"""
+
+[[deferred]]
+id = "QP-A-2"
+story = "EX-3"
+reason = """
+A method outside the rule's `MessageClass` produces no `PatchHeaders` effect at all. Needs a trace
+to inspect, so it needs the runtime; the class matching is normative in §8.1 already.
+"""
+
+[[deferred]]
+id = "QP-A-3"
+story = "EX-3"
+reason = """
+A branch to a trunk binding no profile is byte-identical — the assertion that *binding* is the only
+selector. Needs two trunks and the runtime to forward on one of them.
+"""
+
+[[deferred]]
+id = "QP-A-4"
+story = "EX-3"
+reason = """
+Idempotence: applying `Set` to a draft already carrying the configured value changes no byte and
+emits one effect. Needs the module; the property is a claim about `HeaderOp::Set`, not about config.
+"""
+
+[[deferred]]
+id = "QP-A-5"
+story = "EX-3"
+reason = """
+`EnsureExplicit(Direction)` materializing `a=sendrecv` at session and `m=audio` scope (RFC 8866
+§6.7). Needs the module and an SDP field writer; the RFC 8866 §5–6 locator it is built on is the
+kernel-side parser `ME-4` files upstream, which does not exist yet either.
+"""
+
+[[deferred]]
+id = "QP-A-6"
+story = "EX-3"
+reason = """
+The literal P3 assertion — an already-negotiated `a=sendonly` is never overwritten, only the scope
+that carried nothing is materialized. The row this profile exists to be safe about; needs the
+module.
+"""
+
+[[deferred]]
+id = "QP-A-7"
+story = "EX-3"
+reason = """
+The same two rules on the response path (H11), against a 200 OK answer body. Needs the runtime's
+response-side egress point as well as the module.
+"""
+
+[[deferred]]
+id = "QP-A-8"
+story = "EX-3"
+reason = "A request with no body produces no `RewriteBody` and no error. Needs the module to run at all."
+
+[[deferred]]
+id = "QP-A-9"
+story = "EX-3"
+reason = """
+A body of `application/isup` is untouched — the declared media type scopes the effect (E3). Needs
+the module and the §6 `BodyClaim` scope check the runtime enforces.
+"""
+
+[[deferred]]
+id = "QP-C-1"
+story = "EX-3"
+reason = """
+Both shipped profiles composed on one trunk, and the forwarded bytes identical under either
+evaluation order — the confluence claim asserted rather than argued. Needs the module and `EX-5`'s
+catalogue to bind two profiles to one object.
+"""
+
+[[deferred]]
+id = "QP-C-2"
+story = "EX-3"
+reason = """
+A trunk-bound and a domain-bound profile applying to two *different* messages on the two legs of one
+transaction, with no composed set containing rules from both bindings. Needs the runtime, a
+registrant domain and a trunk — so it needs `EX-5`'s bindings and a two-leg harness scenario.
+"""
+
+[[deferred]]
+id = "QP-C-3"
+story = "EX-3"
+reason = """
+The G9 ordering assertion: `media-anchor` replaces the body, the quirk's field write lands on the
+replacement, and the forwarded body carries both. Needs the relay as well as the quirk module —
+`ME-4`/`ME-5` — which is why it is the last of the `QP-C` rows to become testable.
+"""
+
+[[deferred]]
+id = "QP-C-4"
+story = "EX-3"
+reason = """
+A domain-bound and a trunk-bound profile writing the same elementary target **boots**, each applying
+on its own leg. The row that fails if `EX-11`'s derived condition is violated, so it is the
+regression guard for the composition rule rather than a feature test. Needs the startup composition
+`EX-3` builds and `EX-5`'s bindings.
+"""
+
+[[deferred]]
+id = "QP-G-1"
+story = "EX-3"
+reason = "G10 — a profile naming a header outside the catalogue fails the boot. Startup validation, no graph validator yet."
+
+[[deferred]]
+id = "QP-G-2"
+story = "EX-3"
+reason = """
+G10 — two profiles contesting one elementary target with no override, rejected naming both and the
+contested target. Needs the validator and `EX-5`'s bindings; the elementary-class overlap rule is
+§8.1's.
+"""
+
+[[deferred]]
+id = "QP-G-3"
+story = "EX-3"
+reason = """
+G13's resolving case — an override at the binding names the target and the winner, the loser's rule
+is dropped, and the startup composition record names the override. Needs the validator and the
+composition export.
+"""
+
+[[deferred]]
+id = "QP-G-4"
+story = "EX-3"
+reason = """
+G10 — a configured value that does not parse against the catalogue row's ABNF. Needs the validator
+and the registry constants the ABNF comes from (`EX-2`/`EX-4`).
+"""
+
+[[deferred]]
+id = "QP-G-5"
+story = "EX-3"
+reason = "G10 — a binding naming a trunk that does not exist. Needs the validator and a trunk object to be absent from (`RT-2`)."
+
+[[deferred]]
+id = "QP-G-6"
+story = "EX-3"
+reason = """
+G11 — a profile asserting `Srtp` on a trunk declaring `SrtpPolicy::Disabled`. The same check as
+media-relay's G-M5, and the same row as `MR-C-3`; `ME-6` landed `TrunkMediaPolicy`, so what is
+missing is only the validator that reads it.
+"""
+
+[[deferred]]
+id = "QP-G-7"
+story = "EX-3"
+reason = "G11's passing case — `Sdes` or `DtlsSrtp` satisfies `Srtp`, and the node boots. Needs the validator."
+
+[[deferred]]
+id = "QP-G-8"
+story = "EX-3"
+reason = """
+G9 — a second module declaring `Replace(\"application/sdp\")` at the same phase as `media-anchor`.
+The rule is new in §7 as of `EX-12`; enforcing it needs the graph validator reading the §6
+`BodyClaim` list.
+"""
+
+[[deferred]]
+id = "QP-G-9"
+story = "EX-3"
+reason = "G9 — two modules declaring the same `Field(t, f)` at one phase. Startup validation, no validator yet."
+
+[[deferred]]
+id = "QP-G-10"
+story = "EX-3"
+reason = """
+The catalogue invariant, enforced as an ordinary G2 exclusive-claim conflict between
+`carrier-quirks` and `session-timer` over `Session-Expires`. Needs no new rule — it needs G2 to be
+running, which is `HF-3`/`HF-6`'s blocker too.
+"""
+
+[[deferred]]
+id = "QP-G-11"
+story = "EX-3"
+reason = """
+G12 — a profile carrying `requires_media` bound to a domain, which has no `TrunkMediaPolicy` to
+check against. Needs the validator and a domain binding (`EX-5`).
+"""
+
+[[deferred]]
+id = "QP-G-12"
+story = "EX-3"
+reason = """
+G13 — the commonest contest, two profiles on the *same* trunk, resolved by an override there. The
+row that shows the escape is not directional. Needs the validator and `EX-5`'s bindings.
+"""
+
+[[deferred]]
+id = "QP-G-13"
+story = "EX-3"
+reason = """
+G13 — an override whose target no two applicable profiles write: the contest was removed and the
+override was not, so the boot fails rather than the override silently doing nothing. Needs the
+validator.
+"""
+
+[[deferred]]
+id = "QP-G-14"
+story = "EX-3"
+reason = """
+G13 — an override whose winner is bound at that point but writes no rule for the named target.
+Naming a profile does not name a target. Needs the validator.
+"""
+
+[[deferred]]
+id = "QP-G-15"
+story = "EX-3"
+reason = """
+G13 and G11 together — an override deletes rules, never assertions, so a profile whose every rule is
+overridden away is still bound and still fails G11. Needs the validator and the override machinery.
+"""
+
+[[deferred]]
+id = "QP-G-16"
+story = "EX-3"
+reason = """
+G14 — `ValueLeaf::TrunkConfig` in a profile bound to a domain, and the mirror case. Two independent
+reasons reject this profile at a domain (G12 for the assertion, G14 for the leaf) and the row exists
+to pin the one that survives if a future profile drops the assertion. Needs the validator.
+"""
+
+[[deferred]]
+id = "QP-G-17"
+story = "EX-3"
+reason = """
+G13 — the override an operator reading the composition as a union would write as the repair for
+`QP-C-4`, rejected because at that trunk the target is written by one profile and the winner is
+bound elsewhere. A specialization of `QP-G-13`; needs the validator.
+"""
+
+[[deferred]]
+id = "QP-G-18"
+story = "EX-3"
+reason = """
+G13 — a three-way contest resolved by one entry naming one winner, with both losers' rules dropped
+and the override recorded once. Needs the validator and `EX-5`'s bindings.
+"""
+
+# ---------------------------------------------------------------------------------------------
+# Rows covered by a test that never compares a value the row states — `CF-12`'s ledger.
+#
+# Not deferrals. Every row below has a test, the test runs, and what it does check is checked; what
+# it does not check is the quantity the row exists to pin. `PB-F-1` is the case that named the
+# class: the row read "Timer C set 180 s" and its test compared `[Kind::ResolveTargets,
+# Kind::Forward, Kind::SetTimer]`, so a row claiming 180 s and code arming 180 s coexisted for the
+# project's whole life without ever meeting. `PX-10` corrected that row; this list is what the
+# sweep found when the same question was asked of every other one.
+#
+# The entries are a ratchet, not a waiver. `check-vectors.py` fails on a row that becomes shape only
+# without being listed, and fails on a listed row whose proof has since started comparing the value
+# — so the list can only shrink, and none of these rows counts towards "proved" in the report.
+#
+# Read the reasons: they are not all the same defect. Some are a missing assertion and nothing more
+# (`RA-D-5`, `LS-R-20`). Some are the check reaching the edge of what it can decide — a value that
+# is illustrative rather than pinned (`LS-K-1`), or stated at a layer the test does not reach
+# (`LS-R-10`). One, `PB-R-5`, was a row and a test that flatly disagreed — the only entry the sweep
+# found where both halves ran and stated opposite outcomes. `PX-11` settled it in `proxy-behavior`
+# §8.1 rather than by assertion, and it has left this list.
+# ---------------------------------------------------------------------------------------------
+
+[[unasserted]]
+id = "PB-V-3"
+reason = """
+States "insert 70 → decrement → forward with 69". The test compares the forwarded `Max-Forwards`
+against `69` and nothing observes the inserted `70`, so the insertion default is inferred from the
+decrement rather than checked. A missing assertion, and a cheap one to add.
+"""
+
+[[unasserted]]
+id = "PB-F-1"
+reason = """
+The case the class is named for. States a Record-Route token parameter of at most 200 B and Timer C
+armed at 240 s; the test compares the armed duration against `DEFAULT_TIMER_C` and a floor constant,
+never against 240, and measures no header length at all. Comparing the code's own constant is not
+comparing the row: were the constant to move, the test would still pass and the row would still say
+240 s — which is exactly how it came to say 180 s.
+"""
+
+[[unasserted]]
+id = "PB-R-9"
+reason = """
+States "as `503` from branch → R8". The `503` is a description of how a transport error is treated
+internally, not a message anyone sees: R8 requires that it never be forwarded as `503`. The test
+asserts the `500` that does go upstream, which is the observable half of the row. The unobservable
+half has nothing to compare it to at this layer.
+"""
+
+[[unasserted]]
+id = "PB-C-1"
+reason = """
+States `200` to the CANCEL. The test compares the first effect's kind against `Kind::AnswerCancel`
+and never the status it carries — the `PB-F-1` shape exactly, one row over. A CANCEL answered with
+anything else would pass.
+"""
+
+[[unasserted]]
+id = "RA-D-5"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::Mismatch` and that `stale` is
+absent, never the status. `RA-D-2`'s test does compare `challenge.status` against `401`, so the
+idiom exists in the same file; this row simply does not use it.
+"""
+
+[[unasserted]]
+id = "RA-D-7"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::ForeignNonce` and that `stale`
+is absent. Same missing assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "RA-D-8"
+reason = """
+States `401` with `stale=true`. The test compares the `stale` flag and the header text carefully and
+never the status. Same missing assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "RA-D-9"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::QopMismatch` only. Same missing
+assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "RA-A-3"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::Algorithm` only. Same missing
+assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "LS-L-1"
+reason = """
+The `Expect` cell restates the fixture — q 1000, refreshes at t=200, t=100, t=50, and C at 500 —
+rather than pinning an outcome, and the outcome it does pin is an *order*, which the test compares
+exactly. The numbers belong to the setup the test builds by other means. The edge of what reading a
+row's Expect column can decide, not a gap in the test.
+"""
+
+[[unasserted]]
+id = "LS-R-1"
+reason = """
+States `200`, revision 1 and a granted 3600. The test compares the revision and the granted duration
+and reaches the response through `.expect("a 200")` — a message, not a comparison, so nothing would
+fail if the outcome carried a different status.
+"""
+
+[[unasserted]]
+id = "LS-K-1"
+reason = """
+The row's 5, 6 and 7 are an illustration of a CAS sequence, not values the implementation must
+produce; the test runs the same sequence from revision 1 and compares each step symbolically
+(`conflict.current` against the revision it read, the final commit against `Revision(3)`). Asserting
+the literal 5 would pin the fixture, not the behaviour.
+"""
+
+[[unasserted]]
+id = "LS-R-3"
+reason = """
+States `200` and "revision still 2". The test compares the status against `200` and compares the
+revision against the one read before the retry — a stronger check than the literal, since it holds
+wherever in the sequence the row is exercised. The literal 2 is a property of the row's fixture.
+"""
+
+[[unasserted]]
+id = "LS-K-6"
+reason = """
+States "returns revision 6". The test compares the authoritative read against the revision the
+commit returned, which is what K6 actually requires; 6 is the row's illustration. Same shape as
+`LS-R-3`.
+"""
+
+[[unasserted]]
+id = "CC-V-9"
+reason = """
+The `Expect` cell is `E(cluster.timers.timerC, CC-V7)` — an error, with "requires more than 3
+minutes" as the rationale beside it. The test compares the rule name and the offending value
+(`120000 ms`). The 3 minutes is prose explaining why the rule exists, and the bound itself is
+`CC-V-12`'s business, where it is compared.
+"""
+
+[[unasserted]]
+id = "LS-R-10"
+reason = """
+States "abort, `500`". The test compares the outcome against `Rejection::StaleSequence` and that
+nothing was removed. The `500` is the driver's mapping of that rejection and there is no driver in
+this test — the sans-IO layer never produces a status. The row spans two layers; its proof covers
+one.
+"""
+
+[[unasserted]]
+id = "LS-R-11"
+reason = """
+States `423` plus `Min-Expires: 300`. The test compares the minimum against `300` and matches
+`Rejection::IntervalTooBrief`; the `423` appears only inside a `panic!` message. Half the row is
+compared, half is named in prose.
+"""
+
+[[unasserted]]
+id = "LS-R-18"
+reason = """
+States `421 Extension Required` naming `path`. The test compares the named tag against `"path"` and
+that nothing committed, never the status.
+"""
+
+[[unasserted]]
+id = "LS-R-20"
+reason = """
+States `420` plus `Unsupported: nothing-we-know`. The test compares the unsupported tags against
+`["nothing-we-know"]`, never the status.
 """

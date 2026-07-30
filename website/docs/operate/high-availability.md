@@ -82,20 +82,22 @@ a description of the mechanism and not as a service-level objective.
 
 ## Today there is none
 
-There is one node.
+Two nodes can share one registrar, and that is not the same thing as surviving the loss of one.
 
-Losing it loses everything: every call in progress, every connection, and **every registration**,
-because bindings are held in a process-local in-memory store, there is no second node that kept
-them, and there is no database behind it. A restart is indistinguishable from a node loss, and every
-phone is unreachable until it re-registers.
+What the shared PostgreSQL location store does buy is **registration survival**: bindings live
+outside both processes, so a node that dies takes no registration with it, and a node that restarts
+comes back to the same set. With `backend: memory` none of that holds — a restart is
+indistinguishable from a node loss and every phone is unreachable until it re-registers.
 
-The PostgreSQL location store is real, tested code — but it sits behind a cargo feature and the
-shipped binary does not reach it, so it changes nothing about the paragraph above. Nor does running
-two copies of the binary: they share nothing, they do not know about each other, and two independent
-open registrars is not a cluster.
+What it does not buy is anything else on the table above. Calls in progress on the lost node are
+gone, its connections are gone, and — because nothing mints an affinity token — **callers have to be
+pointed at a specific node**, so losing one is visible to whoever was addressing it. You cannot put
+one address in front of the two and let it fail over: in-dialog requests must return to the node that
+forwarded them, and a balancer will send them elsewhere. That is the gap between "two nodes share a
+registrar" and "node loss is survivable", and it is affinity tokens, flow ownership and drain.
 
 If you need availability today, you need it from something in front of this, and that something
-cannot give you registration survival, because the registrations are inside the process.
+cannot route mid-dialog requests correctly yet.
 
 ## Reading a chart or a values file
 

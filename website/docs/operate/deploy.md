@@ -6,8 +6,9 @@ description: "The reference topology, roles by configuration, and the operator a
 # Deploy
 
 :::caution Preview
-**Designed, not shipped.** What runs today is a container and a single-node k3d/devspace profile —
-one process, one replica, no operator. See [Docker and k3d](../guides/docker-and-k3d.md).
+**Designed, not shipped.** What runs today is a container and a k3d/devspace profile of **two** nodes
+over one location service — two Deployments of one replica each, no operator, and no single address in
+front of them. See [Docker and k3d](../guides/docker-and-k3d.md).
 
 The Helm chart in `deploy/helm/` renders a `SipxCluster` custom resource that **nothing serves**:
 there is no operator image and no CRD. Everything below describes the arrangement this platform is
@@ -19,15 +20,16 @@ meant to be run with, and links the designs that define it.
 | | Status |
 |---|---|
 | A container, one node, `docker run` | **today** |
-| A single-node k3d cluster via devspace — plain `Deployment`, one replica, `ClusterIP` | **today** |
+| Two nodes and one PostgreSQL location service on k3d via devspace — two plain `Deployment`s of one replica each, a `ClusterIP` per node | **today** |
 | The Helm chart — it templates and renders | **today, partly** — it renders a resource nothing reconciles |
 | The `SipxCluster` CRD and the operator that reconciles it | designed |
 | Three zones, roles scaled separately, drain-aware rollout | designed |
 | Autoscaling | designed — phase 2, after drain |
 
-The devspace profile proves that the binary starts, registers phones and forwards a call. It does
-not prove clustering, zone spread, media, or store availability, because none of those have a
-second node to be true across.
+The devspace profile proves that two nodes start, share one registrar, and forward a call across the
+pair with audio. It does not prove zone spread, media relaying, store availability, or **one address
+in front of the two** — each node record-routes its own pod IP, so a single Service would spread
+in-dialog requests across nodes that know nothing about each other's dialogs.
 
 ## The reference topology
 

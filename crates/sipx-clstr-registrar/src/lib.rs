@@ -35,7 +35,8 @@ pub mod store;
 
 pub use aor::{AorError, CanonicalAor, shard_key};
 pub use auth::{
-    Algorithm, ChallengeResponse, CredentialStore, Decision, InMemoryCredentials, TenantAuth,
+    Algorithm, AuthOutcome, ChallengeResponse, CredentialStore, Decision, InMemoryCredentials,
+    TenantAuth,
 };
 pub use binding::{Binding, BindingSet, Revision, SourceAddr, Timestamp};
 pub use command::{
@@ -43,6 +44,6 @@ pub use command::{
     TenantPolicy,
 };
 pub use lookup::{Target, order_targets};
-pub use parse::{Admission, EdgeContext, admit, register_command};
+pub use parse::{Admission, EdgeContext, admit, admit_audited, register_command};
 pub use process::process;
 pub use store::{Applied, CasConflict, Change, InMemoryStore, LocationStore, apply};

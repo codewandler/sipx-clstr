@@ -69,7 +69,7 @@ cluster:
   tenant:
     - name: default
       id: 1
-      domains: [example.test]
+      domains: [127.0.0.1]
 YAML
 
 ./target/debug/sipx-clstr run --config cluster.yaml --node 1 --zone a --roles edge,registrar
@@ -98,11 +98,18 @@ python3 scripts/sip_demo.py 127.0.0.1:5060
 RESULT: PASS — registrar stored both bindings and the proxy forwarded between them
 ```
 
+The demo registers `alice@127.0.0.1`, which is why the tenant declares `domains: [127.0.0.1]`: a
+`REGISTER` for a domain the tenant does not serve is answered **`403`**. Declare the domain your
+phones actually put in their address-of-record, or leave `domains` out to serve any.
+
 > [!WARNING]
-> **This is an open registrar.** Digest authentication is implemented and proved against the RFCs'
-> own vectors, and the document's `tenant[].auth` section is accepted but **not applied** — so anyone
-> who can reach the port can register any address-of-record. With `backend: memory` a restart also
-> forgets every binding. Keep it on loopback or a trusted network.
+> **This is an open registrar.** The tenant above declares no `tenant[].auth`, so anyone who can
+> reach the port can register any address-of-record in a served domain. Declaring `auth` does not
+> fix that: digest is implemented and vector-proved, but there is no credential store yet, so a node
+> whose nonce `secretRef` resolves **refuses to start** and one whose reference does not resolve
+> challenges every `REGISTER` into a `401` nobody can answer. There is no configuration today that
+> gives you an authenticated registrar. With `backend: memory` a restart also forgets every binding.
+> Keep it on loopback or a trusted network.
 
 A node is configured by a document — YAML, JSON or TOML — not by flags. Two nodes sharing one
 PostgreSQL location service are a cluster: a user who registers through one can be called through the
@@ -163,11 +170,11 @@ multi-node test is treated as a bug in the design, not in the test.
 
 | | |
 |---|---|
-| **Working** | **Two nodes sharing one registrar.** RFC 3261 §16 forwarding with forking, `CANCEL` and Timer C; `REGISTER` over a compare-and-swap location store, in memory or in PostgreSQL; configuration by one cluster-scoped document in YAML, JSON or TOML; UDP and TCP; media flowing directly between endpoints. Register through one node, be called through another — proved with independent `sipx` CLI phones, with audio, locally and on Kubernetes |
+| **Working** | **Two nodes sharing one registrar.** RFC 3261 §16 forwarding with forking, `CANCEL` and Timer C; `REGISTER` over a compare-and-swap location store, in memory or in PostgreSQL; configuration by one cluster-scoped document in YAML, JSON or TOML, with the tenant's served domains, binding quota and expiry bounds enforced from it and a bounded number of in-flight transactions answering `503` above it; UDP and TCP; media flowing directly between endpoints. Register through one node, be called through another — proved with independent `sipx` CLI phones, with audio, locally and on Kubernetes |
 | **Written** | **Ten specifications** with normative rules and byte-level test-vector tables — proxy behaviour, location service, registrar auth, affinity token, hook framework, cluster config, asserted identity, number normalisation, media relay, end-to-end probe |
 | **Proved by** | The deterministic multi-node harness — seeded, virtual-time, byte-identical on replay — plus a real-socket end-to-end test against independent `sipx` CLI phones. The [conformance report](docs/reference/conformance.md) is generated, not written: **134 of 492 vector rows proved**, 358 deferred, each naming a reason and an owner. The denominator quadrupled when `CF-8` brought every spec under the gate — the report got more honest, not worse |
-| **Accepted but not applied** | `tenant[].auth` and seventeen other sections of the schema load without error and change nothing. The node logs which ones at startup, and being made to refuse them rather than ignore them is open work |
-| **Not yet** | **One address in front of the cluster** — that needs affinity tokens, and without them in-dialog requests must be addressed to the node that forwarded them. Also: trunk routing, media control, applied authentication, registrar sharding, the operator and chart |
+| **Accepted but not applied** | Seventeen sections of the schema — `profile`, `management`, `keys`, `shardMap`, `registrar`, `normalisation`, `trunk`, `domain`, `destinationSet`, `routeRule`, `ingress`, `rateLimit`, `nat`, `mediaPool`, `observability`, `probe`, `echo` — load without error and change nothing, as do a listener's `tls`, `maxConnections` and `connectionLifetime`. The node logs the exact paths at startup, and the security-relevant ones on their own line. `tenant[].auth` has **left** this list: it is applied, and a document this build cannot honour is refused rather than accepted |
+| **Not yet** | **One address in front of the cluster** — that needs affinity tokens, and without them in-dialog requests must be addressed to the node that forwarded them. Also: trunk routing, media control, a user-credential store (so there is no authenticated registrar, only an open one or a refusal), registrar sharding, the operator and chart |
 | **Built on** | [sipx](https://github.com/codewandler/sipx) 0.7.0 — the SIP kernel this platform orchestrates, pinned to a tag rather than a branch. Protocol logic belongs there; this repo adds clustering |
 
 **Milestones.** M0 foundation on paper *(complete)* → M1 one node that proxies and registers

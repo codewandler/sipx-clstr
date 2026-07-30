@@ -45,8 +45,21 @@ it in a `Record-Route` would accept calls that could never be transferred or hun
 A `transport` this build cannot serve — `tls`, `ws`, `wss` — is **refused**, not quietly downgraded to
 cleartext.
 
-The tenant is a name and nothing else. It does not enable authentication: `tenant[].auth` is accepted
-by the loader and **not applied**, so this node has one tenant and no credentials.
+The tenant carries what the registrar enforces: its served `domains` (a `REGISTER` for any other is
+answered `403`), its `maxBindingsPerAor` quota and its `expiry` bounds. Leaving `domains` out serves
+any domain.
+
+:::danger Do not put this on a public address
+The listener above is the one this page is about — a public bind, advertised to a routable address —
+and this node is an **open registrar**. Anyone who can reach the port can register any
+address-of-record in a served domain, and take over an existing one.
+
+`tenant[].auth` is applied, not ignored, but it cannot make this node authenticate: there is no user
+credential store yet. A node whose nonce `secretRef` **resolves** refuses to start, saying so; a node
+whose reference does not resolve starts, logs `auth="required"`, and challenges every `REGISTER` into a
+`401` that nobody can answer. Neither is an authenticated registrar. Until credentials exist, the only
+protection is the network: loopback, a private subnet, or a firewall.
+:::
 
 ## What it prints
 
@@ -100,5 +113,6 @@ misconfiguration is `2` and never `0`.
 ## What it is not
 
 There is no reload, no management port, and no metrics endpoint. A configuration change is a restart.
-Authentication is accepted by the document and not applied. All of those are specified; none is
-implemented — see [Configuration](../reference/configuration.md) for the section-by-section state.
+Authentication is applied but has no credential store behind it, so there is no way to configure a
+registrar that authenticates. All of those are specified; none is implemented — see
+[Configuration](../reference/configuration.md) for the section-by-section state.
