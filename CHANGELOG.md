@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The two-node cluster proofs answered `403`** (`FC-5`). `FC-4` made a `REGISTER` for a domain the
+  tenant does not serve a `403` — closing a real hole — and `scripts/e2e-call.sh` was updated with
+  it. The two-node proofs were not: they registered in `127.0.0.1` and a Service IP against documents
+  declaring `example.test` and `cluster.local`. So the evidence for this project's headline claim was
+  red, and `README.md`'s statement that `two-node-call.sh` "proves it locally" was false. It passes
+  again.
+
+  The class is closed rather than the three instances: `scripts/check-proof-domains.py` reads every
+  proof under `scripts/` and `deploy/`, resolves the address-of-record it registers through the
+  script's own shell assignments, and compares it against the `tenant.domains` of the document that
+  governs it — running in both the gate and CI. It refuses the three cheap ways to be vacuously
+  green: `domains: []` fails (that is the fail-open `FC-4` removed), a domain only known at runtime
+  fails, and a proof that ships no document and names none fails.
+
 - **A configuration document could be refused for a value the loader itself supplied** (`DP-12`).
   The schema declared Timer C with a default of 180 s and, in the same rule, `MUST be > 3 minutes`.
   180 s *is* three minutes, so any document carrying a `timers:` section without naming `timerC` was

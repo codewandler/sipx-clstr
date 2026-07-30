@@ -124,7 +124,14 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
   five of six. `website/docs/getting-started.md` §3–4 offers `scripts/two-node-call.sh` and the k3d
   manifests, and all three are red for the same reason the README quick start was: they register in a
   domain their own document does not serve, so `FC-4` answers `403`.
-- **What would settle it:** `FC-5`, which repairs those three and adds a check so the class cannot
+- **`FC-5` has landed and settled most of it.** `scripts/two-node-call.sh` is green — both
+  registrations, two binding rows written by two different nodes, and the cross-node call — so the
+  local half of getting-started §3–4 now runs as written. What remains unobserved is the Kubernetes
+  half: `FC-5` corrected the manifests and the check proves they agree, but it declined to deploy
+  into the only reachable cluster because that cluster carries unrelated live workloads. So the k3d
+  path is *machine-checked for consistency*, not *executed*. Ticking this item needs a throwaway
+  cluster and one run.
+- **Superseded note:** `FC-5`, which repairs those three and adds a check so the class cannot
   ship again. When it lands, re-run getting-started §3–4 as written and tick the item.
 
 - **One acceptance item is blocked on a fenced file, and it is the interesting one.** `FC-4` made a

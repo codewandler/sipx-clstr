@@ -2,7 +2,7 @@
 id: FC-5
 title: Repair the two-node proofs FC-4 broke, and make a mismatched domain impossible to ship
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 epic:
 areas: [scripts, deploy, ci]
