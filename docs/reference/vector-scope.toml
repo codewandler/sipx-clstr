@@ -2551,3 +2551,186 @@ story = "RT-2"
 reason = """
 Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative.
 """
+
+# ---------------------------------------------------------------------------------------------
+# Rows covered by a test that never compares a value the row states — `CF-12`'s ledger.
+#
+# Not deferrals. Every row below has a test, the test runs, and what it does check is checked; what
+# it does not check is the quantity the row exists to pin. `PB-F-1` is the case that named the
+# class: the row read "Timer C set 180 s" and its test compared `[Kind::ResolveTargets,
+# Kind::Forward, Kind::SetTimer]`, so a row claiming 180 s and code arming 180 s coexisted for the
+# project's whole life without ever meeting. `PX-10` corrected that row; this list is what the
+# sweep found when the same question was asked of every other one.
+#
+# The entries are a ratchet, not a waiver. `check-vectors.py` fails on a row that becomes shape only
+# without being listed, and fails on a listed row whose proof has since started comparing the value
+# — so the list can only shrink, and none of these rows counts towards "proved" in the report.
+#
+# Read the reasons: they are not all the same defect. Some are a missing assertion and nothing more
+# (`RA-D-5`, `LS-R-20`). Some are the check reaching the edge of what it can decide — a value that
+# is illustrative rather than pinned (`LS-K-1`), or stated at a layer the test does not reach
+# (`LS-R-10`). One, `PB-R-5`, is a row and a test that flatly disagree.
+# ---------------------------------------------------------------------------------------------
+
+[[unasserted]]
+id = "PB-V-3"
+reason = """
+States "insert 70 → decrement → forward with 69". The test compares the forwarded `Max-Forwards`
+against `69` and nothing observes the inserted `70`, so the insertion default is inferred from the
+decrement rather than checked. A missing assertion, and a cheap one to add.
+"""
+
+[[unasserted]]
+id = "PB-F-1"
+reason = """
+The case the class is named for. States a Record-Route token parameter of at most 200 B and Timer C
+armed at 240 s; the test compares the armed duration against `DEFAULT_TIMER_C` and a floor constant,
+never against 240, and measures no header length at all. Comparing the code's own constant is not
+comparing the row: were the constant to move, the test would still pass and the row would still say
+240 s — which is exactly how it came to say 180 s.
+"""
+
+[[unasserted]]
+id = "PB-R-5"
+reason = """
+**The row and its test disagree.** The row says that with A at `486` and B at `404` the best
+response is `486`; `pb_r_5_the_best_of_two_failures_is_the_lowest_class_then_the_lowest_code`
+asserts `404`, and §8 R7 says only "the lowest class among received finals", settling nothing within
+4xx. One of the two is wrong and this check cannot say which — it can only say they were never
+compared. Needs a decision in `proxy-behavior` §8, not an assertion.
+"""
+
+[[unasserted]]
+id = "PB-R-9"
+reason = """
+States "as `503` from branch → R8". The `503` is a description of how a transport error is treated
+internally, not a message anyone sees: R8 requires that it never be forwarded as `503`. The test
+asserts the `500` that does go upstream, which is the observable half of the row. The unobservable
+half has nothing to compare it to at this layer.
+"""
+
+[[unasserted]]
+id = "PB-C-1"
+reason = """
+States `200` to the CANCEL. The test compares the first effect's kind against `Kind::AnswerCancel`
+and never the status it carries — the `PB-F-1` shape exactly, one row over. A CANCEL answered with
+anything else would pass.
+"""
+
+[[unasserted]]
+id = "RA-D-5"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::Mismatch` and that `stale` is
+absent, never the status. `RA-D-2`'s test does compare `challenge.status` against `401`, so the
+idiom exists in the same file; this row simply does not use it.
+"""
+
+[[unasserted]]
+id = "RA-D-7"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::ForeignNonce` and that `stale`
+is absent. Same missing assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "RA-D-8"
+reason = """
+States `401` with `stale=true`. The test compares the `stale` flag and the header text carefully and
+never the status. Same missing assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "RA-D-9"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::QopMismatch` only. Same missing
+assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "RA-A-3"
+reason = """
+States `401`. The test compares `challenge.because` against `Reason::Algorithm` only. Same missing
+assertion as `RA-D-5`.
+"""
+
+[[unasserted]]
+id = "LS-L-1"
+reason = """
+The `Expect` cell restates the fixture — q 1000, refreshes at t=200, t=100, t=50, and C at 500 —
+rather than pinning an outcome, and the outcome it does pin is an *order*, which the test compares
+exactly. The numbers belong to the setup the test builds by other means. The edge of what reading a
+row's Expect column can decide, not a gap in the test.
+"""
+
+[[unasserted]]
+id = "LS-R-1"
+reason = """
+States `200`, revision 1 and a granted 3600. The test compares the revision and the granted duration
+and reaches the response through `.expect("a 200")` — a message, not a comparison, so nothing would
+fail if the outcome carried a different status.
+"""
+
+[[unasserted]]
+id = "LS-K-1"
+reason = """
+The row's 5, 6 and 7 are an illustration of a CAS sequence, not values the implementation must
+produce; the test runs the same sequence from revision 1 and compares each step symbolically
+(`conflict.current` against the revision it read, the final commit against `Revision(3)`). Asserting
+the literal 5 would pin the fixture, not the behaviour.
+"""
+
+[[unasserted]]
+id = "LS-R-3"
+reason = """
+States `200` and "revision still 2". The test compares the status against `200` and compares the
+revision against the one read before the retry — a stronger check than the literal, since it holds
+wherever in the sequence the row is exercised. The literal 2 is a property of the row's fixture.
+"""
+
+[[unasserted]]
+id = "LS-K-6"
+reason = """
+States "returns revision 6". The test compares the authoritative read against the revision the
+commit returned, which is what K6 actually requires; 6 is the row's illustration. Same shape as
+`LS-R-3`.
+"""
+
+[[unasserted]]
+id = "CC-V-9"
+reason = """
+The `Expect` cell is `E(cluster.timers.timerC, CC-V7)` — an error, with "requires more than 3
+minutes" as the rationale beside it. The test compares the rule name and the offending value
+(`120000 ms`). The 3 minutes is prose explaining why the rule exists, and the bound itself is
+`CC-V-12`'s business, where it is compared.
+"""
+
+[[unasserted]]
+id = "LS-R-10"
+reason = """
+States "abort, `500`". The test compares the outcome against `Rejection::StaleSequence` and that
+nothing was removed. The `500` is the driver's mapping of that rejection and there is no driver in
+this test — the sans-IO layer never produces a status. The row spans two layers; its proof covers
+one.
+"""
+
+[[unasserted]]
+id = "LS-R-11"
+reason = """
+States `423` plus `Min-Expires: 300`. The test compares the minimum against `300` and matches
+`Rejection::IntervalTooBrief`; the `423` appears only inside a `panic!` message. Half the row is
+compared, half is named in prose.
+"""
+
+[[unasserted]]
+id = "LS-R-18"
+reason = """
+States `421 Extension Required` naming `path`. The test compares the named tag against `"path"` and
+that nothing committed, never the status.
+"""
+
+[[unasserted]]
+id = "LS-R-20"
+reason = """
+States `420` plus `Unsupported: nothing-we-know`. The test compares the unsupported tags against
+`["nothing-we-know"]`, never the status.
+"""
