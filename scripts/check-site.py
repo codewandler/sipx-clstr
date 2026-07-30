@@ -29,7 +29,14 @@ stops it happening again, and it reads exactly what the link checker deliberatel
 4. **Every documented `sipx-clstr` invocation parses.** Command lines in fenced blocks across
    `README.md` and the site are held to the same flag set, and a repository path a command names
    (`scripts/…`, `deploy/…`, `Dockerfile`) has to exist.
-5. **Every proof the site offers is in CI, or says why not.** "In CI" means the gate or a workflow
+5. **Every documented version banner is the one the binary prints**, byte for byte, kernel half
+   included. `CF-19`. Checking a command's *flags* says nothing about what it is shown as
+   *printing*, so three pages went on quoting `sipx-clstr 0.11.0 (sipx kernel 0.10.0)` after the
+   workspace moved to `0.12.0`, with the full gate green. It is a release-time defect specifically —
+   the number only goes stale at a cut, and the site deploys *on* a cut, so the first reader of the
+   wrong version is a public one. Every fenced block is read, not the command ones only: the banner
+   is output, so it lives in exactly the `text` blocks item 4 skips.
+6. **Every proof the site offers is in CI, or says why not.** "In CI" means the gate or a workflow
    **invokes** it — parsed as a command, not matched as a substring, so a commented-out line or a
    step merely *named* after a proof does not count. See `PROOF_DIRECTIVE` for the other branch and
    `invokes` for this one; `self_test` pins both against the ways they can be faked.
@@ -47,6 +54,13 @@ agree** — which is what keeps the static reader from drifting away from the pa
 the gate the binary is present (the gate builds and tests the workspace first), so the gate checks
 against the real thing; in the `docs` workflow it is not, and the summary says so rather than
 implying a verification that did not happen.
+
+The **version banner** is read the same way and for the same reason: from `--version` when there is
+a binary, and otherwise composed from `Cargo.toml` — the workspace `version` and the `tag = "v…"`
+the kernel is pinned at, which are the two numbers the banner is made of. When both readings are
+available they must agree, so a binary built before a version bump is reported rather than believed.
+Neither reading is silent: every run names which one it used, and a run that could do neither says
+so in those words instead of exiting 0 on a check it did not perform.
 
 ## What this does not do, said out loud
 
@@ -74,6 +88,7 @@ SITE_DOCS = ROOT / "website" / "docs"
 SIDEBARS = ROOT / "website" / "sidebars.js"
 CLI_PAGE = SITE_DOCS / "reference" / "cli.md"
 MAIN_RS = ROOT / "crates" / "sipx-clstr-node" / "src" / "main.rs"
+MANIFEST = ROOT / "Cargo.toml"
 
 # The published tree plus the one page that is not in it. `README.md` is the project explained for
 # humans arriving cold and it carries the same quickstart; it rotted in exactly the same way and for
@@ -106,6 +121,23 @@ HELP_FLAG = re.compile(r"^\s+(?:-\w,\s+)?(--[a-z][a-z0-9-]*)", re.M)
 
 # The first cell of a markdown table row, when it is a flag: `| \`--config <PATH>\` | — | ... |`.
 TABLE_FLAG = re.compile(r"^\|\s*`?(--[a-z][a-z0-9-]*)")
+
+# A version banner as `sipx-clstr --version` prints it and as a page quotes it back. Recognised by
+# **shape** — the binary's name, then something version-shaped — rather than by content, because a
+# recogniser that only matched *correct* banners would see nothing precisely when there is something
+# to see. A stale banner is a banner; so is one that has lost its `(sipx kernel …)` half, which is
+# the same defect one level further down. The comparison itself is byte for byte against what the
+# binary prints; only the line's own indentation is dropped, because a fence inside a list item is
+# indented and that is not a version defect.
+VERSION_BANNER = re.compile(r"^[ \t]*(sipx-clstr[ \t]+v?\d[^\n]*?)[ \t]*$")
+
+# The two numbers the banner is made of, as `Cargo.toml` spells them: the workspace version, and the
+# tag the kernel is pinned at. The pin is read the way `crates/sipx-clstr-node/tests/kernel_pin.rs`
+# reads it — first `sipx-sip` git dependency, its `tag` — so the static reading here and the test
+# that holds `KERNEL_VERSION` to the manifest are answering from the same line of the same file.
+MANIFEST_SECTION = re.compile(r"^\[([^\]]+)\]")
+MANIFEST_VERSION = re.compile(r'^version\s*=\s*"([^"]+)"')
+MANIFEST_KERNEL_PIN = re.compile(r'^sipx-sip\s*=.*codewandler/sipx.*\btag\s*=\s*"v?([^"]+)"')
 
 # `#[arg(...)]` and the field it decorates, in the `clap` derive. `long` alone takes the field name
 # kebab-cased; `long = "x"` overrides it.
@@ -450,13 +482,106 @@ def cli_surface() -> tuple[set[str], str, list[str]]:
     return from_binary, where, problems
 
 
-def fenced_blocks(path: pathlib.Path) -> list[tuple[int, str, str]]:
-    """`(line number, info string, body)` for every fenced block in a file."""
-    text = path.read_text(encoding="utf-8")
+def banner_from_binary(binary: pathlib.Path) -> str | None:
+    """What `sipx-clstr --version` actually prints, or `None` if it would not say."""
+    try:
+        done = subprocess.run(
+            [str(binary), "--version"], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return done.stdout.strip() or None
+
+
+def banner_from_manifest() -> str | None:
+    """The banner composed from `Cargo.toml`, or `None` if either number could not be read.
+
+    `None` rather than a partial banner on purpose: half a banner compares unequal against every
+    documented line, and would report the site as wrong when it is this reader that failed.
+    """
+    try:
+        text = MANIFEST.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    section = ""
+    version: str | None = None
+    kernel: str | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if header := MANIFEST_SECTION.match(line):
+            section = header.group(1)
+            continue
+        if version is None and section == "workspace.package":
+            if match := MANIFEST_VERSION.match(line):
+                version = match.group(1)
+        if kernel is None:
+            if match := MANIFEST_KERNEL_PIN.match(line):
+                kernel = match.group(1)
+    if version is None or kernel is None:
+        return None
+    # The format string lives in `crates/sipx-clstr-node/src/main.rs`; this is the one place it is
+    # spelled twice, and the two readings are held to each other below whenever both are available.
+    return f"sipx-clstr {version} (sipx kernel {kernel})"
+
+
+def version_banner() -> tuple[str | None, str, list[str]]:
+    """The banner to hold the documentation to, where it came from, and any disagreement.
+
+    Same shape and same discipline as `cli_surface`: the binary when there is one, the static
+    reading otherwise, and a failure when both exist and disagree — which here means either the
+    built binary predates a version bump, or `KERNEL_VERSION` has drifted from the pin.
+    """
+    from_manifest = banner_from_manifest()
+    binary = binary_path()
+    from_binary = banner_from_binary(binary) if binary is not None else None
+
+    if from_binary is not None and binary is not None:
+        where = f"{binary.relative_to(ROOT) if binary.is_relative_to(ROOT) else binary} --version"
+        problems = []
+        if from_manifest is None:
+            problems.append(
+                f"scripts/check-site.py: {where} prints `{from_binary}`, and no banner could be "
+                f"composed from {MANIFEST.relative_to(ROOT)} — the `[workspace.package]` version "
+                f"or the sipx `tag` pin has moved out of reach of `banner_from_manifest`. The docs "
+                f"workflow has only that reading, so it is checking nothing until this is fixed"
+            )
+        elif from_manifest != from_binary:
+            problems.append(
+                f"scripts/check-site.py: {where} prints `{from_binary}`, and "
+                f"{MANIFEST.relative_to(ROOT)} reads as `{from_manifest}`. Either the built binary "
+                f"predates a version bump — rebuild it — or `KERNEL_VERSION` has drifted from the "
+                f"pin, which `crates/sipx-clstr-node/tests/kernel_pin.rs` also holds"
+            )
+        return from_binary, where, problems
+
+    if from_manifest is None:
+        return (
+            None,
+            f"nowhere — no built binary here, and {MANIFEST.relative_to(ROOT)} yielded neither a "
+            f"workspace version nor a kernel pin",
+            [],
+        )
+    return (
+        from_manifest,
+        f"{MANIFEST.relative_to(ROOT)} (no built binary here — the gate checks against one)",
+        [],
+    )
+
+
+def fenced_blocks_of(text: str) -> list[tuple[int, str, str]]:
+    """`(line number of the opening fence, info string, body)` for every fenced block in `text`."""
     return [
         (text[: match.start()].count("\n") + 1, match.group(2).strip(), match.group(3))
         for match in FENCE.finditer(text)
     ]
+
+
+def fenced_blocks(path: pathlib.Path) -> list[tuple[int, str, str]]:
+    """`(line number, info string, body)` for every fenced block in a file."""
+    return fenced_blocks_of(path.read_text(encoding="utf-8"))
 
 
 def command_lines(body: str) -> list[tuple[int, str]]:
@@ -596,6 +721,49 @@ def check_documented_commands(surface: set[str], where: str) -> tuple[list[str],
                             f"`{line.strip()}` cannot run as written"
                         )
     return problems, verified, unrunnable
+
+
+def documented_banners(text: str) -> list[tuple[int, str]]:
+    """`(line number, banner)` for every version banner inside a fenced block of `text`.
+
+    **Every** fence, whatever its info string. The banner is output rather than a command, so it
+    sits in the `text` blocks `check_documented_commands` deliberately leaves alone — which is why
+    no check had ever read one. Outside a fence it is prose and belongs to `check-docs.py`.
+    """
+    found: list[tuple[int, str]] = []
+    for start, _, body in fenced_blocks_of(text):
+        for offset, line in enumerate(body.splitlines()):
+            if match := VERSION_BANNER.match(line):
+                found.append((start + 1 + offset, match.group(1)))
+    return found
+
+
+def check_documented_versions(expected: str | None, where: str) -> tuple[list[str], int]:
+    """Every version the documentation prints is the version the binary prints."""
+    problems: list[str] = []
+    found = 0
+
+    for path in tracked(*COMMAND_SOURCES):
+        if path.suffix != ".md":
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        for number, banner in documented_banners(path.read_text(encoding="utf-8")):
+            found += 1
+            if expected is None or banner == expected:
+                continue
+            problems.append(
+                f"{rel}:{number}: documents `{banner}`, but the banner is `{expected}` (from "
+                f"{where}). The site deploys on release and the version only goes stale at a cut, "
+                f"so the first reader of this line is a public one"
+            )
+
+    if expected is None and found:
+        problems.append(
+            f"scripts/check-site.py: {found} documented version banner(s) went unchecked — the "
+            f"banner to hold them to could be read from {where}. Refusing to exit 0 on a check "
+            f"that read nothing"
+        )
+    return problems, found
 
 
 def check_proofs_are_gated() -> list[str]:
@@ -742,6 +910,48 @@ def self_test() -> list[str]:
             yaml=True,
         ),
     )
+
+    # `CF-19`. The version check is a string comparison and carries no risk worth pinning; all of it
+    # is in what `documented_banners` decides is a banner. Recognise too little and a stale line is
+    # invisible — which is the defect — and recognise too much and every refusal message the site
+    # quotes becomes a version defect.
+    def banners(body: str) -> list[str]:
+        return [banner for _, banner in documented_banners(f"```text\n{body}\n```\n")]
+
+    current = "sipx-clstr 0.12.0 (sipx kernel 0.10.0)"
+    stale = "sipx-clstr 0.11.0 (sipx kernel 0.10.0)"
+
+    check("a banner in a fenced block is read", banners(current) == [current])
+    check(
+        "a stale one is still a banner — matching only current ones would see nothing",
+        banners(stale) == [stale],
+    )
+    check(
+        "so is one that has lost its kernel half",
+        banners("sipx-clstr 0.12.0") == ["sipx-clstr 0.12.0"],
+    )
+    check(
+        "an indented banner is read, without its indentation",
+        banners(f"    {current}") == [current],
+    )
+    check(
+        "a refusal message is not a banner",
+        banners("sipx-clstr: cluster.yaml was refused — 2 problem(s):") == [],
+    )
+    check("nor is an invocation of the binary", banners("sipx-clstr --version") == [])
+    check("nor a container image tag", banners("sipx-clstr:dev") == [])
+    check(
+        "nor the binary named anywhere but the start of the line",
+        banners("docker build -t sipx-clstr 0.12.0") == [],
+    )
+    check(
+        "a banner outside every fence is prose, which is check-docs.py's",
+        documented_banners(f"{current}\n") == [],
+    )
+    check(
+        "the reported line is the file's, not the block's",
+        documented_banners(f"intro\n\n```text\n{current}\n```\n") == [(4, current)],
+    )
     return failures
 
 
@@ -753,12 +963,16 @@ def main() -> int:
         return 2
 
     surface, where, drift = cli_surface()
+    expected, banner_where, banner_drift = version_banner()
     commands, verified, unrunnable = check_documented_commands(surface, where)
+    versions, banners = check_documented_versions(expected, banner_where)
     problems = (
         check_reachability()
         + drift
         + check_cli_page(surface, where)
         + commands
+        + banner_drift
+        + versions
         + check_proofs_are_gated()
     )
 
@@ -768,6 +982,16 @@ def main() -> int:
     # Printed on every run, green or red. The point of the summary is that narrowing what this looks
     # at should be visible in its output rather than in its exit code.
     print(f"\nsite: CLI surface from {where} — {len(sorted(surface))} flag(s): {sorted(surface)}")
+    if expected is None:
+        print(
+            f"site: version banner UNVERIFIED — it could be read from {banner_where}. "
+            f"{banners} documented banner(s) went unchecked"
+        )
+    else:
+        print(
+            f"site: version banner from {banner_where} — `{expected}`; "
+            f"{banners} documented banner(s) checked against it"
+        )
     if unrunnable:
         print(f"site: {len(unrunnable)} documented command(s) need a tool this runner has not got:")
         for line in unrunnable:
