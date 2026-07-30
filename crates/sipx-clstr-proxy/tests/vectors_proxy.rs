@@ -652,7 +652,7 @@ fn pb_r_3_and_r_4_a_2xx_is_forwarded_and_cancels_the_others_and_a_late_2xx_is_fo
 }
 
 #[test]
-fn pb_r_5_the_best_of_two_failures_is_the_lowest_class_then_the_lowest_code() {
+fn pb_r_5_the_best_of_two_failures_prefers_the_branch_that_reached_the_user() {
     let request = invite("sip:bob@b.example", vec![]);
     let (mut context, effects) = run(
         request.clone(),
@@ -675,7 +675,11 @@ fn pb_r_5_the_best_of_two_failures_is_the_lowest_class_then_the_lowest_code() {
         Box::new(branch_response(&request, &b, 404, "Not Found")),
         b,
     ));
-    assert_eq!(statuses(&out), [404], "404 beats 486 within 4xx");
+    assert_eq!(
+        statuses(&out),
+        [486],
+        "R7 rank 2 over rank 3: the branch that reached the user outranks the one reporting absence"
+    );
 }
 
 #[test]
@@ -1189,10 +1193,147 @@ fn pb_r_10_a_branch_timeout_behaves_as_a_408_from_that_branch() {
         a,
     ));
     let out = context.on_input(Input::BranchResponse(
-        Box::new(branch_response(&request, &b, 486, "Busy Here")),
+        Box::new(branch_response(&request, &b, 500, "Server Internal Error")),
         b,
     ));
-    assert_eq!(statuses(&out), [408], "408 beats 486 within 4xx");
+    assert_eq!(
+        statuses(&out),
+        [408],
+        "the timeout is an ordinary 4xx final from A, so R7's class order picks it over B's 5xx"
+    );
+}
+
+/// The four rows below pin §8.1, the within-class rule `PX-11` settled. RFC 3261 §16.7 step 6
+/// fixes the class and leaves the response inside it to the proxy, so each of these is a choice
+/// this specification makes rather than one the RFC forces — except `PB-R-14`, which is the one
+/// the RFC does force.
+#[test]
+fn pb_r_11_a_resubmission_preference_outranks_a_lower_code() {
+    let request = invite("sip:bob@b.example", vec![]);
+    let (mut context, effects) = run(
+        request.clone(),
+        vec![
+            target("sip:bob@10.0.0.1", 1_000),
+            target("sip:bob@10.0.0.2", 1_000),
+        ],
+    );
+    let ids = branches(&effects);
+    let (a, b) = (
+        ids.first().cloned().expect("A"),
+        ids.get(1).cloned().expect("B"),
+    );
+
+    context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 404, "Not Found")),
+        a,
+    ));
+    let out = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 484, "Address Incomplete")),
+        b,
+    ));
+    assert_eq!(
+        statuses(&out),
+        [484],
+        "§16.7 step 6 names 484 as resubmission-affecting; the caller can complete the address"
+    );
+}
+
+#[test]
+fn pb_r_12_an_answer_outranks_a_branch_that_never_answered() {
+    let request = invite("sip:bob@b.example", vec![]);
+    let (mut context, effects) = run(
+        request.clone(),
+        vec![
+            target("sip:bob@10.0.0.1", 1_000),
+            target("sip:bob@10.0.0.2", 1_000),
+        ],
+    );
+    let ids = branches(&effects);
+    let (a, b) = (
+        ids.first().cloned().expect("A"),
+        ids.get(1).cloned().expect("B"),
+    );
+
+    context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 486, "Busy Here")),
+        a,
+    ));
+    // R9 — B's timeout reaches the engine as a synthesized `408` final for that branch.
+    let out = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 408, "Request Timeout")),
+        b,
+    ));
+    assert_eq!(
+        statuses(&out),
+        [486],
+        "silence must not outrank an answer: A reached the user, B did not"
+    );
+}
+
+#[test]
+fn pb_r_13_two_server_failures_fall_to_the_lowest_code() {
+    let request = invite("sip:bob@b.example", vec![]);
+    let (mut context, effects) = run(
+        request.clone(),
+        vec![
+            target("sip:bob@10.0.0.1", 1_000),
+            target("sip:bob@10.0.0.2", 1_000),
+        ],
+    );
+    let ids = branches(&effects);
+    let (a, b) = (
+        ids.first().cloned().expect("A"),
+        ids.get(1).cloned().expect("B"),
+    );
+
+    context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 500, "Server Internal Error")),
+        a,
+    ));
+    let out = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 502, "Bad Gateway")),
+        b,
+    ));
+    assert_eq!(
+        statuses(&out),
+        [500],
+        "§8.1 ranks no 5xx code, so the tie-break decides and nothing more is claimed"
+    );
+}
+
+#[test]
+fn pb_r_14_a_6xx_outranks_a_4xx_already_stored_in_the_context() {
+    let request = invite("sip:bob@b.example", vec![]);
+    let (mut context, effects) = run(
+        request.clone(),
+        vec![
+            target("sip:bob@10.0.0.1", 1_000),
+            target("sip:bob@10.0.0.2", 1_000),
+        ],
+    );
+    let ids = branches(&effects);
+    let (a, b) = (
+        ids.first().cloned().expect("A"),
+        ids.get(1).cloned().expect("B"),
+    );
+
+    let early = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 404, "Not Found")),
+        a,
+    ));
+    assert!(
+        statuses(&early).is_empty(),
+        "B is still pending, so nothing is chosen yet"
+    );
+    let out = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 600, "Busy Everywhere")),
+        b,
+    ));
+    assert_eq!(
+        statuses(&out),
+        [600],
+        "the one part of the choice §16.7 step 6 makes a MUST: 6xx if any exist in the context"
+    );
 }
 
 #[test]

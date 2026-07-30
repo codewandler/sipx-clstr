@@ -542,7 +542,8 @@ impl ResponseContext {
         }
     }
 
-    /// R7's class order: the lowest class among received finals, then the lowest code within it.
+    /// R7's order: the lowest class among received finals, then §8.1's within-class rank, then the
+    /// lowest code as a tie-break — which makes the choice total and independent of arrival order.
     ///
     /// 6xx is already forwarded on arrival by R6, so it cannot reach here — but it is included in
     /// the ordering anyway, because a rule that only works because of what happens elsewhere is a
@@ -551,7 +552,7 @@ impl ResponseContext {
         self.finals
             .iter()
             .map(|response| response.status.code())
-            .min_by_key(|status| (status / 100, *status))
+            .min_by_key(|status| (status / 100, within_class_rank(*status), *status))
     }
 
     fn aggregate_challenges(&self, request: &Request, status: u16) -> Option<Response> {
@@ -703,6 +704,24 @@ fn pop_via(response: Response) -> Response {
 
 fn clone_response(response: &Response) -> Response {
     response.clone()
+}
+
+/// §8.1's within-class rank — lower is preferred, and the lowest code breaks a tie inside a rank.
+///
+/// §16.7 step 6 fixes the class and leaves the response inside it to us (`MAY select any response
+/// within that chosen class`), with one steer: prefer what the caller can act on. Bare numeric
+/// order is not that steer — it lets `408`, a branch that never answered, outrank `486`, a branch
+/// that did. Every ranked code is a 4xx, the class the RFC scopes its preference to, so any other
+/// class falls through to the tie-break and is chosen by code alone.
+fn within_class_rank(status: u16) -> u8 {
+    match status {
+        // §16.7 step 6's own SHOULD, verbatim: the caller can change these and retry successfully.
+        401 | 407 | 415 | 420 | 484 => 1,
+        // A branch reached the user and the user's side answered: present, not available now.
+        480 | 486 => 2,
+        // Absence, silence, our own cancellation, and rejections of the message rather than the user.
+        _ => 3,
+    }
 }
 
 fn build_response(request: &Request, status: u16, reason: &str) -> Result<Response, ()> {

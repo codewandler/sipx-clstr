@@ -171,11 +171,61 @@ guarantee; the passthrough vectors assert it):
 | R4 | Other 1xx: forward immediately; reset that branch's Timer C |
 | R5 | 2xx to INVITE: forward immediately, **always** — including after a final response was already chosen (RFC 6026); then cancel remaining pending branches |
 | R6 | 6xx: forward immediately, cancel all pending branches |
-| R7 | Final-response selection when all branches concluded: best response by class order 6xx first (already handled by R6), then the lowest class among received finals; within 4xx, `401`/`407` aggregate all challenge headers from all challenging branches into one response |
+| R7 | Final-response selection when all branches concluded: 6xx first (a MUST, discharged on arrival by R6), then the lowest class among received finals, then §8.1's within-class rank. `401`/`407` aggregate all challenge headers from all challenging branches into one response |
 | R8 | `503` from a branch is treated as branch failure and MUST NOT be forwarded as `503`: it becomes `500 Server Internal Error` if it ends up the best response (§16.7 ¶ on 503) |
 | R9 | Branch timeout (kernel timer or Timer C without provisional): behaves as `408 Request Timeout` from that branch |
 | R10 | Branch transport error (§16.9): behaves as `503` from that branch (and therefore R8) |
 | R11 | Forwarding the chosen final response cancels every still-pending branch; hook `BeforeResponseForward` runs before the `Respond` effect |
+
+### 8.1. Choosing within the class (§16.7 step 6's `MAY`)
+
+§16.7 step 6 fixes the class and, deliberately, not the response:
+
+> It MUST choose from the 6xx class responses if any exist in the context. If no 6xx class
+> responses are present, the proxy SHOULD choose from the lowest response class stored in the
+> response context. The proxy MAY select any response within that chosen class. The proxy SHOULD
+> give preference to responses that provide information affecting resubmission of this request,
+> such as 401, 407, 415, 420, and 484 if the 4xx class is chosen.
+
+So the RFC settles the class — 6xx a MUST, the lowest class otherwise a SHOULD — and leaves the
+pick inside it open. Its one steer is an *interest* rather than a closed list: prefer the response
+the caller can act on. A fork ending in one `486` and one `404` names neither of the enumerated
+codes, so the RFC will not adjudicate it. That is the premise, not the answer: a proxy that leaves
+the choice open forwards whichever code the branches' arrival order happened to favour, and the
+caller cannot tell which question was answered.
+
+**The rule.** Within the chosen class the best response is the one of lowest **rank**; equal ranks
+break to the lowest numeric code, so selection is total and independent of the order branches
+concluded in.
+
+| rank | codes | why |
+|---|---|---|
+| 1 | `401`, `407`, `415`, `420`, `484` | §16.7 step 6's own SHOULD, verbatim: these tell the caller what to change and retry *successfully*. `401`/`407` additionally aggregate every challenging branch's headers (R7) |
+| 2 | `480`, `486` | a branch reached the user and the user's own side answered — present, not available now |
+| 3 | every other code in the class | absence (`404`, `410`), silence (`408`, R9), our own cancellation (`487`), and rejections of the message rather than of the user (`400`) — lowest code first |
+
+Ranks 1 and 2 name 4xx codes only, which is the class the RFC scopes its preference to. Every other
+class falls entirely to rank 3 and is chosen by code alone: the plain reading of the MAY, and
+nothing more is claimed for it. R8 removes `503` from the candidates before any of this runs.
+
+**Why rank, and not the lowest code.** A forking proxy answers one question with one response. Each
+branch's final is a statement about one *contact*; what goes upstream is a statement about the
+*address of record*. `404 Not Found` says that address does not exist — a claim any other branch's
+answer falsifies. Forwarding it over a `486` tells the caller something we know to be untrue about
+the thing they asked for, and tells them to stop rather than to try again; `486 Busy Here` is true
+at the AoR level and is the one they can act on. Forking to a busy contact and a stale one is an
+ordinary registration rather than a corner case, so the difference is user-visible and not a
+tie-break nobody sees.
+
+Numeric order reads like a preference because the codes sort plausibly in places, and then stops:
+`408` — a branch that never answered — outranks `486`, a branch that did, so silence beats an
+answer; and a downstream `400 Bad Request` outranks both, reporting a fault in the message we sent
+as the callee's status. Lowest code is a good tie-break, which is the job it keeps here. It cannot
+carry a preference, and it was being read as one.
+
+The rule is written down because the alternative was tried: with §8 silent, `PB-R-5` and the test
+that proved it stated opposite outcomes for the life of the project, and neither was wrong about
+anything this specification said (`PX-11`).
 
 ## 9. CANCEL and Timer C (§16.10, §16.8)
 
@@ -270,6 +320,10 @@ the rows here are the normative behavior matrix.
 | PB-R-8 | Sole branch `503` | upstream sees `500` |
 | PB-R-9 | Branch transport error | as `503` from branch → R8 |
 | PB-R-10 | Branch timeout | as `408` from branch |
+| PB-R-11 | A `404`, B `484`, all concluded | best = `484` forwarded — the resubmission preference beats a lower code |
+| PB-R-12 | A `486`, B concludes on timeout (R9), all concluded | best = `486` forwarded — an answer outranks silence |
+| PB-R-13 | A `500`, B `502`, all concluded | best = `500` forwarded — no rank applies, lowest code |
+| PB-R-14 | A concluded `404`, then B answers `600` | `600` forwarded — R6, and the class order is a MUST |
 
 **CANCEL / Timer C (PB-C):**
 
