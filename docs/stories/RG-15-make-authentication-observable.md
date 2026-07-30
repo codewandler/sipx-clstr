@@ -2,7 +2,7 @@
 id: RG-15
 title: Make authentication observable, and make its replay window O(1)
 pillar: Signalling
-status: in-progress
+status: done
 priority: 3
 design: docs/designs/registrar-location.md
 epic: registrar-location

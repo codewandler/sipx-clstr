@@ -9,6 +9,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **An authentication decision left no trace** (`RG-15`). A `REGISTER` that was challenged, refused
+  or admitted produced nothing an operator could see, so a credential-stuffing run against a tenant
+  and a quiet night were the same log. Every outcome now produces exactly one record naming the
+  tenant, the source, the status and the reason — and no credential, nonce, cnonce, response digest
+  or presented username appears in any of them, which is enforced by the reason type being
+  `&'static str` rather than by review.
+
+  The record is owed to the **decision**, not to what follows it. A correct digest followed by a
+  message that then fails to parse used to record nothing at all, because the outcome was read after
+  the principal had been dropped — so a successful authentication was indistinguishable from silence,
+  the exact failure this story exists to remove. Admission now returns the outcome alongside the
+  decision, so no later failure can erase it.
+
 - **The `timers` section was accepted, validated, projected — and armed nothing** (`PX-10`). An
   operator who set `timers.timerC` in the cluster document got the proxy crate's private 180 s,
   silently, because nothing ever assigned it: `grep timer_c` over the driver returned no matches.
@@ -115,6 +128,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `401`/`407` challenges, now depend on which branch answered first. §16.7 prescribes no order among
   equal-status finals, and preserving the old order would mean preserving the head-of-line blocking
   that was the defect.
+
+
+### Known gaps
+
+- **The digest replay window is `O(n)` per authenticated request** (`RG-15`). Measured on the pinned
+  kernel: 7.5 µs against a one-entry window, 19.2 µs against its full 4096 — about 11.6 µs of pure
+  scan, 2.5× the cost of the verification itself, and it runs under the node-wide authenticator lock,
+  so it is a ceiling on the node rather than on one request. The window is a private field of the
+  kernel's `Authenticator`, and a nonce replay window is an authentication primitive, so building a
+  second one here would shadow-implement kernel logic. Filed in the upstream ledger with a
+  reproduction instead.
 
 ## [0.11.0] — 2026-07-30
 

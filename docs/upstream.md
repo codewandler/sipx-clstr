@@ -9,10 +9,17 @@ a boundary is this project's biggest coordination risk; this table keeps it audi
 **State of play — sipx `v0.4.0` cleared this ledger, and it has not stayed clear.** Every row filed
 by `CX-1` landed in one release: `S-15`, `S-16`, `T-14`, `T-16`, `T-17`, `T-18`, `T-19` and `X-20`
 are in the tag this workspace pins. Of those, the only one that is not `landed` is `X-15`, which was
-filed as an offer and which `CF-1` had already decided stays local. **Two rows have opened since, and
-neither is filed upstream yet:** the `TimerQueue` `Default` bound that pins the MSRV floor (`CF-9`),
-and the nonce that carries no per-challenge entropy (`CX-5`). Both were found by reading the kernel
-rather than by a release note, which is the only way rows like these surface.
+filed as an offer and which `CF-1` had already decided stays local. **Three rows have opened since,
+and none is filed upstream yet:** the `TimerQueue` `Default` bound that pins the MSRV floor
+(`CF-9`), the nonce that carries no per-challenge entropy (`CX-5`), and the replay window that scans
+its whole capacity on every authenticated request (`RG-15`). All three were found by reading the
+kernel — and, for the last one, by measuring it — rather than by a release note, which is the only
+way rows like these surface.
+
+Two of the three are in `sipx-ua/src/challenge.rs` and they are **different defects**: `CX-5` is
+about what the nonce *is*, `RG-15` about what the window *does* with it. Neither is fixed by moving
+the pin — `challenge.rs` is byte-identical between `v0.7.0`, `v0.10.0` and kernel `main` — so
+`CX-4` will close neither.
 
 One row reopened on contact with the code and closed again the same day: `X-14` generalized
 `TimerQueue` over its key rather than its clock, so the harness could not drive it from virtual

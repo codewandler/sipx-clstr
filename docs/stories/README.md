@@ -61,10 +61,6 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
 
-### Registrar & location service
-_The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
-
 ## Blocked
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 
@@ -215,6 +211,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RG-12 — Reach a shared location store from a running node](RG-12-reach-a-shared-location-store-from-a-node.md) · Signalling · the store is selectable and refuses to fall back; reading a document at startup is DP-10
 - [RG-13 — Bound the location store's growth — the change log and the row set both grow forever](RG-13-bound-the-location-stores-growth.md) · Signalling · changes is a Vec nothing in the shipped path ever drains, in both backends
 - [RG-14 — Make the REGISTER contact path linear, and bound the work before the quota decides](RG-14-make-the-register-contact-path-linear.md) · Signalling · one 64 KB REGISTER costs millions of URI parses, and the quota is checked after the work is done
+- [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling
 - [RT-7 — Specify per-trunk asserted identity and privacy policy](RT-7-specify-per-trunk-asserted-identity-and-privacy.md) · Signalling · two rework rounds — the user privacy level was advertised as performed while a third of it was not
