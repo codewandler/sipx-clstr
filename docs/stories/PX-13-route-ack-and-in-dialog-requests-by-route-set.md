@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
 areas: [proxy, node]
-note: merged then reverted — the fix works but leaks transactions; CI e2e reports outstanding=3 that never drains
+note: reverted on a bad threshold, not a leak — it drains at 128·T1, which RFC 3261 permits; blocked on CF-22 correcting the window
 ---
 
 # Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
@@ -39,6 +39,28 @@ Request-URI as an address of record and asking the location service about it.
 - [x] `scripts/gate.sh` is green.
 
 ## Progress
+- **CORRECTION, 2026-07-30, established by measurement: this story does not leak transactions.** The
+  store drains at exactly **`64.000 s` = `128·T1`**. Two absorption windows, both RFC-mandated for a
+  proxied non-INVITE to a silent next hop: Timer F (`64·T1`, §17.1.2.2) on the client transaction,
+  then — because §16.7 requires the best final response and §17.2.2 gives Trying/Proceeding **no
+  timer** — Timer J (`64·T1`, §17.2.2) starting only once that response is sent. The pinned kernel
+  implements exactly that.
+- **So the revert was made on a bad threshold, and that was the coordinator's error.**
+  `scripts/e2e-call.sh:284` waits `seq 1 100 × sleep 0.5` = **50 s**, strictly between 32 s and 64 s,
+  under a comment budgeting for one window. This story was reverted for failing a check whose bound is
+  inside RFC 3261's own worst case.
+- **Why it looked like a regression.** The two harness traces are byte-identical until the BYE reaches
+  the edge. `main` looks up 0 targets and answers `480` **itself**; this story forwards to the dialog's
+  remote target. So the pre-existing pass depended on the node answering a dialog's BYE instead of
+  delivering it — which *is* `V-03`, the defect this story fixes. `sipx dial` exits when `--duration`
+  elapses, so the callee is already gone by the time its BYE is forwarded.
+- **Blocked on `CF-22`**, which now owns correcting the window and asserting the bound RFC 3261
+  actually permits. Once that lands, this branch (`impl/PX-13`, `234ab7b`) should be re-merged
+  unchanged — nothing in the diff is known to be wrong. Everything from its first pass still stands:
+  the review `PASS`, the trap-socket failing-first proof, the `P1` narrowing verified in both
+  directions, the three ACK semantics checked against the kernel's own transaction code, and the
+  two-node proof run at integration.
+
 - **MERGED AND REVERTED, 2026-07-30.** Merged as `6651043` with the full gate green and the local
   two-node proof passing, then reverted because CI's `e2e` job failed on the merge. **The revert is
   not a judgement on the work** — the fix is correct and the defect it closes is real; it leaks
