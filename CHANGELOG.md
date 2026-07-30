@@ -9,6 +9,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A node answered every method, whatever roles it was given** (`DP-13`, validated review finding
+  `V-01`, filed as `FC-6` before the review backlog renumbered it). The projected role set was read,
+  validated, and used to select listeners and the location store — and then **dropped** before
+  `NodeConfig` was built, so dispatch was by method alone: `REGISTER` to the registrar, `ACK` to the
+  stateless path, everything else to the proxy, on every node regardless of what it was started as. A
+  node started as `inbound-proxy` accepted a `REGISTER` and **stored the binding**, reproduced against
+  the real binary.
+
+  Roles now become a `Capabilities` set derived from `ProjectedConfig.identity.roles` in
+  `startup::node_config`, carried on `NodeConfig`, and consulted by dispatch. A capability set rather
+  than the raw roles on purpose: `cluster-config` §4 `R3` forbids consulting a *role* when classifying
+  a request, and carrying the set into the request path would invite exactly that. A role this build
+  cannot serve — `echo`, `e2e-tester` — now raises `StartupError::RoleNotServed` and stops the node
+  instead of being silently ignored, which is this epic's apply-or-refuse rule applied one section
+  over.
+
+  An `ACK` with no forwarding path is **dropped and logged**, not answered. That is not an improvised
+  exception: `cluster-config` `V11` already makes the identical argument with the identical citation —
+  an `ACK` for a 2xx has no response in SIP at all (RFC 3261 §17.1.1.3), so there is no status to send
+  it.
+
+  **This closes the fail-open and not the whole story.** `DP-13` stays open for three things this does
+  not do: the refusal is `405 Method Not Allowed` with `Allow` where the story asks for `503` with
+  `Retry-After` (and `481` for an unmatched CANCEL) — and the story is right, because `405` tells a
+  client the method is permanently unavailable and it should stop, where `503` invites failover to a
+  node that *does* serve the role; the `ACK` drop is logged but not counted; and the echo engine is
+  not wired, which is blocked on `e2e-probe` §9 defining configuration fields it currently does not
+  have. Ticking those without code is what the story record refuses to do.
+
 - **An accepted call could start a new one** (`PX-14`, validated review finding `V-04`). A 2xx, a 6xx
   or an upstream `CANCEL` cancelled the branches that had been *launched* and left never-launched
   targets sitting in the queue. When a cancelling branch later settled, the generic final-response
