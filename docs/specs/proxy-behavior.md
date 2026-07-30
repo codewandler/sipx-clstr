@@ -49,7 +49,7 @@ enum Input {
 
 enum Effect {
     Respond(Response),                    // to the server transaction (upstream)
-    Forward { branch: BranchId, request: Request, target: Target },
+    Forward { branch: BranchId, request: Request, target: Target, next_hop: Uri },
     CancelBranch(BranchId),
     ResolveTargets(TargetQuery),
     SetTimer { timer: ProxyTimer, branch: Option<BranchId>, after: Duration },
@@ -60,6 +60,14 @@ enum Effect {
 
 Effects are ordered; the driver performs them in order. `Forward` before the `SetTimer` that
 guards it, always. The driver (PX-2) owns the mapping onto kernel client/server transactions.
+
+**`Forward` carries the target *and* the next hop, because they are two different things.** The
+target is what goes into the Request-URI (F2); the next hop is the URI whose address the copy is
+actually sent to (F7). They coincide for a bare contact and diverge whenever a `Route` survives
+preprocessing or the target carries a `Path` — and a driver that derived the next hop from the
+target instead would send a mid-dialog request to the far end's contact rather than to the route
+set's first hop. **[sipx-clstr]** The choice is the engine's, so the harness and the socket driver
+cannot make it differently.
 
 ## 3. Modes
 
@@ -117,6 +125,35 @@ Applied before target determination, in order:
 Recognizing "this platform" covers every configured edge identity, not only the receiving
 node — any edge pops any edge's Route (that is the point of the token).
 
+**[sipx-clstr] P1 recognizes a Record-Route *value*, not merely our host.** An edge identity is
+host-scoped and port-agnostic (§5 above, and deliberately: a client that resolved a different port
+is still talking to this node), so "the Request-URI names an edge" is far weaker than §16.4's
+condition, which is that the Request-URI *is a value this platform placed in a Record-Route*. The
+values this platform places have a fixed shape — no user part, and `lr` — so P1 fires only for a
+Request-URI that has both. Without that narrowing, every mid-dialog request whose remote target
+happens to sit on the same host as the edge is mistaken for a strict-routing recovery: its
+Request-URI is replaced by our own `Record-Route` and its `Route` is consumed, so the request is
+addressed to us and the dialog's remote target is lost. A loopback deployment — the edge on
+`127.0.0.1` and its phones on `127.0.0.1` — is exactly that case, and so is any deployment that
+puts an edge on the same address as a gateway.
+
+## 5.1. Target determination (§16.5)
+
+Applied after preprocessing and before forwarding. §16.5 has two cases, and which one applies is a
+decision, so it belongs in the engine rather than in whatever the driver happens to ask a store:
+
+| # | Rule |
+|---|---|
+| T1 | The request is **within a dialog** (its `To` carries a tag): the target set is *predetermined*. The Request-URI is the only target and no location lookup happens — a mid-dialog Request-URI is the dialog's remote target (§12.2.1.1), which is a contact and not an address of record |
+| T2 | Otherwise the Request-URI is an address this platform is responsible for: the targets come from the location service — `ResolveTargets`, answered by `TargetsResolved`, with §7's empty-set rule |
+
+**[sipx-clstr]** T1 is what V-03 was missing, and the failure it caused was total rather than
+partial: an ordinary remote `Contact` is not a registered AoR, so treating a mid-dialog Request-URI
+as one resolves to an empty set for every normal call — a `BYE` answered `480` and, since an `ACK`
+has no response at all (§7.2), an acknowledgement silently discarded. A registrar that happens to
+hold a binding under that contact's canonical key is worse, not better: the request is then
+delivered to whatever that binding names.
+
 ## 6. Via branch and the loop-detection cookie (§16.6 step 8, RFC 5393)
 
 Every forwarded request gets one new topmost Via with a branch of the form
@@ -159,7 +196,7 @@ guarantee; the passthrough vectors assert it):
 | F4 | Record-Route (dialog-forming requests when the platform must stay in the path) | One `Record-Route` per side carrying the affinity token as a URI parameter; direction distinguishes the sides. Byte budget: the token URI **parameter** MUST stay ≤ 200 bytes — the budget authority is [affinity-token](affinity-token.md) §3 (worst case 157 B including the 64 B module-facts ceiling); the bound is per parameter, not per header line |
 | F5 | Add headers per policy/hooks | Hook phase `BeforeForward`; modules declare what they touch |
 | F6 | Route postprocessing | Strict-routing next hop: move Request-URI to last Route, first Route to Request-URI |
-| F7 | Determine next hop | First Route (lr) or Request-URI, handed to the route plan (RT-1); this spec consumes an ordered target, nothing more |
+| F7 | Determine next hop | Read off **the copy, after F6**: the first `Route` if it carries `lr`, else the Request-URI. The `lr` test is what makes the rule total across F6 — a first `Route` without it means the swap has already put the strict router in the Request-URI, so the Request-URI *is* the next hop. The engine computes it and carries it on the `Forward` effect (§2); the address it resolves to is the driver's (RT-1's route plan), the URI is not |
 | F8 | Push Via | §6 branch; `rport` per kernel behavior |
 | F9 | `Content-Length` | Present on stream transports (kernel framing rule) |
 | F10 | Forward | `Effect::Forward` — one kernel client transaction per branch |
@@ -179,6 +216,24 @@ end by **R12** and **C7**: it does not survive a result that concludes the conte
 launched branches and leaving the queue intact is not a partial stop — the next branch to settle
 finds a queue and forks it, so the request is re-originated after it was answered, globally rejected
 or withdrawn.
+
+## 7.2. ACK: one method, three messages (§17.1.1.3, §17.2.1)
+
+`ACK` is the one method a proxy must split by semantics, because the same method name covers three
+messages with three different owners. Conflating them is V-03: every `ACK` went down one path that
+was right for none of them.
+
+| # | Rule |
+|---|---|
+| K1 | The `ACK` for a non-2xx sent **downstream** belongs to the client transaction that received the final response, which generates it (§17.1.1.3). The proxy neither builds nor forwards it — the kernel does, on the branch's own transaction, and the copy the proxy would add would be a second one |
+| K2 | The `ACK` for a non-2xx arriving from **upstream** belongs to the server transaction that sent that response. It is absorbed there — Completed → Confirmed, which stops the response being retransmitted (§17.2.1) — and it is **not** forwarded. There is no forwarding to do: the transaction it concludes is ours |
+| K3 | The `ACK` for a 2xx is a **separately routed request** (§17.1.1.3) and takes §§4–5.1 and §7 like any other: validation, preprocessing, the predetermined target set (T1), F1–F9 and F7's next hop. It is forwarded with **no transaction of its own**, and it is **never answered** — there is no response to an `ACK`, so a request that cannot be forwarded is recorded and dropped, and no status is invented for it |
+
+**[sipx-clstr]** K3's "never answered" is not a policy choice, and it is the same rule
+[cluster-config](cluster-config.md) §8 V11 states for a node whose roles wire no forwarding path: an
+`ACK` that cannot be delivered has no refusal available, so the outcome is a record. Every other
+unroutable request settles as a state-machine input with a status attached (§7's `480`, §4's V-table);
+an `ACK` settles as an explicit outcome with a reason and no message. **Neither is a silent drop.**
 
 ## 8. Response processing (§16.7, with RFC 6026)
 
@@ -284,7 +339,7 @@ not tuning. Degraded behavior when it fails anyway:
 |---|---|---|
 | INVITE/non-INVITE retransmission | Processed as a new request (indistinguishable) | Duplicate fork risk — why dataplane affinity is REQUIRED; residual rate measured under CF harness fault schedules |
 | CANCEL | C4: stateless forward | Correct per §16.10; the owning edge's transaction still answers |
-| ACK for a non-2xx | No match → routed as a request if it has a route, else dropped silently (ACK never gets a response) | Upstream absorbs response retransmissions until its timer expires — bounded, harmless |
+| ACK for a non-2xx | No match → K3's path: routed as a request if anything names a next hop, else an unroutable outcome that is **recorded** (an ACK never gets a response) | Upstream absorbs response retransmissions until its timer expires — bounded, harmless |
 | ACK for a 2xx | Not transaction-scoped: routes by token like any mid-dialog request | The normal path; any edge handles it |
 
 ## 12. Test vectors
@@ -316,6 +371,8 @@ the rows here are the normative behavior matrix.
 | PB-P-3 | First Route = *another* edge of ours (valid token) | Same as PB-P-2 — any edge pops any edge |
 | PB-P-4 | Mid-dialog, token tampered | → Respond `403`; no forward, no fallback |
 | PB-P-5 | Mid-dialog, token expired | → Respond `403` |
+| PB-P-6 | In-dialog request (`To` tag), R-URI a remote contact | T1 — no `ResolveTargets` at all; forwarded to the Request-URI as the only target |
+| PB-P-7 | R-URI at an edge's host but with a user part, `Route` present | **Not** P1 — the Request-URI is a contact, not a `Record-Route` value: it survives, and the `Route` is popped by P2 rather than consumed |
 
 **Forwarding (PB-F):**
 
@@ -324,8 +381,11 @@ the rows here are the normative behavior matrix.
 | PB-F-1 | Dialog-forming INVITE, 1 target | Forward: Via pushed (cookie present), `Max-Forwards` decremented, Record-Route with token parameter ≤ 200 B, Timer C armed at F11's default, **240 s**, and armed *after* the `Forward` |
 | PB-F-2 | 3 targets (q-ordered) | 3 branches, unique branch ids, same cookie field rules, `Max-Breadth` divided |
 | PB-F-3 | Unknown header `X-Vendor: a, b` in request | Byte-identical in every forwarded branch |
-| PB-F-4 | Next hop is a strict router | F6 swap: R-URI ↔ Route ends |
+| PB-F-4 | Next hop is a strict router | F6 swap: R-URI ↔ Route ends; F7's next hop is then the Request-URI, because the first `Route` no longer carries `lr` |
 | PB-F-5 | Resolved target set is empty | → Respond `480` |
+| PB-F-6 | In-dialog request, a `Route` for another element survives preprocessing | F7 — the next hop is that `Route`, and the Request-URI is left as the dialog's remote target |
+| PB-F-7 | `ACK` for a 2xx carrying our `Route` | K3 — the `Route` is popped, the remote target is the next hop, `Max-Forwards` is decremented, a `Via` is pushed, no `Record-Route` is added, and nothing is answered |
+| PB-F-8 | `ACK` for a 2xx that cannot be forwarded (`Max-Forwards: 0`) | K3 — an explicit unroutable outcome carrying the reason; no response of any status |
 
 **Responses (PB-R):**
 
@@ -384,5 +444,5 @@ assumed from the halves.
 | # | Given | Expect |
 |---|---|---|
 | PB-A-1 | INVITE retransmission delivered to a second edge (simulated stickiness miss) | duplicate fork observed and counted — the metric exists; rate bounded by the fault schedule |
-| PB-A-2 | ACK (non-2xx) at foreign edge, no route | dropped silently |
+| PB-A-2 | ACK (non-2xx) at foreign edge, no route | not forwarded, and the outcome recorded — never answered |
 | PB-A-3 | ACK (2xx) at foreign edge with token | routed normally (mid-dialog path) |
