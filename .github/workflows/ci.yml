@@ -88,6 +88,70 @@ jobs:
       - name: The workspace on its declared rust-version
         run: scripts/check-msrv.sh
 
+  # `CF-15`. The end-to-end proof, actually run.
+  #
+  # `DX-12` recorded this one as not-in-CI because the `sipx` CLI is built from another repository.
+  # That reason was true and the conclusion was wrong: it costs a shallow clone and about forty
+  # seconds of `cargo build`, against `FC-4` breaking this proof — and two of its siblings — for a
+  # whole release with nothing watching. It is the evidence `website/docs/guides/registrations-and-
+  # calls.md` offers for the headline claim, so nothing else in this file substitutes for it: the
+  # deterministic harness proves the decisions, and this proves the sockets, the wire format and the
+  # fact that two *separate processes* agree about a registration.
+  #
+  # Its own job rather than a step in `gate`, so a red says "the end-to-end call broke" rather than
+  # "the gate is red", and so it runs alongside the gate instead of behind it. Not in
+  # `scripts/gate.sh` either: the gate must stay runnable without a second checkout.
+  e2e:
+    runs-on: ubuntu-latest
+    # The script's own waits are bounded (the longest is RFC 3261's 64·T1 drain, ~50s), so anything
+    # near this ceiling is a hang rather than a slow run, and should be killed as one.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-e2e-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-e2e-${{ runner.os }}-
+
+      # The far end is the kernel's own phone, built from the **same tag this workspace pins its
+      # kernel libraries to** — read out of `Cargo.toml` rather than written here, so a kernel bump
+      # moves the phone with it instead of leaving this job proving a call against a version nothing
+      # else uses. It stays un-vendored on purpose: the property that makes this a proof rather than
+      # a self-test is that the client side is an independent implementation.
+      - name: Build the sipx CLI at the pinned kernel tag
+        env:
+          # Cleared deliberately, as the `msrv` job does. `-D warnings` is this repository's policy
+          # for its own code; applying it to someone else's checkout would fail this proof for a lint
+          # in the kernel, which says nothing about whether the call completes.
+          RUSTFLAGS: ''
+        run: |
+          tag="$(sed -n 's/^sipx-sip = .*tag = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)"
+          echo "kernel tag: ${tag:?no sipx tag found in Cargo.toml}"
+          git clone --depth 1 --branch "$tag" \
+            https://github.com/codewandler/sipx "$RUNNER_TEMP/sipx-kernel"
+          cargo build --release --bin sipx \
+            --manifest-path "$RUNNER_TEMP/sipx-kernel/Cargo.toml"
+
+      # The node binds `127.0.0.1:5060` and cannot be made to vary — location-service §3.2 N7, plus
+      # `sipx dial` having no `--target`, plus `check-proof-domains.py` requiring a static literal
+      # domain; the note above `preflight` in the script sets out all three. That is safe *here* and
+      # is the reason this is its own job: `ubuntu-latest` is a fresh VM per job, so exactly one run
+      # of this script exists on it and nothing else is listening on 5060. `CF-13` flagged the
+      # collision for a developer's second terminal, which the script now refuses with exit 2 rather
+      # than failing halfway through.
+      - name: A call completes with media flowing directly between the phones
+        run: scripts/e2e-call.sh --sipx "$RUNNER_TEMP/sipx-kernel/target/release/sipx"
+
   # The durable location store gets its own job, with a real database. `RG-4`'s promise is that the
   # PostgreSQL backend passes the *identical* suite the in-memory one does, and the only way to keep
   # that true is to run it.

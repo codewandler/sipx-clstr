@@ -2,11 +2,11 @@
 id: CF-11
 title: Gate that every published doc is reachable from the site
 pillar: Foundation
-status: ready
+status: backlog
 priority: 2
 epic: conformance-harness
 areas: [ci, build, docs]
-note: two specs are unreachable on the published site and nothing notices
+note: premise died with the docs split — nothing under docs/ is published; superseded by DX-12
 ---
 
 # Gate that every published doc is reachable from the site
@@ -28,7 +28,20 @@ all**, so a spec can be published to `docs/`, pass every gate, and simply not ap
 - [ ] Adding a spec without listing it fails the gate, proved by trying it.
 
 ## Progress
-- (not started)
+
+- **Superseded by `DX-12`, and its premise is now false.** Recorded rather than silently dropped.
+  This story asks that files under `docs/specs/` and `docs/designs/` be reachable from
+  `website/sidebars.js`. Since the docs split (`DX-1`), **nothing under `docs/` is published at all**
+  — the site is `website/docs/`, and internal material is reached by absolute GitHub URL. So
+  `docs/specs/registrar-auth.md` is not an unnoticed omission; it is correctly absent, and listing it
+  in the sidebar would now be the defect.
+- The live half of the concern — a page that exists but is reachable from nothing — moved to the
+  authored site, which is `DX-12`'s first acceptance item ("a check fails when a file under
+  `website/docs/` is not reachable from `website/sidebars.js`"), together with the sidebar-names-a-
+  missing-id case. Nothing in this story is lost by closing it.
+- Left as `backlog` rather than `done`, because it was not done, and rather than `blocked`, because
+  nothing blocks it. **It should probably be deleted** — that is a call for the repository owner, not
+  for an integration pass.
 
 ## Notes
 - Found during wave 4. `DP-1` added `docs/specs/cluster-config.md` and correctly reported that it

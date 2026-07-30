@@ -6,13 +6,15 @@ Status: accepted (`RG-2`). Prefix `RA`.
 
 ## 1. Normative references
 
-- **RFC 3261** §22 (authentication, and what digest does *not* provide — §7), §20.44
+- **RFC 3261** §22 (authentication, and what digest does *not* provide — §7), §22.4 item 4 (the
+  ETag-based nonce construction does not apply to SIP — §6.1), §20.44
   `WWW-Authenticate`, §20.27 `Proxy-Authenticate`, §20.7 `Authorization`, §20.28
   `Proxy-Authorization`, §21.4.2 `401`, §21.4.8 `407`, §26.1.1 (registration hijacking),
   §26.2.1–§26.2.2 (TLS and the SIPS scheme).
 - **RFC 7616** — HTTP digest, which SIP profiles: the `HA1`/`HA2` construction (§3.4.1–§3.4.3),
-  `qop=auth`, `nc`, `cnonce`, `stale`, the SHA-256 families; §5.3–§5.5 for the integrity and replay
-  limits §7 turns into a decision.
+  `qop=auth`, `nc`, `cnonce`, `stale`, the SHA-256 families; §3.3 (the `nonce` parameter, its
+  uniqueness and its example construction — §6.1), §5.12 (parameter randomness, the source that
+  uniqueness needs); §5.3–§5.5 for the integrity and replay limits §7 turns into a decision.
 - **RFC 2617** — the obsoleted form the deployed base still speaks, cited in §7 for the
   `request-digest` (§3.2.2.1) and `A2` (§3.2.2.3) constructions.
 - **RFC 8760** — the additional algorithms and the downgrade warning that motivates §4.
@@ -33,6 +35,15 @@ What is here is the **policy**, which is a deployment's and therefore this platf
 | where credentials come from | how a nonce is minted or recognised |
 | the identity a successful REGISTER is recorded under | the replay window's data structure |
 | which status a refusal carries, and what the response says | `stale` semantics |
+
+**The replay window's cost is the kernel's too, and it is not free.** `sipx-ua`'s window is a
+`VecDeque` scanned front-to-back (`challenge.rs:194,388` at the pinned `v0.7.0`) while the nonce
+being checked is always the newest entry at the back, so every authenticated request walks all 4096
+entries under whatever lock the caller holds. That is a defect in an auth primitive, so this
+platform may not fix it — it is filed in the [upstream ledger](../upstream.md) as
+*A replay window that is O(1) on the hot path*, and `RG-15` recorded it there rather than building a
+second window here. What this platform owns of the same hot path — its credential store — is `O(1)`
+since `RG-15`.
 
 **Authentication runs before REGISTER processing**, not inside it. It decides whether a request is
 allowed to become a `RegisterCommand` at all; the location service then receives the authenticated
@@ -67,6 +78,13 @@ For a REGISTER arriving at an edge, in order:
    fresh nonce and **`stale=true`**. The client re-computes and re-sends without prompting anyone.
    Conflating A7 with A6 makes every expiry look like a bad password, and users answer that by
    changing passwords that were fine.
+
+**"Fresh", in A2, A6 and A7, means §6.1's `N1`** — a nonce no other challenge has been given — and not
+merely "minted again". The two come apart exactly where it matters: a nonce that is a function of the
+clock alone is re-minted identically inside one second, so a refusal issued in the same second as the
+credential it refused re-offers the nonce it has just rejected, and A6's "challenge again with a fresh
+nonce" silently becomes "challenge again with the same one". `N1` is what makes A6 and A7 mean what
+they say.
 
 A proxy authenticating a non-REGISTER request follows the same decision with `407`,
 `Proxy-Authenticate` and `Proxy-Authorization` substituted throughout. The two must not be mixed:
@@ -109,7 +127,65 @@ byte-exact as the client sent the username, with no case folding. The tenant is 
 username is only unique within one, and a principal that could name two tenants' users is an
 authorization bug waiting for a cross-tenant lookup.
 
-## 6. The nonce secret, and what a multi-edge deployment inherits
+## 6. The nonce: uniqueness, the secret, and what a multi-edge deployment inherits
+
+### 6.1 `N1` — a nonce is unique per challenge
+
+Normative. **Every challenge this edge emits carries a nonce no other challenge has carried.** Two
+clients challenged in the same realm in the same second are two nonces, not one.
+
+RFC 7616 §3.3 defines the parameter that way — a nonce is *"a server-specified string which should be
+uniquely generated each time a 401 response is made"* — and it is restated here as a rule of this
+specification because §6.2's properties do not imply it and are easy to mistake for it. A nonce that
+is a pure function of the second it was minted in is unforgeable, is expiry-checkable without a
+table, and still collides.
+
+**Uniqueness is what makes the replay window a per-client fact.** The window is keyed on the nonce
+string and holds one nonce-count per nonce (§3 A6, `RA-R-3`, `RA-R-5`). Two clients holding the same
+nonce therefore share one counter, and the sharing is only observable where their two answers are
+verified by the same window — one edge (§6.2's second bullet is the other direction of the same
+coin). At that edge the first to authenticate at `nc=1` takes the count, and the second — a
+different user, a correct password, legitimately also at `nc=1` — is a repeat of a count with a
+different digest, which is `RA-R-2`: a replay. §3 A6 answers it with `401` and no `stale`, which this
+specification chooses so that a client "will stop and ask a human". So a **correct** credential is
+refused and its user is sent to change a password that was never wrong — the outcome §3 A7 exists to
+prevent, reached through a door A7 does not watch. `RA-R-8` is the row.
+
+**And it is reachable, not theoretical.** The condition is narrow but ordinary: one tenant that
+requires authentication, two of its users challenged within the same second by the same edge, both
+answering. It costs nothing to reach at a modest REGISTER rate, needs no attacker, and produces no
+error anywhere — the edge believes it refused a replay. It became reachable when `tenant[].auth`
+started producing a challenging registrar (`FC-3`); an open tenant (§3 A1) is untouched, and two
+answers that land on two edges are untouched too, because the windows are separate (§6.2).
+
+**What satisfies `N1`.** Per-challenge entropy in the nonce: draw random bytes at each challenge,
+carry them in the nonce beside the issue time, and cover both with the MAC. RFC 7616 §5.12 asks for
+exactly that source — server nonces *"should be generated by a strong random or properly seeded
+pseudorandom source"*. It costs none of §6.2's properties: the nonce still carries its own issue
+time, so expiry stays checkable, and the MAC still verifies from the secret and the realm alone, so
+no table and no shared state appear.
+
+**What does not: a timestamp alone, at any resolution.** RFC 7616 §3.3's example construction is
+`timestamp H(timestamp ":" ETag ":" secret-data)`, in which the ETag is the per-challenge element —
+and RFC 3261 §22.4 item 4 removes precisely that element for SIP: *"The example procedure for
+choosing a nonce based on Etag does not work for SIP."* A SIP nonce that keeps the timestamp and
+replaces the ETag with something **constant** — a realm, say — therefore has nothing left that varies
+between two challenges, which is the shape this rule exists to forbid. A finer clock narrows the
+collision window rather than closing it, and it closes nothing at all under the harness, where the
+clock is pinned and a clock-derived nonce is byte-identical by construction.
+
+`N1` is not §7.3's rejected option of binding the nonce to more of the *request*: entropy varies per
+challenge, not per request, so re-registering a changed `Contact` against a live nonce stays ordinary
+(RFC 3261 §10.2), and nothing about §6.2 is given up.
+
+**Where `N1` is enforced, and its state today.** Nonce minting is the kernel's (§2), so this is a
+requirement placed on `sipx-ua::challenge` rather than something this repository implements — the
+[upstream ledger](../upstream.md) carries the row, the reproduction and the release it waits on.
+Until a pinned kernel mints per-challenge entropy the rule is **stated and unmet**: `RA-R-8` is
+deferred in [vector-scope.toml](../reference/vector-scope.toml) rather than passing, which is the
+honest record of a normative rule the code does not yet keep.
+
+### 6.2 The secret, and what a multi-edge deployment inherits
 
 A nonce is verifiable from the secret and the realm alone, with no shared table — that is what
 makes it usable at an edge. Two consequences follow, and both are properties of the deployment
@@ -236,7 +312,7 @@ Rejected, each with the reason it was rejected:
 |---|---|
 | `qop=auth-int` | Does not close it. `auth-int` adds `H(entity-body)` to `A2` (RFC 7616 §3.4.3) — the body. A REGISTER's binding set is entirely header fields and its body is normally empty, so this changes nothing here while costing interop with every client that implements `auth` alone. It is the first thing a reader reaches for, which is why it is written down rather than left out. |
 | One-time nonces (RFC 7616 §5.5) | Would close it, and breaks `RA-R-1`. A UDP retransmission *is* the same `(nonce, nc, response)` arriving twice; a nonce honoured once refuses the second copy and drops a phone that did nothing wrong. M1's fifth exit criterion says it must not. |
-| Binding the nonce to more of the request — RFC 7616 §5.4's "request-specific element" | Three reasons, any one sufficient. It is kernel machinery rather than policy: nonce minting and recognition are `sipx-ua`'s (§2), so it is an [upstream](../upstream.md) conversation and not a change this repository may make. It destroys §6's property that a nonce is verifiable from the secret and the realm alone, which is what lets any edge answer another edge's challenge without shared state. And it refuses correct clients — re-registering a *changed* `Contact` against a live nonce is ordinary (RFC 3261 §10.2). |
+| Binding the nonce to more of the request — RFC 7616 §5.4's "request-specific element" | Three reasons, any one sufficient. It is kernel machinery rather than policy: nonce minting and recognition are `sipx-ua`'s (§2), so it is an [upstream](../upstream.md) conversation and not a change this repository may make. It destroys §6.2's property that a nonce is verifiable from the secret and the realm alone, which is what lets any edge answer another edge's challenge without shared state. And it refuses correct clients — re-registering a *changed* `Contact` against a live nonce is ordinary (RFC 3261 §10.2). **This rejects binding to the *request*, and says nothing against §6.1's `N1`:** per-challenge entropy varies per challenge rather than per request, keeps both properties above, and is required rather than rejected. |
 | A registrar-side check — remember the `Contact` first seen under a nonce and refuse a change | The same false refusals, plus the memory is per-node exactly as the replay window is (§6): it would hold at the edge that issued the challenge and not at the edge that receives the answer. A check that is a boundary at one edge and not at another is worse than no check, because it reads as a boundary. |
 
 **Revisit when** a deployment needs a guarantee stronger than "TLS plus a short nonce lifetime" on
@@ -282,6 +358,7 @@ Normative. `RG-2`'s tests derive from these.
 | RA-R-5 | Many distinct nonces, more than the window holds | The window's memory does not grow with traffic. An evicted nonce loses its replay history and its counts start over — see §6, and note that it is *bounded by the nonce lifetime*, not unbounded |
 | RA-R-6 | A captured `Authorization` reattached to a REGISTER whose `Contact`, `CSeq` and `Expires` differ, with the method and the signed `uri` unchanged | **Authenticates, under the captured principal, and the binding is written.** The digest is byte-identical, so this takes RA-R-1's branch and not RA-R-2's, and the AoR ends up forking to both contacts. Accepted deliberately, bounded by the nonce lifetime — §7.3 |
 | RA-R-7 | The same captured `Authorization` reattached instead to a REGISTER carrying `Contact: *`, `Expires: 0` and a fresh `Call-ID`, with the method and the signed `uri` unchanged | **Authenticates, under the captured principal, and every binding on the AoR is removed.** The digest is byte-identical, so this takes RA-R-1's branch exactly as RA-R-6 does; [location-service](location-service.md) §W3 then removes every stored binding because the fresh `Call-ID` differs from all of them, with no ordering check. Loss of service, not a fork — RFC 3261 §26.1.1. Accepted deliberately, bounded by the nonce lifetime — §7.3 |
+| RA-R-8 | **Two different users** of one tenant are challenged at the same instant — so, under a mint that carries no per-challenge entropy, with the byte-identical nonce — and each answers correctly at `nc=1`, both answers verified by the same edge | **Both authenticate.** This is §6.1's `N1` as a vector: two challenges, two nonces, two counters, so the second correct credential is not the first one's `nc` repeated with a different digest and `RA-R-2` never fires. Fails where the nonce is a function of the clock alone — one shared counter, and the second user gets A6's `401` without `stale` for a password that is right |
 
 **The tenant boundary (RA-T).**
 
@@ -290,3 +367,52 @@ Normative. `RG-2`'s tests derive from these.
 | RA-T-1 | Two tenants, same username, different passwords | Each authenticates only against its own tenant's credential |
 | RA-T-2 | Credentials valid in tenant A presented to tenant B | Refused — the realm differs, so RA-D-4 |
 | RA-T-3 | One tenant requires authentication, another does not | Independent; the second is not weakened by the first (A1) |
+
+**The audit trail (RA-L).** The rules are §9, which follows this table because §8 is where every
+vector in this specification lives.
+
+| # | Given | Expect |
+|---|---|---|
+| RA-L-1 | A REGISTER refused under A6 | One record, at `warn`, naming the status and the reason §3 already computed (§9 L1). None of the presented password, nonce, `cnonce`, response digest or username appears in it (§9 L2) |
+| RA-L-2 | A REGISTER challenged under A2 | One record, and **not** as a refusal: nothing was wrong, nothing was offered (§9 L1) |
+| RA-L-3 | A REGISTER that proceeds under A1 | One record saying *unauthenticated*, rather than no record (§9 L3) |
+| RA-L-4 | A REGISTER whose credentials verify under A5, and whose `Contact` then fails to parse | The success record is still emitted, naming §5's principal. §3's outcome does not depend on what happened after §3 (§9 L1) — and the same holds one step down for an A1 proceed that then fails to parse |
+
+## 9. The audit trail
+
+Normative. What an authentication decision must leave behind, and what it must not.
+
+Added by `RG-15`. Until then §3's decision computed *why* it refused — `ChallengeResponse::because`
+is documented "Why, for logs and tests" — and the driver discarded it, so no `401`, `403` or success
+anywhere in the register path produced a single line. §3 A1 already justified the open-tenant
+principal by "`RG-3`'s audit trail must be able to say *unauthenticated*", and nothing wrote that
+anywhere.
+
+1. **L1.** Every outcome of §3 produces exactly one record, naming the outcome and, for a refusal,
+   the reason. A2's challenge is an outcome and is **not** a refusal — it is the first half of a
+   round trip the client is expected to complete, and recording it as trouble buries the real thing
+   under every phone's ordinary first REGISTER. This is the only defence §6's exposure has: with no
+   rate limiting and a 300-second nonce lifetime, a refusal nobody can count makes brute force
+   against a tenant both undetectable and unbounded.
+
+   **The record is owed for the decision, not for what follows it.** A request that A5 authenticates
+   and that then fails to become a `RegisterCommand` — a malformed `Contact`, a missing `Call-ID` —
+   has still had an outcome under §3, and it is recorded with the principal §3 proved. An
+   implementation that reads the outcome off whatever the *whole* admission returned will lose
+   exactly this case, because the rejection it ends at looks identical to one that never
+   authenticated. `RG-15` shipped that bug and `RA-L-4` is why it cannot come back.
+2. **L2.** A record carries **no credential material**: not the password, not the nonce, not the
+   `cnonce`, not the response digest, and not the presented username. Nothing has been proved about
+   a request that failed, so every string in its record comes from a closed set this platform owns.
+   The mechanism is a return type, not a discipline — the reason is a `&'static str`, which cannot
+   carry a runtime value however carelessly a driver writes the line. Same argument as
+   `cluster-config` §8 V9's `dsnRef`: a log line is the artefact most likely to be copied into an
+   issue.
+3. **L3.** A success records the principal of §5 — the identity the digest **proved**, which the
+   binding is already stored under, so naming it adds no exposure. A proceed under A1 records
+   *unauthenticated* explicitly. An absent record and an unauthenticated one are different facts,
+   and a trail that cannot tell them apart cannot answer "who wrote this binding".
+
+**What the record identifies the far end by** is the source address the driver observed, not
+anything the message claimed. It is the field an operator acts on, and it is the one field in the
+record that no attacker chooses.

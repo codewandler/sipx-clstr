@@ -19,6 +19,32 @@
 # Exit:   0 registrations crossed the node boundary and the call completed
 #         1 a step failed
 #         2 the environment was not ready (no sipx CLI, no docker, no database)
+#
+# not-in-ci: nobody has written the job yet — and as of `CF-15` that is the whole of the reason,
+# which is a weaker one than what stood here before and is recorded honestly rather than left to be
+# re-read as a live blocker. Both of `DX-12`'s stated reasons have since been settled: the external
+# `sipx` CLI builds from the pinned kernel tag in about forty seconds, which
+# `.github/workflows/ci.yml`'s `e2e` job now does on every push, and the PostgreSQL location service
+# is a service container, which that file's `postgres` job already runs against the same suite.
+#
+# What would change it: a job that composes those two — the `e2e` job's kernel-CLI build step, the
+# `postgres` job's service container — and then runs this script. The fixed `15081`/`15091` below are
+# **not** the obstacle they look like: like `scripts/e2e-call.sh`, this proof needs a literal address
+# its phones can be dialled at (location-service §3.2 N7, and `check-proof-domains.py` requiring a
+# static literal domain), so it is one-run-per-machine by construction — which a dedicated
+# `ubuntu-latest` VM gives it for free. The work is orchestration, not a change to the proof.
+#
+# This is the proof behind the `0.11.0` cluster headline, so leaving it unrun is the same bet
+# `DX-12` took on `scripts/e2e-call.sh` and `FC-4` collected on.
+#
+# `scripts/check-proof-domains.py` holds the part of it a runner can check today, that its phones
+# register in domains its embedded document actually serves.
+#
+# That checker finds the cluster document a proof runs against in one of two places: embedded in the
+# file, as here — the heredoc below is this proof's document — or named by a `proof-document: <path>`
+# comment when the document is deployed elsewhere, which is what `scripts/k8s-two-node-call.sh` does.
+# This paragraph spells the directive and is not one: since `CF-14` the directive is recognised only
+# as a whole comment line of its own, so a comment *about* it stays prose.
 
 set -uo pipefail
 
@@ -62,6 +88,10 @@ fail() { printf '[FAIL] %s\n' "$1" >&2; exit 1; }
 # concerned, which is what the deployed shape looks like. 127.0.0.0/8 is all local on Linux.
 NODE_A_ADDR="127.0.0.1:5060"
 NODE_B_ADDR="127.0.0.2:5060"
+# The address-of-record domain, and it **must** appear in the document's `tenant.domains` below:
+# `FC-4` made a REGISTER outside the tenant's served domains a `403` (location-service §5.1 S1), so a
+# `DOMAIN` the document does not serve fails at the first registration. `scripts/check-proof-domains.py`
+# is the gate that keeps these two lines agreeing; it is not a convention to remember.
 DOMAIN="127.0.0.1"
 
 step "the shared location store"
@@ -105,7 +135,9 @@ cluster:
   tenant:
     - name: default
       id: 1
-      domains: [example.test]
+      # Must equal `$DOMAIN` above — see the note there. Not `[]`: an empty list means "any", which
+      # is the fail-open `FC-4` exists to remove, and would make this proof prove less than it does.
+      domains: [127.0.0.1]
 YAML
 pass "the same bytes will configure both nodes"
 

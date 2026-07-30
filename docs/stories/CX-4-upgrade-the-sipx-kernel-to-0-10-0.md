@@ -43,6 +43,11 @@ protocol core that has since been corrected, and so the next upgrade is one step
 
 ## Notes
 
+- **This upgrade does not fix the nonce-uniqueness defect, and it was expected to.** `CX-5` checked:
+  `crates/sipx-ua/src/challenge.rs` is byte-identical between `v0.7.0`, `v0.10.0` and kernel `main`, so
+  the bump moves the pin and leaves the mint alone. Do not close `CX-5` on the strength of this story.
+
+
 - 0.8.0 → 0.10.0 is predominantly user-agent, media and ICE work — SRTP keying, an ICE agent, RFC
   8839 SDP attributes, `sipx peers`, push (RFC 8599). Little of it is on this platform's path, which
   is why this is `priority: 2` and not `1`: it is unlikely to unblock clustering, and equally

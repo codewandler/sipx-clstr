@@ -31,6 +31,24 @@ jobs:
       - name: Every spec vector is proved or deferred with a reason
         run: scripts/check-vectors.py --check
 
+      # `FC-5`. The end-to-end proofs are what the release's cluster claim rests on, and nothing else
+      # in CI reads them — they need a database, a `sipx` CLI and in one case a Kubernetes cluster,
+      # so they are run by hand. `FC-4` changed the node underneath them and three of them answered
+      # `403` for a release cycle with every job green. This is the part of them a runner can check.
+      - name: Every proof registers in a domain its own document serves
+        run: scripts/check-proof-domains.py
+
+      # `DX-12`. Orphan pages and dead commands are the two site defects that survive a green build:
+      # Docusaurus happily publishes a page nothing links to, and no gate had ever read a documented
+      # command, so ~30 of them invoked flags `DP-8` had deleted — through a release.
+      #
+      # There is no Rust toolchain in this job, so the CLI surface here is read statically from
+      # `main.rs` rather than from the binary; the gate runs the same script after `cargo build` and
+      # checks the real `--help`. The script prints which source it used, so a run that verified less
+      # says so in its own output instead of just exiting 0.
+      - name: Every page is reachable and every documented command is real
+        run: scripts/check-site.py
+
       - name: The board is in sync with story frontmatter
         run: |
           # The board is generated; a hand-edited or stale one is a defect. This asserts the

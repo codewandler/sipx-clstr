@@ -60,6 +60,30 @@ design calls decisive is computed by the kernel and never read.
 
 ## Progress
 
+- **Coordinator audit, and why this is still `in-progress` with every box ticked.** The commit
+  `e61308e` is titled "Ledger for DP-11: **done**" and its body says it "marks DP-11 done". Its diff
+  does not: it touched this file and the board, and left `status: in-progress` untouched. Checked
+  each of that commit's three claims against the tree rather than against its message:
+
+  - **The spec gap is genuinely closed.** `ded66bc` declared the section, and
+    [cluster-config](../specs/cluster-config.md) now carries it in §7's registry, `V8`'s ceiling
+    (≤ 65536, ≥ 1) and `V11`'s reasoning, exemptions included. The loose end this story's own note
+    flagged — "the loader recognises a key the spec does not yet declare" — is settled.
+  - **There was no `CHANGELOG.md` entry at all**, in any section. Written now, under `[Unreleased]`:
+    `0.11.0` was cut at `7f73e0d`, *before* this landed, so `[Unreleased]` is where it belongs and this
+    run's release is what ships it.
+  - **The upstream row was never filed.** That commit said it "carries forward the upstream finding";
+    it carried it forward into this file and no further. `docs/upstream.md` has no row for it.
+
+- **What is actually left: one row in `docs/upstream.md`**, for the finding this story escalated —
+  `sipx-transport`'s `Endpoint` emits a `tracing::warn!` per shed request and a `tracing::error!` per
+  shed ACK, synchronously on the event loop that must keep timers running, so the kernel's overload
+  handling gets slower the more overload there is. The remedy is the kernel's: sample or rate-limit the
+  line and leave the counters, which are already lock-free and already correct. Deferred by minutes
+  rather than by design — `CX-4` is re-reading `docs/upstream.md` row by row right now and I will not
+  edit a file a live implementor owns. **This story closes when that row is filed, and not before**:
+  closing it with a named delta unlanded is precisely the defect `CF-16` was filed to find.
+
 - **The shape chosen, and why it cannot starve registration.** The bound is taken at the point of
   admitting a **proxied** transaction, on the accept loop, before anything is cloned and before a task
   exists. `REGISTER` is exempt: it never takes a permit and never waits for one, because a registration
