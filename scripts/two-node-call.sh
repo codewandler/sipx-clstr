@@ -25,6 +25,12 @@
 # every push, which is a green that means nothing. Run by hand before a release. `DX-12` recorded
 # this rather than leaving it unstated; `scripts/check-proof-domains.py` holds the part of it a
 # runner can check, that its phones register in domains its embedded document actually serves.
+#
+# That checker finds the cluster document a proof runs against in one of two places: embedded in the
+# file, as here — the heredoc below is this proof's document — or named by a `proof-document: <path>`
+# comment when the document is deployed elsewhere, which is what `scripts/k8s-two-node-call.sh` does.
+# This paragraph spells the directive and is not one: since `CF-14` the directive is recognised only
+# as a whole comment line of its own, so a comment *about* it stays prose.
 
 set -uo pipefail
 

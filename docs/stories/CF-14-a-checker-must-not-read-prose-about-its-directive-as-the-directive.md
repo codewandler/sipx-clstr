@@ -2,7 +2,7 @@
 id: CF-14
 title: A checker must not read prose about its own directive as the directive
 pillar: Foundation
-status: ready
+status: in-progress
 priority: 2
 epic: conformance-harness
 areas: [ci, build]
@@ -44,22 +44,57 @@ reused.
 
 ## Acceptance
 
-- [ ] **Failing-first**: add the explanatory comment to a proof script, watch the gate go red, and
+- [x] **Failing-first**: add the explanatory comment to a proof script, watch the gate go red, and
       quote it. Reproduction is above and takes one line.
-- [ ] The directive is recognised only where it is meant — an anchored form, a designated header
+- [x] The directive is recognised only where it is meant — an anchored form, a designated header
       region, or the same code-stripping `check-docs.py` already does. Choose one and say why in the
       script.
-- [ ] A proof script can contain a comment that fully explains the directive, including the literal
+- [x] A proof script can contain a comment that fully explains the directive, including the literal
       token, and still pass. That is the acceptance test: the checker must survive being documented.
-- [ ] The same question is asked of the other repo-consistency checkers rather than assumed —
+- [x] The same question is asked of the other repo-consistency checkers rather than assumed —
       `check-site.py` (`DX-12`) resolves script references by *mentioning*, which its own RISKS note
       says a commented-out invocation would satisfy; `check-vectors.py` reads rows out of spec
       tables. Report what you find for each even where nothing needs changing.
-- [ ] `scripts/gate.sh` green.
+- [x] `scripts/gate.sh` green.
 
 ## Progress
 
-- (running log)
+- **Fixed by anchoring.** `DOC_DIRECTIVE` is now
+  `^[ \t]*#?[ \t]*proof-document:[ \t]*(\S+)[ \t]*$` with `re.M`: the directive is a line whose
+  *entire* content is the token and a path. Chosen over `check-docs.py`'s code-stripping because a
+  shell comment has no fence or code span to strip, and because it states the rule positively — a
+  declaration occupies its own line, every other appearance of the token is prose. The reasoning,
+  including why renaming the token was refused, is in the script above the constant.
+- The optional `#` lets a Python proof declare it in a module docstring, the way `sip_demo.py`
+  carries its `not-in-ci:`.
+- **Two cases, both now in the tree as permanent regression evidence.** `scripts/two-node-call.sh`
+  gained a paragraph that fully explains the directive and spells the token (it embeds its own
+  document and declares nothing). `scripts/k8s-two-node-call.sh` spells the token *twice in prose
+  above its real directive* — the shadowing case, where the correct declaration was being outvoted
+  by an earlier mention. On the merge base those two files produce two failures; after the fix the
+  real directive at `k8s-two-node-call.sh:37` resolves and the checker is green.
+- **`DX-12`'s write-around is gone.** `k8s-two-node-call.sh` carried a paragraph saying it
+  "deliberately does not spell the directive's name". That paragraph was the defect's visible
+  cost; it is now a comment that names the directive plainly.
+- **`check-site.py`: the same class, fail-**open**, and fixed.** `PROOF_DIRECTIVE`
+  (`not-in-ci:`) was searched unanchored over a proof script's whole text, so a *description* of
+  the convention — or a quotation of the script's own error message, which spells the token —
+  counted as a declaration and silently exempted the proof. All four proofs it governs
+  (`sip_demo.py`, `two-node-call.sh`, `k8s-two-node-call.sh`, `e2e-call.sh`) rely on it entirely:
+  none is named in `scripts/gate.sh` or `.github/workflows/`. Anchored the same way; all four still
+  declare.
+- **`check-site.py`'s other mention-test: assessed, deliberately not changed.**
+  `check_proofs_are_gated` resolves "is this proof in CI" with `name in text` over `gate.sh` and the
+  workflows, so a commented-out or merely-mentioned invocation would satisfy it — its own `RISKS`
+  note said so. It is currently inert: no offered proof appears in either source at all, so every
+  one goes down the directive path. Fixing it properly means parsing invocations out of shell and
+  YAML, which is a different piece of work; filed as a finding rather than done here.
+- **`check-vectors.py`: assessed, nothing to change, and not edited** (`CF-12` owns it). Its
+  `ROW`/`TEST_NAME`/`COVERS` scanning is the same *shape* — regexes over text that talks about the
+  thing being scanned — but it is already immune by construction: `spec_rows` reads a prefix only
+  from the spec that owns it, so a design doc or its own docstring citing `PB-F-1` cannot invent a
+  row. `TEST_NAME` requires `fn <name>_`, and `COVERS` requires a `// covers:` comment. Prose
+  mentioning a row ID is not scanned in any of the three positions.
 
 ## Notes
 

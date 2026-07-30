@@ -26,16 +26,14 @@
 # different cost class from the rest of the gate and cannot be stood up per push. Run by hand
 # against a real cluster before a release. Recorded by `DX-12` as a decision rather than an
 # omission; `scripts/check-proof-domains.py` checks the registered domains against the ConfigMap
-# named by the directive below, which is the half a runner can settle.
-#
-# That sentence deliberately does not spell the directive's name: `check-proof-domains.py` searches
-# the whole file for it and takes the first hit, so prose *about* the directive is read *as* the
-# directive and points it at a backtick. Same class of defect `check-docs.py` fixed by stripping
-# code spans before looking for links.
+# named by the `proof-document:` directive below, which is the half a runner can settle.
 #
 # Unlike the local proof this script embeds no cluster document — it registers against one that is
-# already deployed. This line names it so `scripts/check-proof-domains.py` can hold the two to the
-# same `domains`, which is machine-read, not decoration:
+# already deployed. A `proof-document: <path>` comment names it, so the checker can hold the two to
+# the same `domains`; the last line of this block is machine-read, not decoration. Naming the
+# directive in this paragraph is safe since `CF-14`: it is recognised only as a whole comment line,
+# so prose about it is prose. Before that it was taken by first match anywhere in the file, and this
+# note had to avoid spelling it at all.
 # proof-document: deploy/devspace/manifests/node.yaml
 
 set -uo pipefail

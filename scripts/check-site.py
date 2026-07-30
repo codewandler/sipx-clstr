@@ -135,7 +135,16 @@ REPO_PATH = re.compile(
 # `FC-4` broke three of them for a release cycle. So the exemption is written down *in the script
 # it exempts*, with a reason, and this fails on a proof that has neither a CI reference nor a
 # recorded decision. Widening the gate is a deliberate act; so is declining to.
-PROOF_DIRECTIVE = re.compile(r"not-in-ci:\s*(\S[^\n]*)")
+#
+# Anchored to the start of a line, for `CF-14`'s reason and with its polarity reversed. This is a
+# declaration, and an unanchored search matched the token anywhere — including in a *description* of
+# the convention, or in a quotation of the error message below, both of which a proof script is
+# exactly the place to write. `check-proof-domains.py` had the same defect and it at least announced
+# itself as a false red; this one is a false green, so the script that stopped declaring its
+# exemption keeps it, silently, and nothing ever goes red to say so. All four proofs this currently
+# governs declare it at the start of a line already — three as `# not-in-ci: …`, and `sip_demo.py` in
+# its module docstring, which is why the comment marker is optional.
+PROOF_DIRECTIVE = re.compile(r"^[ \t]*#?[ \t]*not-in-ci:[ \t]*(\S[^\n]*)", re.M)
 CI_REFERENCES = ("scripts/gate.sh", ".github/workflows")
 
 
