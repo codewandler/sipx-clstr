@@ -48,7 +48,6 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
 - [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
-- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 3 — §5.5 settles the quota question against the code; the fix is process.rs, not an amendment
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
@@ -87,6 +86,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
+- [RG-25 — Bound the contact operations one REGISTER may carry, in the spec and not only in code](RG-25-bound-the-contact-operations-one-register-may-carry.md) · Registrar · RG-14 item 2, never landed — one 64 KB datagram costs ~0.2 s of a core, and RG-16 cannot be finished without it
 - [RG-24 — Reap expired bindings even when the REGISTER changes nothing else](RG-24-reap-expired-bindings-even-when-nothing-else-changes.md) · Registrar · drop_expired runs on a clone that a Noop outcome discards, so an AoR that only ever queries grows without bound
 
 ### Outbound routing & trunks
@@ -100,6 +100,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ## Blocked
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
+- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · blocked by RG-25 — the quota cannot be measured on the outcome alone until the contact count is bounded
 
 ## Backlog
 - [CX-9 — Pin the qualifying released kernel and clear the M4 upstream ledger](CX-9-pin-the-qualifying-kernel-release.md) · Platform · blocked by every M4 kernel story and a tagged release carrying them
