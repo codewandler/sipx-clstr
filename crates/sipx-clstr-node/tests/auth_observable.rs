@@ -16,19 +16,25 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod support;
+
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
 
-use sipx_clstr_node::driver::{self, AuthConfig, NodeConfig};
+use sipx_clstr_node::driver::{AuthConfig, NodeConfig};
 use sipx_clstr_registrar::InMemoryCredentials;
 
-/// The node that challenges. Its own port, so a parallel suite run does not fight over one.
-const AUTHENTICATED_PORT: u16 = 15091;
-/// The node that does not (§3 A1) — `RA-L-3`'s *unauthenticated* is a recorded fact, not a silence.
-const OPEN_PORT: u16 = 15092;
+/// What the challenging node says it is reached at. **Advertised, never bound** — both nodes bind
+/// `127.0.0.1:0` and report what they got (`CF-13`). These two took `15091`/`15092` before, which
+/// `fork_branches.rs` had already taken for the same reason: to dodge a third suite's fixed ports.
+/// Two files independently picking the same "spare" pair is what proved that dodging does not scale.
+const AUTHENTICATED_ADVERTISED: &str = "127.0.0.1:15091";
+/// The same, for the node that does not challenge (§3 A1) — `RA-L-3`'s *unauthenticated* is a
+/// recorded fact, not a silence.
+const OPEN_ADVERTISED: &str = "127.0.0.1:15092";
 
 /// Distinctive on purpose: every one of these is credential material, and the assertion at the end
 /// is that none of it appears in a record. A generic value like `"alice"` would match by accident.
@@ -83,12 +89,11 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Capture {
 // ----------------------------------------------------------------------------- the two nodes ---
 
 fn challenging_node() -> NodeConfig {
-    let mut config = NodeConfig::new(
-        format!("127.0.0.1:{AUTHENTICATED_PORT}")
-            .parse()
-            .expect("an address"),
-    )
-    .expect("a loopback node");
+    // `advertising` rather than `new`: an ephemeral bind has no port to advertise yet, and
+    // `Advertised` refuses port zero. Nothing here routes to the advertised address — the phone
+    // addresses each node by the address that node reports.
+    let mut config = NodeConfig::advertising(support::ephemeral(), AUTHENTICATED_ADVERTISED)
+        .expect("a loopback node");
     AUTHENTICATED_TENANT.clone_into(&mut config.tenant);
     config.auth = Some(AuthConfig {
         realm: REALM.to_owned(),
@@ -101,12 +106,8 @@ fn challenging_node() -> NodeConfig {
 }
 
 fn open_node() -> NodeConfig {
-    let mut config = NodeConfig::new(
-        format!("127.0.0.1:{OPEN_PORT}")
-            .parse()
-            .expect("an address"),
-    )
-    .expect("a loopback node");
+    let mut config =
+        NodeConfig::advertising(support::ephemeral(), OPEN_ADVERTISED).expect("a loopback node");
     OPEN_TENANT.clone_into(&mut config.tenant);
     config.auth = None;
     config
@@ -176,16 +177,15 @@ fn nonce_of(challenge: &str) -> String {
     nonce.to_owned()
 }
 
-/// Send `message` to `port`, and return the first response that comes back.
+/// Send `message` to `node`, and return the first response that comes back.
 ///
-/// Retried, because the node's socket comes up asynchronously and a lost datagram on loopback is
-/// cheaper to re-send than to reason about.
-async fn exchange(socket: &UdpSocket, port: u16, message: &str) -> String {
-    let node = format!("127.0.0.1:{port}");
+/// Still retried, though the node is known to be bound before this is ever called: a lost datagram
+/// on loopback is cheaper to re-send than to reason about.
+async fn exchange(socket: &UdpSocket, node: &str, message: &str) -> String {
     let mut buffer = vec![0u8; 4096];
     for _ in 0..40 {
         socket
-            .send_to(message.as_bytes(), &node)
+            .send_to(message.as_bytes(), node)
             .await
             .expect("send");
         match tokio::time::timeout(Duration::from_millis(250), socket.recv_from(&mut buffer)).await
@@ -225,8 +225,12 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
         .try_init()
         .expect("this test owns the subscriber");
 
-    let challenging = tokio::spawn(async move { driver::run(challenging_node()).await });
-    let open = tokio::spawn(async move { driver::run(open_node()).await });
+    // Each node reports the port the kernel gave it, so neither this file nor any other has to
+    // reserve one.
+    let challenging = support::start_in_process(challenging_node()).await;
+    let open = support::start_in_process(open_node()).await;
+    let challenging_at = challenging.target();
+    let open_at = open.target();
 
     let phone = UdpSocket::bind("127.0.0.1:0")
         .await
@@ -234,7 +238,7 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
     let phone_port = phone.local_addr().expect("the phone's address").port();
 
     // A2 — no credentials offered, so a challenge. `RA-L-2`.
-    let challenge = exchange(&phone, AUTHENTICATED_PORT, &register(phone_port, 1, None)).await;
+    let challenge = exchange(&phone, &challenging_at, &register(phone_port, 1, None)).await;
     assert!(
         challenge.starts_with("SIP/2.0 401"),
         "a tenant that requires authentication must challenge; got:\n{challenge}"
@@ -244,7 +248,7 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
     let nonce = nonce_of(&challenge);
     let refusal = exchange(
         &phone,
-        AUTHENTICATED_PORT,
+        &challenging_at,
         &register(phone_port, 2, Some(&a_wrong_answer(&nonce))),
     )
     .await;
@@ -254,7 +258,7 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
     );
 
     // A1 — an open tenant proceeds with no principal, and the trail has to *say* so. `RA-L-3`.
-    let accepted = exchange(&phone, OPEN_PORT, &register(phone_port, 3, None)).await;
+    let accepted = exchange(&phone, &open_at, &register(phone_port, 3, None)).await;
     assert!(
         accepted.starts_with("SIP/2.0 200"),
         "an open tenant registers without credentials; got:\n{accepted}"
@@ -269,14 +273,14 @@ async fn ra_l_1_a_refusal_is_recorded_with_its_reason_and_nothing_else() {
     // `sipx-ua` is not in this crate's dependency graph. The authenticated half of the same
     // structural claim is `ra_l_4_a_success_is_still_reported_when_the_message_then_fails_to_parse`
     // in the registrar's own vectors, which is the layer the principal used to be dropped at.
-    let malformed = exchange(&phone, OPEN_PORT, &a_register_that_cannot_parse(phone_port)).await;
+    let malformed = exchange(&phone, &open_at, &a_register_that_cannot_parse(phone_port)).await;
     assert!(
         malformed.starts_with("SIP/2.0 4"),
         "a malformed Contact must be refused, or this case is not what it says; got:\n{malformed}"
     );
 
-    challenging.abort();
-    open.abort();
+    challenging.stop();
+    open.stop();
 
     let log = capture.text();
     let records = auth_records(&log);

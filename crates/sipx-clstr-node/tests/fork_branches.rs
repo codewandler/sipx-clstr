@@ -40,13 +40,14 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::io::Write;
+mod support;
+
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
 
 use sipx_clstr_node::config::{NodeIdentity, Role};
-use sipx_clstr_node::driver::{self, NodeConfig};
+use sipx_clstr_node::driver::NodeConfig;
 use sipx_clstr_node::startup;
 
 /// How long the caller will wait for the live device's `200 OK`.
@@ -58,8 +59,17 @@ const RELAY_BUDGET: Duration = Duration::from_secs(4);
 /// The kernel's Timer B, 64·T1 — what the defect cost, and what the budget is measured against.
 const TIMER_B: Duration = Duration::from_secs(32);
 
+/// What the node says it is reached at. **Advertised, never bound** — see `tests/support/mod.rs`.
+/// Nothing here routes to it: both devices answer the source address they received from, and the
+/// caller addresses the node by the address the node reports.
+const ADVERTISED: &str = "127.0.0.1:15091";
+
 /// A cluster document for one edge/registrar node.
-fn document(node_port: u16) -> String {
+///
+/// The listener binds `127.0.0.1:0` (`CF-13`). These two tests used to take `15091` and `15092`,
+/// chosen to dodge `admission_bound.rs` — and `auth_observable.rs` then chose the same pair, which is
+/// the reason that workaround was replaced rather than extended.
+fn document() -> String {
     format!(
         "
 apiVersion: sipx.dev/v1alpha1
@@ -71,8 +81,8 @@ cluster:
   listener:
     - roles: [edge, registrar]
       transport: udp
-      bind: 127.0.0.1:{node_port}
-      advertise: 127.0.0.1:{node_port}
+      bind: {bind}
+      advertise: {ADVERTISED}
   membership:
     - node: 1
       name: node-a
@@ -84,23 +94,14 @@ cluster:
     - name: default
       id: 1
       domains: [example.test]
-"
+",
+        bind = support::EPHEMERAL,
     )
 }
 
-fn write_document(text: &str, tag: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("px9-{}-{tag}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let path = dir.join("cluster.yaml");
-    let mut file = std::fs::File::create(&path).expect("create document");
-    file.write_all(text.as_bytes()).expect("write document");
-    drop(file);
-    path.to_str().expect("utf-8 path").to_owned()
-}
-
 /// The node this scenario runs, from the document rather than from a literal.
-fn node_config(node_port: u16) -> NodeConfig {
-    let path = write_document(&document(node_port), &node_port.to_string());
+fn node_config(tag: &str) -> NodeConfig {
+    let path = support::write_document(&document(), tag);
     let identity = NodeIdentity {
         node: 1,
         zone: "a".to_owned(),
@@ -304,7 +305,7 @@ enum First {
 }
 
 /// One forked call with one live device and one black hole. Returns how long the `200` took.
-async fn forked_call(node_port: u16, first: First) -> Option<Duration> {
+async fn forked_call(tag: &str, first: First) -> Option<Duration> {
     let live = UdpSocket::bind("127.0.0.1:0")
         .await
         .expect("bind the live device");
@@ -317,12 +318,11 @@ async fn forked_call(node_port: u16, first: First) -> Option<Duration> {
         .await
         .expect("bind the caller");
     let caller_port = caller.local_addr().expect("the caller's address").port();
-    let node = format!("127.0.0.1:{node_port}");
 
     let live_task = live_device(live);
     let dead_task = black_hole(dead);
-    let config = node_config(node_port);
-    let running = tokio::spawn(async move { driver::run(config).await });
+    let running = support::start_in_process(node_config(tag)).await;
+    let node = running.target();
 
     // Registration order is what decides the merge base's drain order; see the module note.
     let (early, late) = match first {
@@ -339,7 +339,7 @@ async fn forked_call(node_port: u16, first: First) -> Option<Duration> {
 
     let elapsed = time_to_answer(&caller, RELAY_BUDGET).await;
 
-    running.abort();
+    running.stop();
     live_task.abort();
     dead_task.abort();
     elapsed
@@ -349,7 +349,7 @@ async fn forked_call(node_port: u16, first: First) -> Option<Duration> {
 /// drained its branch first and the live device's `200` waited behind Timer B.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn px9_a_dead_branch_does_not_delay_a_live_ones_answer() {
-    let elapsed = forked_call(15091, First::BlackHole).await;
+    let elapsed = forked_call("black-hole-first", First::BlackHole).await;
     // Printed rather than only asserted: the number *is* the evidence, and a run that passed for
     // the wrong reason is visible here rather than inferred.
     println!("black-hole-first: 200 OK relayed after {elapsed:?} (budget {RELAY_BUDGET:?})");
@@ -371,7 +371,7 @@ async fn px9_a_dead_branch_does_not_delay_a_live_ones_answer() {
 /// passing: a fix that only helped one drain order would leave half of the two-device users waiting.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn px9_the_live_branch_is_still_relayed_when_it_registered_first() {
-    let elapsed = forked_call(15092, First::Live).await;
+    let elapsed = forked_call("live-first", First::Live).await;
     println!("live-first: 200 OK relayed after {elapsed:?} (budget {RELAY_BUDGET:?})");
     let elapsed =
         elapsed.unwrap_or_else(|| panic!("no 200 OK reached the caller within {RELAY_BUDGET:?}"));

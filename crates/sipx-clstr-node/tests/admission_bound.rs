@@ -19,14 +19,15 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+mod support;
+
 use std::collections::BTreeSet;
-use std::io::Write;
 use std::time::Duration;
 
 use tokio::net::UdpSocket;
 
 use sipx_clstr_node::config::{NodeIdentity, Role};
-use sipx_clstr_node::driver::{self, NodeConfig};
+use sipx_clstr_node::driver::NodeConfig;
 use sipx_clstr_node::startup;
 
 /// The bound the document declares. Small on purpose: the assertion is about the ceiling existing,
@@ -37,12 +38,17 @@ const BOUND: usize = 8;
 /// a near miss but an obvious one, and so a lost datagram or two cannot rescue it.
 const OFFERED: usize = 40;
 
-/// The node's port. Fixed, in the style of `tests/startup_warns.rs`, and its own so that suite runs
-/// in parallel do not fight over it.
-const NODE_PORT: u16 = 15081;
+/// What the node says it is reached at. **Advertised, never bound** — see `tests/support/mod.rs` on
+/// why the two are allowed to differ here and why only the bind could ever collide. Nothing in this
+/// scenario routes to it: the sink answers nothing at all, and the caller addresses the node by the
+/// address the node reports.
+const ADVERTISED: &str = "127.0.0.1:15081";
 
 /// A cluster document for one edge/registrar node with an admission bound.
-fn document(node_port: u16, bound: usize) -> String {
+///
+/// The listener binds `127.0.0.1:0` (`CF-13`): the kernel picks the port and the node reports it, so
+/// two suites running at once cannot land on each other.
+fn document(bound: usize) -> String {
     format!(
         "
 apiVersion: sipx.dev/v1alpha1
@@ -56,8 +62,8 @@ cluster:
   listener:
     - roles: [edge, registrar]
       transport: udp
-      bind: 127.0.0.1:{node_port}
-      advertise: 127.0.0.1:{node_port}
+      bind: {bind}
+      advertise: {ADVERTISED}
   membership:
     - node: 1
       name: node-a
@@ -69,18 +75,9 @@ cluster:
     - name: default
       id: 1
       domains: [example.test]
-"
+",
+        bind = support::EPHEMERAL,
     )
-}
-
-fn write_document(text: &str, tag: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("dp11-{}-{tag}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let path = dir.join("cluster.yaml");
-    let mut file = std::fs::File::create(&path).expect("create document");
-    file.write_all(text.as_bytes()).expect("write document");
-    drop(file);
-    path.to_str().expect("utf-8 path").to_owned()
 }
 
 /// The node configuration this scenario runs, and whether the **document** supplied it.
@@ -94,8 +91,8 @@ fn write_document(text: &str, tag: &str) -> String {
 ///
 /// The fallback cannot hide, either: the scenario asserts the flag — **after** the ceiling, so that a
 /// build with no bound at all fails on the bound rather than on the configuration.
-fn node_config(node_port: u16, bound: usize) -> (NodeConfig, bool) {
-    let path = write_document(&document(node_port, bound), &node_port.to_string());
+fn node_config(tag: &str, bound: usize) -> (NodeConfig, bool) {
+    let path = support::write_document(&document(bound), tag);
     let identity = NodeIdentity {
         node: 1,
         zone: "a".to_owned(),
@@ -109,12 +106,11 @@ fn node_config(node_port: u16, bound: usize) -> (NodeConfig, bool) {
                 "the document could not express an admission bound ({error}); \
                  running the node as it was"
             );
-            let config = NodeConfig::new(
-                format!("127.0.0.1:{node_port}")
-                    .parse()
-                    .expect("an address"),
-            )
-            .expect("a loopback node");
+            // `advertising` rather than `new`: an ephemeral bind has no port to advertise yet, and
+            // `Advertised` refuses port zero. The fallback binds the same nothing-in-particular the
+            // document does, so this path cannot collide either.
+            let config =
+                NodeConfig::advertising(support::ephemeral(), ADVERTISED).expect("a loopback node");
             (config, false)
         }
     }
@@ -227,13 +223,14 @@ async fn dp11_a_flood_cannot_exceed_the_admission_bound() {
         .await
         .expect("bind the caller");
     let caller_port = caller.local_addr().expect("the caller's address").port();
-    let node = format!("127.0.0.1:{NODE_PORT}");
 
-    let (config, from_document) = node_config(NODE_PORT, BOUND);
-    let running = tokio::spawn(async move { driver::run(config).await });
+    let (config, from_document) = node_config("flood", BOUND);
+    // The node reports the port the kernel gave it, so nothing here has to know one in advance.
+    let running = support::start_in_process(config).await;
+    let node = running.target();
 
-    // Register the sink, retrying until the node's socket is up. The `200` is the signal that the
-    // node is serving, which is cheaper and more honest than sleeping and hoping.
+    // Register the sink. The `200` is the signal that the registrar is answering; the node is
+    // already known to be bound, because `start_in_process` waited for it to say so.
     let mut registered = false;
     for round in 0..40u32 {
         caller
@@ -277,7 +274,7 @@ async fn dp11_a_flood_cannot_exceed_the_admission_bound() {
         .filter_map(|datagram| call_id(datagram))
         .collect();
 
-    running.abort();
+    running.stop();
 
     // Printed rather than only asserted: the numbers are the evidence, and a run that passes for the
     // wrong reason (nothing offered, nothing admitted) is visible here rather than inferred.
@@ -340,19 +337,19 @@ async fn dp11_a_flood_cannot_exceed_the_admission_bound() {
 /// is take registrations.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn dp11_registration_survives_a_saturated_proxy_path() {
-    const PORT: u16 = 15082;
     let sink = UdpSocket::bind("127.0.0.1:0").await.expect("bind the sink");
     let sink_port = sink.local_addr().expect("the sink's address").port();
     let caller = UdpSocket::bind("127.0.0.1:0")
         .await
         .expect("bind the caller");
     let caller_port = caller.local_addr().expect("the caller's address").port();
-    let node = format!("127.0.0.1:{PORT}");
 
-    let (config, _from_document) = node_config(PORT, 1);
-    let running = tokio::spawn(async move { driver::run(config).await });
+    let (config, _from_document) = node_config("saturated", 1);
+    let running = support::start_in_process(config).await;
+    let node = running.target();
 
-    // Round 0 gets the node up. Everything from round 1 arrives at a node whose bound is spent.
+    // Round 0 gets the registrar answering. Everything from round 1 arrives at a node whose bound is
+    // spent.
     let mut up = false;
     for round in 0..40u32 {
         caller
@@ -386,7 +383,7 @@ async fn dp11_registration_survives_a_saturated_proxy_path() {
             answered += 1;
         }
     }
-    running.abort();
+    running.stop();
 
     assert_eq!(
         answered, 10,
@@ -402,37 +399,27 @@ async fn dp11_registration_survives_a_saturated_proxy_path() {
 /// that says the platform is past its limit. So this drives the **binary** and reads its **stderr**,
 /// following `tests/startup_warns.rs`: a counter that is read into a variable and never emitted is a
 /// counter nobody has, and no unit test can tell the difference.
+///
+/// **It waits for the line, it does not wait for a clock (`CF-13`).** This used to sleep a flat
+/// 1500 ms against a 500 ms sampling tick and then assert on whatever had been written. Three ticks
+/// of margin sounds ample and is not: under a parallel fan-out a debug-built node can lose that much
+/// to scheduling before it emits anything, and an independent review watched this fail once and pass
+/// on four subsequent runs. A test that fails one run in five trains people to re-run rather than to
+/// read, which costs more than the test is worth. So the wait now ends on the *output* — as soon as
+/// the load line has been emitted, and not before — which is both faster in the ordinary case and
+/// indifferent to how loaded the machine is.
 #[test]
 fn dp11_the_shed_counters_reach_a_human() {
-    const PORT: u16 = 15083;
-    let text = document(PORT, BOUND);
-    let path = write_document(&text, "stderr");
+    let path = support::write_document(&document(BOUND), "shed-counters");
+    let node = support::BinaryNode::start(&path);
 
-    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_sipx-clstr"))
-        .args([
-            "run",
-            "--config",
-            &path,
-            "--node",
-            "1",
-            "--zone",
-            "a",
-            "--roles",
-            "edge,registrar",
-        ])
-        // Deliberately not raising the level: an operator who has to know to turn logging up has not
-        // been told.
-        .env_remove("RUST_LOG")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("the binary runs");
-
-    // Longer than the 500 ms sampling interval, so at least one load line has been emitted.
-    std::thread::sleep(Duration::from_millis(1500));
-    let _ = child.kill();
-    let output = child.wait_with_output().expect("collect output");
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    // The sampling tick is what this test is about, so the wait is for a sample rather than for a
+    // duration. `shed_requests` is on the load line and on nothing else, so seeing it means the tick
+    // has fired at least once — which is the whole precondition the sleep used to approximate.
+    let _ = node.stderr_until(|seen| seen.contains("shed_requests"));
+    // Stopping returns the same record, complete: the wait above decides *when* to read it, and this
+    // decides *what* the assertions below get to quote.
+    let stderr = node.stop();
 
     for field in [
         "shed_requests",
