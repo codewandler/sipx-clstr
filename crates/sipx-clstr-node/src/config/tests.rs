@@ -67,7 +67,7 @@ fn a_well_formed_document_loads() {
     assert_eq!(config.tenants.len(), 1);
     // V3: defaults are adopted from the owning spec, not restated differently.
     assert_eq!(config.security.max_forwards, MAX_FORWARDS);
-    assert_eq!(config.timers.timer_c_ms, 180_000);
+    assert_eq!(config.timers.timer_c_ms, DEFAULT_TIMER_C_MS);
 }
 
 /// §2 D3 — JSON is the same data model, read by the same parser.
@@ -787,4 +787,131 @@ fn with_admission(line: &str) -> String {
         "  zones: [a, b, c]",
         &format!("  zones: [a, b, c]\n  admission:\n    {line}"),
     )
+}
+
+// ------------------------------------------- DP-12: Timer C's default, and the keys nobody reads ---
+
+/// The good document with a `timers` section carrying the given already-indented lines.
+fn with_timers(lines: &str) -> String {
+    good().replace(
+        "  zones: [a, b, c]",
+        &format!("  zones: [a, b, c]\n  timers:\n{lines}"),
+    )
+}
+
+/// §12 `CC-V-12` — a `timers` section that names some timers but **not** `timerC` loads, and Timer C
+/// takes §8 V7's declared default.
+///
+/// This is the whole of `DP-12` in one document. V7 used to declare the default as exactly 180 s
+/// beside a rule requiring *more* than 3 minutes (RFC 3261 §16.6 step 11), so the loader refused the
+/// value the loader itself had supplied, and the only way to carry a `timers` section at all was to
+/// spell `timerC` out. The literal below is the spec's number on purpose: moving one without moving
+/// the other is the drift this row exists to catch.
+#[test]
+fn cc_v_12_a_timers_section_without_timer_c_loads_with_the_declared_default() {
+    let document = with_timers("    t1: 500\n");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env()).expect("should load");
+    assert_eq!(config.timers.t1_ms, 500);
+    assert_eq!(
+        config.timers.timer_c_ms, 240_000,
+        "§8 V7's declared default"
+    );
+    assert!(
+        config.timers.timer_c_ms > 180_000,
+        "a default that cannot satisfy the rule declared beside it is the defect DP-12 closed"
+    );
+}
+
+/// A document with no `timers` section at all lands on the same compliant default.
+///
+/// It reached one before this story too — but only because the floor was never checked on the
+/// defaulted path, which is precisely what hid the contradiction. The check now runs against
+/// whatever value stands, written or defaulted.
+#[test]
+fn dp12_a_document_with_no_timers_section_carries_a_compliant_timer_c() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(good().as_bytes(), &who, &env()).expect("should load");
+    assert_eq!(config.timers.timer_c_ms, 240_000);
+}
+
+/// §12 `CC-V-9` — `timerC` below the floor is refused, naming the path and the rule.
+#[test]
+fn cc_v_9_a_timer_c_below_three_minutes_is_refused() {
+    let document = with_timers("    timerC: 120000\n");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    let error = errors
+        .iter()
+        .find(|e| e.path.to_string() == "cluster.timers.timerC")
+        .expect("a timerC error");
+    assert_eq!(error.rule.to_string(), "CC-V7");
+    assert_eq!(error.found.as_deref(), Some("120000 ms"));
+}
+
+/// The bound stayed **exclusive**, which is the half of `DP-12` that could have been settled the
+/// other way and was not.
+///
+/// RFC 3261 §16.6 step 11 says Timer C "MUST be larger than 3 minutes" — a MUST over a strict
+/// inequality, with no SHOULD and no rounding language anywhere near it. Relaxing the loader to `>=`
+/// would have made the old default legal at the cost of admitting a value the RFC forbids, so the
+/// default moved instead. Exactly three minutes is still a refusal.
+#[test]
+fn dp12_exactly_three_minutes_is_still_refused() {
+    let document = with_timers("    timerC: 180000\n");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.path.to_string() == "cluster.timers.timerC"
+                && e.rule.to_string() == "CC-V7"),
+        "the floor is exclusive, per RFC 3261 §16.6 step 11: {errors:#?}"
+    );
+}
+
+/// One millisecond over the floor is accepted. The rule is the RFC's, not a wider one this loader
+/// invented while fixing the default.
+#[test]
+fn dp12_one_millisecond_over_the_floor_is_accepted() {
+    let document = with_timers("    timerC: 180001\n");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env()).expect("should load");
+    assert_eq!(config.timers.timer_c_ms, 180_001);
+}
+
+/// **`FC-2`.** The keys §7 declares that nothing in this build reads are *reported*, not dropped.
+///
+/// `timers.maxCallDuration`, `locationStore.ha` and `listener[].tls` are all on the closed-world
+/// allow-lists, so a document may carry them — but no field of `Config` holds them and no driver
+/// consults them. Accepted-and-silently-discarded is the class `FC-2` added `unapplied` to
+/// eliminate; an operator who sets a session cap today gets nothing and is told nothing.
+#[test]
+fn dp12_recognised_but_unread_keys_are_reported_as_unapplied() {
+    let document = good()
+        .replace(
+            "      advertise: 203.0.113.10:5060\n",
+            "      advertise: 203.0.113.10:5060\n      tls: { certRef: edge-cert }\n",
+        )
+        .replace(
+            "    dsnRef: location-dsn\n",
+            "    dsnRef: location-dsn\n    ha: true\n",
+        )
+        .replace(
+            "  zones: [a, b, c]",
+            "  zones: [a, b, c]\n  timers:\n    maxCallDuration: 28800000",
+        );
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env()).expect("should load");
+    let paths: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
+    for expected in [
+        "cluster.timers.maxCallDuration",
+        "cluster.locationStore.ha",
+        "cluster.listener[0].tls",
+    ] {
+        assert!(
+            paths.iter().any(|path| path == expected),
+            "{expected} is accepted and read by nothing, so it must be reported: {paths:?}"
+        );
+    }
 }

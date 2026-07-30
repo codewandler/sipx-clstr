@@ -1348,13 +1348,6 @@ Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10`
 """
 
 [[deferred]]
-id = "CC-V-9"
-story = "DP-8"
-reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
-"""
-
-[[deferred]]
 id = "CC-V-10"
 story = "DP-8"
 reason = """
