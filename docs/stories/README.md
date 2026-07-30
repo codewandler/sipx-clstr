@@ -49,8 +49,8 @@ site · `FC` fail-closed configuration.
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Next (ready — take the top one unless the user named a story)
-- [DP-12 — Settle the self-refuting Timer C default, and stop discarding accepted keys in silence](DP-12-settle-the-self-refuting-timer-c-default.md) · Platform · a document carrying a timers section with no timerC is refused by the loader's own declared default
 - [FC-5 — Repair the two-node proofs FC-4 broke, and make a mismatched domain impossible to ship](FC-5-repair-the-two-node-proofs-fc-4-broke.md) · Foundation · the repository's headline cluster proof answers 403 — the script registers in a domain its own document does not serve
+- [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · the whole timers section is parsed, projected, and read by nothing — the armed Timer C is always 180 s
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
@@ -161,6 +161,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
 - [DP-9 — Prove registration and a call across two nodes in a local cluster](DP-9-prove-a-call-across-two-nodes-in-devspace.md) · Cluster · proved twice — two local processes, and two pods in k3d, both with audio
 - [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
+- [DP-12 — Settle the self-refuting Timer C default, and stop discarding accepted keys in silence](DP-12-settle-the-self-refuting-timer-c-default.md) · Platform · a document carrying a timers section with no timerC is refused by the loader's own declared default
 - [DX-1 — Split the published site from the internal docs tree](DX-1-split-the-site-from-the-internal-docs-tree.md) · Foundation · the old link gate would have gone green by no longer looking — inverted rather than dropped
 - [DX-2 — Lay down the site's information architecture, navigation and landing page](DX-2-lay-down-the-information-architecture.md) · Foundation · URLs are stable from the start — stub pages beat stub URLs that move later
 - [DX-3 — Write the entry pair — what sipx-clstr is, and getting started](DX-3-write-the-entry-pair.md) · Foundation · the two facts that bite — open registrar, in-memory bindings — are stated on the first page

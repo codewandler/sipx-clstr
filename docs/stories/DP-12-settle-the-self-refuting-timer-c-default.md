@@ -2,7 +2,7 @@
 id: DP-12
 title: Settle the self-refuting Timer C default, and stop discarding accepted keys in silence
 pillar: Platform
-status: in-progress
+status: done
 priority: 1
 epic:
 areas: [config, node]

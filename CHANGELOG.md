@@ -9,6 +9,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A configuration document could be refused for a value the loader itself supplied** (`DP-12`).
+  The schema declared Timer C with a default of 180 s and, in the same rule, `MUST be > 3 minutes`.
+  180 s *is* three minutes, so any document carrying a `timers:` section without naming `timerC` was
+  rejected at startup against a default no operator wrote. RFC 3261 §16.6 step 11 is a MUST over a
+  strict inequality with no rounding language, so the rule stands and the **default moved to 240 s** —
+  the smallest whole minute above the floor, stated in the unit the RFC states the floor in.
+
+  The floor is now checked against whatever value stands, written or defaulted. Previously the check
+  was skipped entirely when a document carried no `timers:` section, which is what let a
+  self-refuting default ship invisibly; a compile-time assertion makes a recurrence a build failure
+  rather than a refusal in every operator's startup. The rule's own vector turned out to be
+  *deferred* rather than proved — the other half of how this survived — and is now proved.
+
+- **`timers.maxCallDuration` and `locationStore.ha` were accepted and silently discarded** (`DP-12`).
+  Both are declared by the schema, read by nothing, and were not reported. They now appear in the
+  loader's unapplied list, so setting one tells you it will not take effect instead of implying it
+  did.
+
 - **The published documentation described a binary that no longer exists** (`DX-13`). The site and
   `README.md` still taught the three provisional flags that `0.11.0`'s configuration document
   replaced, and still gave "there is no configuration path" as the reason authentication is off —
