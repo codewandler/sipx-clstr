@@ -2,7 +2,7 @@
 id: DX-13
 title: Retire the three-flag CLI from the published surface and from the M1 proof script
 pillar: Foundation
-status: blocked
+status: ready
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
@@ -89,10 +89,20 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       "Today there is none" heading and the replica-count paragraph are untouched — but "There is one
       node" was replaced by what the shared store does and does not buy: registration survival, and
       nothing else on that table.
-- [ ] `CHANGELOG.md`'s `[Unreleased]` **Known gaps** entry "Nothing reads a cluster document at
+- [x] `CHANGELOG.md`'s `[Unreleased]` **Known gaps** entry "Nothing reads a cluster document at
       startup yet (`DP-10`)" is corrected, and `DP-9`/`DP-10` get their `### Added` entries. Per
       `AGENTS.md` closed stories roll up here, and the ledger currently says the work has not landed —
       which is why nothing downstream was reconciled.
+
+      **Done by the coordinator, since this is a fenced ledger the story may not edit.** Settled in
+      three parts, each checked rather than assumed: the stale Known-gaps entry was already gone —
+      the `0.11.0` cut removed it, and the only Known gap under `[Unreleased]` is now `RG-15`'s
+      replay-window cost; `DP-9` already had its `### Added` entry in `0.11.0`; `DP-10` had **none**,
+      in any section, and now has one in `0.11.0` — the release that shipped it — covering the
+      `startup.rs` seam, identity from outside the document (§5 P1), `dsnRef` resolved in the driver
+      (§8 V9), TOML as a third encoding, and the two defects found by running the node: the
+      `listening on` line printed before a fatal store failure, and the resolved DSN nearly reaching
+      the log.
 
       **Not done here, and deliberately: `CHANGELOG.md` is a fenced ledger this story may not edit.**
       Most of it has since been overtaken — the `0.11.0` release wrote the `DP-9`/`DP-10` entries and
@@ -112,6 +122,14 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       `args: [run, --config, /etc/sipx-clstr/cluster.yaml]` with identity from the environment.
 
 ## Progress
+
+- **Unblocked, `blocked` → `ready` (coordinator).** Both blockers are gone. `FC-5` landed, so the
+  local half of getting-started §3–4 runs as written. The fenced-ledger item is done above. **One
+  acceptance item remains and it is now executable**: the Kubernetes half of getting-started §3–4 is
+  machine-checked for consistency but has never been *run*, because the only reachable cluster carried
+  unrelated live workloads. This machine has `docker` (daemon up), `k3d v5.8.3`, `kubectl v1.34.1` and
+  `helm v3.8.1`, so the answer is a **throwaway** cluster — created for the run and deleted after.
+  The existing k3d cluster named `babelforce` is not ours and must not be touched.
 
 - **Integrated as PARTIAL and blocked on `FC-5`.** The published surface work is done and merged:
   the three-flag CLI is gone from README, the site and the Dockerfile; the stale "there is no

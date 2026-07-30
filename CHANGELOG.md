@@ -329,6 +329,40 @@ prove, because the thing they do not prove is the next piece of work.
   silently ignored would be configuration nobody applies with nothing saying so, which is the
   failure V2 exists to prevent, one level up.
 
+- **A node is configured by that document at startup, and the provisional flags are gone** (`DP-10`).
+  `DP-8` could read a cluster document and `RG-12` could act on one, and `main.rs` still built its
+  config from three flags, so neither was reachable from a running node. `startup.rs` is the seam: it
+  reads the file, reads the environment, and resolves the references the document deliberately does
+  not contain, so the loader stays pure. The flags were **replaced, not extended** — a transition
+  period where both work is the second configuration surface being removed — and `clap` replaces the
+  hand-rolled parser, whose own comment called the surface "deliberately tiny and provisional", which
+  expired when it grew node-identity semantics.
+
+  Identity comes from **outside** the document (cluster-config §5 P1): node id, zone and role set, from
+  the downward API in Kubernetes or the command line on a host. A document that could name which node
+  is reading it would not be one document for the cluster. `dsnRef` is resolved here rather than in the
+  loader (§8 V9 — resolution is IO), and a reference that does not resolve is a start-up failure naming
+  the reference, never a quiet fall back to the in-memory store. Every loader error is printed, ordered
+  by path, before the process exits `2`.
+
+  TOML became a third encoding in the same change, converted into the same value tree YAML and JSON
+  produce so validation has exactly one path, detected from the bytes rather than the file name, with
+  cluster-config D3 corrected rather than left claiming two. A test asserts the whole `Config` is equal
+  across all three.
+
+  Two defects surfaced by running the node rather than reading it. It printed `listening on` — the
+  documented readiness signal every proof script waits on — and *then* exited when the store was
+  unreachable, so a script proceeded against a dying node; everything that can refuse to start now
+  refuses before anything announces. And logging the store choice would have printed the resolved DSN,
+  password included, undoing V9 in the artefact most likely to be pasted into an issue.
+
+  It also found that `RG-4`'s store could not be driven from a node at all, which its own synchronous
+  tests could not see: the blocking client builds a runtime and `block_on`s it, so the first real call
+  panicked with "Cannot start a runtime from within a runtime", and `block_in_place` turned that into a
+  connection nobody was driving rather than into an error. It is opened on a thread tokio has never
+  touched, behind a `BlockingStore` adapter; the honest fix is `tokio-postgres`, which changes the trait
+  for every backend and is its own story.
+
 - **A node can be pointed at a shared location store** (`RG-12`). `RG-4` built the PostgreSQL
   location service and proved it satisfies the store contract; nothing made it reachable, because
   `driver::run` opened `InMemoryStore::new()` unconditionally. Two nodes were therefore two islands,

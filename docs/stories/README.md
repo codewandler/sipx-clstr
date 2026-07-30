@@ -55,8 +55,12 @@ site · `FC` fail-closed configuration.
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
 
-## Blocked
+### The public documentation site
+_The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
+
+## Blocked
+_None._
 
 ## Backlog
 
