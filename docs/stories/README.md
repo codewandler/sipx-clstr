@@ -87,6 +87,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
+- [RG-24 — Reap expired bindings even when the REGISTER changes nothing else](RG-24-reap-expired-bindings-even-when-nothing-else-changes.md) · Registrar · drop_expired runs on a clone that a Noop outcome discards, so an AoR that only ever queries grows without bound
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
