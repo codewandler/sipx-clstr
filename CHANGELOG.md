@@ -183,6 +183,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The conformance report showed a quarter of the rows it counted** (`CF-17`, found by `CF-16`). Its
+  denominator was every registered vector row — 533 — while it rendered only the five families in its
+  render list, so **395 rows were counted and displayed nowhere**. Anyone reading the report to find
+  out what is covered was reading a table that silently omitted `AI`, `AT`, `CC`, `FR`, `LS`, `MR` and
+  `NN`. The registry and the deferral ledger were correct throughout; the *report* was partial.
+
+  The defect was not the missing section titles. Registering a prefix in `SPECS` got its rows read,
+  counted, deferred and gated — and getting them onto the page was a second step **nothing checked**,
+  so `CF-8` could tick both "families named" and "the report regenerates" while three quarters of the
+  corpus fell out of the document. `unrepresented_families` makes that a gate failure: red on 36
+  `(prefix, letter)` pairs before it is green. And because extending the family list without a second
+  guard would leave the class open, `render` now returns what it actually emitted, so the headline is
+  checked against the rendered tables rather than against the script's own bookkeeping.
+
+  Audited on the document rather than the script: 56 sections, 533 rows shown, 533 distinct, none
+  shown twice, none counted and not shown. The `vectors:` line is byte-identical before and after —
+  this story added no coverage and must not appear to.
+
 - **"Runs in CI" was a substring match, and would have started passing for the wrong reason**
   (`CF-15`). `check-site.py` resolved whether a proof runs in CI with `name in text` over
   `scripts/gate.sh` and `.github/workflows/`. A commented-out line satisfied it, so did a step merely
@@ -398,14 +416,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ### Known gaps
-
-- **The conformance report shows a quarter of the rows it counts** (`CF-17`, found by `CF-16`). Its
-  denominator is every registered vector row — 533 — and it renders only the five families in its
-  render list, so 395 rows are counted and never displayed. Anyone reading the report to see what is
-  covered is reading a table that silently omits `AI`, `AT`, `CC`, `FR`, `LS`, `MR` and `NN`. The
-  registry and the deferral ledger are correct; it is the *report* that is partial. Nothing green
-  contradicts it, because "a registered family also renders" was never a tested condition — which is
-  the same shape as the defect `CF-8` was written to close, one level further out.
 
 - **The digest replay window is `O(n)` per authenticated request** (`RG-15`). Measured on the pinned
   kernel: 7.5 µs against a one-entry window, 19.2 µs against its full 4096 — about 11.6 µs of pure

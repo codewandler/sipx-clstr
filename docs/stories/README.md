@@ -51,7 +51,6 @@ site · `FC` fail-closed configuration.
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 
 ### The public documentation site
@@ -158,6 +157,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-14 — A checker must not read prose about its own directive as the directive](CF-14-a-checker-must-not-read-prose-about-its-directive-as-the-directive.md) · Foundation · documenting check-proof-domains.py's directive inside a proof turns the gate red on a correct script
 - [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
 - [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
+- [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio

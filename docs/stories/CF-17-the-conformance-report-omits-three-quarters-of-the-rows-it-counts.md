@@ -2,8 +2,7 @@
 id: CF-17
 title: The conformance report omits three quarters of the rows it counts
 pillar: Foundation
-status: in-progress
-priority: 1
+status: done
 epic: conformance-harness
 areas: [conformance, specs]
 note: CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
