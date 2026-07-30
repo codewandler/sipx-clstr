@@ -112,3 +112,27 @@ design calls decisive is computed by the kernel and never read.
   decide how much it will take on. Reading `shed()` is ours too. If the per-message log line under
   overload turns out to need fixing inside the kernel, that half goes on
   [upstream.md](../upstream.md).
+
+## Integration
+
+- Reviewed as evidence rather than on the report. **The failing-first test was re-run at the merge
+  base independently**: 40 of 40 offered transactions admitted against a bound of 8, panicking exactly
+  as claimed. No fenced file was touched.
+- **The spec gap the implementor escalated was closed before merging, not after.** It recognised
+  `cluster.admission` while `cluster-config.md` §7 declared no such section — spec-before-code, and it
+  correctly refused to edit a fenced spec. The registry row, the §8 V8 ceiling (`1..=65536`) and a new
+  **V11** rule landed first. V11 is where the exemption reasoning now lives, because an operator
+  reading the schema is who needs it: the bound is on *concurrency*, not the kernel's queue;
+  `REGISTER` and `ACK` are outside it; every other gated method is subject to it.
+- **The REGISTER exemption was checked, not taken on trust.** A registration storm *is* the overload,
+  and a shed refresh makes a phone unreachable — turning a spike into an outage plus a retry spike. The
+  code takes no permit anywhere on the REGISTER path. `ACK` is exempt for the harder reason: RFC 3261
+  §17.1.1.3 gives an ACK for a 2xx no response at all, so there is no `503` to answer it with.
+- **`BYE`/`CANCEL` stay gated**, and the trade-off is argued rather than assumed: shedding the requests
+  that *end* work makes overload self-sustaining, but an unbounded method is an unbounded node, and a
+  `503` with `Retry-After` to a `BYE` is a retry rather than a loss.
+- Merge conflict in `config/tests.rs` only, against `FC-4` which landed after this branched. Purely
+  additive on both sides — both test sets kept, verified by running them.
+- Carried forward rather than dropped: the kernel logs per shed message synchronously on the loop that
+  must keep timers running, which makes overload handling slower the more overload there is. That is
+  the kernel's to fix and belongs on `docs/upstream.md`; recorded here so it is not lost.
