@@ -258,7 +258,7 @@ not answer for never becomes "proceed" by omission.
   - **No engine timer's duration or arming point is a function of a query's latency.** Every
     engine timer is armed at a fixed pipeline anchor rather than at a wall-clock offset from the
     request's arrival: Timer C at proxy spec F11, after F10 `Forward`, so its deadline is
-    `t_forward + 180 s` and never `t_invite + 180 s`. A suspension at H3, H5 or H7 precedes
+    `t_forward + timerC` and never `t_invite + timerC`. A suspension at H3, H5 or H7 precedes
     `ResolveTargets`, so no branch and no branch timer exists yet; one at H9 or H11 delays when
     the anchor is reached and does not change what is armed there. What a suspension does
     consume is caller-perceived setup time, which §8's `hook_budget` bounds explicitly rather

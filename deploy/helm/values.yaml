@@ -399,8 +399,15 @@ cluster:
   # The `frTimer: 3s` / `frInvTimer: 600s` pair this file used to carry named
   # those two timers in a spelling from outside the RFC, at values an order of
   # magnitude from it, with no reason recorded for either.
+  #
+  # `timerC` is now absent for the same reason (`PX-10`). It carried 600000 —
+  # 10 minutes — because the schema's own default was then 180000, the floor
+  # exactly, which its own rule refused: a `timers` section that did not name
+  # `timerC` would not load, so the chart had to name one, and 10 minutes was
+  # what it named with no reason recorded. `DP-12` moved the default to 240 s
+  # and `PX-10` made the proxy arm it, so omission loads and means the schema's
+  # default. A deployment that wants longer writes it, with a reason.
   timers:
-    timerC: 600000              # 10 min; must be > 180000
     maxCallDuration: 28800000   # 8 h — the session cap, unrelated to Timer C
 
   # Unowned: cluster-config §7 gives this section a home and a reload class and

@@ -9,6 +9,34 @@ use std::time::Duration;
 
 use bytes::Bytes;
 
+/// Timer C's floor, and it is **exclusive**: a legal Timer C is strictly larger than this.
+///
+/// RFC 3261 §16.6 step 11 — "the timer MUST be larger than 3 minutes". A MUST over a strict
+/// inequality, with no SHOULD and no rounding language near it, so reading it as `≥` would admit
+/// exactly the value the RFC forbids. §16.8 is "Processing Timer C" and states no bound at all; it
+/// was cited here, and in [proxy-behavior] F11, until `PX-10`.
+///
+/// Stated in seconds, as F11 and the RFC state it, so the bound and [`DEFAULT_TIMER_C`] cannot be
+/// misread for each other.
+///
+/// [proxy-behavior]: https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/proxy-behavior.md
+#[allow(clippy::duration_suboptimal_units)]
+pub const TIMER_C_FLOOR: Duration = Duration::from_secs(180);
+
+/// Timer C's default: the smallest whole-minute value **above** [`TIMER_C_FLOOR`].
+///
+/// It was 180 s — the floor exactly, and therefore the one value RFC 3261 forbids — in this crate
+/// until `PX-10`, and in the configuration schema until `DP-12`. The number here and
+/// `cluster-config` §8 V7's `timerC` default are deliberately the same value: this is the default a
+/// proxy built in code gets, that one is the default a document gets, and a proxy whose two
+/// defaults disagreed is how the contradiction survived being fixed once.
+///
+/// Deliberately not raised further. Timer C is the only bound on a branch that has gone quiet since
+/// its last provisional (§16.7 restarts it on each 101–199), so every extra minute is a minute a
+/// wedged branch holds a proxied transaction — and, since `DP-11`, an admission slot.
+#[allow(clippy::duration_suboptimal_units)]
+pub const DEFAULT_TIMER_C: Duration = Duration::from_secs(240);
+
 /// The key the loop-detection cookie is computed under (§6).
 ///
 /// Keyed so an outsider cannot forge "not a loop" and drive a request round a cycle until it
@@ -104,8 +132,10 @@ pub struct ProxyConfig {
     pub default_max_forwards: u8,
     /// `Max-Breadth` assumed when the request carries none (RFC 5393 §5.2's recommended 60).
     pub default_max_breadth: u32,
-    /// Timer C for INVITE branches. §16.8 requires "larger than 3 minutes"; 180 s is the floor and
-    /// the default, and a smaller value is refused rather than silently raised.
+    /// Timer C for INVITE branches (F11).
+    ///
+    /// The floor is [`TIMER_C_FLOOR`] and it is exclusive; the default is [`DEFAULT_TIMER_C`]. What
+    /// a *document* puts here is `cluster.timers.timerC`, carried by the node's `NodeConfig`.
     pub timer_c: Duration,
     /// The cookie key (§6).
     pub cookie_key: CookieKey,
@@ -114,9 +144,6 @@ pub struct ProxyConfig {
 impl ProxyConfig {
     /// A configuration for one identity, with the spec's defaults.
     #[must_use]
-    // Timer C stays in seconds: [proxy-behavior](../../../docs/specs/proxy-behavior.md) F11 states
-    // it as "Default 180 s", and `from_mins(3)` would no longer match the row it is checked against.
-    #[allow(clippy::duration_suboptimal_units)]
     pub fn new(host: &str, record_route_uri: impl Into<Bytes>, cookie_key: CookieKey) -> Self {
         Self {
             identities: vec![EdgeIdentity::host(host)],
@@ -125,7 +152,7 @@ impl ProxyConfig {
             schemes: vec!["sip".to_owned(), "sips".to_owned()],
             default_max_forwards: 70,
             default_max_breadth: 60,
-            timer_c: Duration::from_secs(180),
+            timer_c: DEFAULT_TIMER_C,
             cookie_key,
         }
     }
@@ -154,15 +181,25 @@ impl ProxyConfig {
             .any(|known| known.eq_ignore_ascii_case(&scheme))
     }
 
-    /// Timer C, never below §16.8's floor.
+    /// Timer C, never at or below §16.6 step 11's floor.
     ///
-    /// A configuration that asked for 30 s would make the proxy cancel branches that RFC 3261
-    /// considers healthy, so the floor is enforced here rather than trusted to the operator.
+    /// A configuration that asked for 30 s would make the proxy cancel branches RFC 3261 considers
+    /// healthy, so the bound is enforced here rather than trusted to whoever built the value.
+    ///
+    /// **Why the fallback is the default and not the floor.** This was `.max(TIMER_C_FLOOR)` until
+    /// `PX-10`, which honoured F11 as it then read — an *inclusive* floor under an *exclusive* RFC
+    /// bound — and so answered a request for 180 s, or for anything below it, with exactly 180 s:
+    /// the one value the RFC forbids, arrived at by the code whose job was to prevent it. Clamping
+    /// to a strict bound has no correct value on the bound itself, so an unusable request falls back
+    /// to [`DEFAULT_TIMER_C`] instead. A document cannot reach this path — `cluster-config` §8 V7
+    /// refuses `timerC <= 180 s` at load — so what it protects is a `ProxyConfig` built in code.
     #[must_use]
-    // As in `new`: F11's floor is written "≥ 180 s", so the floor here is too.
-    #[allow(clippy::duration_suboptimal_units)]
     pub fn effective_timer_c(&self) -> Duration {
-        self.timer_c.max(Duration::from_secs(180))
+        if self.timer_c > TIMER_C_FLOOR {
+            self.timer_c
+        } else {
+            DEFAULT_TIMER_C
+        }
     }
 }
 
@@ -220,15 +257,34 @@ mod tests {
     }
 
     #[test]
-    // Every value in this test is a Timer C reading in seconds, and the 30 it starts from is not a
-    // whole minute: converting only some of them would hide that 180 is the floor 30 is raised to.
+    // Every value here is a Timer C reading in seconds, and the 30 it starts from is not a whole
+    // minute: converting only some of them would hide which of them is the floor.
     #[allow(clippy::duration_suboptimal_units)]
-    fn timer_c_never_drops_below_the_rfc_floor() {
+    fn timer_c_never_sits_on_or_below_the_rfc_floor() {
         let mut config = config();
+
+        // The bound is strict (§16.6 step 11), so the floor itself is not a legal answer — this is
+        // the case that made the merge base arm exactly the forbidden 180 s.
+        config.timer_c = TIMER_C_FLOOR;
+        assert_eq!(config.effective_timer_c(), DEFAULT_TIMER_C);
+
         config.timer_c = Duration::from_secs(30);
-        assert_eq!(config.effective_timer_c(), Duration::from_secs(180));
-        config.timer_c = Duration::from_secs(240);
-        assert_eq!(config.effective_timer_c(), Duration::from_secs(240));
+        assert_eq!(config.effective_timer_c(), DEFAULT_TIMER_C);
+
+        // One second over the floor is legal, and is honoured rather than rounded to anything.
+        config.timer_c = TIMER_C_FLOOR + Duration::from_secs(1);
+        assert_eq!(config.effective_timer_c(), Duration::from_secs(181));
+
+        config.timer_c = Duration::from_secs(300);
+        assert_eq!(config.effective_timer_c(), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn the_default_timer_c_satisfies_the_floor_it_is_declared_beside() {
+        // The `DP-12` defect in this crate's half: a default that its own rule refuses cannot be
+        // accepted by omission, and no operator can fix a default by writing nothing.
+        assert!(DEFAULT_TIMER_C > TIMER_C_FLOOR);
+        assert_eq!(config().effective_timer_c(), DEFAULT_TIMER_C);
     }
 
     #[test]

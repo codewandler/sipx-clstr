@@ -10,7 +10,8 @@
 
 use bytes::Bytes;
 use sipx_clstr_proxy::{
-    BranchId, CookieKey, Effect, Input, Kind, ProxyConfig, ResponseContext, Target, TokenVerdict,
+    BranchId, CookieKey, DEFAULT_TIMER_C, Effect, Input, Kind, ProxyConfig, ProxyTimer,
+    ResponseContext, TIMER_C_FLOOR, Target, TokenVerdict,
 };
 use sipx_sip::{
     Header, HeaderName, Method, Request, RequestBuilder, Response, ResponseBuilder, StatusCode, Uri,
@@ -359,6 +360,27 @@ fn pb_f_1_a_dialog_forming_invite_is_record_routed_with_a_branch_and_timer_c() {
     assert_eq!(
         effects.iter().map(Effect::kind).collect::<Vec<_>>(),
         [Kind::ResolveTargets, Kind::Forward, Kind::SetTimer]
+    );
+
+    // The row says "Timer C armed at F11's default, 240 s", and until `PX-10` this test asserted
+    // only that *a* timer was set — so the row read 180 s, the code armed 180 s, and the value the
+    // row exists to pin was never compared to anything. A "proved" row that proves the shape and not
+    // the number is how the same defect survived being fixed once already (`DP-12`, `CC-V-9`).
+    let armed = effects
+        .iter()
+        .find_map(|effect| match effect {
+            Effect::SetTimer {
+                timer: ProxyTimer::C,
+                branch: Some(_),
+                after,
+            } => Some(*after),
+            _ => None,
+        })
+        .expect("a Timer C, armed on the branch it guards");
+    assert_eq!(armed, DEFAULT_TIMER_C, "F11's default");
+    assert!(
+        armed > TIMER_C_FLOOR,
+        "§16.6 step 11 is a strict bound: {armed:?} must be larger than {TIMER_C_FLOOR:?}"
     );
 
     let forwarded = effects

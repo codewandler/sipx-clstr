@@ -17,8 +17,8 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use sipx_clstr_proxy::{
-    BranchId, CookieKey, Effect as ProxyEffect, Input as ProxyInput, ProxyConfig, ProxyTimer,
-    ResponseContext, Target,
+    BranchId, CookieKey, DEFAULT_TIMER_C, Effect as ProxyEffect, Input as ProxyInput, ProxyConfig,
+    ProxyTimer, ResponseContext, Target,
 };
 use sipx_clstr_sim::node::{Effect, Input, SimNode, TimerId, send};
 use sipx_clstr_sim::{LinkKind, LinkPolicy, NodeId, Sim, SimTime};
@@ -427,12 +427,21 @@ fn scenario(seed: u64, policy: LinkPolicy, rings: [bool; 2], cancel: bool) -> Si
     sim
 }
 
-/// Long enough for a cancelled call to conclude, far short of Timer C's 180 s.
+/// Long enough for a cancelled call to conclude, far short of Timer C.
 ///
 /// The bound is the point. `run_until_idle` would run past Timer C, and then a `487` produced by C5
 /// — the timer reaping a silent branch — would satisfy an assertion meant to be about the CANCEL.
 /// That is exactly how this file's first version passed while the CANCEL was being dropped entirely.
 const BEFORE_TIMER_C: Duration = Duration::from_secs(10);
+
+/// A step toward Timer C that cannot reach it, whatever F11's default is.
+///
+/// Written against [`DEFAULT_TIMER_C`] rather than as a literal: this file had `60` then `150` — a
+/// pair chosen to straddle 180 s — and when `PX-10` moved the default to 240 s the two steps stopped
+/// straddling anything and the test failed on the timer never firing. A fraction of the constant
+/// keeps both halves of the assertion true by construction rather than by arithmetic somebody has to
+/// redo.
+const SHORT_OF_TIMER_C: Duration = DEFAULT_TIMER_C.checked_div(4).unwrap();
 
 #[test]
 fn a_cancelled_call_ends_in_487_for_the_caller() {
@@ -520,22 +529,21 @@ fn a_cancel_for_a_branch_that_never_answered_is_queued_until_it_does() {
 }
 
 #[test]
-// The 60 is a step toward Timer C's 180 s and is followed by a 150 that is not a whole minute:
-// converting only the 60 would make the two steps look unrelated to the timer they straddle.
-#[allow(clippy::duration_suboptimal_units)]
 fn timer_c_reaps_a_branch_that_goes_silent_and_the_call_still_concludes() {
     // C5/C6 in virtual time: neither callee ever answers, so the only thing that can conclude the
-    // call is Timer C. 180 s of virtual time costs nothing here, which is the whole argument for a
-    // virtual clock — the same test against a real clock would take three minutes.
+    // call is Timer C. Four minutes of virtual time costs nothing here, which is the whole argument
+    // for a virtual clock — the same test against a real clock would take longer than the timer,
+    // and every value RFC 3261 §16.6 step 11 admits is over three minutes.
     let mut sim = scenario(0x4341_4E03, LinkPolicy::CLEAN, [false, false], false);
-    sim.advance(Duration::from_secs(60)).expect("runs");
+    sim.advance(SHORT_OF_TIMER_C).expect("runs");
     assert_eq!(
         sim.node::<Caller>(CALLER).and_then(|c| c.final_status),
         None,
         "nothing should have concluded yet"
     );
 
-    sim.advance(Duration::from_secs(150)).expect("runs");
+    // Past the timer from here, with the first step's worth of margin.
+    sim.advance(DEFAULT_TIMER_C).expect("runs");
     assert_eq!(
         sim.node::<Caller>(CALLER).and_then(|c| c.final_status),
         Some(408),

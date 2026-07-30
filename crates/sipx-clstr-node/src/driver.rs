@@ -73,6 +73,14 @@ pub struct NodeConfig {
     /// why the knob lives where it does, and [`AdmissionBound`] for what the bound does and does not
     /// cover.
     pub max_in_flight_transactions: usize,
+    /// Timer C for INVITE branches (`PX-10`, proxy-behavior F11).
+    ///
+    /// From `cluster.timers.timerC`. It reaches the engine through [`proxy_config`] and nowhere
+    /// else, so this field is the whole of the document→driver→engine path for it. Until `PX-10`
+    /// there was no such path: `cluster.timers` was parsed, validated and projected onto
+    /// `ProjectedConfig`, and then read by nobody, so every INVITE branch was guarded by the proxy
+    /// crate's own default whatever the document said.
+    pub timer_c: Duration,
 }
 
 /// Which location service backs this node (`RG-12`, location-service §6.2).
@@ -130,6 +138,7 @@ impl NodeConfig {
             domains: Vec::new(),
             store: StoreChoice::InMemory,
             max_in_flight_transactions: crate::config::DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS,
+            timer_c: sipx_clstr_proxy::DEFAULT_TIMER_C,
         }
     }
 
@@ -695,6 +704,12 @@ fn proxy_config_keyed(
     let host = speaking_for.map_or("", Listener::advertised_host);
 
     let mut proxy = ProxyConfig::new(host, record_route, cookie_key);
+    // `PX-10` — the document's Timer C, or nothing the document said ever reaches a branch. Assigned
+    // rather than left at `ProxyConfig::new`'s default, which is what `grep -n timer_c driver.rs`
+    // used to return no matches for. The engine still applies F11's floor on top
+    // (`effective_timer_c`), so a value the loader could not have refused — a `NodeConfig` built in
+    // code — cannot arm a Timer C the RFC forbids.
+    proxy.timer_c = config.timer_c;
     // The node answers to every address it advertises, on any port: a client that resolved a port
     // differently, or reached us over another transport, is still talking to this node.
     proxy.identities.clear();
@@ -1021,6 +1036,15 @@ async fn perform(
                 // rings forever on the losing branch.
                 tracing::info!(%branch, "branch cancellation is PX-6's, not yet wired to a socket");
             }
+            // `SetTimer`/`ClearTimer` reach no clock here, and `PX-10` did **not** change that: what
+            // it changed is the deadline the engine puts in `SetTimer` — the document's Timer C
+            // rather than a private default (see `proxy_config_keyed`). So on this driver a Timer C
+            // is armed with the right value and never fires, and a branch that goes quiet after a
+            // provisional is reaped by the kernel's Timer B or not at all. The deterministic harness
+            // does perform these effects, which is why `PB-C-5`/`PB-C-6` are proved there. Wiring a
+            // real clock to them belongs with `CancelBranch` above — a fired Timer C's first act is
+            // to cancel the branch (§9 C5), so a driver that armed the timer without wiring the
+            // cancel would reap branches it could not tell to stop. `PX-6` owns the pair.
             ProxyEffect::AnswerCancel
             | ProxyEffect::SetTimer { .. }
             | ProxyEffect::ClearTimer { .. }

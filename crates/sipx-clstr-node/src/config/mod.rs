@@ -1551,11 +1551,22 @@ fn read_timers(
             &at,
             errors,
         );
-        // §7 declares `maxCallDuration` and nothing in this build reads it — no field of
-        // `TimersSpec` holds it and no driver consults it — so it is reported rather than dropped.
-        // Accepted-and-silently-discarded is the class `FC-2` added `unapplied` to eliminate.
-        if map.contains_key(Value::from("maxCallDuration")) {
-            unapplied.push(at.field("maxCallDuration"));
+        // Of the five keys §7 declares, exactly one reaches a driver: `timerC`, which `PX-10` wired
+        // through `NodeConfig::timer_c` onto the proxy engine's `ProxyConfig`. The other four are
+        // reported rather than dropped, because accepted-and-silently-discarded is the class `FC-2`
+        // added `unapplied` to eliminate — and `DP-12` found `maxCallDuration` alone on this list
+        // while the whole section was in fact unread, which understated it by four keys.
+        //
+        // `t1`, `timerB` and `timerF` are the **kernel's** transaction timer constants (RFC 3261
+        // §17.1.1.2, §17.1.2.2). Applying them means handing them to `sipx_transport::Config::timers`
+        // when the endpoint is built, and this build never sets that field, so a document naming
+        // them gets the kernel's own constants. `maxCallDuration` is a session cap, has no field on
+        // `TimersSpec` at all, and is not Timer C — conflating the two produces a Timer C set to
+        // hours in the belief that it protects long calls, and then the wrong knob is the one tuned.
+        for ignored in ["t1", "timerB", "timerF", "maxCallDuration"] {
+            if map.contains_key(Value::from(ignored)) {
+                unapplied.push(at.field(ignored));
+            }
         }
 
         let mut read_ms = |key: &str, slot: &mut u64| {

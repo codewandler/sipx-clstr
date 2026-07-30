@@ -2,11 +2,11 @@
 id: PX-10
 title: Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default
 pillar: Platform
-status: ready
+status: done
 priority: 1
 epic:
 areas: [proxy, node, config]
-note: the whole timers section is parsed, projected, and read by nothing — the armed Timer C is always 180 s
+note: timerC now reaches the engine from the document and F11 defaults to 240 s; the rest of the timers section is reported unapplied rather than dropped
 ---
 
 # Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default
@@ -39,28 +39,56 @@ evidence, *the entire `timers` section* is unapplied.
 
 ## Acceptance
 
-- [ ] **Failing-first**: a test that loads a document setting `timers.timerC` to a value distinct
+- [x] **Failing-first**: a test that loads a document setting `timers.timerC` to a value distinct
       from every default, drives an INVITE that forks, and asserts the *armed* Timer C is the
       document's value. It must fail at the merge base, where the answer is always 180 s.
-- [ ] `timers` is wired through the driver, or every key in it that is not wired is reported in
+      → `crates/sipx-clstr-node/tests/timer_c_armed.rs`; at the merge base both cases fail with
+      `left: 180s`.
+- [x] `timers` is wired through the driver, or every key in it that is not wired is reported in
       `Config::unapplied`. Those are the only two honest outcomes; the current third — accepted,
       projected, and dropped — is the one being removed.
-- [ ] `proxy-behavior.md` F11 states a default and a floor that can both hold at once, cites
+      → both halves: `timerC` wired (`startup.rs` → `NodeConfig::timer_c` → `driver.rs:proxy_config_keyed`),
+      and `t1`/`timerB`/`timerF`/`maxCallDuration` reported (`config/mod.rs:read_timers`).
+- [x] `proxy-behavior.md` F11 states a default and a floor that can both hold at once, cites
       **§16.6 step 11** rather than §16.8, and agrees with `cluster-config.md` §8 V7 as `DP-12` left
       it (floor `> 180 s`, default 240 s). Two specs disagreeing about one timer is how this
-      survived twice.
-- [ ] Vector row `PB-F-1` ("Timer C set 180 s", `proxy-behavior.md:253`) moves with F11 and is
+      survived twice. → `docs/specs/proxy-behavior.md:162`.
+- [x] Vector row `PB-F-1` ("Timer C set 180 s", `proxy-behavior.md:253`) moves with F11 and is
       **proved**, not deferred. `DP-12` found `CC-V-9` was deferred rather than proved, and that is
-      precisely why the sibling defect went unnoticed.
-- [ ] `crates/sipx-clstr-proxy/src/config.rs:128` and `:165` agree with the corrected F11.
-- [ ] `deploy/helm/values.yaml:403`'s `timerC: 600000` is revisited. It was declared as a workaround
+      precisely why the sibling defect went unnoticed. → the row reads 240 s, and
+      `pb_f_1_a_dialog_forming_invite_is_record_routed_with_a_branch_and_timer_c` now compares the
+      armed duration; it previously asserted only that *a* timer was set, which is why a row saying
+      180 s and code arming 180 s never met.
+- [x] `crates/sipx-clstr-proxy/src/config.rs:128` and `:165` agree with the corrected F11.
+      → `DEFAULT_TIMER_C` (240 s) and `TIMER_C_FLOOR` (180 s, exclusive); `effective_timer_c` falls
+      back to the default rather than clamping onto a strict bound.
+- [x] `deploy/helm/values.yaml:403`'s `timerC: 600000` is revisited. It was declared as a workaround
       for the self-refuting default (`KO-14` said so); omission works now, so the file should either
-      drop it or say that 10 minutes is a deliberate choice.
-- [ ] `scripts/gate.sh` green.
+      drop it or say that 10 minutes is a deliberate choice. → dropped, with the reason recorded;
+      `deploy/helm/check-values.sh` still renders and loads for every role.
+- [x] `scripts/gate.sh` green.
 
 ## Progress
 
-- (running log)
+- 2026-07-30 (`PX-10`): done, with one caveat stated below that a reader should not miss.
+- **Considered for upstream (AGENTS.md #6): no — the arming stays here.** RFC 3261 gives the kernel
+  the *transaction* timers (§17: A, B, D, E, F, G, H, I, J, K) and gives Timer C to the **proxy TU**
+  (§16.6 step 11 arms it, §16.7 restarts it on each 101–199, §16.8 processes it). It is a property of
+  a response context fanning one server transaction out to N client transactions, and that driver is
+  already recorded as local in [upstream.md](../upstream.md) ("Decided (not upstream)"). No new
+  ledger row: this is that row.
+- **The caveat: the node driver still performs no timer at all.** `driver.rs`'s effect loop drops
+  `SetTimer`/`ClearTimer` on the floor, as it always has. What `PX-10` fixed is the *value* the
+  engine puts in `SetTimer` — the document's, not a private 180 s. A fired Timer C on a real socket
+  is `PX-6`'s, together with `CancelBranch`, which is dropped in the same arm: a fired Timer C's
+  first act is to cancel the branch (§9 C5), so arming without the cancel would reap branches the
+  node could not tell to stop. Commented at the arm rather than left for the next reader to discover.
+- The armed value is asserted where it is because it cannot be asserted anywhere later: every Timer C
+  §8 V7 admits is `> 180 s`, so a real-clock test would take over three minutes, and the harness that
+  *does* fire timers in virtual time has no dependency on the node crate and cannot see `driver.rs`.
+- `crates/sipx-clstr-sim/tests/proxy_cancel.rs` advanced `60 s` then `150 s` — a pair chosen to
+  straddle 180 s — and stopped straddling anything when the default moved. Rewritten against
+  `DEFAULT_TIMER_C` so the next change to the default cannot silently un-fire the timer.
 
 ## Notes
 
