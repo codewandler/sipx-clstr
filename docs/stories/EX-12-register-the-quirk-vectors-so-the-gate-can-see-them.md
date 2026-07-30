@@ -2,7 +2,7 @@
 id: EX-12
 title: Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns
 pillar: Platform
-status: in-progress
+status: done
 priority: 2
 epic:
 areas: [extensions, ci, docs]

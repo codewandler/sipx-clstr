@@ -31,6 +31,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Thirty-one vector rows were invisible to the gate** (`EX-12`). The quirk-profile rows lived in a
+  design record, and the checker reads rows only from the spec that *owns* a prefix — so no spec owned
+  `QP`, and a fabricated row passed the check. They now live in `hook-framework` §9.1, which owns the
+  prefix, and all 31 carry a deferral naming the work that would prove them rather than being counted
+  as proved. The total goes up, not the proved figure.
+
+  Registering a prefix is no longer something to remember: the checker now fails on any table row
+  shaped like a vector whose prefix no spec owns, across both the spec and design trees. `QP` was the
+  only unowned prefix in the repository, so that rule goes green exactly as this lands.
+
+  The blocker underneath was a story that closed on half its scope. `EX-8` was named in writing as the
+  owner of the `Replace`/`Field` body-claim split and rules `G9`–`G14`; its acceptance covered only
+  the other half, and it closed `done`. Those deltas land here, which is also what makes it possible
+  for a deployment to anchor media and run an SDP quirk at once instead of the two colliding.
+
 - **Two checkouts could not be tested at the same time** (`CF-13`). The node's socket suites bound
   hard-coded ports, so concurrent runs collided with `Address already in use` — and the failure
   landed on whichever diff happened to be under test rather than on the one at fault. It cost two
