@@ -4,9 +4,9 @@
 # Two trees, kept visibly apart:
 #
 #   deployment:  how it is deployed. Ordinary Helm; looks like Helm.
-#   cluster:     what it does. DP-1's config schema, verbatim — the same tree
-#                a node reads. The chart emits it into the SipxCluster spec
-#                without reshaping it.
+#   cluster:     what it does. The cluster configuration document, verbatim —
+#                the same tree a node reads. The chart emits it into the
+#                SipxCluster spec without reshaping it.
 #
 # These defaults are the DEFAULT DEPLOYMENT SET: a self-contained, single-zone
 # environment that stands up on a local k3s/k3d cluster with no edits — one
@@ -17,15 +17,37 @@
 # A deployment overlays its own values on top; an overlay that needs a new
 # template is a defect in this chart.
 #
+# THE SCHEMA IS NORMATIVE AND THIS FILE IS NOT (KO-14). docs/specs/cluster-config.md
+# owns the `cluster:` tree: §7's registry says which sections exist and who owns
+# each one's content, §2 D4 fixes lowerCamelCase keys with kebab-case values, and
+# §8 V2's closed world makes an unrecognised key a startup error rather than a
+# warning — so a section under a name the schema does not define is a node that
+# does not boot. Where this file and a spec disagreed, the spec won; the change
+# list is the reconciliation table in docs/designs/deployment.md.
+#
+# Durations are bare integers and the unit is the owning spec's, named per key:
+# `tenant[].expiry` is seconds (location-service §5.2), `timers` are
+# milliseconds (RFC 3261 §17). A `3600s` string is refused — the loader reads
+# integers, and a unit inside the value would be a second syntax to validate.
+#
 # NOTHING HERE RUNS YET. There is no operator image and no CRD — KO-1 pins the
 # custom resource and KO-3 implements the reconcile loop. Until then the chart
-# renders a resource nothing serves.
+# renders a resource nothing serves. What KO-14 fixed is the document, not
+# whether anything reads it: `deploy/helm/check-values.sh` renders this file and
+# feeds the result to the real loader, which is the only way any of the rules
+# above is checked rather than asserted.
 ########################################################################
 
+# The schema version of the document below, and therefore the API version of the
+# resource that carries it: one version field on the thing being versioned,
+# rather than a `crd:` block spelling the same string in two halves.
 # Provisional until KO-1 pins the custom resource.
-crd:
-  apiGroup: sipx.dev
-  apiVersion: v1alpha1
+#
+# The document's *configuration* version (cluster-config §3 D9) is deliberately
+# absent: it is a u32 the operator sets from the resource's metadata.generation,
+# strictly increasing over the sequence of documents a cluster is given, so a
+# value written here would be a second answer to "which configuration is this".
+apiVersion: sipx.dev/v1alpha1
 
 deployment:
   image:
@@ -46,6 +68,13 @@ deployment:
   # Every replica of a host-networked role binds the same node-global port, so
   # same-role replicas cannot share a node (KO-11). Replica counts above the
   # node count are a placement error, not a capacity decision.
+  #
+  # The keys are role names from cluster-config §4 R1's closed set, spelled as
+  # the schema spells them. `proxy` is not a role — the set has `inbound-proxy`
+  # and `outbound-proxy`, and R3 is what makes running both in one process safe
+  # should a deployment want that. `echo` is a role because e2e-probe §9 puts it
+  # there: the probe's callee is the same binary in `echo` mode, and without a
+  # workload for it the echo trunk below points at nothing.
   roles:
     edge:
       replicas: 1
@@ -59,12 +88,24 @@ deployment:
       resources:
         requests: { cpu: 100m, memory: 256Mi }
         limits:   { memory: 512Mi }
-    proxy:
+    inbound-proxy:
       replicas: 1
       resources:
         requests: { cpu: 100m, memory: 256Mi }
         limits:   { memory: 512Mi }
-    e2eTester:
+    outbound-proxy:
+      replicas: 1
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits:   { memory: 512Mi }
+    e2e-tester:
+      replicas: 1
+      resources:
+        requests: { cpu: 20m, memory: 64Mi }
+        limits:   { memory: 128Mi }
+    # Refused beside any call-path role (cluster-config §4 R6, e2e-probe §11),
+    # so it is its own workload and never an extra role on the edge.
+    echo:
       replicas: 1
       resources:
         requests: { cpu: 20m, memory: 64Mi }
@@ -79,7 +120,7 @@ deployment:
     enabled: true
     storage: 1Gi
   rtpengine:
-    enabled: true               # mirrors cluster.media.mode == "managed"
+    enabled: true               # mirrors cluster.mediaPool[0].mode == "managed"
     replicas: 1
     hostNetwork: true
     image:
@@ -91,7 +132,11 @@ deployment:
     name: ""
 
 ########################################################################
-# cluster: DP-1's config schema.
+# cluster: the configuration document (docs/specs/cluster-config.md).
+#
+# Emitted into the SipxCluster spec verbatim. Every key below is either applied
+# by the loader or a §7 section it recognises and defers; a key that is neither
+# stops a node from starting.
 ########################################################################
 
 cluster:
@@ -99,64 +144,169 @@ cluster:
   environment: local
   zones: [local]
 
+  # A deployment profile is a named module set plus role flags
+  # (hook-framework §8) and KO-1 wants one on the resource. No name is written
+  # here because EX-5 has not shipped the catalog it would have to come from,
+  # and hook-framework §7's startup graph validation refuses a profile it cannot
+  # resolve — a name invented in a values file would be a node that does not
+  # boot rather than a node with a profile. The key has a home; it stays empty
+  # until there is something true to put in it.
+  #
+  # profile: <name from EX-5's catalog>
+
+  # SIP listeners only. The management endpoint is *not* in this list: every
+  # entry's advertised address is part of the node's SIP identity
+  # (proxy-behavior §5), so an HTTP endpoint here makes that identity set wrong.
+  # It has its own section below.
+  #
+  # `roles` is a set, not a value (§4 R2): a listener shared by co-resident
+  # roles has to be expressible, or the co-located case cannot be configured.
+  #
+  # `advertise` is what goes in Via, Contact and Record-Route, so it must be an
+  # address a peer can route to — inside the cluster that is the pod's own IP,
+  # which the operator supplies as POD_IP from the downward API. §8 V4 refuses
+  # an undefined name rather than substituting empty, so a deployment that does
+  # not set it is refused at load instead of advertising an unparsable address.
+  #
+  # Every role the deployment set runs has a listener here. A projected node
+  # with none is refused (§5 P4), which is what the proxy, echo and e2e-tester
+  # workloads used to be.
   listener:
-    - role: edge
+    - roles: [edge]
       transport: udp
       bind: "0.0.0.0:5060"
-      advertise: "${NODE_IP}:5060"
-    - role: edge
+      advertise: "${POD_IP}:5060"
+    - roles: [edge]
       transport: tcp
       bind: "0.0.0.0:5060"
-      advertise: "${NODE_IP}:5060"
-      connectionLifetime: 3605s
-      maxConnections: 2048
-    - role: registrar
+      advertise: "${POD_IP}:5060"
+    - roles: [registrar]
       transport: udp
       bind: "0.0.0.0:5070"
-      advertise: "${NODE_IP}:5070"
-    - role: management
-      transport: http
-      bind: "127.0.0.1:8080"
+      advertise: "${POD_IP}:5070"
+    - roles: [inbound-proxy, outbound-proxy]
+      transport: udp
+      bind: "0.0.0.0:5060"
+      advertise: "${POD_IP}:5060"
+    # The probe's caller and its callee: neither is on the call path, and R6
+    # permits exactly this pair to share a process.
+    - roles: [e2e-tester, echo]
+      transport: udp
+      bind: "0.0.0.0:5060"
+      advertise: "${POD_IP}:5060"
     # No TLS listener in the default set — a local self-signed cert proves
-    # nothing. A deployment overlay adds one.
+    # nothing, and this build refuses `transport: tls` at load rather than
+    # binding cleartext for a transport that was asked for. A deployment
+    # overlay adds one once there is a certificate to name.
 
-  registrar:
-    realm: sip.local
-    maxExpires: 3600s
-    minExpires: 60s
-    usePath: true
-    methodFiltering: true
-    maxContacts: 10
-    shards: 1
-    authBackend: location_store
+  # Private by construction: bound to loopback, and the operator keeps it there
+  # with a NetworkPolicy. `tls` names a certificate by reference when it is
+  # reachable off-node.
+  management:
+    bind: "127.0.0.1:8080"
+
+  # membership, keys and shardMap are AF-6's sections (cluster-config §10) and
+  # the chart writes none of them:
+  #
+  #   - `membership` carries a node id, zone and role set per member, and the
+  #     ids are assigned by whoever creates the workloads — the operator (§5 P1,
+  #     KO-3). A node with no entry still starts (P3), so their absence is not a
+  #     defect; a wrong id here would be.
+  #   - `shardMap` needs an owner per shard drawn from `membership` plus a
+  #     drainTimeout (§10 A4), which is why `registrar.shards: 1` is gone: a
+  #     count cannot express ownership, and drain-then-switch fences on an owner
+  #     and a version.
+  #   - `keys` carries affinity-token §6's attributes with the secret by
+  #     reference; the operator renders it into a Secret.
 
   locationStore:
     backend: postgres
-    dsnRef: sipx-location/dsn      # created by the chart when postgresql.enabled
+    dsnRef: sipx-location/dsn      # a reference, never a value (§8 V9)
     ha: single
 
-  numbering:
-    normalize: [strip_plus, strip_leading_zeros]
-    normalizeFields: [from_user, to_user, request_uri_user, pai_user]
-    ruriDigitsMin: 3
-    ruriDigitsMax: 20
-    ruriFallbackToUser: true
-    outbound:
-      e164Plus: true
-      anonymousFrom: "sip:anonymous@anonymous.invalid"   # RFC 5379 §5.1.4
+  # What is left of the old `registrar:` block: §7 assigns it exactly these two
+  # keys. Everything else that lived here is per tenant, because
+  # location-service §5.2/§5.5 and registrar-auth §2 make it per tenant, and a
+  # node-wide spelling would be a coarser policy the registrar's own spec cannot
+  # see (§7 S2). This section is recognised and not yet descended into; FC-3
+  # owns making it applied or refused.
+  registrar:
+    usePath: true
+    methodFiltering: true
+
+  # One tenant, because this build serves one tenant per node and refuses a
+  # document declaring more rather than silently honouring the first.
+  #
+  # `domains` is deliberately absent, which means "any": the local set's clients
+  # reach it at a pod or node address the chart cannot know, and a served-domain
+  # list (location-service §5.1 S1) would refuse the very registrations the probe
+  # makes. A real deployment lists its domains and everything else is then
+  # refused.
+  #
+  # `auth` is absent too, and that is a decision rather than an omission: it
+  # would name a realm and a nonce secret by reference (registrar-auth §2, §8
+  # V9), and this build refuses to start when that secret resolves — there is no
+  # credential store to check users against yet (RG-7), so an authenticating
+  # tenant would answer 401 to every REGISTER while looking protected. The local
+  # set runs an open tenant, deliberately and out loud.
+  #
+  #   auth:
+  #     realm: sip.local
+  #     secretRef: sipx-nonce/secret
+  tenant:
+    - name: default
+      id: 1                     # 0 is reserved for "none/system" (§6 I2)
+      expiry:                   # seconds — location-service §5.2
+        default: 3600
+        min: 60
+        max: 3600               # the local set's own cap, not the spec's 86400
+      maxBindingsPerAor: 10     # location-service §5.5
+
+  # No normalisation profiles, and that is the whole content of this section in
+  # the default set. number-normalisation N27 gives the platform no default and
+  # no built-in profile: with nothing bound, no number is altered. The flat
+  # `numbering:` block that used to be here was a second dialect for the same
+  # job — a global normaliser with its own field names — and the schema's shape
+  # is named profiles bound at one of exactly two points (N23): `ingress[]` for
+  # the request as received, whose scope vocabulary is RT-8/RT-9's, and
+  # `trunk[].normalisation` per branch on egress.
+  #
+  # The shape, for an overlay that needs one (number-normalisation §3, §10;
+  # lowerCamelCase keys and kebab-case values per §2 D4):
+  #
+  #   normalisation:
+  #     trim:
+  #       fields:
+  #         - name: request-uri
+  #           transforms:
+  #             - replacePrefix: { "+": "" }
+  #             - stripLeadingZeros: { max: 2 }
+  #           guard: { digits: { min: 3, max: 20 }, fallback: to }
+  #
+  # Two things that used to live in `numbering:` are not the normaliser's at
+  # all: forcing a leading `+` on egress is an `ensurePrefix: "+"` in an egress
+  # profile (N28 — a `+` appears only because a declared rule put it there), and
+  # an anonymous From URI is RFC 5379 privacy policy, which is RT-7's and has no
+  # home in this document yet.
 
   security:
     unknownSource: drop
-    maxForwards: 10
     sanityCheck: true
-    answerOptionsKeepalive: true
-    rejectUserAgents: [friendly, scanner, sipcli, sipvicious, VaxSIPUserAgent, pplsip]
+    # The mechanism, with nothing in it. A shipped list of tool names is a
+    # default that goes stale and that nobody reviews.
+    userAgentDenyList: []
     internalZone:
       networks: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-    anonymousCalls:
-      mode: log
-      minDigits: 4
-      rejectStatus: 403
+    # `maxForwards` is not a key here. RFC 3261 §16.6 step 3 fixes it at 70 —
+    # the value a proxy inserts when a request carries none — so §8 V6 refuses
+    # to make it a knob and the loader refuses the key by name. The 10 this file
+    # used to carry was not a hop budget being tightened; it silently shortened
+    # every call path that arrived without the header.
+    #
+    # `answerOptionsKeepalive` and `anonymousCalls` are gone with it: OPTIONS
+    # handling is proxy-behavior's and not a schema surface, and anonymous-call
+    # policy is the same RFC 5379 privacy question RT-7 owns. Both were
+    # unrecognised keys, which §8 V2 makes a startup error.
 
   # The default set has no carrier and no internal core: it dials its own echo
   # endpoint, which is what makes `helm install` self-contained.
@@ -172,78 +322,126 @@ cluster:
     - name: echo-test
       direction: outbound
       match: { prefix: "999000" }
-      destination: pool-echo
+      destination: echo
     - name: inbound-to-echo
       direction: inbound
       match: { any: true }
       destination: echo
 
-  routingHook:
-    enabled: false
-
   trunk:
     - name: echo-server
-      pool: pool-echo
+      pool: echo
       direction: outbound
       test: true
       failoverRank: 0
       register: false
       proxies:
         - { weight: 1.0, host: "sipx-echo", port: 5060 }
+      # Media policy is a property of the peer, and the peer is the trunk
+      # (media-relay §13.1, MP6; cluster-config §7 S3). There is no cluster-wide
+      # codec or SRTP setting to write, and this is the only shape admissible
+      # today: media-relay MP12 refuses any policy but the identity until CF-3
+      # has confirmed each NG key against the interop baseline, and G-M6 is that
+      # refusal at startup.
+      #
+      # What used to be here — `codecs.offer: [PCMA, PCMU, telephone-event]`
+      # with `mask: all` — was not the identity policy, so the default
+      # deployment set declared a media policy the platform will not start on.
+      # It was also the relay's own wire vocabulary (media-relay §13.3's NG
+      # keys) written into a configuration file, which puts the protocol in the
+      # config.
+      media:
+        codecs: as-received     # never Restrict while MP12 holds
+        transcode: none         # written rather than assumed (MP2)
+        srtp: disabled          # RTP/AVP toward this peer
+      # A quirk binding lives on the object it binds to — `quirks`,
+      # `quirkConfig` and `quirkOverrides` here and on `domain[]`
+      # (extension-framework G13). The top-level `quirkProfile: []` this file
+      # used to carry was a list of profiles naming where they apply, which is
+      # the shape EX-10 removed.
 
-  quirkProfile: []
+  # The pool is cluster-wide; the policy above is not. `nodes` is absent because
+  # `mode: managed` means the operator owns the rtpengine workload and therefore
+  # the node list (KO-7); a self-managed pool lists its own. The seven NG timers
+  # are configuration with defaults in media-relay §8 K6 and are adopted
+  # unchanged rather than restated here — §8 V3 forbids a second default. The
+  # retransmission schedule is four fixed attempts and is not a knob at all,
+  # which is why the old `ngTimeout`/`ngRetries` pair has no replacement.
+  #
+  # The RTP range deliberately sits below Kubernetes' default NodePort range
+  # (30000-32767): rtpengine runs host-networked here, so the old
+  # 30000-30200 claimed the same host ports a NodePort Service would be given.
+  mediaPool:
+    - mode: managed
+      portRange: { min: 16384, max: 16584 }
 
-  media:
-    mode: managed
-    ngTimeout: 3000ms
-    ngRetries: 2
-    portRange: { min: 30000, max: 30200 }
-    timeout: 60s
-    silentTimeout: 3600s
-    rewrite: [replace-origin, replace-session-connection]
-    strictSource: true
-    generateRtcp: false
-    codecs:
-      offer: [PCMA, PCMU, telephone-event]
-      transcode: []
-      mask: all
-
-  limit:
+  # RT-3's, and a list rather than a map — `limit[]` beside `limits:`, one letter
+  # apart, was a defect waiting for a mis-edit.
+  rateLimit:
     - name: per-destination-cps
       kind: cps
-      scope: destination_number
+      scope: destination-number
       algorithm: red
       value: 10
       onExceed: { status: 486, reason: "Busy (rate-limit threshold exceeded)" }
 
-  limits:
-    maxCallDuration: 28800s
-    timerC: 600s               # the 180s default silently caps long calls
-    frTimer: 3s
-    frInvTimer: 600s
+  # RFC 3261 §17's timers, by their RFC names (§8 V7). Milliseconds.
+  #
+  # Timer C bounds an INVITE that never receives a final response and is
+  # cancelled by the one that does (RFC 3261 §16.6 step 11), so it cannot cap an
+  # established call — the comment this file used to carry, that its "180s
+  # default silently caps long calls", was wrong about the mechanism, and a knob
+  # explained by a wrong reason is the one that gets tuned. The session cap is
+  # `maxCallDuration`. §8 V7 requires Timer C to be greater than 3 minutes.
+  #
+  # `t1`, `timerB` and `timerF` are absent: RFC 3261 §17.1.1.2 / §17.1.2.2 fix
+  # their defaults (500 ms, and 64·T1 for both) and §8 V3 adopts them unchanged.
+  # The `frTimer: 3s` / `frInvTimer: 600s` pair this file used to carry named
+  # those two timers in a spelling from outside the RFC, at values an order of
+  # magnitude from it, with no reason recorded for either.
+  timers:
+    timerC: 600000              # 10 min; must be > 180000
+    maxCallDuration: 28800000   # 8 h — the session cap, unrelated to Timer C
 
+  # Unowned: cluster-config §7 gives this section a home and a reload class and
+  # nothing more. Detection, `received`/`rport` handling (RFC 3261 §18.2.1,
+  # RFC 3581) and contact aliasing are real behaviour with no normative text
+  # behind them, and these field names came from somewhere other than an RFC.
+  # It needs its own story before it needs more schema; KO-14 left the block as
+  # it found it, in the unit the rest of the file uses.
   nat:
     detect: true
     fixNatedRegister: true
     contactAlias: true
-    keepalive: { method: OPTIONS, interval: 30s, natedOnly: true }
+    keepalive: { method: OPTIONS, interval: 30000, natedOnly: true }
 
+  # Served on the management endpoint above; there is one, so nothing names it.
   observability:
-    metrics: { enabled: true, path: /metrics, listener: management }
-    rpc:     { enabled: true, path: /RPC, listener: management }
+    metrics: { enabled: true, path: /metrics }
+    rpc:     { enabled: true, path: /RPC }
     logFormat: json
     hep:
       enabled: false
     cdr:
       enabled: true
-      fields: [callid, reply_code, from_number, to_number, call_direction]
+      fields: [call-id, reply-code, from-number, to-number, call-direction]
 
+  # e2e-probe §5. There is no `enabled` key: the probe runs iff a node runs the
+  # `e2e-tester` role, and a second switch would be a way for the two to
+  # disagree. `tenant` must name a declared tenant (§8 V5).
+  #
+  # A target is (address, transport, zone) (T1), enumerated rather than
+  # discovered (T3), and a pod IP or a Service name must not be one (T2) — the
+  # probe enters through the front door or it cannot detect a broken front door.
+  # On a single-node local cluster the front door is the node address the edge is
+  # host-networked onto, which the operator supplies to the tester as
+  # EDGE_ADDRESS; there is no VIP and no DNS name to use instead.
   probe:
-    enabled: true
-    schedule: 60s
-    tenant: e2e-test
+    schedule: 60000             # ms, before T5's jitter
+    tenant: default
     targets:
       - name: edge-udp
-        via: "${NODE_IP}"
+        address: "${EDGE_ADDRESS}"
         transport: udp
-        destination: "9990001"
+        zone: local
+        destination: "9990001"  # matched by the echo-test route rule above
