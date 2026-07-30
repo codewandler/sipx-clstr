@@ -149,12 +149,26 @@ fn explicit(
     // it could not yet tell from a new contact, and LS-R-15 caught it. Distinguishing a refresh from
     // an addition *is* the reconciliation, so the cheapest sound place for this is right here: one
     // parse per stored binding, and no per-op re-parse.
+    //
+    // Two ops of one request can also name the same contact (B7), and then only the first is an
+    // addition — the second lands on the binding the first added. Counting both would refuse at the
+    // quota boundary a request the mutation loop then commits within it, which is the one way this
+    // check could differ from the final one. So a candidate is compared against the additions
+    // already counted, and never against ones that were skipped: §19.1.4 equivalence is
+    // non-transitive, so `a ≡ b`, `b ≡ c`, `a ≢ c` really does commit two bindings, and comparing
+    // against the skipped `b` would under-count it. Equivalence over already-parsed URIs — the
+    // parse budget is untouched.
     let current_active = current.active_count(cmd.now);
-    let additions = ops
-        .iter()
-        .zip(granted.iter())
-        .filter(|(op, grant)| **grant > 0 && view.find(&op.uri).is_none())
-        .count();
+    let mut adding: Vec<&sipx_sip::Uri> = Vec::new();
+    for (op, grant) in ops.iter().zip(granted.iter()) {
+        if *grant > 0
+            && view.find(&op.uri).is_none()
+            && !adding.iter().any(|counted| counted.equivalent(&op.uri))
+        {
+            adding.push(&op.uri);
+        }
+    }
+    let additions = adding.len();
     if current_active + additions > policy.max_bindings_per_aor {
         return Outcome::Reject(Rejection::Forbidden(
             "the address-of-record already holds its maximum bindings",
@@ -183,7 +197,17 @@ fn explicit(
                     continue;
                 };
 
-                if stored.call_id == cmd.call_id {
+                // §5.3.2 B7 — B2–B5 compare this request's token against the token of the request
+                // that last *wrote* the matched binding. When an earlier operation of this same
+                // request wrote it, that token is this command's own, so the comparison decides
+                // nothing and B6 has already fixed the order: the operation applies.
+                //
+                // The flag is what tells this apart from a retransmission, which arrives carrying
+                // the token stored on the binding too and must stay B4's (§5.3.1). The two cases
+                // are token-identical, so the registrar answers from what it knows — it performed
+                // this write itself, a moment ago — rather than inferring it from a comparison
+                // that cannot separate them.
+                if !view.written_here(index) && stored.call_id == cmd.call_id {
                     if cmd.cseq < stored.cseq {
                         // B5 — the ordering token went backwards. Abort everything.
                         return Outcome::Reject(Rejection::StaleSequence);
@@ -247,16 +271,38 @@ fn explicit(
 ///
 /// Single-contact REGISTER cannot reach any of that, which is why every existing proof was green.
 /// The fix is structural rather than a re-parse: only this type mutates the set, and every mutation
-/// moves the parsed view with it (§5.3.2 B6), so the per-reconciliation parse budget `RG-14` bought
-/// — one parse per stored binding, none per operation — is unchanged.
+/// moves the view with it (§5.3.2 B6), so the per-reconciliation parse budget `RG-14` bought — one
+/// parse per stored binding, none per operation — is unchanged.
+///
+/// Resolving operations against the live set is also what makes B7 reachable, so the view carries
+/// the second fact B7 needs: which bindings *this* request wrote. Nothing else can supply it — a
+/// binding written a moment ago by an earlier operation and a binding written by an earlier
+/// delivery of the same REGISTER are byte-identical in `(Call-ID, CSeq)`, and only the first is
+/// outside B4/B5's reach.
 struct Reconciling {
     set: BindingSet,
-    /// `parsed[i]` is the contact URI of `set.all()[i]`, or `None` when those bytes do not parse.
+    /// `slots[i]` describes `set.all()[i]`. One vector rather than one per fact, so there is no
+    /// second alignment to keep — the invariant is `slots.len() == set.all().len()`, and the three
+    /// mutators below are the only things that can change either side of it.
+    slots: Vec<Slot>,
+}
+
+/// What reconciliation knows about one binding beyond the binding itself.
+struct Slot {
+    /// The binding's contact URI, or `None` when those bytes do not parse.
     ///
     /// A binding whose stored contact will not parse matches nothing, which is the same answer a
     /// comparison against it would have produced; it is kept in place rather than dropped so the
     /// indices of everything after it are still the set's.
-    parsed: Vec<Option<sipx_sip::Uri>>,
+    uri: Option<sipx_sip::Uri>,
+    /// Whether an earlier operation of **this** request wrote this binding (§5.3.2 B7).
+    ///
+    /// Recorded rather than derived, because it cannot be derived: a binding this request just
+    /// wrote and a binding an earlier delivery of the same request wrote carry the same
+    /// `(Call-ID, CSeq)`, and the second is B4's retransmission while the first is not a write
+    /// under a spent token at all. Only the reconciliation that performed the write knows which
+    /// it is looking at.
+    written_here: bool,
 }
 
 impl Reconciling {
@@ -267,16 +313,21 @@ impl Reconciling {
     /// attacker can tune. The parse is the expensive part; equivalence on two already-parsed URIs
     /// is not.
     fn new(set: BindingSet) -> Self {
-        let parsed = set
+        let slots = set
             .all()
             .iter()
             .map(|binding| {
                 #[cfg(test)]
                 parse_meter::record();
-                sipx_sip::Uri::parse(binding.contact.clone()).ok()
+                Slot {
+                    uri: sipx_sip::Uri::parse(binding.contact.clone()).ok(),
+                    // Everything the set arrived with was written by some earlier request — this
+                    // one has not applied an operation yet.
+                    written_here: false,
+                }
             })
             .collect();
-        Self { set, parsed }
+        Self { set, slots }
     }
 
     /// The first binding in creation order whose contact is §19.1.4-equivalent to `uri`.
@@ -284,9 +335,11 @@ impl Reconciling {
     /// Equivalence is non-transitive, so more than one stored binding can match; §5.3 makes the
     /// first the one that is updated.
     fn find(&self, uri: &sipx_sip::Uri) -> Option<usize> {
-        self.parsed
-            .iter()
-            .position(|stored| stored.as_ref().is_some_and(|stored| stored.equivalent(uri)))
+        self.slots.iter().position(|slot| {
+            slot.uri
+                .as_ref()
+                .is_some_and(|stored| stored.equivalent(uri))
+        })
     }
 
     /// The binding at `index`, if the set still holds one there.
@@ -294,27 +347,42 @@ impl Reconciling {
         self.set.all().get(index)
     }
 
+    /// Whether an earlier operation of this request wrote the binding at `index` (§5.3.2 B7).
+    fn written_here(&self, index: usize) -> bool {
+        self.slots.get(index).is_some_and(|slot| slot.written_here)
+    }
+
     /// Add a binding whose contact parsed to `uri`, keeping both halves in creation order.
     fn insert(&mut self, binding: crate::binding::Binding, uri: sipx_sip::Uri) {
         let at = self.set.insert_at(binding);
-        // `insert_at` returns an index into the set it just grew, so it is within the view's length
-        // too; clamped rather than trusted because a `Vec::insert` past the end panics, and nothing
-        // a REGISTER carries may reach a panic (AGENTS.md #3).
-        self.parsed.insert(at.min(self.parsed.len()), Some(uri));
+        // `insert_at` computes its position by `partition_point` over the set *before* the insert,
+        // so with `slots.len() == set.all().len()` holding on entry, `at` is at most `slots.len()`
+        // — exactly the range `Vec::insert` accepts. The clamp is therefore unreachable, and kept
+        // only so that a future change breaking that invariant mis-places a slot instead of
+        // panicking on network input (AGENTS.md #3). It is a belt on a proof, not a live hazard.
+        let at = at.min(self.slots.len());
+        self.slots.insert(
+            at,
+            Slot {
+                uri: Some(uri),
+                written_here: true,
+            },
+        );
     }
 
     /// Replace the binding at `index` with one whose contact parsed to `uri`.
     fn replace(&mut self, index: usize, binding: crate::binding::Binding, uri: sipx_sip::Uri) {
-        if let Some(slot) = self.parsed.get_mut(index) {
-            *slot = Some(uri);
+        if let Some(slot) = self.slots.get_mut(index) {
+            slot.uri = Some(uri);
+            slot.written_here = true;
             self.set.replace(index, binding);
         }
     }
 
     /// Drop the binding at `index` from both halves.
     fn remove(&mut self, index: usize) {
-        if index < self.parsed.len() {
-            let _ = self.parsed.remove(index);
+        if index < self.slots.len() {
+            let _ = self.slots.remove(index);
             self.set.remove(index);
         }
     }
@@ -612,6 +680,26 @@ mod rg14_quota_tests {
             parses, 2,
             "a refusal costs one parse per stored binding to distinguish a refresh from a new binding; got {parses}"
         );
+    }
+
+    /// The early check and the final check must still agree once B7 lets two operations name one
+    /// contact (§5.3.2). Empty set, quota 1, and one REGISTER naming the same contact twice: the
+    /// committed set is one binding, so the request fits — and an early check that counted both
+    /// operations as additions would refuse `403` something the mutation loop commits within the
+    /// quota. That is the only way the cheap upper bound can disagree with the outcome, so it is
+    /// asserted rather than argued.
+    #[test]
+    fn b7_two_operations_naming_one_contact_are_one_addition_against_the_quota() {
+        let cmd = command(vec![
+            op("sip:alice@10.0.0.9:5060", 3600),
+            op("sip:alice@10.0.0.9:5060", 7200),
+        ]);
+        let outcome = process(&cmd, &BindingSet::new(), &policy(1));
+
+        let Outcome::Commit { set, .. } = outcome else {
+            panic!("one contact named twice is one binding, so a quota of 1 fits: {outcome:?}");
+        };
+        assert_eq!(set.active_count(cmd.now), 1);
     }
 
     /// The early check must not change *which* requests are accepted. A request that fits within the

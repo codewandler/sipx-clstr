@@ -329,6 +329,7 @@ fresh binding (B1): once a binding is gone, the RFC's model has nothing to compa
 | # | Rule |
 |---|---|
 | B6 | A request's contact operations are applied **in the order the request states them**, and each is matched (§5.3) against the binding set **as the preceding operations left it**. A binding an earlier operation removed is absent for every later operation, exactly as an expired one is; a binding an earlier operation added or replaced is present for them, with the value it was given |
+| B7 | B2–B5 compare this request's ordering token against the token of the request that **last wrote** the matched binding. A binding that an earlier operation of *this same request* added or replaced carries this request's own `(Call-ID, CSeq)`, so that comparison decides nothing — B6 has already fixed the order. Such a binding is matched and the operation **applies**: a later removal removes it, a later refresh replaces it with the value the later operation grants. It is never B4's idempotent retry and never B5's abort |
 
 Why this needs saying. §10.3's atomicity requirement is about what a *reader* observes — the whole
 request commits or none of it does (K2) — and it is silent on what each operation is decided
@@ -345,6 +346,33 @@ one CAS commit or nothing (§6 K1/K2), and no reader sees an intermediate set. N
 a writer that loses the race re-reads the committed set and re-runs the **entire** sequence against
 it (§2, §5.1 S10), so a losing writer never commits a set reconciled against state it read before
 the winner wrote.
+
+**B7 is the half of B6 that is easy to get wrong in the safe-looking direction.** Once operations
+really are resolved against the set as it stands, a later operation can match a binding an earlier
+operation of the same request just wrote — two §19.1.4-equivalent contacts in one REGISTER is all it
+takes, and `CC;expires=3600, CC;line=7;expires=0` is an ordinary thing for a UA to send when it
+believes the line-tagged spelling is a separate binding. That freshly written binding carries this
+request's `Call-ID` and `CSeq`, because this request wrote it. A registrar that runs B2–B5 against it
+unchanged reads "same token, stored state is not what is asked for" and aborts the **whole** request
+`500` (B5) — so the UA is left unregistered, its retry with a fresh `CSeq` fails identically, and the
+failure is permanent rather than transient. B6's own text already forbids that reading: the binding
+"is present for them, with the value it was given" — present and applied to, not fatal.
+
+The distinction B7 turns on is **who wrote the binding, not what token it carries**. A retransmission
+of one REGISTER also arrives carrying the token stored on the binding, and that case must stay B4's:
+the binding was written by an *earlier delivery*, the registrar must not write it a second time, and
+§5.3.1 is the whole argument for why. B7 covers only a binding written during *this* reconciliation
+pass — a fact the registrar knows directly, having just performed the write, and which it must not
+try to infer by comparing tokens, because the two cases are token-identical. A CAS re-read (§2)
+starts a fresh pass against the committed set, so nothing carries over: on the retry the binding the
+winner committed was written by someone else, and B2–B5 decide it normally.
+
+B7 does not widen what a request may do. Every operation it lets through is one the same UA could
+have sent as a single-contact REGISTER against the state its predecessor left, and the bounds on
+additions are unchanged — authentication (§5.1 S3/S4) and the per-tenant quota (§5.5), neither of
+which B7 touches. What it removes is only the `500`: the last operation naming a contact wins, the
+committed set is a function of the request, and the `200` enumerates the set that actually holds
+(§5.6), so a UA whose two spellings turn out to be one contact is told so rather than refused.
 
 ### 5.4 Wildcard removal (`Contact: *`)
 
@@ -543,6 +571,10 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-R-23 | Set `{CA}` written by `i1`/1; REGISTER `i1`, CSeq 1, `CA` (same granted duration) **and** CB, 500 ms later | `200`, commits: CA untouched (B4 — same deadline, same `refreshed_at`), CB added (B1), revision bumped. B4.3 — the no-mutation guarantee is about the matched binding, not the request |
 | LS-R-24 | Set `{CA, CB}` written by `i1`/1; **one** REGISTER `i2`/1 carrying `CA;expires=0`, `CB;expires=0` and `CC;expires=3600` | `200`; the committed set is exactly `{CC}` and the response lists CC alone. B6 — CA's removal shortens the set, and CB's removal is still resolved against CB. A registrar resolving every operation against a view captured before the first mutation leaves CB bound |
 | LS-R-25 | Set `{CA, CB, CC}` written by `i1`/1; **one** REGISTER `i2`/1 carrying `CA;expires=0` and `CB;expires=7200` | `200`; the committed set is `{CB, CC}`, CB granted 7200 and CC untouched. B6 — the refresh lands on CB, not on whatever the removal shifted into CB's former place |
+| LS-R-26 | Set `{CA, CB}` written by `i1`/1; **one** REGISTER `i2`/1 carrying `CA;expires=0` and `CB;expires=0` | `200`; the committed set is **empty** and the response lists no contacts; revision bumped. B6 — CA's removal shortens the set, and CB's removal must still resolve to CB rather than past the end |
+| LS-R-27 | Set `{CA, CB, CC}` written by `i1`/1; **one** REGISTER `i2`/1 carrying `CB;expires=7200` and `CA;expires=0` | `200`; the committed set is `{CB, CC}`, CB granted 7200 and CC untouched — LS-R-25's operations in the opposite order. B6 — the refresh does not move CA, so the removal that follows it still resolves to CA |
+| LS-R-28 | Empty set; **one** REGISTER `i2`/1 carrying `CC;expires=3600` and `CC;line=7;expires=0`, the two §19.1.4-equivalent | `200`; the committed set is **empty**; revision bumped. B7 — the removal applies to the binding the first operation just added, which carries this request's own token; a registrar running B4/B5 against that token aborts the whole request with B5's failure code and leaves the UA unregistered |
+| LS-R-29 | Empty set; **one** REGISTER `i2`/1 carrying `CC;expires=3600` and `CC;expires=7200` | `200`; the committed set is `{CC}` granted 7200, one binding not two; revision bumped. B7/B6 — the later operation replaces the binding the earlier one added; it is neither a retry (B4) nor a second write under a spent token (B5) |
 
 **Consistency / CAS (LS-K).**
 

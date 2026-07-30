@@ -94,6 +94,13 @@ pub fn run_location_store_suite(
     ls_r_atomicity(&mut suite);
     ls_r_path(&mut suite);
     ls_r_expired_binding_is_absent(&mut suite);
+    // §5.3.2 — the multi-contact rows. B6 first, then B7, which is only reachable once B6 holds.
+    ls_r_two_removals_and_an_addition(&mut suite);
+    ls_r_a_removal_ahead_of_a_refresh(&mut suite);
+    ls_r_two_removals_commit_the_empty_set(&mut suite);
+    ls_r_a_refresh_ahead_of_a_removal(&mut suite);
+    ls_r_a_removal_of_what_this_request_added(&mut suite);
+    ls_r_a_second_operation_on_what_this_request_added(&mut suite);
     ls_k_cas_conflict(&mut suite);
     ls_k_revision_survives_empty(&mut suite);
     ls_k_changes(&mut suite);
@@ -600,6 +607,239 @@ fn ls_r_expired_binding_is_absent(suite: &mut Suite<'_>) {
             applied.outcome.status()
         )
     });
+}
+
+/// LS-R-24 — two removals and an addition in one REGISTER (§5.3.2 B6).
+///
+/// The multi-contact rows are here, and not only in the registrar's own vector file, because what
+/// they pin is the set that gets **committed** — and a backend is what makes a committed set
+/// durable. `RG-16` was a decision-logic defect, but a backend that dropped or reordered the rows of
+/// one commit would present the identical symptom, a set the request never described, and the
+/// in-memory suite could not tell the two apart. Reconciliation is store-independent, so each row
+/// must give the identical answer on every backend; a backend needing its own version of one has
+/// broken §6.3's "identical suite" claim rather than implemented it.
+fn ls_r_two_removals_and_an_addition(suite: &mut Suite<'_>) {
+    // The first removal shortens the set, so a registrar resolving later operations against a view
+    // captured before it leaves CB bound.
+    let who = "r24";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:a@10.0.0.1", Some(0), None),
+                contact("sip:b@10.0.0.2", Some(0), None),
+                cc(),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-24", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-24", stored == ["sip:c@10.0.0.3".to_owned()], || {
+        format!("expected exactly CC committed, got {stored:?}")
+    });
+}
+
+/// LS-R-25 — remove then refresh (B6). The refresh must land on CB, not on the binding the removal
+/// shifted into CB's former index.
+fn ls_r_a_removal_ahead_of_a_refresh(suite: &mut Suite<'_>) {
+    let who = "r25";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb(), cc()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:a@10.0.0.1", Some(0), None),
+                contact("sip:b@10.0.0.2", Some(7_200), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-25", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check(
+        "LS-R-25",
+        stored == ["sip:b@10.0.0.2".to_owned(), "sip:c@10.0.0.3".to_owned()],
+        || format!("expected CB and CC, each exactly once, got {stored:?}"),
+    );
+}
+
+/// LS-R-26 — two removals, nothing else: the committed set is empty (B6).
+///
+/// The stripped-down shape, where a stale view leaves CB's removal resolving one past the end of the
+/// set the first removal shortened, so CB survives a request that named it.
+fn ls_r_two_removals_commit_the_empty_set(suite: &mut Suite<'_>) {
+    let who = "r26";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:a@10.0.0.1", Some(0), None),
+                contact("sip:b@10.0.0.2", Some(0), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-26", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-26", stored.is_empty(), || {
+        format!("expected the empty set committed, got {stored:?}")
+    });
+}
+
+/// LS-R-27 — LS-R-25's operations in the opposite order (B6). The refresh does not move CA, so the
+/// removal that follows still resolves to CA.
+fn ls_r_a_refresh_ahead_of_a_removal(suite: &mut Suite<'_>) {
+    let who = "r27";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb(), cc()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:b@10.0.0.2", Some(7_200), None),
+                contact("sip:a@10.0.0.1", Some(0), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-27", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check(
+        "LS-R-27",
+        stored == ["sip:b@10.0.0.2".to_owned(), "sip:c@10.0.0.3".to_owned()],
+        || format!("expected CB and CC, each exactly once, got {stored:?}"),
+    );
+}
+
+/// LS-R-28 — B7. Two §19.1.4-equivalent spellings in one request: the removal applies to the binding
+/// the addition just made, rather than aborting under this request's own ordering token.
+fn ls_r_a_removal_of_what_this_request_added(suite: &mut Suite<'_>) {
+    let who = "r28";
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![cc(), contact("sip:c@10.0.0.3;line=7", Some(0), None)],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-28", applied.outcome.status() == 200, || {
+        format!(
+            "a contact named twice in one request is not a second write under a spent token: got {}",
+            applied.outcome.status()
+        )
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-28", stored.is_empty(), || {
+        format!("the later operation was the removal, so nothing is bound; got {stored:?}")
+    });
+}
+
+/// LS-R-29 — B7 the other way: the later operation replaces the binding the earlier one added, so the
+/// set holds one binding at the later grant, not two bindings and not an abort.
+fn ls_r_a_second_operation_on_what_this_request_added(suite: &mut Suite<'_>) {
+    let who = "r29";
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![cc(), contact("sip:c@10.0.0.3", Some(7_200), None)],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-29", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-29", stored == ["sip:c@10.0.0.3".to_owned()], || {
+        format!("expected one binding, not two: got {stored:?}")
+    });
+    let granted = suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .first()
+        .map(|binding| binding.refreshed_at.until(binding.expires_at).as_secs());
+    suite.check("LS-R-29", granted == Some(7_200), || {
+        format!("the later operation's grant is the one that holds: got {granted:?}s")
+    });
+}
+
+/// Every contact this address-of-record holds, in stored order.
+fn stored_contacts(suite: &Suite<'_>, who: &str) -> Vec<String> {
+    suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .iter()
+        .map(|binding| String::from_utf8_lossy(&binding.contact).into_owned())
+        .collect()
 }
 
 fn ls_k_cas_conflict(suite: &mut Suite<'_>) {
