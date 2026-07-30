@@ -6,7 +6,7 @@ members = ["crates/*"]
 # Tracks the repository's release tags rather than the crates' own maturity: nothing here is
 # published yet (see `publish = false` on every crate), so a second version line would be a
 # number nobody could act on. It starts being meaningful when M1's exit criteria hold.
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 # Derived by building, not by copying: `scripts/check-msrv.sh` compiles the workspace on this
 # exact toolchain, and the gate and CI both run it. The previous value (1.88) claimed to "match
@@ -44,11 +44,11 @@ categories = ["network-programming"]
 
 [workspace.dependencies]
 # Internal crates
-sipx-clstr-proxy = { path = "crates/sipx-clstr-proxy", version = "0.11.0" }
-sipx-clstr-registrar = { path = "crates/sipx-clstr-registrar", version = "0.11.0" }
-sipx-clstr-probe = { path = "crates/sipx-clstr-probe", version = "0.11.0" }
-sipx-clstr-node = { path = "crates/sipx-clstr-node", version = "0.11.0" }
-sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.11.0" }
+sipx-clstr-proxy = { path = "crates/sipx-clstr-proxy", version = "0.12.0" }
+sipx-clstr-registrar = { path = "crates/sipx-clstr-registrar", version = "0.12.0" }
+sipx-clstr-probe = { path = "crates/sipx-clstr-probe", version = "0.12.0" }
+sipx-clstr-node = { path = "crates/sipx-clstr-node", version = "0.12.0" }
+sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.12.0" }
 
 # The kernel, pinned to a released tag rather than to a branch. sipx is not on crates.io, so a
 # git dependency is the only honest way to depend on it; a `tag` rather than a `branch` is what

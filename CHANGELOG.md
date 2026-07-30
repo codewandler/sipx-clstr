@@ -7,6 +7,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-30
+
+The release where the gate was pointed at itself, and did not come off well. A third of the entries
+below are a check that could not see the thing it was believed to check: a conformance report printing 138
+of the 533 rows it counted, thirty-one vector rows registered in a file the gate never opened, a
+"runs in CI" claim held by a substring match, two checkers reading prose *about* a directive as the
+directive, and a sweep that asked every `done` story whether the deltas another document named for it
+had actually landed — the answer was no three times. None of these was found by a failure. Every one
+was found by reading a checker and asking what it would have to miss for the report to still be
+green, which is why they had all survived a release.
+
+What that bought is narrower than it sounds and worth more: the numbers this project prints about
+itself are now numbers it can defend. A proved row compares the value it claims (`CF-12`), a deferred
+row names the story that will cover it, and the end-to-end call — the evidence behind the headline
+claim that a call completes with audio — runs on every push against the kernel's own CLI rather than
+being run by hand and cited afterwards (`CF-15`).
+
+Beside that, three things a cluster operator can use: a node now bounds how much work it holds at
+once and answers `503` with `Retry-After` rather than accepting without limit (`DP-11`); the pinned
+kernel moves three releases forward to `v0.10.0`, bringing the declared Rust floor **down** to 1.91
+(`CX-4`); and the `SipxCluster` custom resource is specified as one definition with the config schema
+rather than a second copy of it, with a check that fails when the two drift (`KO-1`).
+
+Still open and stated rather than implied: the digest replay window is `O(n)` per authenticated
+request, and the nonce is not unique per challenge. Both live in one kernel file that is byte-
+identical at every released tag and at kernel `main`, so neither is fixable from here and no bump
+short of a new kernel release moves them.
+
 ### Added
 
 - **The `SipxCluster` resource is specified, and it is the config schema rather than a copy of it**
