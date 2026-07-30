@@ -71,6 +71,96 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The pinned sipx kernel moves three releases forward, to `v0.10.0`** (`CX-4`). All four `sipx-*`
+  dependencies move together — a workspace holding two kernel versions is a protocol core disagreeing
+  with itself — and the lockfile's package set is unchanged, so the bump pulled in no new transitive
+  crate. What actually reaches this platform, named rather than left as a version number:
+
+  - **The declared Rust floor moves *down*, 1.94 → 1.91, and its cause moves out of the kernel.**
+    `v0.10.0` bounds `impl<K: Eq, I: Ord> Default for TimerQueue<K, I>`, which had been forcing 1.94 on
+    every consumer for a `Default` impl rather than for anything the queue does. What holds the floor at
+    1.91 now is **local**: `Duration::from_hours` in `sipx-clstr-proxy`, stable since 1.91. Both halves
+    are evidenced rather than one — the workspace builds on 1.91 *and* its test suite passes on it — and
+    the shipped image builds on it too. Carrying 1.94 forward would have left a true number attached to
+    a false reason.
+  - **The connection pool key now includes the WebSocket resource.** `Target` and `ConnectionKey` gain
+    `path`, so two resources on one address are two pooled connections. Source-compatible here, and
+    inert until M3 opens a WebSocket — the first WSS work that reaches the pool should re-read
+    `ConnectionKey` rather than assume this.
+  - **A breaking `sipx-ua` change in the range does not reach us.** `Config`/`Registration` dropped
+    `outbound` for `instance`/`reg_id`/`gruu`, and `registrar::interpret` changed signature; this
+    workspace consumes only `challenge`, `auth` and `Algorithm`, which is why the seam was drawn there.
+  - **`v0.9.0`'s SRTP keying fix is wire-breaking between kernel versions and reaches nothing here** —
+    no media crate is pinned and no media is relayed. Stated precisely so nobody reads "wire-breaking"
+    and assumes it applies.
+  - Additive and unused today: `gruu`, `push` (RFC 8599) and `update` in `sipx-sip`, RFC 8839 ICE
+    attributes in `sipx-sdp`.
+  - **Explicitly not fixed: `CX-5`'s nonce defect and `RG-15`'s replay-window scan.** This bump was
+    expected to fix the first and does not. `sipx-ua/src/challenge.rs` is one blob — `30e1d290` — at
+    `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` **and kernel `main`**, so the pin moved and the mint did not.
+    Checked by blob hash at all five refs rather than read out of a release note.
+
+  The [upstream ledger](docs/upstream.md) was re-read row by row against `v0.10.0` — every cited symbol
+  opened in the kernel at that tag — because its own rule says to. One row closed, and one citation was
+  corrected to say it was **wrong when filed** rather than that it drifted: `address.rs` is one blob
+  across `v0.4.0`, `v0.7.0` and `v0.10.0`, and the old pair cited `Path` twice, so `Service-Route` was
+  never cited at all. A correction that invents a drift to explain itself is the failure that ledger
+  exists to catch.
+
+  Verified at integration rather than on report: the end-to-end proof run against a `sipx` CLI **built
+  from the same tag** (bob heard audio, 24000 samples, one socket on the node, transaction store
+  drained), and `docker build` on the new floor producing an image that reports
+  `sipx-clstr 0.11.0 (sipx kernel 0.10.0)`.
+
+- **How many `done` stories closed with work another document had named them for: three** (`CF-16`).
+  `EX-8` was named in writing as the owner of two changes, closed having landed one, and the orphaned
+  half sat unowned for months while a real capability was missing. A story's acceptance is only ever
+  checked against itself, so the board cannot tell "finished" from "finished the part it wrote down".
+  This is the sweep that asks how many others there are, over all 81 `done` stories, with the number
+  produced before anything was fixed:
+
+  - `CF-8` registered seven vector prefixes and put **none of their thirty families** in the
+    conformance report's render list, so **395 of the 533 rows the report counts appear in no table**
+    — while `CF-8` ticked both "families named" and "the report regenerates". Filed as `CF-17`.
+  - Three `hook-framework` rows still call the affinity-token budget "provisional until `AF-1`", and
+    `AF-1` landed — `affinity-token` §3 made the 64-byte budget normative. `EX-8` diagnosed this in
+    writing and recorded it as adjacent-not-mine; nobody owned it after. Filed as `EX-13`.
+  - Three specifications each defer a gap "for `CX-1` to file", and `docs/upstream.md` has **no row
+    for any of them**. Not `CX-1` failing — all three specs postdate its close. Filed as `CX-6`.
+
+  **The checker was deliberately not built, and the measurement is the argument.** Sixteen
+  delegation constructions over the corpus find 159 delegation-shaped mentions, 100 naming a `done`
+  story, 3 real — 3% precision. The 97 false alarms are unreachable by a better pattern because the
+  discriminator is *tense*, not vocabulary: "until `EX-12` landed the split" (resolved) and "until
+  `CF-8`, this table is unenforced" (open) are the same shape. A check at that precision gets deleted
+  by the third person it interrupts. Prevention is recorded instead, on `CX-6`: **a spec deferring
+  work names a ledger row or an epic, not a story** — a story closes, a row does not.
+
+  A separate defect family surfaced while measuring and is filed apart as `CF-18` rather than folded
+  in, because it would **not** have caught `EX-8`: nine `done` stories are cited nowhere in this file,
+  and three carry no ticked acceptance box at all.
+
+- **A spec stops deferring to a story that closed** (`EX-13`, found by `CF-16`). `AF-1` landed and
+  [affinity-token](docs/specs/affinity-token.md) §3 made the 64-byte module-fact sub-budget normative;
+  three `hook-framework` rows went on calling it "placeholder until `AF-1`". §5 class (b) no longer
+  restates the constant **at all** — a second copy of a value is what made the drift possible — `G5`
+  cites §3 as the authority and says plainly that it owns the summation and not the bound, and `HF-7`
+  keeps its `72 > 64` arithmetic with the 64 attributed rather than asserted. The number did not move
+  and no row changed coverage class.
+
+  `G5` also gains a forward-compatibility sentence, decided rather than defaulted: §3 explicitly keeps
+  renegotiation open, so deleting the word "provisional" alone would have traded a stale-modality claim
+  for a live contradiction — "not provisional" and "not renegotiable" are different claims. Deferring
+  explicitly makes a future renegotiation a one-spec edit.
+
+- **The deferral ledger says what it is** (`CF-16`). `docs/reference/vector-scope.toml` described
+  itself as "the narrow, `PB`-only ancestor" of the conformance registry. That was true when `PB` was
+  the only registered prefix, and it survived `CF-8`'s six registrations and `EX-12`'s seventh — by
+  which point `PB` was the third *smallest* family in the file, which now carries 389 deferrals over
+  eleven prefixes and 19 rows covered for shape only. A header describing a file as narrower than it is
+  invites the next reader to add a row without reading the discipline above it, and that discipline is
+  what keeps a coverage report honest.
+
 - **Which failure a caller sees when a fork fails two ways** (`PX-11`). Forking to a contact that is
   busy and one that is gone used to return `404 Not Found`, because the best final was picked by
   numeric order. It now returns `486 Busy Here`.
@@ -92,6 +182,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CF-12` started requiring a proof to compare what its row claims.
 
 ### Fixed
+
+- **The conformance report showed a quarter of the rows it counted** (`CF-17`, found by `CF-16`). Its
+  denominator was every registered vector row — 533 — while it rendered only the five families in its
+  render list, so **395 rows were counted and displayed nowhere**. Anyone reading the report to find
+  out what is covered was reading a table that silently omitted `AI`, `AT`, `CC`, `FR`, `LS`, `MR` and
+  `NN`. The registry and the deferral ledger were correct throughout; the *report* was partial.
+
+  The defect was not the missing section titles. Registering a prefix in `SPECS` got its rows read,
+  counted, deferred and gated — and getting them onto the page was a second step **nothing checked**,
+  so `CF-8` could tick both "families named" and "the report regenerates" while three quarters of the
+  corpus fell out of the document. `unrepresented_families` makes that a gate failure: red on 36
+  `(prefix, letter)` pairs before it is green. And because extending the family list without a second
+  guard would leave the class open, `render` now returns what it actually emitted, so the headline is
+  checked against the rendered tables rather than against the script's own bookkeeping.
+
+  Audited on the document rather than the script: 56 sections, 533 rows shown, 533 distinct, none
+  shown twice, none counted and not shown. The `vectors:` line is byte-identical before and after —
+  this story added no coverage and must not appear to.
 
 - **"Runs in CI" was a substring match, and would have started passing for the wrong reason**
   (`CF-15`). `check-site.py` resolved whether a proof runs in CI with `name in text` over

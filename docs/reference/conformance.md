@@ -11,6 +11,8 @@ will.
 
 **125 of 533 rows proved**; 19 covered for shape only; 389 deferred.
 
+Σ over the 56 sections below is 533, so every row counted above is shown in exactly one table.
+
 ## What these words mean
 
 **Proved** means: a test named for the row exists and runs, and — where the row's `Expect`
@@ -187,7 +189,7 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `RA-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
 | `RA-R-7` | proved | `crates/sipx-clstr-sim/tests/register_auth.rs` |
-| `RA-R-8` | deferred | `CX-5` — `N1`, nonce uniqueness per challenge — registrar-auth §6.1. Deferred because it cannot be covered from this repository *and* because it does not hold: nonce minting is `sipx-ua::challenge`'s (an auth primitive, AGENTS.md #6), and at the pinned `v0.7.0` its mint is `<issued-at in hex>.<HMAC over issued-at and realm>` — a pure function of the second, the realm and the secret. Two users of one tenant challenged in the same second hold one nonce and therefore one replay counter, and the second correct credential is refused as `RA-R-2` with a `401` carrying no `stale`. The row states the requirement rather than the current behaviour, so it fails today by construction; that is the point of writing it. Filed as an `open` row in docs/upstream.md with the reproduction. Coverage is CX-5's remaining acceptance — a kernel that mints per-challenge entropy, a pinned release carrying it, and the harness scenario that challenges two users within one simulated second and requires both to authenticate. CX-5 therefore stays open: closing it would leave this deferral naming a story nobody will act on. |
+| `RA-R-8` | deferred | `CX-5` — `N1`, nonce uniqueness per challenge — registrar-auth §6.1. Deferred because it cannot be covered from this repository *and* because it does not hold: nonce minting is `sipx-ua::challenge`'s (an auth primitive, AGENTS.md #6), and at the pinned `v0.10.0` its mint is `<issued-at in hex>.<HMAC over issued-at and realm>` — a pure function of the second, the realm and the secret. Two users of one tenant challenged in the same second hold one nonce and therefore one replay counter, and the second correct credential is refused as `RA-R-2` with a `401` carrying no `stale`. The row states the requirement rather than the current behaviour, so it fails today by construction; that is the point of writing it. Filed as an `open` row in docs/upstream.md with the reproduction. Coverage is CX-5's remaining acceptance — a kernel that mints per-challenge entropy, a pinned release carrying it, and the harness scenario that challenges two users within one simulated second and requires both to authenticate. CX-5 therefore stays open: closing it would leave this deferral naming a story nobody will act on. |
 
 ## Registrar auth — the tenant boundary (§5)
 
@@ -269,3 +271,578 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `QP-G-16` | deferred | `EX-3` — G14 — `ValueLeaf::TrunkConfig` in a profile bound to a domain, and the mirror case. Two independent reasons reject this profile at a domain (G12 for the assertion, G14 for the leaf) and the row exists to pin the one that survives if a future profile drops the assertion. Needs the validator. |
 | `QP-G-17` | deferred | `EX-3` — G13 — the override an operator reading the composition as a union would write as the repair for `QP-C-4`, rejected because at that trunk the target is written by one profile and the winner is bound elsewhere. A specialization of `QP-G-13`; needs the validator. |
 | `QP-G-18` | deferred | `EX-3` — G13 — a three-way contest resolved by one entry naming one winner, with both losers' rules dropped and the override recorded once. Needs the validator and `EX-5`'s bindings. |
+
+## Location service — AoR canonicalization (§3)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `LS-C-1` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-2` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-3` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-4` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-5` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-6` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+| `LS-C-7` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-8` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-9` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-10` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-11` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-12` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-13` | proved | `crates/sipx-clstr-registrar/src/aor.rs` — asserts `2001`, `1` |
+| `LS-C-14` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-15` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-16` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-17` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-18` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-19` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-20` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-21` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-C-22` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+
+## Location service — REGISTER processing and the CAS contract (§5)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `LS-R-1` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `200`; not compared |
+| `LS-R-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `2` |
+| `LS-R-3` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `2`; not compared |
+| `LS-R-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
+| `LS-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
+| `LS-R-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-7` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-8` | proved | `crates/sipx-clstr-registrar/src/parse.rs` — asserts `400` |
+| `LS-R-9` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `400` |
+| `LS-R-10` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `500`; not compared |
+| `LS-R-11` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `423`; not compared |
+| `LS-R-12` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `7200` |
+| `LS-R-13` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `1800` |
+| `LS-R-14` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `3600` |
+| `LS-R-15` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `403`, `200` |
+| `LS-R-16` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `423` |
+| `LS-R-17` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-18` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `421`; not compared |
+| `LS-R-19` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
+| `LS-R-20` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `420`; not compared |
+| `LS-R-21` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
+| `LS-R-22` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
+| `LS-R-23` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+
+## Location service — the consistency contract (§6)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `LS-K-1` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `5`, `6`, `7`; not compared |
+| `LS-K-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-K-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
+| `LS-K-4` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+| `LS-K-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
+| `LS-K-6` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `6`; not compared |
+
+## Location service — the lookup contract (§7)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `LS-L-1` | shape only | `crates/sipx-clstr-registrar/src/lookup.rs` — states `1000`, `200`, `100`, `50`, `500`; not compared |
+| `LS-L-2` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+| `LS-L-3` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
+| `LS-L-4` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
+| `LS-L-5` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
+| `LS-L-6` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
+| `LS-L-7` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
+| `LS-L-8` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+
+## Location service — the sharding key (§8)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `LS-H-1` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+| `LS-H-2` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+| `LS-H-3` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+
+## Media relay — port semantics (§3)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-T-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-9` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-10` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-11` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-12` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-T-13` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — the null relay (§4)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-N-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-N-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-N-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-N-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-N-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — NG encoding, byte-exact (§6)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-E-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-9` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-10` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-11` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-12` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-13` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-14` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-15` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-16` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-17` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-18` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-19` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-E-20` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — exchange and timers (§8)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-X-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-9` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-X-10` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — faults and the error taxonomy (§9)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-F-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-F-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — health signals and node state (§10)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-H-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-9` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-H-10` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — per-trunk media policy (§13)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-P-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-9` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-10` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-11` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-12` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-13` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-14` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-15` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-P-16` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Media relay — media-policy configuration (§13.5)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `MR-C-1` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-2` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-3` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-4` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-5` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-6` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-7` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+| `MR-C-8` | deferred | `ME-1` — Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it. |
+
+## Number normalisation — extraction and URI forms (§4)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `NN-X-1` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-2` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-3` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-4` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-5` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-6` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-7` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-8` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-9` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-X-10` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+
+## Number normalisation — the closed transform set (§5)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `NN-T-1` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-2` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-3` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-4` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-5` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-6` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-7` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-8` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-9` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-10` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-11` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-T-12` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+
+## Number normalisation — guards and fallback (§6)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `NN-G-1` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-2` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-3` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-4` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-5` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-6` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-7` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-8` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-9` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-10` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-G-11` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+
+## Number normalisation — E.164 egress (§9)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `NN-E-1` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-E-2` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-E-3` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-E-4` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-E-5` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+
+## Number normalisation — composition (§7)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `NN-C-1` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-C-2` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-C-3` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-C-4` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-C-5` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-C-6` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+
+## Number normalisation — binding and the pipeline (§8)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `NN-B-1` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-2` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-3` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-4` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-5` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-6` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-7` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+| `NN-B-8` | deferred | `RT-2` — Number normalisation. There is no trunk object and no ingress scope to bind a profile to, so no request can reach a normalisation step. `RT-2` builds trunks; the binding rules are already normative. |
+
+## Affinity token — mint, parse and negative vectors (§10)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AT-1` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-2` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-3` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-4` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-5` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-6` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-7` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-8` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-9` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-10` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-11` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-12` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-13` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-14` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-15` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-16` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-17` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-18` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+
+## Flow reference — mint, resolution and negative vectors (§14)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `FR-1` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-2` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-3` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-4` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-5` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-6` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-7` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-8` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-9` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-10` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-11` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-12` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-13` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-14` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-15` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-16` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-17` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-18` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-19` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-20` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-21` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+| `FR-22` | deferred | `AF-7` — Flow references and connection ownership. A flow reference is stored on a binding today but never produced or consulted, because there is no second node to own a connection. `AF-7` implements ownership and the owner RPC. |
+
+## Cluster config — the document, versioning and substitution (§3)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-D-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-5` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-6` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-7` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-8` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-D-9` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+
+## Cluster config — roles and projection (§4, §5)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-R-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-5` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-6` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-7` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-8` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-9` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-10` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+
+## Cluster config — logical ids (§6)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-I-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-I-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-I-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-I-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+
+## Cluster config — validation across sections (§8)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-V-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-5` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-6` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-7` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-8` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-9` | shape only | `crates/sipx-clstr-node/src/config/tests.rs` — states `3 minutes`; not compared |
+| `CC-V-10` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-11` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-V-12` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `240 s` |
+
+## Cluster config — key reload (§9.3)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-K-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-K-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-K-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-K-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-K-5` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-K-6` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+
+## Cluster config — trunk reload (§9.2)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-T-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-T-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-T-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-T-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+
+## Cluster config — shard-map handoff (§9.4)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `CC-S-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-5` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-6` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-7` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-8` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-S-9` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+
+## Asserted identity — the `PaiRequest` derivation (§4)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-D-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-D-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-D-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-D-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-D-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-D-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-D-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — the emission gate, trust × privacy (§8)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-T-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-8` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-9` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-10` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-11` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-12` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-13` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-14` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-15` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-16` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-T-17` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — selection (§7)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-S-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-8` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-9` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-10` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-11` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-S-12` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — anonymous callers and `From` (§9)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-A-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-8` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-9` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-10` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-11` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-12` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-13` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-14` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-15` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-16` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-17` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-18` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-19` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-20` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-21` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-22` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-23` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-A-24` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — the normalisation seam (§6.1)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-N-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-N-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-N-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-N-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-N-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-N-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-N-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — `Privacy: critical` (§10)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-C-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-8` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-9` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-10` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-11` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-C-12` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — pipeline and binding (§6, §11)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-P-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-8` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-9` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-10` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-P-11` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+
+## Asserted identity — byte-exact forms (§7.1)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `AI-X-1` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-X-2` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-X-3` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-X-4` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-X-5` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-X-6` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |
+| `AI-X-7` | deferred | `RT-7` — Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled. |

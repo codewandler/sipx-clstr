@@ -2,8 +2,7 @@
 id: DP-11
 title: Give the node an admission bound, not only an inherited queue bound
 pillar: Cluster
-status: in-progress
-priority: 1
+status: done
 design: docs/designs/deployment.md
 epic: deployment
 areas: [deploy, driver, observability]
@@ -75,7 +74,15 @@ design calls decisive is computed by the kernel and never read.
   - **The upstream row was never filed.** That commit said it "carries forward the upstream finding";
     it carried it forward into this file and no further. `docs/upstream.md` has no row for it.
 
-- **What is actually left: one row in `docs/upstream.md`**, for the finding this story escalated —
+- **Closed. The row is filed** (coordinator): `docs/upstream.md` now carries "Overload handling logs
+  per message, on the loop that must keep timers running", with every citation read at `v0.10.0`
+  rather than inherited — `shed.unmatched` + `tracing::warn!` at `endpoint.rs:1260,1261`, `shed.acks`
+  + `tracing::error!` at `:1628,1629`, `shed.requests` + `tracing::warn!` before `refuse` at
+  `:1635,1636`, and `ShedCounts` at `:267` as three `Relaxed` `AtomicU64`s (`:241`) — which is the
+  point: the counters are lock-free and correct, so the remedy is to sample the *line* and keep them.
+  The ledger's own state-of-play count went from two open rows to three.
+
+- **What was left, until the row above landed: one row in `docs/upstream.md`**, for the finding this story escalated —
   `sipx-transport`'s `Endpoint` emits a `tracing::warn!` per shed request and a `tracing::error!` per
   shed ACK, synchronously on the event loop that must keep timers running, so the kernel's overload
   handling gets slower the more overload there is. The remedy is the kernel's: sample or rate-limit the

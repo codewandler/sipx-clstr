@@ -10,14 +10,16 @@
 # an image that never runs them.
 
 # The workspace's `rust-version`, which `CF-9` made true: the floor was 1.88, the workspace did
-# not build on it, and this image pinned 1.97 as a stopgap. The floor is now 1.94 — measured, and
-# re-measured on every gate run and every CI run by `scripts/check-msrv.sh`.
+# not build on it, and this image pinned 1.97 as a stopgap. The floor is now 1.91 — measured, and
+# re-measured on every gate run and every CI run by `scripts/check-msrv.sh`. It came *down* from
+# 1.94 when `CX-4` moved the kernel pin to `v0.10.0`, which bounded the `TimerQueue` `Default` impl
+# that had been forcing 1.94 on every consumer; what holds it at 1.91 now is local code.
 #
 # Building the image on the declared floor rather than on current stable is deliberate. It is what
 # caught the original defect, and it keeps catching it: a development machine runs stable and
 # stable builds everything, so this pin is one of the few places the claim is actually exercised.
 # Keep it equal to `rust-version` in Cargo.toml.
-ARG RUST_VERSION=1.94
+ARG RUST_VERSION=1.91
 
 # ---------------------------------------------------------------------------------- builder ---
 FROM rust:${RUST_VERSION}-bookworm AS builder

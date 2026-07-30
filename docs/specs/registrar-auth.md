@@ -37,7 +37,7 @@ What is here is the **policy**, which is a deployment's and therefore this platf
 | which status a refusal carries, and what the response says | `stale` semantics |
 
 **The replay window's cost is the kernel's too, and it is not free.** `sipx-ua`'s window is a
-`VecDeque` scanned front-to-back (`challenge.rs:194,388` at the pinned `v0.7.0`) while the nonce
+`VecDeque` scanned front-to-back (`challenge.rs:194,388` at the pinned `v0.10.0`) while the nonce
 being checked is always the newest entry at the back, so every authenticated request walks all 4096
 entries under whatever lock the caller holds. That is a defect in an auth primitive, so this
 platform may not fix it — it is filed in the [upstream ledger](../upstream.md) as

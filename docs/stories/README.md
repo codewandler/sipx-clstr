@@ -44,23 +44,25 @@ site · `FC` fail-closed configuration.
 
 ## Now (in progress)
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
-- [DP-11 — Give the node an admission bound, not only an inherited queue bound](DP-11-give-the-node-an-admission-bound.md) · Cluster · one tokio::spawn per new transaction with no semaphore — the only backpressure is the kernel's queue
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · the downgrade is closed (CC-V10); the tls sub-block and the published exposure row are left
-- [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Next (ready — take the top one unless the user named a story)
-- [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
+- [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
+- [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 
+### Kubernetes operator, Helm packaging & autoscaling
+_One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
+- [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
+
 ## Blocked
-_None._
+- [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Backlog
 
@@ -154,14 +156,18 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-13 — Driver tests bind fixed ports, so two checkouts cannot be tested at once](CF-13-driver-tests-bind-fixed-ports-and-cannot-run-in-parallel.md) · Foundation · observed twice in one afternoon — "Address already in use" and a load-sensitive flake, neither caused by the diff under test
 - [CF-14 — A checker must not read prose about its own directive as the directive](CF-14-a-checker-must-not-read-prose-about-its-directive-as-the-directive.md) · Foundation · documenting check-proof-domains.py's directive inside a proof turns the gate red on a correct script
 - [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
+- [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
+- [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
+- [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
 - [DP-9 — Prove registration and a call across two nodes in a local cluster](DP-9-prove-a-call-across-two-nodes-in-devspace.md) · Cluster · proved twice — two local processes, and two pods in k3d, both with audio
 - [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
+- [DP-11 — Give the node an admission bound, not only an inherited queue bound](DP-11-give-the-node-an-admission-bound.md) · Cluster · one tokio::spawn per new transaction with no semaphore — the only backpressure is the kernel's queue
 - [DP-12 — Settle the self-refuting Timer C default, and stop discarding accepted keys in silence](DP-12-settle-the-self-refuting-timer-c-default.md) · Platform · a document carrying a timers section with no timerC is refused by the loader's own declared default
 - [DX-1 — Split the published site from the internal docs tree](DX-1-split-the-site-from-the-internal-docs-tree.md) · Foundation · the old link gate would have gone green by no longer looking — inverted rather than dropped
 - [DX-2 — Lay down the site's information architecture, navigation and landing page](DX-2-lay-down-the-information-architecture.md) · Foundation · URLs are stable from the start — stub pages beat stub URLs that move later
@@ -186,6 +192,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [EX-10 — Give `overrides` a schema, or remove it from the composition rule](EX-10-give-overrides-a-schema-or-remove-it.md) · Extensions · found reviewing EX-7 — the one construct that resolves a contested target is in no schema
 - [EX-11 — Derive when trunk-bound and domain-bound rule sets actually intersect](EX-11-derive-when-trunk-and-domain-bound-rules-intersect.md) · Extensions · found reviewing EX-7, unresolved by EX-9 and EX-10 — asserted, never derived
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
+- [EX-13 — hook-framework still calls the settled token budget provisional](EX-13-hook-framework-still-calls-the-settled-token-budget-provisional.md) · Platform · AF-1 landed and made the 64-byte sub-budget normative; three hook-framework rows still say "placeholder until AF-1"
 - [FC-2 — Make unapplied configuration visible at startup, at the depth the keys actually live](FC-2-make-unapplied-configuration-visible-at-startup.md) · Cluster · the warning exists, is correct, and reaches nobody — it is logged before the subscriber is installed
 - [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
 - [FC-4 — Apply or refuse the per-tenant policy fields — domains, expiry and maxBindingsPerAor](FC-4-apply-or-refuse-the-per-tenant-policy-fields.md) · Cluster · domains parses into a struct field nothing reads — a REGISTER for an undeclared domain is accepted

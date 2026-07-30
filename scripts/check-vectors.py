@@ -179,6 +179,17 @@ COMPARED_ARGS = {None: 1, "_eq": 2, "_ne": 2, "_matches": 2}
 
 PROVED, SHAPE_ONLY, UNREADABLE = "proved", "shape only", "unreadable"
 
+# Row family → the section title the report gives it. `render` iterates this, so a family absent
+# here is a family the report cannot show — which was `CF-17`: `CF-8` registered seven prefixes in
+# `SPECS` and named none of their families here, so 395 of 533 rows were counted in the denominator
+# and printed in no table. `unrepresented_families` now refuses that state, because the failure was
+# silent in the direction that flatters the report: every other part of the script saw those rows.
+#
+# Order is load-bearing twice over — `render` emits sections in this order and `sort_key` reads row
+# order from it — so families are grouped by prefix in `SPECS` registration order, and within a
+# prefix in the order that prefix's own spec tabulates them. The section each title cites is the one
+# that *governs* the family, not the one the vector table lives in: a reader checking `MR-E` wants
+# §6's encoding rules, not §12.2 again.
 FAMILIES = {
     ("PB", "V"): "Proxy — request validation (§4)",
     ("PB", "P"): "Proxy — route preprocessing (§5)",
@@ -200,6 +211,42 @@ FAMILIES = {
     ("QP", "A"): "Carrier quirks — one profile applied (§9.1)",
     ("QP", "C"): "Carrier quirks — composition (§9.1)",
     ("QP", "G"): "Carrier quirks — startup validation, G9–G14 (§9.1)",
+    ("LS", "C"): "Location service — AoR canonicalization (§3)",
+    ("LS", "R"): "Location service — REGISTER processing and the CAS contract (§5)",
+    ("LS", "K"): "Location service — the consistency contract (§6)",
+    ("LS", "L"): "Location service — the lookup contract (§7)",
+    ("LS", "H"): "Location service — the sharding key (§8)",
+    ("MR", "T"): "Media relay — port semantics (§3)",
+    ("MR", "N"): "Media relay — the null relay (§4)",
+    ("MR", "E"): "Media relay — NG encoding, byte-exact (§6)",
+    ("MR", "X"): "Media relay — exchange and timers (§8)",
+    ("MR", "F"): "Media relay — faults and the error taxonomy (§9)",
+    ("MR", "H"): "Media relay — health signals and node state (§10)",
+    ("MR", "P"): "Media relay — per-trunk media policy (§13)",
+    ("MR", "C"): "Media relay — media-policy configuration (§13.5)",
+    ("NN", "X"): "Number normalisation — extraction and URI forms (§4)",
+    ("NN", "T"): "Number normalisation — the closed transform set (§5)",
+    ("NN", "G"): "Number normalisation — guards and fallback (§6)",
+    ("NN", "E"): "Number normalisation — E.164 egress (§9)",
+    ("NN", "C"): "Number normalisation — composition (§7)",
+    ("NN", "B"): "Number normalisation — binding and the pipeline (§8)",
+    ("AT", ""): "Affinity token — mint, parse and negative vectors (§10)",
+    ("FR", ""): "Flow reference — mint, resolution and negative vectors (§14)",
+    ("CC", "D"): "Cluster config — the document, versioning and substitution (§3)",
+    ("CC", "R"): "Cluster config — roles and projection (§4, §5)",
+    ("CC", "I"): "Cluster config — logical ids (§6)",
+    ("CC", "V"): "Cluster config — validation across sections (§8)",
+    ("CC", "K"): "Cluster config — key reload (§9.3)",
+    ("CC", "T"): "Cluster config — trunk reload (§9.2)",
+    ("CC", "S"): "Cluster config — shard-map handoff (§9.4)",
+    ("AI", "D"): "Asserted identity — the `PaiRequest` derivation (§4)",
+    ("AI", "T"): "Asserted identity — the emission gate, trust × privacy (§8)",
+    ("AI", "S"): "Asserted identity — selection (§7)",
+    ("AI", "A"): "Asserted identity — anonymous callers and `From` (§9)",
+    ("AI", "N"): "Asserted identity — the normalisation seam (§6.1)",
+    ("AI", "C"): "Asserted identity — `Privacy: critical` (§10)",
+    ("AI", "P"): "Asserted identity — pipeline and binding (§6, §11)",
+    ("AI", "X"): "Asserted identity — byte-exact forms (§7.1)",
     ("SC", "A"): "SipxCluster — admission, cluster-scope (§10)",
     ("SC", "S"): "SipxCluster — observed status (§10)",
 }
@@ -263,6 +310,40 @@ def unowned_rows() -> list[str]:
                         f"vector, but no spec owns the prefix `{found.group(1)}` — register it in "
                         f"SPECS against the spec that states it, or stop writing it as a row"
                     )
+    return problems
+
+
+def unrepresented_families(rows: set[str]) -> list[str]:
+    """Row families the report has no section for.
+
+    `render` iterates `FAMILIES`, so a `(prefix, letter)` pair missing from it is a pair whose rows
+    are counted by every other part of this script and then printed in no table. That was silent
+    until `CF-17`: registering a prefix in `SPECS` got its rows read, counted, deferred and gated,
+    and getting them onto the page was a second step nothing checked. `CF-8` registered seven
+    prefixes, named none of their families, ticked both halves of its Acceptance, and left 395 of
+    533 rows in the denominator and out of the document.
+
+    The direction of the failure is why it needs a gate rather than care: the report kept *counting*
+    the rows, so the headline number stayed honest while the tables quietly stopped backing it up.
+    Being registered but unrepresentable is therefore an error with the fix in the message — the
+    same shape as `unowned_rows`, one seam further along.
+    """
+    counted: dict[tuple[str, str], int] = {}
+    for row in rows:
+        family = family_of(row)
+        counted[family] = counted.get(family, 0) + 1
+    problems: list[str] = []
+    for family in sorted(family for family in counted if family not in FAMILIES):
+        prefix, letter = family
+        label = f"{prefix}-{letter}" if letter else f"{prefix}-"
+        # `spec_rows` only yields rows whose prefix `SPECS` owns, so the fallback is unreachable
+        # today. It is here because a gate that tracebacks tells the reader less than one that
+        # prints, and this function's whole job is to turn a silent state into a legible message.
+        owner = SPECS[prefix][0].relative_to(ROOT) if prefix in SPECS else "an unregistered spec"
+        problems.append(
+            f"{label}: {counted[family]} rows in {owner} and no FAMILIES entry, so the report "
+            f"counts them and shows them in no table — give the family a section title in FAMILIES"
+        )
     return problems
 
 
@@ -540,9 +621,75 @@ def render(
     proofs: dict[str, list[Proof]],
     waived: dict[str, dict],
     verdicts: dict[str, tuple[str, list[str]]],
-) -> str:
+) -> tuple[str, set[str]]:
+    """The report, and the set of rows it actually printed.
+
+    The second element is what makes the headline auditable. A denominator computed from `rows` and
+    tables emitted from `FAMILIES` are two different traversals, and `CF-17` is what happens when
+    they disagree — so the caller compares them instead of trusting that they match, and the report
+    states the comparison in its own words. Returning the emitted set rather than a bare count keeps
+    the failure message able to name the rows.
+    """
     proved = [row for row in rows if verdicts.get(row, (None,))[0] == PROVED]
     shape = [row for row in rows if verdicts.get(row, (None,))[0] == SHAPE_ONLY]
+
+    # The sections are built first so the preamble can state what they contain. Any row this loop
+    # does not reach is a row the document does not show, whatever the headline says.
+    emitted: set[str] = set()
+    sections: list[str] = []
+    section_count = 0
+    for family_key, title in FAMILIES.items():
+        family = sorted(
+            (row for row in rows if family_of(row) == family_key), key=sort_key
+        )
+        if not family:
+            continue
+        emitted.update(family)
+        section_count += 1
+        sections += [f"## {title}", "", "| Row | Status | Proved by / deferred to |", "|---|---|---|"]
+        for row in family:
+            if row in proofs:
+                where = ", ".join(
+                    f"`{path}`" for path in sorted({found.file for found in proofs[row]})
+                )
+                state, values = verdicts[row]
+                named = ", ".join(f"`{value}`" for value in values)
+                if state == PROVED:
+                    note = f" — asserts {named}" if values else ""
+                elif state == SHAPE_ONLY:
+                    note = f" — states {named}; not compared"
+                else:
+                    note = " — no vector-table row to read a claim from"
+                sections.append(f"| `{row}` | {state} | {where}{note} |")
+            else:
+                entry = waived.get(row, {})
+                story = entry.get("story", "—")
+                reason = " ".join(entry.get("reason", "").split())
+                sections.append(f"| `{row}` | deferred | `{story}` — {reason} |")
+        sections.append("")
+
+    # `CF-17`'s acceptance in one sentence, written into the document rather than only checked: the
+    # denominator above and the tables below are counted separately and compared here. When they
+    # disagree the report says so and names the families it dropped, because a report that is silent
+    # about what it omits is the defect, and a green gate is not the only reader this has to survive.
+    missing = sorted(rows - emitted, key=sort_key)
+    if missing:
+        families = ", ".join(
+            dict.fromkeys(
+                f"`{prefix}-{letter}`" if letter else f"`{prefix}-`"
+                for prefix, letter in (family_of(row) for row in missing)
+            )
+        )
+        crosscheck = (
+            f"**{len(missing)} of these rows appear in no table below** — the families "
+            f"{families} have no section, so they are counted here and shown nowhere."
+        )
+    else:
+        crosscheck = (
+            f"Σ over the {section_count} sections below is {len(emitted)}, so every row counted "
+            f"above is shown in exactly one table."
+        )
+
     lines = [
         "# Conformance — every spec vector, and what proves it",
         "",
@@ -562,6 +709,8 @@ def render(
         # wrong is a headline number that is not measuring anything.
         f"**{len(proved)} of {len(rows)} rows proved**; {len(shape)} covered for shape only; "
         f"{len(waived)} deferred.",
+        "",
+        crosscheck,
         "",
         "## What these words mean",
         "",
@@ -585,34 +734,7 @@ def render(
         "exactly what the test is worth. And nothing here says the spec itself is right.",
         "",
     ]
-    for family_key, title in FAMILIES.items():
-        family = sorted(
-            (row for row in rows if family_of(row) == family_key), key=sort_key
-        )
-        if not family:
-            continue
-        lines += [f"## {title}", "", "| Row | Status | Proved by / deferred to |", "|---|---|---|"]
-        for row in family:
-            if row in proofs:
-                where = ", ".join(
-                    f"`{path}`" for path in sorted({found.file for found in proofs[row]})
-                )
-                state, values = verdicts[row]
-                named = ", ".join(f"`{value}`" for value in values)
-                if state == PROVED:
-                    note = f" — asserts {named}" if values else ""
-                elif state == SHAPE_ONLY:
-                    note = f" — states {named}; not compared"
-                else:
-                    note = " — no vector-table row to read a claim from"
-                lines.append(f"| `{row}` | {state} | {where}{note} |")
-            else:
-                entry = waived.get(row, {})
-                story = entry.get("story", "—")
-                reason = " ".join(entry.get("reason", "").split())
-                lines.append(f"| `{row}` | deferred | `{story}` — {reason} |")
-        lines.append("")
-    return "\n".join(lines)
+    return "\n".join(lines + sections), emitted
 
 
 # `PB-F-1` and its proof exactly as they stood at `7d21a22`, the commit `PX-10` corrected. The row
@@ -749,6 +871,7 @@ def main() -> int:
     claimed = claims()
     verdicts = {row: verdict(row, proofs[row], claimed) for row in proofs}
     problems += unowned_rows()
+    problems += unrepresented_families(rows)
 
     for row in sorted(rows, key=sort_key):
         if row not in proofs and row not in waived:
@@ -796,7 +919,25 @@ def main() -> int:
                 f"every value it states — remove the entry"
             )
 
-    report = render(rows, proofs, waived, verdicts)
+    report, emitted = render(rows, proofs, waived, verdicts)
+
+    # The headline is checked against the tables, not merely computed beside them. `unrepresented_
+    # families` already refuses the cause `CF-17` found, but this is the property that story is
+    # actually about, and asserting the property as well as its known cause is what stops the class
+    # reopening in a new way: any future path that drops a row from the document — a family filtered,
+    # a section skipped, a traversal changed — moves this Σ and fails here even if every family still
+    # has a title.
+    if emitted != rows:
+        unshown = sorted(rows - emitted, key=sort_key)
+        named = ", ".join(unshown[:10]) + (
+            f", and {len(unshown) - 10} more" if len(unshown) > 10 else ""
+        )
+        problems.append(
+            f"the report counts {len(rows)} rows and its tables show {len(emitted)}: "
+            f"{len(unshown)} counted and not shown ({named}) — a denominator that counts what "
+            f"the document does not show is the bug"
+        )
+
     if check_only:
         current = REPORT.read_text(encoding="utf-8") if REPORT.is_file() else ""
         if current != report:

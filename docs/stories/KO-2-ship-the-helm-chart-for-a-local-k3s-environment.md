@@ -2,7 +2,7 @@
 id: KO-2
 title: Ship the Helm chart for a local k3s environment
 pillar: Cluster
-status: in-progress
+status: blocked
 priority: 
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
@@ -24,6 +24,26 @@ note: the headline deliverable — helm install on k3s
 - [ ] The README states plainly what the local environment does *not* prove (zone spread, real source preservation, HA of the store).
 
 ## Progress
+- **`in-progress` → `blocked` (coordinator, this run).** It was sitting at the top of the board's
+  **Now** list as "the headline deliverable" while five of its six acceptance items cannot be
+  attempted, which makes the board read as though the chart is being worked when nothing can move it.
+  Its own note below already said why — "There is no image to run and no CRD to validate against, so
+  the rendered resource is currently unserved" — so this is a status catching up with a fact the story
+  had already recorded.
+
+  **What blocks it, precisely:** acceptance item 1 installs "the operator, its CRDs and RBAC", and the
+  operator is [`KO-3`](KO-3-implement-the-operator-reconcile-loop.md) (`backlog`) against a custom
+  resource that [`KO-1`](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) has not yet
+  pinned — which is why `values.crd` still carries a provisional `sipx.dev/v1alpha1`. Item 4's probe
+  verdict additionally wants [`ET-4`](ET-4-implement-the-probe-control-api.md) (`backlog`), since
+  `ET-2` and `ET-3` built the engine and the echo endpoint but nothing exposes a verdict to a chart.
+
+  **What would unblock it:** `KO-1` first, then `KO-3`. `KO-1` is dispatched as of this run, precisely
+  so this chain starts moving.
+
+  What *is* done stays done: the chart skeleton, `helm lint`/`helm template` passing, and `KO-14`
+  bringing the default set to the config schema.
+
 - **Started 2026-07-28.** `deploy/helm/` holds the chart skeleton: `Chart.yaml`, `values.yaml`
   carrying the default deployment set, and `templates/sipxcluster.yaml`, which emits
   `.Values.cluster` verbatim into the SipxCluster spec. `helm lint` and `helm template` pass.
