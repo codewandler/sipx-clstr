@@ -13,13 +13,12 @@
 //! all — it is the driver's, and [proxy-transaction-driver](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/proxy-transaction-driver.md)
 //! says so.
 
-use bytes::Bytes;
-use sipx_sip::headers::Address;
 use sipx_sip::{HeaderName, Method, Request, Response, ResponseBuilder, StatusCode};
 
 use crate::config::ProxyConfig;
 use crate::forward::{ForwardPlan, forward};
-use crate::types::{BranchId, Effect, Input, ProxyTimer, Target, TargetQuery, TokenVerdict};
+use crate::route;
+use crate::types::{BranchId, Effect, Input, ProxyTimer, Target, TokenVerdict};
 use crate::validate::{Refusal, Validated, validate};
 
 /// How one branch is doing.
@@ -108,69 +107,28 @@ impl ResponseContext {
             Err(refusal) => return self.refuse(&request, &refusal),
         };
 
-        // §5 — route preprocessing, before target determination.
+        // §5 — route preprocessing, before target determination. P3's rejection arrives separately,
+        // as `Input::TokenFact(Invalid)`, because verification needs the keys and the keys are the
+        // driver's.
         let mut request = request;
-        let preprocessed = self.preprocess(&mut request);
-        if let Some(effects) = preprocessed {
-            return effects;
-        }
+        route::preprocess(&mut request, &self.config);
 
-        // §16.5 — target determination. The proxy asks; the driver answers. Which URI is asked
-        // about is the first `Route` if there is one (it is loose, or F6 already swapped it), else
-        // the Request-URI.
-        let query = TargetQuery {
-            uri: next_hop_uri(&request),
-        };
+        // §5.1 T1 — a request within a dialog has its target set already: the Request-URI *is* the
+        // dialog's remote target (§12.2.1.1), so there is nothing to ask anybody. Asking anyway is
+        // `V-03`: a remote contact is not an address of record, so the location service answers the
+        // empty set for every ordinary call and §7 concludes it `480`.
+        let in_dialog = route::is_in_dialog(&request);
+        let target = route::predetermined_target(&request);
+        let query = route::aor_query(&request);
         self.request = Some(request);
         self.validated = Some(validated);
+        if in_dialog {
+            return self.on_targets(vec![target]);
+        }
+
+        // §5.1 T2 — the Request-URI is an address this platform is responsible for. The proxy asks;
+        // the driver answers.
         vec![Effect::ResolveTargets(query)]
-    }
-
-    /// §5's P1–P3. Returns effects when preprocessing itself concludes the request.
-    fn preprocess(&mut self, request: &mut Request) -> Option<Vec<Effect>> {
-        // P1 — a strict-routing predecessor put our Record-Route value in the Request-URI. The real
-        // Request-URI is the last Route; recover it and drop that Route.
-        if self.config.is_ours(&request.uri) {
-            let routes: Vec<Bytes> = request
-                .headers
-                .get_all(&HeaderName::Route)
-                .map(|header| Bytes::copy_from_slice(header.value().as_ref()))
-                .collect();
-            if let Some(last) = routes.last()
-                && let Ok(address) = Address::parse(last, "Route")
-            {
-                request.uri = address.uri.clone();
-                request.headers.remove_all(&HeaderName::Route);
-                for route in routes.iter().take(routes.len().saturating_sub(1)) {
-                    if let Ok(header) = sipx_sip::Header::build(HeaderName::Route, route.clone()) {
-                        request.headers.push(header);
-                    }
-                }
-            }
-        }
-
-        // P2 — the first Route resolves to this platform: pop it. Any edge pops any edge's Route,
-        // which is the point of the token.
-        let routes: Vec<Bytes> = request
-            .headers
-            .get_all(&HeaderName::Route)
-            .map(|header| Bytes::copy_from_slice(header.value().as_ref()))
-            .collect();
-        if let Some(first) = routes.first()
-            && let Ok(address) = Address::parse(first, "Route")
-            && self.config.is_ours(&address.uri)
-        {
-            request.headers.remove_all(&HeaderName::Route);
-            for route in routes.iter().skip(1) {
-                if let Ok(header) = sipx_sip::Header::build(HeaderName::Route, route.clone()) {
-                    request.headers.push(header);
-                }
-            }
-        }
-
-        // P3's rejection arrives as `Input::TokenFact(Invalid)`, because verification is the
-        // driver's (it holds the keys). Nothing to do here.
-        None
     }
 
     /// P3 — token verification failed: `403`, no forward, no fallback.
@@ -266,10 +224,14 @@ impl ResponseContext {
             let Ok((branch, forwarded)) = forward(&plan, &self.config) else {
                 continue;
             };
+            // F7 — read off the copy, after F6's swap and after the target's route set went on, so
+            // it is the hop this exact message must reach rather than the URI it is addressed to.
+            let next_hop = route::next_hop_of(&forwarded);
             effects.push(Effect::Forward {
                 branch: branch.clone(),
                 request: Box::new(forwarded),
                 target: target.clone(),
+                next_hop,
             });
             // F11 — Timer C guards INVITE branches. Emitted *after* the Forward, because a timer
             // that started before its request went out would measure the wrong interval.
@@ -771,24 +733,7 @@ fn is_dialog_forming(request: &Request) -> bool {
     // INVITE without a `To` tag. A re-INVITE carries one and must not add a Record-Route: RFC 6141
     // confirms mid-dialog Record-Route does not alter an established route set, so adding one is
     // pure noise that also costs a token's worth of bytes.
-    if request.method != Method::Invite {
-        return false;
-    }
-    request
-        .headers
-        .value(&HeaderName::To)
-        .and_then(|value| Address::parse(&value, "To").ok())
-        .is_none_or(|address| address.tag().is_none())
-}
-
-/// The URI whose targets should be resolved: the first `Route` if one survives preprocessing, else
-/// the Request-URI (F7).
-fn next_hop_uri(request: &Request) -> Bytes {
-    request
-        .headers
-        .value(&HeaderName::Route)
-        .and_then(|value| Address::parse(&value, "Route").ok())
-        .map_or_else(|| request.uri.to_bytes(), |address| address.uri.to_bytes())
+    request.method == Method::Invite && !route::is_in_dialog(request)
 }
 
 /// Timer C's default, exposed so a driver and a test agree on it without repeating the number.
