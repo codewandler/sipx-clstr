@@ -9,6 +9,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Cluster membership, keys and the shard map are specified, and key rotation has a runbook**
+  (`AF-6`). `docs/specs/cluster-membership.md` defines the `membership[]`, `keys[]` and `shardMap`
+  sections, the reload contract, and the two-phase rotation an operator actually follows. It is M2's
+  key-distribution contract: `AF-4`'s token library consumes `keys[]` as an input, and `KY1` freezes
+  its six attributes and binds a change to a new `apiVersion`, so the interface cannot move under a
+  proved surface.
+
+  `cluster-config` keeps every rule of §1–§9 — only three *pointers* moved, which its own §10 `A6`
+  authorises. Nothing is defaulted twice: `L`, `S`, `E_max` and the `keys` ceiling all cite their
+  owners rather than restating them, per §8 `V3`.
+
+  **`CX-5`'s defect class is closed rather than avoided.** That finding — the kernel's digest nonce
+  being a pure function of the second, the realm and the secret, so two clients challenged in the same
+  second collide — has an obvious analogue in key distribution: two nodes deriving the same material
+  from the same inputs. `UQ2`/`UQ3` forbid derivation outright and make distribution a verbatim
+  transport with no agreement step; `UQ4` tabulates every unique-required value with the point at
+  which a duplicate is refused; and `UQ5` names `boot-second` as having *exactly* `CX-5`'s shape and
+  points at its mitigation.
+
+  **Retiring a compromised key is restart-class, and the spec says so** rather than implying
+  otherwise: `cluster-config` §9.3 `RL11` has no in-document escape, so `RB9` activates the successor
+  by reload everywhere and then rolls a restart with the compromised key removed, with exposure
+  bounded by the roll. One security operation that configuration cannot perform, stated where an
+  operator will meet it.
+
+  Specified, not yet loaded: a document written to §3 will not start a node today — `rpc` and
+  `incarnationSource` fall outside the loader's closed world and `keys`/`shardMap` are still deferred
+  sections. `DP-16` owns closing that, and carries the four in-tree documents `MB5` will invalidate
+  the day it does.
+
 - **A transaction nothing will collect now fails the gate** (`CF-22`). No gate step started a node,
   completed a call, and watched the transaction accounting return to zero. `scripts/e2e-call.sh` did
   — and `CF-15` deliberately made it a separate CI job rather than a gate step, so that a red reads
