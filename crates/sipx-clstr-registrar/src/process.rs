@@ -46,6 +46,27 @@ pub fn process(cmd: &RegisterCommand, current: &BindingSet, policy: &TenantPolic
         return Outcome::Reject(Rejection::ExtensionRequired("path"));
     }
 
+    // S6.1 — §5.5.1 Q1/Q2, the bound on the *request*, decided before any per-contact work and
+    // before a single stored binding is read. Position is the whole rule: reconciling one REGISTER
+    // compares every operation it carries against every stored binding, so the work is
+    // `operations × bindings`, and §5.5's quota constrains only the second factor. A bound applied
+    // after reconciliation would refuse the same requests and prevent nothing.
+    //
+    // Not a cheaper spelling of the quota, either. A REGISTER made entirely of refreshes and
+    // removals never grows the set, so §5.5 cannot refuse it however long it is (Q5) — which is why
+    // `RG-14`'s pre-check could never have covered this class, and why the input needs a bound of
+    // its own rather than an earlier evaluation of the outcome's.
+    //
+    // A wildcard is exempt (Q4): it is one operation whose cost is proportional to the stored set
+    // alone, which the quota already bounds, so the request's length cannot amplify it.
+    if let ContactOps::Explicit(ops) = &cmd.contacts
+        && ops.len() > policy.max_contact_ops
+    {
+        return Outcome::Reject(Rejection::Forbidden(
+            "the REGISTER carries more contact operations than this tenant permits",
+        ));
+    }
+
     match &cmd.contacts {
         ContactOps::Wildcard => wildcard(cmd, current),
         ContactOps::Explicit(ops) => explicit(cmd, current, policy, ops),
@@ -89,7 +110,50 @@ fn wildcard(cmd: &RegisterCommand, current: &BindingSet) -> Outcome {
     }
 }
 
+/// S7 — the granted lifetime of every contact operation, decided before any mutation.
+///
+/// E6 fails the *whole* request, so every contact has to be decided before the first one is
+/// applied; otherwise a too-brief second contact would leave the first one committed.
+///
+/// This is also the **first per-operation work** a reconciliation does, which is why §5.5.1's meter
+/// sits here: an over-limit request is refused in [`process`] and never reaches this function, so
+/// the count it reports is zero.
+fn granted_expiries(
+    cmd: &RegisterCommand,
+    policy: &TenantPolicy,
+    ops: &[ContactOp],
+) -> Result<Vec<u32>, Rejection> {
+    let mut granted = Vec::with_capacity(ops.len());
+    for op in ops {
+        #[cfg(any(test, feature = "test-suite"))]
+        op_meter::record();
+
+        let requested = op
+            .expires // E1
+            .or(cmd.expires_header) // E2
+            .unwrap_or(policy.default_expires); // E3
+
+        if requested == 0 {
+            granted.push(0); // E4 — removal, never subject to E5 or E6.
+            continue;
+        }
+        if requested < policy.min_expires {
+            // E6 — and the response must state the minimum, or the UA cannot correct itself.
+            return Err(Rejection::IntervalTooBrief {
+                min: policy.min_expires,
+            });
+        }
+        // E5 — silently lowered. §10.3 step 7 allows shortening, and the response states what was
+        // actually granted, so the UA is not misled about when to refresh.
+        granted.push(requested.min(policy.max_expires));
+    }
+    Ok(granted)
+}
+
 /// §5.2, §5.3, §5.5 — explicit `Contact` values.
+///
+/// §5.5.1's bound on how many of them there may be is decided in [`process`], before this is
+/// reached: an over-limit request must not pay for anything here.
 fn explicit(
     cmd: &RegisterCommand,
     current: &BindingSet,
@@ -104,30 +168,10 @@ fn explicit(
         };
     }
 
-    // S7 — expiry selection for every contact, before any mutation. E6 fails the *whole* request,
-    // so it has to be decided for all contacts before the first one is applied; otherwise a
-    // too-brief second contact would leave the first one committed.
-    let mut granted = Vec::with_capacity(ops.len());
-    for op in ops {
-        let requested = op
-            .expires // E1
-            .or(cmd.expires_header) // E2
-            .unwrap_or(policy.default_expires); // E3
-
-        if requested == 0 {
-            granted.push(0); // E4 — removal, never subject to E5 or E6.
-            continue;
-        }
-        if requested < policy.min_expires {
-            // E6 — and the response must state the minimum, or the UA cannot correct itself.
-            return Outcome::Reject(Rejection::IntervalTooBrief {
-                min: policy.min_expires,
-            });
-        }
-        // E5 — silently lowered. §10.3 step 7 allows shortening, and the response states what was
-        // actually granted, so the UA is not misled about when to refresh.
-        granted.push(requested.min(policy.max_expires));
-    }
+    let granted = match granted_expiries(cmd, policy, ops) {
+        Ok(granted) => granted,
+        Err(rejection) => return Outcome::Reject(rejection),
+    };
 
     let mut set = current.clone();
     set.drop_expired(cmd.now);
@@ -286,6 +330,47 @@ pub(crate) mod parse_meter {
     /// How many stored-contact parses have happened on this thread since the last [`reset`].
     pub(crate) fn count() -> usize {
         STORED_PARSES.with(Cell::get)
+    }
+}
+
+/// A meter over how many **contact operations of the request** one reconciliation examined
+/// (`RG-25`).
+///
+/// A second instrument beside `parse_meter`, because the two count different factors of the same
+/// product and neither can see the other's. `parse_meter` counts *stored* contacts, so it measures
+/// work proportional to the binding set: against an empty address-of-record it reads `0` whether a
+/// REGISTER carries one contact operation or three thousand, which is precisely the class §5.5.1
+/// bounds. This one counts the request's own operations, so an over-limit request reads `0` and a
+/// conforming one reads its length.
+///
+/// A thread-local, for `parse_meter`'s reason: `process` runs synchronously on its caller's
+/// thread, and a global atomic would let a sibling test's operations leak into the delta.
+///
+/// Compiled under `test-suite` as well as `test` so the shared conformance suite can assert the
+/// bound's *cost* on every backend rather than only its answer — the in-memory store and PostgreSQL
+/// run the identical rows, and a row that checked the status alone would pass on a backend that had
+/// paid for the whole reconciliation first.
+#[cfg(any(test, feature = "test-suite"))]
+pub(crate) mod op_meter {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OPS_EXAMINED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Forget every operation counted so far on this thread.
+    pub(crate) fn reset() {
+        OPS_EXAMINED.with(|count| count.set(0));
+    }
+
+    /// Count one contact operation examined.
+    pub(crate) fn record() {
+        OPS_EXAMINED.with(|count| count.set(count.get() + 1));
+    }
+
+    /// How many contact operations have been examined on this thread since the last [`reset`].
+    pub(crate) fn count() -> usize {
+        OPS_EXAMINED.with(Cell::get)
     }
 }
 
@@ -557,6 +642,165 @@ mod rg14_quota_tests {
         assert!(
             matches!(outcome, Outcome::Commit { .. } | Outcome::Noop { .. }),
             "a refresh that does not grow the set must be accepted, got {outcome:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod rg25_tests {
+    use super::*;
+    use crate::binding::{Binding, Timestamp};
+    use crate::command::{ContactOp, ContactOps, RegisterCommand};
+    use bytes::Bytes;
+    use sipx_sip::Uri;
+
+    fn aor(uri: &str) -> crate::CanonicalAor {
+        crate::CanonicalAor::parse(uri.to_owned()).expect("a well-formed AoR")
+    }
+
+    /// A removal of `contact`. Removals are what these tests carry, deliberately — see
+    /// `rg25_a_register_above_the_contact_bound_is_refused_before_reconciliation`.
+    fn removal(contact: &str) -> ContactOp {
+        ContactOp {
+            uri: Uri::parse(Bytes::copy_from_slice(contact.as_bytes())).expect("a valid contact"),
+            verbatim: Bytes::copy_from_slice(contact.as_bytes()),
+            expires: Some(0),
+            q: None,
+            instance_id: None,
+            reg_id: None,
+            push: None,
+        }
+    }
+
+    fn removals(count: usize) -> Vec<ContactOp> {
+        (0..count)
+            .map(|i| removal(&format!("sip:alice@198.51.100.9:{}", 5060 + i)))
+            .collect()
+    }
+
+    fn command(contacts: Vec<ContactOp>) -> RegisterCommand {
+        RegisterCommand {
+            tenant: "t".to_owned(),
+            aor: aor("sip:alice@example.test"),
+            call_id: Bytes::from_static(b"rg25-call"),
+            cseq: 1,
+            contacts: ContactOps::Explicit(contacts),
+            expires_header: None,
+            path: Vec::new(),
+            supports_path: false,
+            require: Vec::new(),
+            received: None,
+            flow_ref: None,
+            principal: None,
+            now: Timestamp::from_secs(1_000),
+        }
+    }
+
+    fn binding(contact: &str) -> Binding {
+        Binding {
+            contact: Bytes::copy_from_slice(contact.as_bytes()),
+            q: 1_000,
+            call_id: Bytes::from_static(b"other"),
+            cseq: 1,
+            expires_at: Timestamp::from_secs(3_600),
+            registered_at: Timestamp::from_secs(1),
+            refreshed_at: Timestamp::from_secs(1),
+            path: Vec::new(),
+            received: None,
+            instance_id: None,
+            reg_id: None,
+            flow_ref: None,
+            push: None,
+            principal: None,
+        }
+    }
+
+    /// **`RG-25`'s failing-first test.** A REGISTER carrying more contact operations than the bound
+    /// is refused, and refused *before* reconciliation: not one stored contact is parsed.
+    ///
+    /// The operations are **removals**, deliberately. A removal never grows the set, so §5.5's quota
+    /// cannot refuse this request however long it is — which is exactly why a bound on the *input*
+    /// has to exist beside the bound on the *committed outcome*. Before this story the request below
+    /// is accepted, answers `200`, and pays a full reconciliation on the way there.
+    ///
+    /// Counted rather than timed, for `RG-14`'s reason: wall-clock would be flaky and a parse is the
+    /// expensive unit. Ten bindings are stocked so `parse_meter` has something to count at all; the
+    /// class it is structurally blind to is
+    /// `rg25_the_bound_is_counted_in_contact_operations_not_in_stored_parses`.
+    #[test]
+    fn rg25_a_register_above_the_contact_bound_is_refused_before_reconciliation() {
+        let mut current = BindingSet::new();
+        for i in 0..10 {
+            current.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
+        }
+
+        // 65 removals — one more than the default bound of 64.
+        let cmd = command(removals(65));
+
+        parse_meter::reset();
+        let outcome = process(&cmd, &current, &TenantPolicy::default());
+        let parses = parse_meter::count();
+
+        assert!(
+            matches!(outcome, Outcome::Reject(Rejection::Forbidden(_))),
+            "a REGISTER above the contact-operation bound must be refused, got {outcome:?}"
+        );
+        assert_eq!(
+            parses, 0,
+            "the refusal precedes reconciliation, so no stored contact is parsed; got {parses}"
+        );
+    }
+
+    /// The class `parse_meter` is **structurally blind to**, and the reason §5.5.1 needed a second
+    /// instrument rather than a second assertion on the first.
+    ///
+    /// The address-of-record here holds nothing, so there are no stored contacts to parse and
+    /// `parse_meter` reads `0` whether the request carries one operation or thousands. The cost that
+    /// still exists is the request's own length, and `op_meter` is what can see it: an over-limit
+    /// request examines **no** contact operation, and a conforming one examines exactly its own.
+    #[test]
+    fn rg25_the_bound_is_counted_in_contact_operations_not_in_stored_parses() {
+        let empty = BindingSet::new();
+        let policy = TenantPolicy::default();
+
+        op_meter::reset();
+        parse_meter::reset();
+        let refused = process(
+            &command(removals(policy.max_contact_ops + 1)),
+            &empty,
+            &policy,
+        );
+        let examined = op_meter::count();
+
+        assert!(
+            matches!(refused, Outcome::Reject(Rejection::Forbidden(_))),
+            "one operation above the bound must be refused, got {refused:?}"
+        );
+        assert_eq!(
+            examined, 0,
+            "an over-limit request must examine no contact operation at all; got {examined}"
+        );
+        assert_eq!(
+            parse_meter::count(),
+            0,
+            "and the old meter reads zero either way here — which is why this one exists"
+        );
+
+        // Q3 — the bound is inclusive, and a conforming request is unaffected: it examines exactly
+        // the operations it carries, which is the linear cost the story is buying.
+        op_meter::reset();
+        let accepted = process(&command(removals(policy.max_contact_ops)), &empty, &policy);
+        let examined = op_meter::count();
+
+        assert_eq!(
+            accepted.status(),
+            200,
+            "exactly the bound is accepted, not one fewer"
+        );
+        assert_eq!(
+            examined, 64,
+            "a conforming request examines exactly its own operations; got {examined}"
         );
     }
 }

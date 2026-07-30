@@ -52,6 +52,18 @@ RFC 5626 flow management and `430 Flow Failed` (M3), RFC 8599 push wake-up flows
 - Considered for upstream: the §10.3 REGISTER decision function — **no** for v1,
   cluster-specific: it is inseparable from tenancy, quota and durable-store policy; revisit
   only if sipx ever grows a server-side registrar role.
+- Considered for upstream: the contact-operation bound of §5.5.1 — **no**, and the halves were
+  weighed rather than assumed (`RG-25`). A per-header *element count* cap in the kernel's parser
+  would be protocol-generic and would be a kernel row; it is not filed, because it would buy
+  nothing this bound does not already buy. Flattening a Contact header set is **linear** and the
+  kernel already bounds its input (64 KB per message, 8 KB per header, 256 headers), so the worst
+  a request can spend there is the ~1 ms that bounds the whole 64 KB datagram. The amplification
+  `RG-25` closes is entirely in *this* spec's reconciliation, which is quadratic in the request's
+  operation count, and the refusal has to be a location-service decision for a second reason:
+  §5.7's `BeforeRegistrarUpdate` may adjust the contact operations after parsing, so a bound
+  enforced only in the parser would be one a module could walk past. Filing a kernel row for a
+  cap this platform does not depend on would have the [upstream ledger](../upstream.md) claim a
+  dependency that does not exist.
 
 ## 2. Roles and the sans-IO contract
 
@@ -214,6 +226,7 @@ Steps run in order; the first failure responds and terminates with nothing commi
 | S4 | `principal` authorized for the AoR (step 4) — policy input | `403 Forbidden` |
 | S5 | AoR extraction from `To`; canonicalization (§3); AoR valid for the Request-URI domain (step 5) | `400` (malformed / §3 rejection), `404` (AoR not in domain) |
 | S6 | Wildcard validation (step 6, §5.4) | `400 Bad Request` |
+| S6.1 | Contact-operation bound (§5.5.1) **[sipx-clstr]** — the request's own length, judged before any stored binding is touched | `403 Forbidden` |
 | S7 | Per-contact expiry selection and min/max policy (step 7, §5.2) | `423 Interval Too Brief` + `Min-Expires` |
 | S8 | Per-tenant quota (§5.5) **[sipx-clstr]** | `403 Forbidden` |
 | S9 | Per-binding Call-ID/CSeq application (steps 6–7, §5.3) | `500` on stale-CSeq abort **[sipx-clstr]** |
@@ -343,6 +356,43 @@ RFC 3261 §10.3 step 6:
   grow the set and never trip the quota.
 - The quota bounds the active set at write time, so every lookup's target set is bounded by
   it — the fork-breadth interaction proxy-behavior V5/§6 (`Max-Breadth`) relies on.
+- The quota is measured on the **committed outcome** and on nothing else. It is not a bound on
+  the request: refreshes, replacements and removals may name any number of contacts without
+  growing the set, so a quota that judged the request would refuse what this rule permits. What
+  bounds the request is §5.5.1, and the two are deliberately separate tests of separate things.
+
+### 5.5.1 The contact-operation bound **[sipx-clstr]**
+
+§5.5 bounds the *result* of a REGISTER. This section bounds the *request*, because the two are
+not the same quantity and neither substitutes for the other: reconciling one REGISTER compares
+every contact operation it carries against every stored binding (§5.3), so the work is the
+product of the request's length and the set's size, while §5.5 constrains only the second factor.
+Nothing else constrains the first — the kernel's message limits admit thousands of contact
+operations in one 64 KB datagram once comma-separated Contact values are flattened, and REGISTER
+is deliberately exempt from the node's admission bound (a registration storm *is* the overload,
+and shedding refreshes turns a spike into an outage). An unbounded request is therefore a
+resource-exhaustion vector in the same sense as the unbounded key §3.2 N13 refuses.
+
+| # | Rule |
+|---|---|
+| Q1 | A REGISTER whose `Contact` headers flatten to more than `max_contact_ops` contact operations (default **64**, per-tenant policy) is refused `403 Forbidden`. The count is the flattened one — comma-separated values inside one header, and values spread over several headers, count alike, because that is the number reconciliation pays for |
+| Q2 | The refusal is decided **before** S7's expiry selection and before any stored binding is read, matched or parsed. An over-limit request therefore costs work proportional to its own length and never to `operations × bindings`; a conforming one is unaffected. This is a position requirement, not an implementation note — a bound applied after reconciliation would refuse the same requests and prevent nothing |
+| Q3 | The bound is inclusive: exactly `max_contact_ops` operations are accepted, and the refusal begins at one more |
+| Q4 | `Contact: *` is one operation and is never refused by Q1. A wildcard's cost is proportional to the stored set alone (§5.4 W3), which §5.5 already bounds, so the request's length cannot amplify it |
+| Q5 | Q1 does not replace §5.5 and §5.5 does not replace Q1. A request within the bound may still exceed the quota, and a request the quota would accept — every operation a refresh or a removal — may still exceed the bound |
+
+Why `403` rather than `513 Message Too Large`. RFC 3261 §21.4.11 exists for a message a server
+cannot process for its length, which fits the request's shape; it is rejected because it does not
+fit the remedy. A UA that reads §18.1.1's guidance for a request too large for its transport
+retries over a congestion-controlled one, and the identical message would be refused identically
+here — a loop that spends more of the registrar than the original request did. `403` is the code
+§5.1 S4/S8 already gives a policy refusal a retry cannot fix by repetition, and the remedy is the
+one a UA can actually apply: send fewer contacts per REGISTER.
+
+**Policy consistency.** `max_contact_ops` must be at least `max_bindings_per_aor` for a tenant,
+or that tenant cannot refresh its whole binding set in one request. The defaults satisfy it with
+room to spare (64 against 10). It is stated rather than enforced because the enforcement belongs
+to whatever configuration surface eventually exposes both numbers, not to the decision function.
 
 ### 5.6 Path and the response
 
@@ -370,8 +420,12 @@ spec names them, per that spec's contract, and anchors them to §5.1:
 
 | Phase (hook-framework) | Anchor here |
 |---|---|
-| `BeforeRegistrarUpdate` | After S6 — the `RegisterCommand` is constructed and validated, the principal fixed — and before S7–S10. Modules see the command (contact ops, requested expiries) and may reject (e.g. `423`, `403`) or adjust the registration; the adjusted command is what §5.2–§5.5 then process |
+| `BeforeRegistrarUpdate` | After S6 — the `RegisterCommand` is constructed and validated, the principal fixed — and before S6.1–S10. Modules see the command (contact ops, requested expiries) and may reject (e.g. `423`, `403`) or adjust the registration; the adjusted command is what §5.2–§5.5 then process |
 | `AfterRegistrarUpdate` | After S10 — the CAS applied, the final binding set known, the S11 response drafted — and before the response is sent. Modules may patch response headers; the binding set is read-only |
+
+**[sipx-clstr]** `BeforeRegistrarUpdate` sits before S6.1 deliberately: a module may add contact
+operations, so §5.5.1's bound is decided on the command as adjusted rather than as parsed. A bound
+enforced only where the message is read would be one a module could walk past.
 
 **[sipx-clstr]** Each phase fires once per REGISTER request: `BeforeRegistrarUpdate` on the
 command before the first CAS attempt, not per retry — a §6 K1 conflict retry re-runs
@@ -519,6 +573,8 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-R-21 | CA expired at `now`, stored CSeq 9; REGISTER `i1`, CSeq 3, CA | added fresh (B1) — an expired binding is absent for every purpose (§5.3) |
 | LS-R-22 | LS-R-3's retry 500 ms later, but `CA;expires=7200` | abort, `500` (B5): the carve-out is B4.1's *duration* match, not the token alone; a same-token command asking for something else is a second write. Nothing commits and the revision does not move |
 | LS-R-23 | Set `{CA}` written by `i1`/1; REGISTER `i1`, CSeq 1, `CA` (same granted duration) **and** CB, 500 ms later | `200`, commits: CA untouched (B4 — same deadline, same `refreshed_at`), CB added (B1), revision bumped. B4.3 — the no-mutation guarantee is about the matched binding, not the request |
+| LS-R-24 | Bound 64 (default): one REGISTER carrying 65 contact operations, every one a removal — so the quota of §5.5 cannot refuse it however long it is | `403`; nothing committed, and no stored binding is examined — the refusal precedes reconciliation (Q1, Q2) |
+| LS-R-25 | Bound 64: the same request carrying exactly 64 operations | `200`; the bound is inclusive and a conforming request is unaffected (Q3) |
 
 **Consistency / CAS (LS-K).**
 

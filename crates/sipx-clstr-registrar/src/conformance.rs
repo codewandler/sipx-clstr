@@ -91,6 +91,7 @@ pub fn run_location_store_suite(
     ls_r_wildcard(&mut suite);
     ls_r_min_and_max_expires(&mut suite);
     ls_r_quota(&mut suite);
+    ls_r_contact_operation_bound(&mut suite);
     ls_r_atomicity(&mut suite);
     ls_r_path(&mut suite);
     ls_r_expired_binding_is_absent(&mut suite);
@@ -503,6 +504,74 @@ fn ls_r_quota(suite: &mut Suite<'_>) {
     suite.check("LS-R-15", refresh.outcome.status() == 200, || {
         "a refresh never grows the set, so it never trips the quota".to_owned()
     });
+}
+
+/// LS-R-24 / LS-R-25 — §5.5.1, the bound on the request rather than on the committed set.
+///
+/// Every operation is a **removal** of a contact that was never bound, so the committed outcome is
+/// empty and §5.5's quota has nothing to refuse however long the request is (Q5). That is what makes
+/// these rows about the bound and not about the quota, and it is why the class exists at all.
+///
+/// The cost is asserted as well as the answer, on **both** backends: `op_meter` reports how many of
+/// the request's contact operations one reconciliation examined, and Q2 is a statement about
+/// position — a store that answered `403` after reconciling would satisfy the status and prevent
+/// nothing.
+fn ls_r_contact_operation_bound(suite: &mut Suite<'_>) {
+    let who = "r24";
+    let bound = policy().max_contact_ops;
+
+    let over = command(&suite.tenant, who, "i1", 1, 0, removals(bound + 1));
+    crate::process::op_meter::reset();
+    let refused = apply(suite.store, &over, &policy(), RETRIES);
+    let examined = crate::process::op_meter::count();
+
+    suite.check("LS-R-24", refused.outcome.status() == 403, || {
+        format!("expected 403, got {}", refused.outcome.status())
+    });
+    suite.check("LS-R-24", refused.revision == Revision::INITIAL, || {
+        format!(
+            "nothing may commit, revision moved to {:?}",
+            refused.revision
+        )
+    });
+    suite.check("LS-R-24", examined == 0, || {
+        format!(
+            "Q2: the refusal precedes reconciliation, so no contact operation is examined; got {examined}"
+        )
+    });
+
+    // LS-R-25 — Q3, the bound is inclusive, and a conforming request pays exactly its own length.
+    crate::process::op_meter::reset();
+    let accepted = apply(
+        suite.store,
+        &command(&suite.tenant, "r25", "i1", 1, 0, removals(bound)),
+        &policy(),
+        RETRIES,
+    );
+    let examined = crate::process::op_meter::count();
+
+    suite.check("LS-R-25", accepted.outcome.status() == 200, || {
+        format!(
+            "exactly the bound must be accepted, got {}",
+            accepted.outcome.status()
+        )
+    });
+    suite.check("LS-R-25", examined == bound, || {
+        format!("a conforming request examines exactly its {bound} operations; got {examined}")
+    });
+}
+
+/// `count` distinct removals — see [`ls_r_contact_operation_bound`] for why removals.
+fn removals(count: usize) -> Vec<ContactOp> {
+    (0..count)
+        .map(|i| {
+            contact(
+                &format!("sip:gone@198.51.100.9:{}", 5060 + i),
+                Some(0),
+                None,
+            )
+        })
+        .collect()
 }
 
 fn ls_r_atomicity(suite: &mut Suite<'_>) {
