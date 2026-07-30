@@ -9,6 +9,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two gate checkers read prose about their own directives as directives** (`CF-14`). Both took the
+  first match anywhere in a file, so a comment *explaining* a directive was parsed as one — and a
+  correct declaration could be outvoted by an earlier mention of the token. `check-proof-domains.py`
+  failed closed, turning the gate red on a correct script and teaching contributors to avoid spelling
+  the token. `check-site.py`'s was the same defect with the polarity reversed and therefore worse: a
+  prose mention of `not-in-ci:` silently exempted a proof from being checked at all. Both directives
+  are now a line whose entire content is the token and its value.
+
+  The regression evidence is permanent rather than a test fixture: two proof scripts now carry
+  comments that fully explain the directive and spell the token, one of them twice above its real
+  declaration. If the anchoring regresses, the gate goes red on the repository's own documentation.
+
 - **Three site properties held by hand are now checked** (`DX-12`). An authored page that no sidebar
   entry routes to, and a sidebar entry naming a page that does not exist, both fail the gate — the
   first is quieter than a broken link and therefore worse, because it does not 404, it is simply

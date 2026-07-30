@@ -2,7 +2,7 @@
 id: CF-14
 title: A checker must not read prose about its own directive as the directive
 pillar: Foundation
-status: in-progress
+status: done
 priority: 2
 epic: conformance-harness
 areas: [ci, build]
