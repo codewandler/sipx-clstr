@@ -49,8 +49,8 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 **The measuring instrument now measures everything, and it now shows what it measures.** Six
 specifications used to carry vector tables the checker had no registration for — roughly 340
 normative rows that nothing executed, and a fabricated row in one of those families passed the gate
-untouched. Thirteen prefixes are now registered: **125 of 549 rows proved, 19 covered for shape only,
-405 deferred**, each deferral naming what is specifically missing and the story that closes it.
+untouched. Fifteen prefixes are now registered: **125 of 573 rows proved, 19 covered for shape only,
+429 deferred**, each deferral naming what is specifically missing and the story that closes it.
 
 Two of those numbers went the "wrong" way on purpose. *Shape only* is a category `CF-12` created for
 a row whose test runs but never compares the value the row states — a row that used to count as
