@@ -9,9 +9,9 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**131 of 579 rows proved**; 19 covered for shape only; 429 deferred.
+**129 of 576 rows proved**; 19 covered for shape only; 428 deferred.
 
-Σ over the 60 sections below is 579, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 576, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -97,6 +97,14 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-C-4` | deferred | `PX-2` — A CANCEL matching no transaction is forwarded statelessly. By definition no response context exists for it, so it never reaches the engine — it is the driver's, and the driver design says so. It becomes testable when a driver exists to test (PX-4's stateless path, M2). |
 | `PB-C-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-C-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `408` |
+
+## Proxy — a terminal result and the queued target set (§7.1, §8, §9)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `PB-T-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `200` |
+| `PB-T-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `600` |
+| `PB-T-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `487` |
 
 ## Proxy — stateless mode (§10)
 
@@ -326,12 +334,6 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `LS-R-21` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
 | `LS-R-22` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
 | `LS-R-23` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-24` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-25` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
-| `LS-R-26` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-27` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
-| `LS-R-28` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-29` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
 
 ## Location service — the consistency contract (§6)
 
@@ -645,7 +647,7 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `CC-R-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-1` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-R-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
 | `CC-R-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
 | `CC-R-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |

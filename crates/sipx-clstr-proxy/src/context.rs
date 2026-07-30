@@ -347,6 +347,7 @@ impl ResponseContext {
         if status / 100 == 2 && request.method == Method::Invite {
             let mut effects = vec![Effect::respond(pop_via(response))];
             self.answered = true;
+            self.conclude_target_set();
             effects.extend(self.cancel_pending());
             return effects;
         }
@@ -356,6 +357,7 @@ impl ResponseContext {
             self.finals.push(clone_response(&response));
             let mut effects = vec![Effect::respond(pop_via(response))];
             self.answered = true;
+            self.conclude_target_set();
             effects.extend(self.cancel_pending());
             effects.extend(self.finish_if_settled());
             return effects;
@@ -368,7 +370,7 @@ impl ResponseContext {
             return Vec::new();
         }
         // A distinct-`q` group remains: sequential forking continues rather than answering.
-        if !self.queued.is_empty() {
+        if self.may_fork_next_group() {
             return self.fork_next_group();
         }
         self.select_and_answer(&request)
@@ -382,6 +384,11 @@ impl ResponseContext {
         // acknowledges the CANCEL, not the cancellation: §16.10 does not let it wait on whether any
         // branch can actually be stopped.
         let mut effects = vec![Effect::AnswerCancel];
+
+        // C7 — the caller has withdrawn the request, so the *target set* is over and not merely the
+        // branches that happen to be in flight. This is the one route to a concluded target set that
+        // forwards no response of its own, which is why C7 states it separately from R12.
+        self.conclude_target_set();
 
         // §9.2 — a CANCEL for a transaction that has already been answered is a no-op beyond that
         // `200`. Nothing to stop, and re-answering upstream would contradict what we already sent.
@@ -452,7 +459,7 @@ impl ResponseContext {
         if self.has_pending() {
             return Vec::new();
         }
-        if !self.queued.is_empty() {
+        if self.may_fork_next_group() {
             return self.fork_next_group();
         }
         self.select_and_answer(&request)
@@ -496,7 +503,7 @@ impl ResponseContext {
         if self.has_pending() {
             return Vec::new();
         }
-        if !self.queued.is_empty() {
+        if self.may_fork_next_group() {
             return self.fork_next_group();
         }
         self.select_and_answer(&request)
@@ -639,8 +646,34 @@ impl ResponseContext {
         ids.into_iter().map(Effect::CancelBranch).collect()
     }
 
+    /// R12/C7 — the target set is over: nothing that was never launched may be launched now.
+    ///
+    /// Acceptance, global rejection and upstream cancellation are terminal for the *whole* target
+    /// set, and cancelling the launched branches is only half of that. §7.1's queue holds the groups
+    /// that never went out, and it is not reachable through `cancel_pending` — there is no branch to
+    /// cancel for a request that was never sent. Discarding it here is the other half, and the two
+    /// are always done together.
+    ///
+    /// Leaving the queue behind does not merely delay those targets: the cancelled branches settle
+    /// with `487`, the last one to do so finds `has_pending` false and a non-empty queue, and the
+    /// generic final-response path forks it — originating an INVITE for a call that was answered,
+    /// globally rejected or withdrawn, whose response nothing upstream is waiting for (`PX-14`).
+    fn conclude_target_set(&mut self) {
+        self.queued.clear();
+    }
+
+    /// Whether a queued group may still go out.
+    ///
+    /// R12 and C7 empty the queue at every point that concludes the target set, so the `answered`
+    /// and `finished` terms are belt to that braces: they state the rule the queue's contents are
+    /// only *evidence* of, and keep a concluded context from forking even if some future path grows
+    /// a queue after the fact.
+    fn may_fork_next_group(&self) -> bool {
+        !self.queued.is_empty() && !self.answered && !self.finished
+    }
+
     fn finish_if_settled(&mut self) -> Vec<Effect> {
-        if self.has_pending() || !self.queued.is_empty() {
+        if self.has_pending() || self.may_fork_next_group() {
             return Vec::new();
         }
         self.finished = true;

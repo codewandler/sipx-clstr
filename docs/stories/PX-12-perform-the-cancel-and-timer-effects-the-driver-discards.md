@@ -61,3 +61,10 @@ construction below the kernel boundary.
 - **Upstream boundary:** CANCEL construction and transaction dispatch are protocol-generic and owned
   by sipx/`CX-7`; scheduling proxy-TU Timer C and performing the engine's existing effects are local
   driver orchestration.
+- **Inherited from `PX-14`, and it becomes live here.** `proxy-behavior` §9 `C7` says "a target that
+  was never tried is never tried", which is broader than the code: `on_targets` assigns
+  `self.queued = targets` unconditionally (`crates/sipx-clstr-proxy/src/context.rs:209`), so an
+  `UpstreamCancelled` arriving *before* `TargetsResolved` still forks the whole set. It is unreachable
+  today only because `Input::UpstreamCancelled` has no producer outside tests and the driver resolves
+  targets synchronously — **and wiring a real upstream CANCEL is exactly this story's job**. Either
+  make the code obey C7 for that ordering, or narrow C7 and say why.

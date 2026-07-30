@@ -2,12 +2,12 @@
 id: RG-16
 title: Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
 pillar: Registrar
-status: in-progress
+status: blocked
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar]
-note: release blocker — a REGISTER carrying several contacts can commit the wrong binding set
+note: V-05 is fixed on impl/RG-16-rework, but the fix trades it for a 403 that refuses a REGISTER the quota permits — needs a §5.5 ruling first
 ---
 
 # Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
@@ -19,66 +19,91 @@ carries more than one contact.
 
 ## Acceptance
 
-- [x] Binding operations use a stable identity or a parsed view updated with every mutation; no
+- [ ] Binding operations use a stable identity or a parsed view updated with every mutation; no
       operation applies an index computed against a different vector state.
-- [x] An insertion becomes visible to later operations in the same REGISTER, and a removal cannot
+- [ ] An insertion becomes visible to later operations in the same REGISTER, and a removal cannot
       shift a later match onto another binding or off the end of the vector.
-- [x] The compare-and-swap contract in [location-service](../specs/location-service.md) §6 still holds:
+- [ ] The compare-and-swap contract in [location-service](../specs/location-service.md) §6 still holds:
       a losing writer retries against fresh state rather than committing a stale set.
-- [x] **Failing-first vector:** from `{A, B}`, one REGISTER with `A;expires=0, B;expires=0` commits the
+- [ ] **Failing-first vector:** from `{A, B}`, one REGISTER with `A;expires=0, B;expires=0` commits the
       empty set. On `86e6b10` it returns `Commit` with B still present because `get(1)` follows A's
       removal.
-- [x] Order-sensitive vectors also cover remove/refresh, refresh/remove, and two operations naming a
+- [ ] Order-sensitive vectors also cover remove/refresh, refresh/remove, and two operations naming a
       contact first inserted by the same request; every response enumerates the actual final set.
-- [x] The new normative `LS-R-*` rows and their test names are registered together.
-- [x] Both the in-memory and PostgreSQL conformance suites pass unchanged, and `scripts/gate.sh` is
+- [ ] The new normative `LS-R-*` rows and their test names are registered together.
+- [ ] Both the in-memory and PostgreSQL conformance suites pass unchanged, and `scripts/gate.sh` is
       green.
 
 ## Progress
 
-- **Done.** The original mechanism was confirmed before it was fixed: `process::explicit` parsed the
-  stored contacts into a `Vec<Option<Uri>>` once, matched every operation by `position` in *that*
-  vector, and then used the position as an index into a `BindingSet` it was concurrently mutating.
-  The two diverged at the first removal.
-- Three original failure modes, all reproduced at `2cb22dd` and now pinned: a binding survives its
-  own removal (the stale index resolves past the end of the shortened set); a refresh lands on
-  whichever binding slid into the index, overwriting a contact the request never named and
-  duplicating one it did; and on the CAS-retry path, where the re-read set is longer, a removal
-  removes the *wrong* binding — the winner's fresh registration.
-- The fix is structural rather than a re-parse. A `Reconciling` view owns the set and one aligned
-  `Vec<Slot>` describing it, and is the only thing that mutates either, so they cannot drift.
-  `BindingSet::insert_at` reports the index an insert landed at, which is what an aligned view needs
-  since creation order means an insert is not an append; `insert` delegates to it.
-- **Rework — the fix exposed a second, reachable defect and it needed the spec, not a patch.** Once
-  operations really are resolved against the live set, a later operation can match a binding an
-  earlier operation of the *same* request just wrote — two §19.1.4-equivalent contacts in one
-  REGISTER is all it takes, and `CC;expires=3600, CC;line=7;expires=0` is an ordinary thing for a UA
-  to send. That binding carries this request's own `Call-ID`/`CSeq`, so `process.rs` read B4/B5
-  against this command's own token and aborted the whole request `500`: at `2cb22dd` the request was
-  a `200`, on the first cut of this branch it was a `500` with the UA left unregistered and every
-  retry failing identically.
-- Settled in the spec first (AGENTS.md #4): location-service §5.3.2 gains **B7** — B2–B5 compare
-  against the token of the request that *last wrote* the matched binding, and a binding this request
-  wrote has no ordering question left for them to decide, so the operation applies. B6's own text
-  already said as much ("present for them, with the value it was given"). The distinction is **who
-  wrote it, not what token it carries**: a retransmission is token-identical and must stay B4's, so
-  the fact is recorded per slot at the moment of the write rather than inferred.
-- Spec: §5.3.2 gains B7 beside B6, with the reasoning for why the two cases cannot be told apart by
-  comparison, why atomicity (§6 K2) and the CAS loop are untouched, and why B7 widens nothing.
-- Vectors: `LS-R-24` … `LS-R-29`, all six **proved** in `docs/reference/conformance.md`, none
-  deferred — two removals and an addition, remove/refresh, the empty-set case, refresh/remove, and
-  both B7 shapes (a removal of what this request added, and a second operation replacing it).
-- Both halves of Acceptance's last item are real: the six rows were added to
-  `registrar/src/conformance.rs`, the **shared two-backend** suite, so they run against the in-memory
-  and the PostgreSQL backend rather than only the in-memory vector file. Dropping the B7 guard was
-  confirmed to fail `LS-R-28`/`LS-R-29` on *both* backends, so the rows are live, not decorative.
-- `RG-14`'s parse budget is unchanged and still asserted: one parse per stored binding for the whole
-  reconciliation, none per operation. B7's per-slot flag and the quota check's duplicate-addition
-  comparison both work on already-parsed URIs.
-- The S8 quota pre-check needed one adjustment B7 forced: two operations naming one contact are one
-  addition, so counting both would refuse at the quota boundary a request the mutation loop then
-  commits within it. Candidates are compared against the additions already *counted* and never
-  against skipped ones, because §19.1.4 equivalence is non-transitive.
+- **Parked 2026-07-30 after two rework rounds. Both branches are preserved and neither is merged:
+  `impl/RG-16` (round 1) and `impl/RG-16-rework` (round 2, `16480fe`).** The original V-05 defect *is*
+  fixed on the rework branch. It is unmerged because the fix currently trades that defect for a
+  different reachable one, and merging would swap a silent wrong answer for a loud wrong refusal.
+
+### What round 2 got right, and should be kept
+
+- `Reconciling` + `Slot` replace the snapshot-index scheme; the invariant `slots.len() == set.all().len()`
+  is held by the three mutators, every `BindingSet` mutator is bounds-checked, and there is no panic
+  path reachable from network input.
+- **`location-service` §5.3.2 B7** decides the question round 1 tripped over: B2–B5 compare against the
+  token of the request that *last wrote* the matched binding, so a binding an earlier operation of the
+  same request wrote leaves them nothing to decide and the operation applies. Reviewed as correct —
+  "last operation naming a contact wins" is the reading RFC 3261 §10.3 produces, `line` is ignored by
+  §19.1.4 (it is not in the user/ttl/method/maddr/transport list), and the `400`-for-duplicates
+  alternative has no §10.3 basis and would contradict item 5's "every response enumerates the actual
+  final set".
+- The six rows are in **`crates/sipx-clstr-registrar/src/conformance.rs`** — the shared suite both
+  backends run — not only in the in-memory test file as round 1 had them. Verified load-bearing on
+  both: deleting the `written_here` guard fails `LS-R-28` on PostgreSQL *and* in memory.
+- `registered_at` is preserved across replacement; `written_here` cannot leak across a CAS retry
+  (`Reconciling::new` sets it false for everything read from the store, and `apply` re-runs `process`
+  on conflict).
+
+### Why it is not merged — two findings, both measured at the branch tip
+
+1. **The S8 quota pre-check refuses a REGISTER whose committed outcome fits the quota, at the default
+   policy.** With nine bindings held and `TenantPolicy::default()` (max 10), one REGISTER carrying
+   `x;line=1, x, x;line=2` is answered
+   `Forbidden("the address-of-record already holds its maximum bindings")`, where the committed
+   outcome is 10 active. `adding` counts a candidate unless it is equivalent to an already-**counted**
+   one, which is an *upper* bound — and after B6/B7 the loop can collapse several operations onto one
+   binding, so the pre-check must be a *lower* bound. §5.5 makes the quota a test on the **committed
+   outcome** and says in terms that "refreshes, replacements and removals never grow the set and never
+   trip the quota"; here two replacements trip it, and a `403` is something the UA cannot retry out of.
+   The non-transitivity argument written above the check is inverted for that chain: the loop commits
+   one binding, so comparing against *skipped* candidates would have been exact.
+2. **A verbatim retransmission of `LS-R-29`'s own shape is answered `500 StaleSequence`** — so the very
+   request B7 exists to legalise is not idempotent. `CC;3600, CC;7200` commits one binding at 7200 on
+   first delivery and `500` on retransmission, because B4 is evaluated per operation against that
+   operation's granted duration while §5.3's idempotency rule is stated per *binding* against the
+   command's requested outcome — which under B6/B7 is 7200, exactly what is stored. Not a regression
+   (the base answers `500` there too), but **B7's own new text claims this case is handled**, so the
+   spec now asserts the opposite of the behaviour.
+
+### What would settle it
+
+- **A ruling on §5.5 first, because it decides where the fix goes.** If §5.5 means strictly "the
+  committed outcome decides", finding 1 is a `process.rs` fix — make the pre-check a lower bound by
+  comparing candidates against *skipped* ones. If a conservative upper-bound refusal is acceptable
+  policy, then §5.5 needs amending plus a vector, and `process.rs` is already right. That call belongs
+  to whoever owns §5.5, not to an implementor.
+- Finding 2 needs a direction chosen: either make B4 compare net outcome per binding, or narrow B7's
+  text to stop claiming the retransmission case is handled.
+- Minor, worth folding in: a retransmission of `LS-R-28`'s shape commits and bumps the revision though
+  the durable set is identical, where B4.2 says a retry leaves the revision as it is. Cost is a
+  spurious revision bump and change event, which §6 K4/K5 make best-effort anyway.
+- `docs/reference/conformance.md` on the branch was regenerated against a pre-merge `main` (131/579,
+  60 sections) and `main` has since moved (129/576, 61 sections). Regenerate at the merge, do not
+  resolve toward either side.
+
+### Correction to the round-2 report
+
+Its failing-first disclosure said `LS-R-26` and `LS-R-27` already passed at the merge base. Measured at
+the real merge base `3b9bf4b`, only `LS-R-27` passes: `LS-R-24`, `25`, `26`, `28`, `29` and the CAS
+test all fail, with `LS-R-26` failing exactly as Acceptance item 4 describes. The disclosure appears to
+have been measured against round 1's tip rather than the merge base — an error in the conservative
+direction, but the record should be right.
 
 ## Notes
 

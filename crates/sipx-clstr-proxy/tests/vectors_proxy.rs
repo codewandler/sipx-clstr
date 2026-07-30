@@ -1,10 +1,14 @@
-//! The `PB-V`, `PB-P`, `PB-F` and `PB-R` vector tables of
+//! The `PB-V`, `PB-P`, `PB-F`, `PB-R` and `PB-T` vector tables of
 //! [proxy-behavior §12](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/proxy-behavior.md),
 //! row by row.
 //!
 //! `PB-C-*` (CANCEL and Timer C) is `PX-6`. `PB-S-*` (stateless) is `PX-4`, deferred to M2 because
 //! nothing consumes it until mid-dialog requests carry tokens. `PB-A-*` (transaction affinity)
 //! needs more than one node and is M2's.
+//!
+//! `PB-T-*` is `PX-14`, and it is here because rows proved one at a time do not prove their
+//! composition: sequential forking (`PB-F-2`) and the terminal results (`PB-R-3`, `PB-R-7`,
+//! `PB-C-2`) were each green while a `487` settling a cancellation re-originated an answered call.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -1019,6 +1023,139 @@ fn a_timer_c_with_no_branch_is_ignored_rather_than_guessed_at() {
     let (mut context, _) = run(request, vec![target("sip:bob@10.0.0.1", 1_000)]);
     let out = context.on_input(Input::TimerFired(sipx_clstr_proxy::ProxyTimer::C, None));
     assert!(out.is_empty());
+}
+
+// ------------------------------------------------------------------- PB-T ----------------------
+
+/// Two branches at `q=1.0` and one queued group at `q=0.5`: the fixture every PB-T row starts from.
+///
+/// The composition is the point. `PB-F-2` proves sequential forking and `PB-R-3`, `PB-R-7` and
+/// `PB-C-2` prove the terminal results, and none of them puts a *queue* behind a terminal result —
+/// which is how a `487` settling a cancellation came to originate a new INVITE (`PX-14`).
+fn two_branches_and_a_queued_group() -> (Request, ResponseContext, BranchId, BranchId) {
+    let request = invite("sip:bob@b.example", vec![]);
+    let (context, effects) = run(
+        request.clone(),
+        vec![
+            target("sip:bob@10.0.0.1", 1_000),
+            target("sip:bob@10.0.0.2", 1_000),
+            target("sip:bob@10.0.0.3", 500),
+        ],
+    );
+    let ids = branches(&effects);
+    assert_eq!(
+        ids.len(),
+        2,
+        "only the leading `q` group forks: {effects:?}"
+    );
+    let a = ids.first().cloned().expect("branch A");
+    let b = ids.get(1).cloned().expect("branch B");
+    (request, context, a, b)
+}
+
+/// Every `Forward` in `effects` — the effect that would originate a new INVITE.
+fn forwards(effects: &[Effect]) -> Vec<&Effect> {
+    effects
+        .iter()
+        .filter(|effect| effect.kind() == Kind::Forward)
+        .collect()
+}
+
+#[test]
+fn pb_t_1_an_accepted_call_discards_the_queued_lower_q_group() {
+    let (request, mut context, a, b) = two_branches_and_a_queued_group();
+
+    // A answers: the call is up (R5) and B is cancelled (R11).
+    let answered = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 200, "OK")),
+        a,
+    ));
+    assert_eq!(statuses(&answered), [200]);
+
+    // B's `487` is that cancellation settling, not a branch failure to route around. C was never
+    // launched and must stay that way: a `Forward` here rings a phone after the caller is already
+    // talking to A, and nothing will ever answer its response.
+    let settled = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 487, "Request Terminated")),
+        b,
+    ));
+    assert_eq!(
+        forwards(&settled).len(),
+        0,
+        "an accepted call must not originate a new request: {settled:?}"
+    );
+}
+
+#[test]
+fn pb_t_2_a_global_rejection_discards_the_queued_lower_q_group() {
+    let (request, mut context, a, b) = two_branches_and_a_queued_group();
+
+    // R6 — a 6xx speaks for the address of record, not for one contact, so trying another contact
+    // afterwards contradicts the answer already sent upstream.
+    let rejected = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 600, "Busy Everywhere")),
+        a,
+    ));
+    assert_eq!(statuses(&rejected), [600]);
+
+    let settled = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 487, "Request Terminated")),
+        b,
+    ));
+    assert_eq!(
+        forwards(&settled).len(),
+        0,
+        "a globally rejected request must not be tried elsewhere: {settled:?}"
+    );
+}
+
+#[test]
+fn pb_t_3_an_upstream_cancel_discards_the_queued_lower_q_group() {
+    let (request, mut context, a, b) = two_branches_and_a_queued_group();
+
+    // Both branches have answered once, so C2 lets both CANCELs go immediately.
+    context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 180, "Ringing")),
+        a.clone(),
+    ));
+    context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 180, "Ringing")),
+        b.clone(),
+    ));
+
+    let cancelled = context.on_input(Input::UpstreamCancelled);
+    assert_eq!(
+        cancelled.first().map(Effect::kind),
+        Some(Kind::AnswerCancel),
+        "C1 first, whatever else follows"
+    );
+    assert_eq!(
+        forwards(&cancelled).len(),
+        0,
+        "the CANCEL itself launches nothing: {cancelled:?}"
+    );
+
+    // The branches settle, and the last one to do so is where the queue used to come back.
+    let first = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &a, 487, "Request Terminated")),
+        a,
+    ));
+    assert_eq!(forwards(&first).len(), 0, "{first:?}");
+
+    let out = context.on_input(Input::BranchResponse(
+        Box::new(branch_response(&request, &b, 487, "Request Terminated")),
+        b,
+    ));
+    assert_eq!(
+        statuses(&out),
+        [487],
+        "C3: the withdrawn request is answered, not re-tried elsewhere"
+    );
+    assert_eq!(
+        forwards(&out).len(),
+        0,
+        "a caller who hung up must not make us ring a third phone: {out:?}"
+    );
 }
 
 // ------------------------------------------------- §16.6 step 6: the target's route set ---------

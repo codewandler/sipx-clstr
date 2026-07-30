@@ -45,6 +45,7 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 ## Now (in progress)
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
+- [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
 
 ## Next (ready — take the top one unless the user named a story)
@@ -54,10 +55,10 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
+- [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
-- [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 release blocker — roles select listeners and the store, then disappear before dispatch
 - [DP-14 — Bound registration and refusal work outside the proxy transaction admission ceiling](DP-14-bound-registration-and-refusal-work.md) · Cluster · V-11 — REGISTER and every refusal still spawn without a process-wide work bound
 - [KO-18 — Give the devspace nodes an address a phone can dial, not only one it can register through](KO-18-give-the-devspace-nodes-a-dialable-address.md) · Cluster · blocks DX-13 — getting-started §4's caller cannot work in any spelling while the AoR is a Service name
 - [DP-15 — Build release-profile images and pin every input used to prove or publish them](DP-15-build-and-pin-the-artifacts-we-release.md) · Cluster · V-20 — the documented image is dev-profile and release evidence follows mutable tags
@@ -77,12 +78,10 @@ _One `values.yaml` to a running, healthy, resizable cluster — delivered and ke
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
-- [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
 - [PX-15 — Source per-process loop-cookie keys from operating-system randomness](PX-15-source-loop-cookie-keys-from-os-randomness.md) · Signalling · V-15 — the HMAC key is predictable text derived entirely from process startup time
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · release blocker — a REGISTER carrying several contacts can commit the wrong binding set
 - [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
@@ -99,6 +98,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ## Blocked
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
+- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · V-05 is fixed on impl/RG-16-rework, but the fix trades it for a 403 that refuses a REGISTER the quota permits — needs a §5.5 ruling first
 
 ## Backlog
 - [CX-9 — Pin the qualifying released kernel and clear the M4 upstream ledger](CX-9-pin-the-qualifying-kernel-release.md) · Platform · blocked by every M4 kernel story and a tagged release carrying them
@@ -267,6 +267,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [PX-9 — Drive fork branches concurrently instead of draining them in order](PX-9-drive-fork-branches-concurrently.md) · Signalling · a user with one dead device waits for Timer B before their live device's 200 OK is relayed
 - [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · timerC now reaches the engine from the document and F11 defaults to 240 s; the rest of the timers section is reported unapplied rather than dropped
 - [PX-11 — Settle which 4xx wins when two branches fail, because the row and its test say different things](PX-11-settle-which-4xx-wins-when-two-branches-fail.md) · Platform · PB-R-5 claims 486 is forwarded; its own test asserts 404, and the spec settles neither
+- [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
