@@ -2,7 +2,7 @@
 id: DX-12
 title: Gate that every site page is reachable and every command shown is real
 pillar: Foundation
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/docs-site.md
 epic: docs-site

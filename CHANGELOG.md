@@ -9,6 +9,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Three site properties held by hand are now checked** (`DX-12`). An authored page that no sidebar
+  entry routes to, and a sidebar entry naming a page that does not exist, both fail the gate — the
+  first is quieter than a broken link and therefore worse, because it does not 404, it is simply
+  never reachable. `reference/cli.md` is verified against the binary in **both** directions, so a
+  flag the page invents and a flag the binary grows without the page are each a failure; proved by
+  temporarily adding a flag to the binary and watching the check catch it.
+
+  The fourth property is the one worth reading: a script a page offers as **proof** must be run by
+  the gate or by CI, or carry a recorded reason why not. An unverified proof and a deliberately
+  unverified proof looked identical from the outside, and the first of those shipped a `403` for a
+  release. All four proof scripts now carry that decision explicitly.
+
+  The check reports what it could not run rather than narrowing quietly: eleven documented commands
+  need Docker, a Kubernetes cluster or the `sipx` CLI, and it says so on every run.
+
 - **An authentication decision left no trace** (`RG-15`). A `REGISTER` that was challenged, refused
   or admitted produced nothing an operator could see, so a credential-stuffing run against a tenant
   and a quiet night were the same log. Every outcome now produces exactly one record naming the

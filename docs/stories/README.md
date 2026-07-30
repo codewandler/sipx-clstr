@@ -56,10 +56,7 @@ site · `FC` fail-closed configuration.
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-12 — A row counted as proved must assert what it claims](CF-12-a-proved-row-must-assert-what-it-claims.md) · Foundation · PB-F-1 said "Timer C set 180 s" and its test compared only effect kinds — the row and the code never met
 - [CF-13 — Driver tests bind fixed ports, so two checkouts cannot be tested at once](CF-13-driver-tests-bind-fixed-ports-and-cannot-run-in-parallel.md) · Foundation · observed twice in one afternoon — "Address already in use" and a load-sensitive flake, neither caused by the diff under test
-
-### The public documentation site
-_The site a stranger lands on should say what this does and how to run it, not what we plan next._
-- [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
+- [CF-14 — A checker must not read prose about its own directive as the directive](CF-14-a-checker-must-not-read-prose-about-its-directive-as-the-directive.md) · Foundation · documenting check-proof-domains.py's directive inside a proof turns the gate red on a correct script
 
 ## Blocked
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
@@ -172,6 +169,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [DX-9 — Write the trunk and media clustering pages](DX-9-write-trunk-and-media-clustering-pages.md) · Foundation · no RTP in the signalling process ever — a vision non-goal, not an implementation detail
 - [DX-10 — Write the deployment and scaling operate pages](DX-10-write-the-deploy-and-scaling-pages.md) · Foundation · HPA on CPU is explicitly rejected — scaling signals are SIP-shaped, and that is the story
 - [DX-11 — Write the observability and high-availability operate pages](DX-11-write-the-observability-and-ha-pages.md) · Foundation · service HA is the guarantee; call survival is never silently promised
+- [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
 - [ET-1 — Specify the e2e-tester role and the probe contract](ET-1-specify-the-e2e-tester-role-and-probe-contract.md) · Platform · M1 #11 · docs/specs/e2e-probe.md — verdict taxonomy, blast radius, 19 vectors; gates ET-2/ET-3
 - [ET-2 — Implement the sans-IO probe engine](ET-2-implement-the-sans-io-probe-engine.md) · Platform · M1 #12 · the probe engine and scheduler; every EP-* vector proved
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · M1 #13 · the echo endpoint; end to end through the real proxy, registrar and probe
