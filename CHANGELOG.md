@@ -9,6 +9,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Five ledger rows three specs promised, and a gate against the dead letter that hid them**
+  (`CX-6`). `asserted-identity` §2, `number-normalisation` §1 and `proxy-behavior` §1 each named
+  candidate upstream rows and deferred the filing to `CX-1` — which closed `done` without filing any
+  of them, so three specs pointed at a ledger entry that did not exist and a closed story was the
+  only thing standing behind them.
+
+  **Five rows rather than three**, because two of those paragraphs say "*both* are candidate ledger
+  rows": filing three would have left half of each pointing at nothing, which is the same dead letter
+  one indirection down. Each is **decided rather than assumed**, per non-negotiable #6 and `CX-1`'s
+  own precedent with `T-17` — four decided upstream and not yet filed, and one **declined**: the RFC
+  5393 loop-detection branch cookie stays here, because it is a keyed MAC over the engine's own
+  routing state with no kernel caller, and the row records the local plan and the three symbols that
+  would move if that ever changes.
+
+  Every citation was re-read in the pinned `v0.10.0` checkout rather than inherited. That is not
+  ceremony: `CX-4` had to correct a row whose line numbers were **wrong when filed** rather than
+  merely stale.
+
+  The gate now refuses the shape that caused it. `check-docs.py` fails a `docs/specs/` paragraph that
+  names a ledger row without linking the ledger, and fails one that defers filing to a *story* — a
+  story closes, the ledger does not. The ledger's own opening sentence attributed all filing to
+  `CX-1`, which was the root of it, and is amended.
+
 - **One switch decides whether the deployment runs its own rtpengine** (`KO-15`).
   `deploy/helm/values.yaml` stated that fact **twice** — a `deployment.rtpengine.enabled` flag beside
   the media pool's own `mode` — so a chart could be installed saying both yes and no, and nothing

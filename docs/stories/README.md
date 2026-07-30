@@ -49,7 +49,6 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
-- [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
@@ -215,6 +214,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
+- [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags

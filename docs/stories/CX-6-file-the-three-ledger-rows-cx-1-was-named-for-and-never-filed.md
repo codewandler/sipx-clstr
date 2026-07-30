@@ -2,7 +2,7 @@
 id: CX-6
 title: File the ledger rows CX-1 was named for and never filed
 pillar: Platform
-status: in-progress
+status: done
 priority: 3
 design:
 epic:
