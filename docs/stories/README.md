@@ -50,12 +50,12 @@ site · `FC` fail-closed configuration.
 
 ## Next (ready — take the top one unless the user named a story)
 - [DP-12 — Settle the self-refuting Timer C default, and stop discarding accepted keys in silence](DP-12-settle-the-self-refuting-timer-c-default.md) · Platform · a document carrying a timers section with no timerC is refused by the loader's own declared default
+- [FC-5 — Repair the two-node proofs FC-4 broke, and make a mismatched domain impossible to ship](FC-5-repair-the-two-node-proofs-fc-4-broke.md) · Foundation · the repository's headline cluster proof answers 403 — the script registers in a domain its own document does not serve
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
-- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 - [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
 
 ### Registrar & location service
@@ -63,7 +63,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
 
 ## Blocked
-_None._
+- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 
 ## Backlog
 

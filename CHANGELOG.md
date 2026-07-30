@@ -9,6 +9,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The published documentation described a binary that no longer exists** (`DX-13`). The site and
+  `README.md` still taught the three provisional flags that `0.11.0`'s configuration document
+  replaced, and still gave "there is no configuration path" as the reason authentication is off —
+  which stopped being the reason when `FC-3` landed. The real one is that there is no credential
+  store yet, and the two states are distinguishable by running the binary, so the pages now say which
+  is which. Nine status tables were re-derived from the binary and the scripts rather than edited by
+  hand, `run-a-node.md` gained an explicit warning on the public-listener case, and the `Dockerfile`'s
+  inverted feature claim was corrected.
+
+  The README quick start also could not have worked: it declared a tenant serving `example.test`
+  while the demo it tells you to run registers `alice@127.0.0.1`, so the registrar correctly answered
+  `403`. It now declares the domain it actually registers in, matching `scripts/e2e-call.sh`.
+
 - **A rule the extension design asserted turns out to be false** (`EX-11`). The design said the
   composed quirk set for one attachment point is every trunk-bound and domain-bound profile's rules
   taken together, and `QP-C-2` was written to match. Derived from the premises the surrounding specs

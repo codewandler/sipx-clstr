@@ -2,7 +2,7 @@
 id: DX-13
 title: Retire the three-flag CLI from the published surface and from the M1 proof script
 pillar: Foundation
-status: in-progress
+status: blocked
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
@@ -112,6 +112,20 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       `args: [run, --config, /etc/sipx-clstr/cluster.yaml]` with identity from the environment.
 
 ## Progress
+
+- **Integrated as PARTIAL and blocked on `FC-5`.** The published surface work is done and merged:
+  the three-flag CLI is gone from README, the site and the Dockerfile; the stale "there is no
+  configuration path" reason for authentication being off is replaced with the real one (since
+  `FC-3`, the reason is that there is no credential store); `run-a-node.md` gained its public-listener
+  warning; nine status tables were re-derived from the binary and the scripts rather than edited.
+  The README quick start now runs — it declared `domains: [example.test]` while the demo registers
+  `alice@127.0.0.1`, so it answered `403`.
+- **What is unresolved:** one acceptance item — "every command on the six pages runs" — stands at
+  five of six. `website/docs/getting-started.md` §3–4 offers `scripts/two-node-call.sh` and the k3d
+  manifests, and all three are red for the same reason the README quick start was: they register in a
+  domain their own document does not serve, so `FC-4` answers `403`.
+- **What would settle it:** `FC-5`, which repairs those three and adds a check so the class cannot
+  ship again. When it lands, re-run getting-started §3–4 as written and tick the item.
 
 - **One acceptance item is blocked on a fenced file, and it is the interesting one.** `FC-4` made a
   tenant's `domains` enforceable, and **the repository's own two-node proofs do not declare the domain
