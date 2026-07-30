@@ -4,23 +4,46 @@
 
 One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12, [e2e-probe](../specs/e2e-probe.md) §10, [registrar-auth](../specs/registrar-auth.md) §8, [hook-framework](../specs/hook-framework.md) §9, [location-service](../specs/location-service.md) §9, [media-relay](../specs/media-relay.md) §12, [number-normalisation](../specs/number-normalisation.md) §11, [affinity-token](../specs/affinity-token.md) §10, [affinity-token](../specs/affinity-token.md) §10, [cluster-config](../specs/cluster-config.md) §12 and [asserted-identity](../specs/asserted-identity.md) §13.
 
-A row is *proved* when a test in the workspace covers it, and *deferred* when
-[vector-scope.toml](vector-scope.toml) says why and names the story that will.
+A row is *proved* when a test in the workspace covers it **and** compares every value the
+row states, *shape only* when a test covers it but never compares a value it states, and
+*deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
+will.
 
-**140 of 498 rows proved**; 358 deferred.
+**120 of 498 rows proved**; 20 covered for shape only; 358 deferred.
+
+## What these words mean
+
+**Proved** means: a test named for the row exists and runs, and — where the row's `Expect`
+column states a number — some assertion in that test compares that number. `CF-12` added
+the second half. Before it, `PB-F-1` read *Timer C set 180 s* and its test asserted only
+`[Kind::ResolveTargets, Kind::Forward, Kind::SetTimer]`, so the row and the code never met;
+the row was wrong about the value for the project's whole life and the report said proved
+throughout.
+
+**Shape only** means the row states a value and nothing in its proof compares it. The test
+runs and the behaviour it does check is checked; the quantity the row exists to pin is not.
+These rows are named in [vector-scope.toml](vector-scope.toml) with what the test asserts
+instead, and they do not count towards *proved*.
+
+**What proved still does not mean.** That the assertion compares the *right* thing: any
+assertion in the test satisfies the check, so a value used as stimulus and re-asserted
+elsewhere counts. That the test agrees with the row — `PB-R-5` states `486` and its test
+asserts `404`; the check can see a number missing, not which of the two is wrong. That a
+row stating no number is checked at all beyond its name: for those, *proved* is worth
+exactly what the test is worth. And nothing here says the spec itself is right.
 
 ## Proxy — request validation (§4)
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `PB-V-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-V-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-V-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-V-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-V-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-V-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-V-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `483` |
+| `PB-V-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `483` |
+| `PB-V-3` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `70`; not compared |
+| `PB-V-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `420` |
+| `PB-V-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `416` |
+| `PB-V-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `482` |
 | `PB-V-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-V-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-V-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `1` |
 | `PB-V-9` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — route preprocessing (§5)
@@ -30,18 +53,18 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 | `PB-P-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-P-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-P-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-P-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-P-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-P-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `403` |
+| `PB-P-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `403` |
 
 ## Proxy — request forwarding (§7)
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `PB-F-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-F-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-1` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `200 B`, `240 s`; not compared |
+| `PB-F-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `3` |
 | `PB-F-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-F-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `480` |
 
 ## Proxy — response processing (§8)
 
@@ -49,25 +72,25 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 |---|---|---|
 | `PB-R-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-R-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-R-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `200` |
 | `PB-R-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-9` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-R-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-R-5` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `486`; not compared |
+| `PB-R-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `407` |
+| `PB-R-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `600` |
+| `PB-R-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `500` |
+| `PB-R-9` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `503`; not compared |
+| `PB-R-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `408` |
 
 ## Proxy — CANCEL and Timer C (§9)
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `PB-C-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-C-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-C-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-C-1` | shape only | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — states `200`; not compared |
+| `PB-C-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `487` |
+| `PB-C-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `200` |
 | `PB-C-4` | deferred | `PX-2` — A CANCEL matching no transaction is forwarded statelessly. By definition no response context exists for it, so it never reaches the engine — it is the driver's, and the driver design says so. It becomes testable when a driver exists to test (PX-4's stateless path, M2). |
 | `PB-C-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
-| `PB-C-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-C-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `408` |
 
 ## Proxy — stateless mode (§10)
 
@@ -99,8 +122,8 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 |---|---|---|
 | `EP-F-1` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 | `EP-F-2` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
-| `EP-F-3` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
-| `EP-F-4` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
+| `EP-F-3` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` — asserts `503` |
+| `EP-F-4` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` — asserts `480` |
 | `EP-F-5` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 | `EP-F-6` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 | `EP-F-7` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
@@ -113,7 +136,7 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 | Row | Status | Proved by / deferred to |
 |---|---|---|
 | `EP-I-1` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
-| `EP-I-2` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
+| `EP-I-2` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` — asserts `407` |
 | `EP-I-3` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 | `EP-I-4` | proved | `crates/sipx-clstr-probe/tests/vectors_probe.rs` |
 
@@ -130,15 +153,15 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 | Row | Status | Proved by / deferred to |
 |---|---|---|
 | `RA-D-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — asserts `401` |
 | `RA-D-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
-| `RA-D-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` — asserts `403` |
+| `RA-D-5` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — states `401`; not compared |
 | `RA-D-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-7` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-8` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-9` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-D-10` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-D-7` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — states `401`; not compared |
+| `RA-D-8` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — states `401`; not compared |
+| `RA-D-9` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — states `401`; not compared |
+| `RA-D-10` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — asserts `407` |
 
 ## Registrar auth — algorithm selection (§4)
 
@@ -146,7 +169,7 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 |---|---|---|
 | `RA-A-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-A-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
-| `RA-A-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-A-3` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` — states `401`; not compared |
 | `RA-A-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 
 ## Registrar auth — replay and retransmission (§3, §6, §7)
