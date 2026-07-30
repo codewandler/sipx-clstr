@@ -60,8 +60,13 @@ surgery API did (upstream ledger, `S-15`/PX-3):
    *privately*. N5 and N7 need that split in public API. Writing a second RFC 3966 splitter here
    is precisely what rule 6 forbids.
 
-Both are candidate ledger rows for `CX-1` to file against sipx; the implementing story (RT-2's
-trunk model) is blocked on them for `tel:` fields and for lossless rewriting, not on this spec.
+Both are ledger rows in [upstream.md](../upstream.md) — *Replacing a URI's user part* and *A public
+RFC 3966 split of a `tel:` URI* — decided **upstream** and not yet filed against sipx. The second is
+one row for two asks: [asserted-identity](asserted-identity.md) §2 reaches the same split through
+§6.1's seam to read the number inside a `tel` value, and one kernel change serves both. The
+implementing story (RT-2's trunk model) is blocked on them for `tel:` fields and for lossless
+rewriting, not on this spec — and what this paragraph points at is the **row**, because a row
+outlives whichever story eventually files it.
 
 ## 2. What this is, and the one property that matters
 

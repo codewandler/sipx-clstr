@@ -24,8 +24,12 @@ failover (RT-1/RT-4), authentication policy (RG-2 and the hook framework).
 
 **Upstream considerations** (AGENTS.md rule 6): the engine itself is orchestration and stays
 here. Considered for upstream: the `Headers` surgery primitives (already ledgered, PX-3) and
-the RFC 5393 branch-cookie computation (§6) — protocol-generic, flagged for CX-1 to raise with
-the other ledger rows; until decided it is implemented here behind a seam that can move.
+the RFC 5393 branch-cookie computation (§6). The second is now a **decided** ledger row in
+[upstream.md](../upstream.md), and the decision is **declined**: the cookie is keyed with the
+cluster's own key family so an outsider cannot forge "not a loop" (§6), its inputs are this
+engine's routing state, and the kernel has no proxy to consume it. It stays here, in
+`sipx-clstr-proxy`'s `cookie` module — the seam that could have moved, recorded as one that does
+not.
 
 ## 2. Sans-IO contract
 
