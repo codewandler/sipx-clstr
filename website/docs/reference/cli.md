@@ -9,7 +9,7 @@ Two commands. Everything a node does is decided by its
 [configuration document](configuration.md); the command line only says *which* document and *which
 node this is*.
 
-```text
+```text title="sipx-clstr -h"
 A clustered SIP proxy and registrar
 
 Usage: sipx-clstr [COMMAND]
@@ -22,6 +22,9 @@ Options:
   -V, --version  Print the version and the sipx kernel it is built against
   -h, --help     Print help (see more with '--help')
 ```
+
+`--help` prints the same thing with the long descriptions, and `run --help` documents where identity
+and secrets come from. Both exit `0`.
 
 ## `sipx-clstr run`
 

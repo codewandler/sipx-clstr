@@ -41,11 +41,19 @@ Compare-and-swap matters more than it sounds. A binding update is not "write the
 interleave into a set that neither client asked for. That contract is what makes the store
 shardable later without changing the registrar.
 
-Today that store is **in memory, in the process**. Restart the node and every binding is gone.
-There is a PostgreSQL implementation with its own tests, but the binary cannot be pointed at it.
+Which store you get is named in the document. `backend: memory` is in the process — restart the node
+and every binding is gone. `backend: postgres` is the shared location service: it survives a restart
+and two nodes reading it are one registrar. It needs the non-default `postgres` cargo feature, and a
+node asking for it without the feature refuses to start rather than quietly using its own memory.
 
-And there is no authentication. The digest code is implemented and proved against the RFCs' own
-vectors, but no flag turns it on, so the registrar accepts any AoR from anyone.
+Before the store is touched, the tenant's policy applies: a `REGISTER` for a domain the tenant does
+not serve is answered **`403`**, the per-AoR binding quota is enforced, and the granted expiry is
+clamped to the tenant's bounds.
+
+What is *not* enforced is who you are. The digest code is implemented, proved against the RFCs' own
+vectors, and applied from `tenant[].auth` — but there is no user-credential store, so a document
+asking for authentication either stops the node or challenges every `REGISTER` into a `401` nobody can
+answer. A node that runs accepts any AoR in a served domain from anyone.
 
 ## What a call does
 

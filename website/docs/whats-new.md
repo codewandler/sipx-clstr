@@ -19,9 +19,11 @@ trunk, no media relay, no operator.
 
 Two things will bite you:
 
-- **It is an open registrar.** Digest authentication is implemented and vector-proved, and the
-  document's `tenant[].auth` section is accepted and **not applied**. Anyone who can reach the port can
-  register any address-of-record. Do not put it on a public address.
+- **It is an open registrar.** Digest authentication is implemented, vector-proved and now *applied*
+  from `tenant[].auth` — and there is still no way to configure a node that authenticates, because
+  there is no user-credential store. A document asking for it either stops the node or challenges
+  everyone into a `401` nobody can answer; a document not asking accepts any `REGISTER` for any
+  address-of-record in a served domain. Do not put it on a public address.
 - **One address in front of both nodes does not work.** Each node writes its own address into
   `Record-Route`, so in-dialog requests have to come back to the node that forwarded them. A single
   Service or VIP will send a `BYE` to whichever node the balancer picks, and that node knows nothing
@@ -41,8 +43,8 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 | Carrier trunks, number normalisation, asserted identity | specified, not shipped |
 | Media relay control | specified, not shipped |
 | Kubernetes operator, Helm, autoscaling | designed |
-| Authentication actually applied — the document accepts it and nothing enforces it | implemented, not applied |
-| Eighteen of the schema's sections — accepted, validated only in part, applied not at all | partly shipped |
+| A user-credential store, without which authentication is applied but cannot protect anything | specified, not shipped |
+| Seventeen of the schema's sections — recognised, contents not validated, applied not at all | partly shipped |
 
 **The measuring instrument now measures everything.** Six specifications used to carry vector tables
 the checker had no registration for — roughly 340 normative rows that nothing executed, and a
@@ -82,7 +84,8 @@ prove.
 
 **What still does not work:** one address in front of both nodes. Each node record-routes its own
 address, so in-dialog requests must come back to it. Affinity tokens are what fix that and they are
-not implemented. Authentication is accepted by the document and not applied.
+not implemented. At this release authentication was still accepted by the document and not applied;
+that has since changed — see [Where this actually is](#where-this-actually-is) for the current state.
 
 ### 0.10.0 — documentation you can actually start from
 
@@ -96,8 +99,10 @@ reference.
   Python, and nothing else. No PBX, no account, no softphone to build.
 - **A [command reference](reference/cli.md)** whose every flag, message and exit code was produced
   by running the binary rather than read off the source.
-- **A [configuration page](reference/configuration.md)** that states plainly there is no
-  configuration file yet, and what the schema replacing these flags will look like.
+- **A [configuration page](reference/configuration.md)** that stated plainly what the binary of the
+  day did *not* read — at 0.10.0 there was no configuration file at all, only three flags — and what
+  the schema replacing them would look like. 0.11.0 shipped that schema, and the page now describes
+  the document the node actually reads.
 - **[Migration concept maps](migrate/from-kamailio.md)** for people arriving from an existing
   deployment, including what does not carry over.
 - **Clustering and operations are documented as unshipped**, marked in the navigation and again on

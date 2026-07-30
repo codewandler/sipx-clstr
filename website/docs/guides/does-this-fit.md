@@ -5,8 +5,8 @@ description: "The honest answer — what sipx-clstr is for, what it deliberately
 
 # Does this fit?
 
-Read this before you build anything on it. The short version: **the design is a clustered SIP
-proxy and registrar; the implementation today is one node.**
+Read this before you build anything on it. The short version: **the design is a clustered SIP proxy
+and registrar; the implementation today is two nodes sharing one registrar, addressed individually.**
 
 ## It fits if you want
 
@@ -44,19 +44,24 @@ Everything below the line is specification, not software.
 |---|---|
 | One node: proxy + registrar, UDP and TCP | **today** |
 | Registrations, forwarding between registered users, direct media | **today** |
-| Digest authentication | implemented and proved, **not reachable from the CLI** |
-| Durable (PostgreSQL) location store | implemented and tested, **not reachable from the binary** |
+| Configuration by one cluster-scoped document; served domains, binding quota, expiry bounds and an in-flight bound all enforced from it | **today** |
+| Durable, shared (PostgreSQL) location store — selected from the document | **today**, with the non-default `postgres` cargo feature compiled in; a node asking for the store without it refuses to start |
+| Two nodes sharing one registrar: register through one, be called through the other | **today** — scripted as two local processes and as two pods on Kubernetes |
+| Digest authentication | implemented, proved and applied from the document — but **no user-credential store**, so a document asking for it is refused or challenges nobody |
 | — | — |
-| More than one node cooperating | specified, not shipped |
+| One address in front of the nodes | specified, not shipped |
 | Affinity tokens, flow ownership | specified, not shipped |
 | Trunks, number normalisation, asserted identity | specified, not shipped |
 | Media relay control | specified, not shipped |
 | Kubernetes operator, Helm, autoscaling | designed |
 | Queues, IVR, conference | not planned for the core |
 
-The two "not reachable" rows are the ones that surprise people. The code exists and passes tests;
-what is missing is the configuration surface that would let you switch it on. Until that lands,
-the binary is an **open registrar with in-memory bindings**. Do not expose it.
+The two rows to read twice are the last two. The location store **is** reachable now — name it in the
+document and build with `--features postgres` — so registrations can be durable and shared. Digest
+authentication is reachable in the same sense and still buys you nothing: with no user credentials, a
+document declaring `tenant[].auth` either stops the node or challenges every `REGISTER` into a `401`
+nobody can answer. So the node you can run today is an **open registrar**, and the only thing
+protecting it is the network it is on. Do not expose it.
 
 ## Where the claims come from
 
