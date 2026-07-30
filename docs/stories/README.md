@@ -51,6 +51,7 @@ site · `FC` fail-closed configuration.
 ## Next (ready — take the top one unless the user named a story)
 - [DP-12 — Settle the self-refuting Timer C default, and stop discarding accepted keys in silence](DP-12-settle-the-self-refuting-timer-c-default.md) · Platform · a document carrying a timers section with no timerC is refused by the loader's own declared default
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
+- [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
