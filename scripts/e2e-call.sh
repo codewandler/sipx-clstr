@@ -13,6 +13,14 @@
 #
 # The `sipx` CLI is not vendored: it is the kernel's own phone, built from the sipx checkout. Pass
 # `--sipx`, or set SIPX, or have it on PATH.
+#
+# not-in-ci: needs the external `sipx` CLI, built from a separate repository at a version this one
+# does not pin, plus two real UDP sockets and RTP between them. Vendoring or building it here would
+# destroy the property that makes this a proof — that the far end is an *independent*
+# implementation of the client side — so it is run by hand before a release rather than per push.
+# `DX-12` decided this deliberately rather than leaving it an accident: what a runner *can* check is
+# checked, by `scripts/check-proof-domains.py` (the domains it registers in are ones its own document
+# serves) and by `scripts/check-site.py` (the page that offers it still points at a file that exists).
 
 set -uo pipefail
 

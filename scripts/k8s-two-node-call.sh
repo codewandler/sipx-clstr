@@ -21,6 +21,18 @@
 # Usage:  scripts/k8s-two-node-call.sh [--sipx <path>] [--namespace <ns>]
 # Exit:   0 the cross-node call completed · 1 a step failed · 2 environment not ready
 #
+# not-in-ci: needs a live Kubernetes cluster with the devspace profile already deployed, a pod image
+# carrying the external `sipx` CLI, and the pod CIDR reachable from where it runs. That is a
+# different cost class from the rest of the gate and cannot be stood up per push. Run by hand
+# against a real cluster before a release. Recorded by `DX-12` as a decision rather than an
+# omission; `scripts/check-proof-domains.py` checks the registered domains against the ConfigMap
+# named by the directive below, which is the half a runner can settle.
+#
+# That sentence deliberately does not spell the directive's name: `check-proof-domains.py` searches
+# the whole file for it and takes the first hit, so prose *about* the directive is read *as* the
+# directive and points it at a backtick. Same class of defect `check-docs.py` fixed by stripping
+# code spans before looking for links.
+#
 # Unlike the local proof this script embeds no cluster document — it registers against one that is
 # already deployed. This line names it so `scripts/check-proof-domains.py` can hold the two to the
 # same `domains`, which is machine-read, not decoration:

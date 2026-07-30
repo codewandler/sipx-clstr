@@ -19,6 +19,12 @@
 # Exit:   0 registrations crossed the node boundary and the call completed
 #         1 a step failed
 #         2 the environment was not ready (no sipx CLI, no docker, no database)
+#
+# not-in-ci: needs the external `sipx` CLI *and* a PostgreSQL location service in Docker — the exit
+# code above says so itself, and a runner that has neither would report "environment not ready" on
+# every push, which is a green that means nothing. Run by hand before a release. `DX-12` recorded
+# this rather than leaving it unstated; `scripts/check-proof-domains.py` holds the part of it a
+# runner can check, that its phones register in domains its embedded document actually serves.
 
 set -uo pipefail
 

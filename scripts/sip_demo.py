@@ -17,6 +17,12 @@ It does not prove media: no RTP flows, the SDP is carried opaquely. `ME-2` is wh
 
 Usage:  python3 sip_demo.py [host:port]
         NODE=host:port python3 sip_demo.py
+
+not-in-ci: needs a node already listening on a UDP port — it is the *client* half of a proof, not a
+self-contained one, and on its own it would time out rather than fail meaningfully. The behaviour it
+demonstrates is covered per push by the driver's own tests, which drive the same REGISTER/INVITE
+path through the deterministic harness. It stays as the thing a reader runs by hand against the node
+they just started, which is what `README.md` offers it as. `DX-12` recorded this deliberately.
 """
 
 from __future__ import annotations
