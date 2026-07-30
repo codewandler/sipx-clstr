@@ -12,9 +12,9 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 **M1 is complete: all fourteen stories are `done` and every exit criterion is proved.** The four
 load-bearing specs live in `docs/specs/` — proxy behavior, location service, affinity token, hook
 framework — joined now by `registrar-auth`; the deterministic-harness design is accepted and the
-harness is built. sipx **`v0.4.0`** cleared the whole [upstream ledger](../upstream.md) in one
-release, leaving only `X-15`, which `CF-1` had already decided stays local. Nothing here waits on
-sipx.
+harness is built. sipx **`v0.4.0`** cleared the ledger as it then stood; the workspace now pins
+**`v0.10.0`**, and the [upstream ledger](../upstream.md) is open again. `CX-7` owns the two
+review-confirmed capability gaps, and `PX-12` waits for a released outgoing-CANCEL surface.
 
 `RG-2` closed the milestone: digest runs *before* REGISTER processing through `parse::admit`, the
 principal it yields reaches the binding, and `sipx-clstr-sim/tests/register_auth.rs` proves the
@@ -44,37 +44,55 @@ site · `FC` fail-closed configuration.
 
 ## Now (in progress)
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
-- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · the downgrade is closed (CC-V10); the tls sub-block and the published exposure row are left
+- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
+- [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
-
-### The public documentation site
-_The site a stranger lands on should say what this does and how to run it, not what we plan next._
-- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
+- [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
-- [FC-6 — Apply or refuse the declared node roles, so a node cannot answer a method its role excludes](FC-6-apply-or-refuse-the-declared-node-roles.md) · Cluster · release blocker — roles pick listeners and the store, then are dropped; an inbound-proxy accepts and stores a REGISTER
+- [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 — four ingress controls load as applied, validate no values, and change no runtime decision
 
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
+- [KO-16 — Make the Helm skeleton advertise only what it actually installs](KO-16-make-the-helm-skeleton-advertise-only-what-it-installs.md) · Cluster · V-19 — metadata promises a full install; the chart emits one unserved custom resource
+
+### Outbound routing & trunks
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
+- [RT-12 — Resolve outbound targets and settle every failed branch](RT-12-resolve-outbound-targets-and-settle-every-failed-branch.md) · Signalling · V-12 · outbound selection is UDP-only; hostname/transport failures are logged without a BranchTransportError and can leave no final response
 
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
-- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker — PX-6 proved the effects are produced; nothing performs them, and a Timer C is armed and never fires
 - [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
 - [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
+- [PX-15 — Source per-process loop-cookie keys from operating-system randomness](PX-15-source-loop-cookie-keys-from-os-randomness.md) · Signalling · V-15 — the HMAC key is predictable text derived entirely from process startup time
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · release blocker — a REGISTER carrying several contacts can commit the wrong binding set
+- [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
+- [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
+- [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
+- [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
+
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 release blocker — roles select listeners and the store, then disappear before dispatch
+- [DP-14 — Bound registration and refusal work outside the proxy transaction admission ceiling](DP-14-bound-registration-and-refusal-work.md) · Cluster · V-11 — REGISTER and every refusal still spawn without a process-wide work bound
+- [DP-15 — Build release-profile images and pin every input used to prove or publish them](DP-15-build-and-pin-the-artifacts-we-release.md) · Cluster · V-20 — the documented image is dev-profile and release evidence follows mutable tags
+
+### The public documentation site
+_The site a stranger lands on should say what this does and how to run it, not what we plan next._
+- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
+- [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
 
 ## Blocked
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
@@ -86,7 +104,7 @@ _What makes N nodes one proxy: routing state rides in the message, and every res
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
 - [AF-4 — Implement the token mint/verify library](AF-4-implement-the-token-mint-verify-library.md) · Cluster · blocked by AF-1
 - [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4 only — PX-5 is done and T-14's typed Path landed in v0.4.0
-- [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster · feeds DP-1 — this story owns the membership/key schema sections
+- [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster · owns cluster key distribution/rotation; PX-15 supplies the per-process secure-randomness seam
 - [AF-7 — Implement connection ownership and the owner RPC](AF-7-implement-connection-ownership-and-the-owner-rpc.md) · Cluster · blocked by AF-2, AF-3 — implements both
 
 ### Conformance & deterministic harness
@@ -96,19 +114,12 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-6 — Seed the conformance registry with the M1 profile](CF-6-seed-the-conformance-registry-with-the-m1-profile.md) · Platform · blocked by EX-2 — the extraction work CF-2's report needs
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · premise died with the docs split — nothing under docs/ is published; superseded by DX-12
 
-### Roles, topology & operations
-_The operational contract: roles by config, a reference topology, and an honest HA statement._
-- [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
-- [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
-- [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
-- [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
-- [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
-
 ### End-to-end call probe (`e2e-tester` role)
 _The outside view: can a real call be placed through this deployment, right now?_
 - [ET-4 — Implement the probe control API](ET-4-implement-the-probe-control-api.md) · Platform · blocked by ET-2; private management interface only
 - [ET-5 — Publish probe results as metrics and alerts](ET-5-publish-probe-results-as-metrics-and-alerts.md) · Platform · blocked by ET-2; joins the DP-3 metric set
 - [ET-6 — Run continuous probes against the reference deployment](ET-6-run-continuous-probes-against-the-reference-deployment.md) · Platform · blocked by ET-3, ET-4, DP-2
+- [ET-7 — Make the probe establish and tear down a real SIP dialog](ET-7-make-the-probe-establish-and-tear-down-a-real-dialog.md) · Platform · V-03 · blocked by PX-13 for real-node acceptance; the current probe invents AoR-shaped ACK/BYE and proves no dialog route
 
 ### Extension framework & RFC registry
 _Extensions become declared modules over typed hook phases, never edits to the core._
@@ -137,15 +148,6 @@ _The SIP process controls media over a network protocol; it never touches a medi
 - [ME-4 — Design SDP rewrite in the proxy path](ME-4-design-sdp-rewrite-in-the-proxy-path.md) · Media
 - [ME-5 — Implement the media-anchoring module](ME-5-implement-the-media-anchoring-module.md) · Media · blocked by ME-4, ME-2, EX-3
 
-### Proxy engine
-_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
-- [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
-
-### Registrar & location service
-_The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-5 — Implement rendezvous sharding and shard handoff](RG-5-implement-rendezvous-sharding-and-shard-handoff.md) · Signalling
-- [RG-7 — Support migrating an existing credential store](RG-7-support-migrating-an-existing-credential-store.md) · Signalling · gates a downstream registrar cutover
-
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
 - [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
@@ -155,6 +157,25 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RT-8 — Express source-IP admission as reviewable config](RT-8-express-source-ip-admission-as-config.md) · Signalling · admission is the whole security boundary when no user is authenticated
 - [RT-9 — Specify tenant-scoped route selection](RT-9-specify-scoped-route-selection.md) · Signalling · several pools can be 'default' at once; a single global default cannot express it
 - [RT-11 — Decide whether a trunk may unconditionally strip a standard header, against the caller's request](RT-11-decide-unconditional-egress-removal-for-standard-headers.md) · Signalling · RT-7 §14 records this as a known gap, not a deferral — and it is a product question first
+
+### Proxy engine
+_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
+- [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
+- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker · blocked by CX-7's released CANCEL API; local timer/effect wiring must not construct CANCEL by shadowing the kernel
+
+### Registrar & location service
+_The one place the platform is allowed durable state — so its updates must serialize._
+- [RG-5 — Implement rendezvous sharding and shard handoff](RG-5-implement-rendezvous-sharding-and-shard-handoff.md) · Signalling
+- [RG-7 — Support migrating an existing credential store](RG-7-support-migrating-an-existing-credential-store.md) · Signalling · gates a downstream registrar cutover
+- [RG-21 — Graduate the PostgreSQL store from a serialized cleartext proof backend](RG-21-graduate-the-postgresql-store-from-proof-backend.md) · Registrar · V-14 · blocked by RG-17; then design and replace the NoTls mutexed client with a production backend
+
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
+- [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
+- [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
+- [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
+- [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
 
 ## Done
 - [AF-1 — Specify the affinity token](AF-1-specify-the-affinity-token.md) · Cluster
@@ -245,5 +266,4 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [RT-10 — Close the transform-totality holes before RT-2 implements](RT-10-close-the-normalisation-totality-holes.md) · Routing · found reviewing RT-6 — N12's totality claim does not hold as written
 - [VZ-1 — Implement the SSE replay feed and canvas page](VZ-1-implement-the-sse-replay-feed-and-canvas-page.md) · Platform · the constellation's first feed — a paced sim replay over SSE, one page, zero new runtime deps
 
-_See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->

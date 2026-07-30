@@ -32,14 +32,14 @@ note: the headline deliverable — helm install on k3s
   had already recorded.
 
   **What blocks it, precisely:** acceptance item 1 installs "the operator, its CRDs and RBAC", and the
-  operator is [`KO-3`](KO-3-implement-the-operator-reconcile-loop.md) (`backlog`) against a custom
-  resource that [`KO-1`](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) has not yet
-  pinned — which is why `values.crd` still carries a provisional `sipx.dev/v1alpha1`. Item 4's probe
-  verdict additionally wants [`ET-4`](ET-4-implement-the-probe-control-api.md) (`backlog`), since
+  operator is [`KO-3`](KO-3-implement-the-operator-reconcile-loop.md) (`backlog`).
+  [`KO-1`](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) is done and pinned the
+  custom-resource contract; the remaining absence is the reconciler and the objects it owns. Item
+  4's probe verdict additionally wants [`ET-4`](ET-4-implement-the-probe-control-api.md) (`backlog`), since
   `ET-2` and `ET-3` built the engine and the echo endpoint but nothing exposes a verdict to a chart.
 
-  **What would unblock it:** `KO-1` first, then `KO-3`. `KO-1` is dispatched as of this run, precisely
-  so this chain starts moving.
+  **What would unblock it:** `KO-3`, followed by the probe control/deployment path. `KO-16` keeps
+  the skeleton's metadata honest while that implementation is absent.
 
   What *is* done stays done: the chart skeleton, `helm lint`/`helm template` passing, and `KO-14`
   bringing the default set to the config schema.
@@ -50,8 +50,8 @@ note: the headline deliverable — helm install on k3s
 - Contributed by a downstream deployment of this platform, which had
   built it downstream before the boundary was corrected: the chart belongs to this story, and a
   consuming deployment carries only its own values.
-- **The API group and version are provisional** (`sipx.dev/v1alpha1`, held in `values.crd`) because
-  `KO-1` has not pinned the custom resource. They become template constants when it does.
+- **The API remains alpha** (`sipx.dev/v1alpha1`), but its current contract is pinned by completed
+  story `KO-1`; alpha status is not evidence that no contract exists.
 - Still missing, and the bulk of this story: the operator Deployment, the CRDs, RBAC, the managed
   PostgreSQL and rtpengine dependencies, and a NOTES.txt. There is no image to run and no CRD to
   validate against, so the rendered resource is currently unserved.

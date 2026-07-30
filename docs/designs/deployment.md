@@ -1,7 +1,7 @@
 # Design: Roles, topology & operations
 
 **Status:** proposed · **Pillar:** Cluster · **Epic:** `deployment` ·
-**Stories:** DP-1 … DP-5
+**Stories:** DP-1 … DP-15
 
 ## Why
 
@@ -257,3 +257,10 @@ listener binds one address and advertises another, and what arrives on the bound
 answerable at the advertised one; the 3-zone reference deployment stands up from the repo's
 manifests; the invariant metrics exist and the M2 kill-a-node scenario shows service HA within the
 documented bounds; the HA table published in the docs matches what the harness demonstrates.
+
+## Validated review remediation (2026-07-30)
+
+`DP-13` carries projected roles into dispatch and refuses unavailable roles, `DP-14` bounds all
+admitted work including registrar and refusal paths, and `DP-15` makes the built and tested release
+artifact immutable and reproducible. These are deployment orchestration; protocol parsing and
+transaction mechanics stay in sipx.

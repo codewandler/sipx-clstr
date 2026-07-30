@@ -148,3 +148,7 @@ Record-Route/Route path in the harness (AF-5); the connection table, flow_ref pl
 RPC implemented (AF-7) and delivering to connection-bound clients across nodes; and the M2
 assertion — mid-dialog requests across a 3-node simulated cluster with the cross-node
 dialog-lookup counter at zero.
+
+`PX-15` supplies the immediate per-process secure-randomness seam for loop-cookie keys. `AF-6`
+retains ownership of how keys are distributed, rotated and versioned across a cluster; the proxy
+story must not invent a competing cluster key schema.

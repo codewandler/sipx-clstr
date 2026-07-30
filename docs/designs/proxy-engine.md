@@ -1,7 +1,7 @@
 # Design: Proxy engine
 
 **Status:** proposed · **Pillar:** Signalling · **Epic:** `proxy-engine` ·
-**Stories:** PX-1 … PX-8
+**Stories:** PX-1 … PX-15
 
 ## Why
 
@@ -269,3 +269,11 @@ sans-IO proxy core passing those vectors under the deterministic harness, includ
 CANCEL, Timer C, loop detection and best-response selection; an M1 node through which two
 sipx CLI phones register and call each other with media direct; and the topology-hiding question
 answered in writing (PX-8) rather than left to whoever meets it first in a deployment.
+
+## Validated review remediation (2026-07-30)
+
+The independent review of `86e6b10` separated engine proofs from wire behavior. `PX-12` performs
+CANCEL and Timer C effects in the real driver once `CX-7` supplies the generic outgoing-CANCEL
+surface; `PX-13` separates AoR lookup from Route/remote-target forwarding; `PX-14` makes a terminal
+fork outcome discard every unlaunched group; and `PX-15` injects an unpredictable loop-cookie key
+while leaving cluster distribution and rotation to `AF-6`.

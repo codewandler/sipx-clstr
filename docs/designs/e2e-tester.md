@@ -1,7 +1,7 @@
 # Design: End-to-end call probe (`e2e-tester` role)
 
 **Status:** proposed · **Pillar:** Platform · **Epic:** `e2e-tester` ·
-**Stories:** ET-1 … ET-6
+**Stories:** ET-1 … ET-7
 
 ## Why
 
@@ -115,3 +115,10 @@ echo endpoint answers and reflects the correlation marker; the control API trigg
 demand and returns the same record the schedule produces; probe results appear as metrics with
 per-edge/per-transport breakdown and alerting; and the reference deployment runs continuous probes
 whose failure is demonstrably caused by killing a listener, not by the probe itself.
+
+## Validated review remediation (2026-07-30)
+
+`ET-7` makes the probe an RFC 3261 dialog peer rather than an AoR-shaped test double: it records the
+remote Contact, tags and Record-Route route set, advances dialog CSeq, and sends ACK/BYE to the
+derived next hop. Its real-node acceptance waits on `PX-13`; the simulator may not rewrite these
+requests back to the registered AoR.

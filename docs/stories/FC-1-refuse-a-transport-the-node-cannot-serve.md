@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
 areas: [deploy, security, transport]
-note: the downgrade is closed (CC-V10); the tls sub-block and the published exposure row are left
+note: V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
 ---
 
 # Refuse a listener transport the node cannot serve, instead of silently serving cleartext
@@ -34,9 +34,20 @@ to get confidentiality is the one that removes it.
 - [x] **Failing-first**: a test loads a document with `transport: tls` and requires a refusal. It
       fails today, because the document loads clean and the node comes up on UDP. A second case
       pins `transport: ws`/`wss`/`http` to the same refusal, since all three reach `_ => Udp` now.
-- [x] `transport: udp` and `transport: tcp` behave exactly as they do today — this story adds a
-      refusal, it does not change what already works. The existing `DP-5` bind/advertise rules and
-      §5 P6's duplicate-transport refusal are untouched.
+- [x] For the original TLS-downgrade close, UDP and the shared UDP+TCP listener behavior were left
+      intact. This historical item does not accept TCP-only exposure; V-07 below owns that case.
+      The existing `DP-5` bind/advertise rules and §5 P6 duplicate-transport refusal stay intact.
+- [ ] **V-07 exact listener exposure:** a projected set that declares TCP and no UDP either binds a
+      genuinely TCP-only endpoint or refuses startup before binding. With the pinned kernel today it
+      must refuse: constructing its cleartext endpoint from the TCP listener also opens UDP, so
+      accepting the document exposes more network surface than it declares.
+- [ ] **Failing-first current-kernel test:** load a TCP-only document and require startup refusal
+      before either UDP or TCP binds. It fails on `86e6b10`, which starts and exposes both. After
+      `CX-7` lands and this workspace pins exact listener selection, the same fixture instead starts,
+      proves TCP succeeds, and proves a UDP REGISTER sees no socket and no response.
+- [ ] An arrival reported on any undeclared transport is dropped and health-signalled as an invariant
+      violation, never served through `cleartext()` as a fallback. The test covers this arm directly
+      so a future kernel regression cannot silently widen exposure again.
 - [ ] The published exposure guidance stops advertising a transport the node cannot serve.
       `website/docs/operate/deploy.md`'s table has a `TLS 5061 | public` row; either it goes, or it
       carries the status the rest of the site's unshipped surface carries. Coordinate with `DX-13`
@@ -70,6 +81,11 @@ to get confidentiality is the one that removes it.
 - **Also left**: `website/docs/operate/deploy.md`'s `TLS 5061 | public` exposure row, which now
   advertises a transport the loader actively refuses. `DX-13` owns the edit so the page is touched
   once.
+- **V-07 extends the unfinished story from spelling to exact socket exposure.** The validated
+  synthesis reproduced a TCP-only node answering a UDP REGISTER on `86e6b10`. `Listeners::endpoint_config`
+  builds the shared cleartext endpoint from whichever listener exists, and the driver knowingly
+  serves a transport that was never declared. “TCP behaves as it does today” is not an acceptable
+  green result when today's behavior includes an undeclared UDP service.
 
 ## Notes
 
@@ -95,5 +111,9 @@ to get confidentiality is the one that removes it.
   is worse than having no TLS field at all.
 - Upstream? No. The kernel owns transports; which spellings *this* schema admits, and what a node
   does with one it cannot serve, is this platform's configuration semantics.
+- **V-07 boundary refinement:** refusing a network exposure this schema cannot honor, and dropping an
+  undeclared arrival, are local configuration/driver obligations. A generic endpoint capability to
+  bind TCP without UDP belongs in sipx; until it exists in the pinned kernel, the local loader must
+  refuse TCP-only configuration rather than shadow-implement a transport.
 - Decide explicitly whether `ws`/`wss` refuse or are simply absent from the schema. M3 owns
   WebSocket reachability, and a key that will exist later is not a reason to accept it now.

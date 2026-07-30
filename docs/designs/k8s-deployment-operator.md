@@ -1,7 +1,7 @@
 # Design: Kubernetes operator, Helm packaging & autoscaling
 
 **Status:** proposed · **Pillar:** Cluster · **Epic:** `k8s-deployment-operator` ·
-**Stories:** KO-1 … KO-9
+**Stories:** KO-1 … KO-16
 
 ## Why
 
@@ -175,3 +175,9 @@ without dropping registrations; and autoscaling raises and
 lowers replicas from Prometheus-derived SIP signals within its guardrails — never scaling in
 during shedding, never below the per-zone floor, and never while an invariant metric says the
 cluster is wrong rather than busy.
+
+## Validated review remediation (2026-07-30)
+
+`KO-16` keeps the current Helm skeleton honest while `KO-2` remains blocked: chart metadata and
+story notes name only the `SipxCluster` custom resource that is rendered, do not claim an installed
+operator, CRDs, or RBAC, and name `KO-3` plus the probe work as the path to a runnable cluster.

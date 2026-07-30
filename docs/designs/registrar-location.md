@@ -1,7 +1,7 @@
 # Design: Registrar & location service
 
 **Status:** proposed · **Pillar:** Signalling · **Epic:** `registrar-location` ·
-**Stories:** RG-1 … RG-6
+**Stories:** RG-1 … RG-21
 
 ## Why
 
@@ -87,3 +87,12 @@ The union of RG-1 … RG-6: a normative `docs/specs/location-service.md`; server
 challenge and verification; REGISTER processing passing its vectors on the in-memory store under
 the harness; the PostgreSQL backend passing the same contract tests; rendezvous sharding; and
 proxy target sets built from lookups — completing the M1 register-and-call loop.
+
+## Validated review remediation (2026-07-30)
+
+`RG-16` repairs multi-contact reconciliation; `RG-17` makes authoritative reads fallible;
+`RG-18` separates served Request-URI authority from To-AoR authorization; `RG-19` centralizes
+normative response facts on the wire; `RG-20` rejects malformed-present registration inputs
+atomically; and `RG-21` replaces the proof-only PostgreSQL path with a bounded, TLS-verifying,
+recoverable production driver. The pinned kernel already exposes typed `Expires`; generic syntax
+is consumed rather than reimplemented here.

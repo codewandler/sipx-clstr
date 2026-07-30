@@ -6,19 +6,31 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-29:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
+_As of 2026-07-30:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
 written and cross-reconciled — proxy behavior, location service, affinity token, hook framework
 — the deterministic-harness design is accepted with its sipx-testkit upstream split decided, and
 `CX-1` has filed the kernel gaps as stories in the sipx repo. M1 is scoped below: fourteen
 stories, in order, with exit criteria that name the vectors that prove them. `CX-2` creates the
 Cargo workspace as its first act.
 
-The sipx kernel this platform builds on has shipped its own M0–M4 — sans-IO core, transactions,
-UDP/TCP/**TLS/WS/WSS** transports, DNS, digest *client*, media, CLI phone — all released in
-0.2.0, which is the version M1 pins. What the kernel still owes this platform is four small
-things, none of which M1 blocks on: header editing operations (`S-15`), the server side of
-digest (`S-16`), the `Service-Route` header (`T-16`) and the testkit's timer queue and loopback
-link (`X-14`). See the [upstream ledger](upstream.md).
+The workspace now pins sipx `v0.10.0`. The original M1 kernel gaps landed, but the
+[upstream ledger](upstream.md) is open again: nonce uniqueness, replay-window complexity and
+per-message overload logging remain unfiled, and the validated review added outgoing proxy CANCEL
+and exact listener-selection gaps for `CX-7` to file. A kernel bump alone cannot be assumed to
+close any row; every row is re-read against the pinned tag.
+
+### Validated review remediation
+
+Three reviewers independently inspected protocol/state, security/operations, and
+assurance/documentation at `86e6b10`; the coordinator reproduced and deduplicated their claims into
+20 validated findings. The reports and exact finding-to-story ownership live in
+[`docs/reviews/`](reviews/00-validated-synthesis.md).
+
+The work stays in the existing epics. The five validated release blockers are owned by `DP-13`,
+`PX-12`–`PX-14`, and `RG-16`, with `CX-7` supplying `PX-12`'s kernel prerequisite. The High and
+Medium corrections remain explicit rather than being promoted in severity: `RG-17`–`RG-20`,
+`FC-1`, `FC-6`, `DP-14`, `RT-12`, `PX-15`, `CF-20`, `KO-16`, `RG-21`, and `DP-15`. `ET-7`,
+`CF-3`, and `DX-14` make dialog and release claims match what independent evidence proves.
 
 ## Milestones
 
@@ -148,14 +160,14 @@ thing after M1 rather than an M2 subject.
 
 ## Next
 
-- `RG-9` — say what digest actually protects. Priority 1 now that `RG-8` has closed: the response
-  digest covers method and Request-URI only, so a captured `Authorization` reattached to a REGISTER
-  with a different `Contact`, `CSeq` or `Expires` hashes identically and is accepted, where
-  [registrar-auth](specs/registrar-auth.md) `RA-R-2` reads as though it is refused. A spec decision
-  about what the platform accepts, not a patch.
-- Then M2: the affinity token (`AF-*`) is the defining subsystem, and `DP-1`'s config schema
-  replaces the node's provisional one. The operator epic advances in parallel (`KO-2` in progress)
-  and the kernel stories `CX-1` filed advance on sipx's own schedule.
+- Close the release-blocking review findings first. `/track:next` remains the authority for the
+  exact take order; dependencies are carried in story frontmatter and notes rather than duplicated
+  here.
+- `CX-7` is the upstream edge: `PX-12` waits for a released outgoing-CANCEL primitive, while
+  `FC-1` must refuse TCP-only configuration until exact listener selection exists. `RG-20` is local
+  because typed `Expires` parsing already exists in the pinned kernel.
+- Resume the M2 affinity, routing, media and deployment sequence after the reviewed release surface
+  is honest and its real-driver behavior is proved.
 
 ## Epics
 
