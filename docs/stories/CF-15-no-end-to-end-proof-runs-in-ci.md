@@ -2,8 +2,7 @@
 id: CF-15
 title: No end-to-end proof runs in CI, and the check that would notice is inert
 pillar: Foundation
-status: in-progress
-priority: 1
+status: done
 epic: conformance-harness
 areas: [ci, build]
 note: all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised

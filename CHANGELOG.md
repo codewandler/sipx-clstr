@@ -7,6 +7,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The end-to-end call proof runs on every push** (`CF-15`). `scripts/e2e-call.sh` — the evidence
+  `website/docs/guides/registrations-and-calls.md` offers for the headline claim that a call
+  completes with audio — now runs in CI, in its own `e2e` job, against the kernel's own `sipx` CLI
+  built from the tag `Cargo.toml` pins. Reading the tag rather than writing it here means a kernel
+  bump moves the phone with it, instead of leaving the job proving a call against a version nothing
+  else uses; the CLI stays un-vendored, because the property that makes this a proof is that the
+  client side is an independent implementation.
+
+  `DX-12` had recorded this one as not-in-CI because the CLI comes from another repository. That
+  premise was true and the conclusion was wrong: it costs a shallow clone and about forty seconds of
+  `cargo build`, measured at both `v0.7.0` and `v0.10.0`. The cost of *not* running it was `FC-4`
+  breaking this proof — and two of its siblings — for a whole release with nothing watching.
+
+  It is a separate job rather than a gate step so a red says "the end-to-end call broke" rather than
+  "the gate is red", and so `scripts/gate.sh` stays runnable without a second checkout.
+
+  The proof needs `127.0.0.1:5060` literally, which is the port residue `CF-13` handed over. It is
+  settled by constraining rather than varying: location-service §3.2 N7 makes an absent port and an
+  explicit one distinct AoR keys (RFC 3261 §19.1.4), `sipx dial` has no `--target` so the call leg's
+  address is the request-URI's and drags the domain with it, and `check-proof-domains.py` refuses a
+  domain that is not a static literal — the check that makes `FC-4`'s `403`s impossible to repeat
+  silently. So the script is one-run-per-machine by construction, `preflight` says so with exit 2 in
+  0 s instead of failing halfway through, and CI is unaffected because each job gets a fresh VM.
+
+  The three proofs that stay out of CI now name what would change that. `k8s-two-node-call.sh`: the
+  phone *image*, not the cluster. `two-node-call.sh`: both of `DX-12`'s reasons are settled, so the
+  honest reason is that nobody has written the job. `sip_demo.py`: it would have to start its own
+  node, at which point it is `e2e-call.sh` with less coverage.
+
 ### Changed
 
 - **Which failure a caller sees when a fork fails two ways** (`PX-11`). Forking to a contact that is
@@ -30,6 +61,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CF-12` started requiring a proof to compare what its row claims.
 
 ### Fixed
+
+- **"Runs in CI" was a substring match, and would have started passing for the wrong reason**
+  (`CF-15`). `check-site.py` resolved whether a proof runs in CI with `name in text` over
+  `scripts/gate.sh` and `.github/workflows/`. A commented-out line satisfied it, so did a step merely
+  *named* after a proof, and so did a sentence in a comment explaining that the proof is **not** run.
+  It was inert only because nothing in either file mentioned any proof at all — the same shape of
+  false green that `DX-12`'s `not-in-ci:` directive was written to close, one level up.
+
+  Demonstrated before it was fixed, on the real files: adding the single line
+  `# scripts/e2e-call.sh` to `scripts/gate.sh` took the checker from `FAIL` / exit 1 to clean /
+  exit 0, with nothing running the proof.
+
+  The name must now appear where a shell would execute it: comments are stripped, a workflow is read
+  only inside `run:` bodies (inline and block scalar), and the name has to stand in command position
+  — after env assignments and wrappers like `timeout`, never as an argument to something else.
+  Heredoc bodies and `\` continuations are not tracked, which is stated in the module rather than
+  implied to be exact; both fail closed. A `self_test()` runs on every invocation, on
+  `check-vectors.py`'s reasoning that a checker whose own defect was a false green has to carry the
+  proof it is still closed — fifteen cases, including the exact `gate.sh` line above.
 
 - **Thirty-one vector rows were invisible to the gate** (`EX-12`). The quirk-profile rows lived in a
   design record, and the checker reads rows only from the spec that *owns* a prefix — so no spec owned

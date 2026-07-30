@@ -53,7 +53,6 @@ site · `FC` fail-closed configuration.
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
 - [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
 
 ## Blocked
@@ -150,6 +149,7 @@ _Which egress, in what order, and when to stop — routing as plans, trunks as s
 - [CF-12 — A row counted as proved must assert what it claims](CF-12-a-proved-row-must-assert-what-it-claims.md) · Foundation · PB-F-1 said "Timer C set 180 s" and its test compared only effect kinds — the row and the code never met
 - [CF-13 — Driver tests bind fixed ports, so two checkouts cannot be tested at once](CF-13-driver-tests-bind-fixed-ports-and-cannot-run-in-parallel.md) · Foundation · observed twice in one afternoon — "Address already in use" and a load-sensitive flake, neither caused by the diff under test
 - [CF-14 — A checker must not read prose about its own directive as the directive](CF-14-a-checker-must-not-read-prose-about-its-directive-as-the-directive.md) · Foundation · documenting check-proof-domains.py's directive inside a proof turns the gate red on a correct script
+- [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
