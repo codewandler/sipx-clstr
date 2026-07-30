@@ -2,8 +2,7 @@
 id: EX-13
 title: hook-framework still calls the settled token budget provisional
 pillar: Platform
-status: in-progress
-priority: 3
+status: done
 design: docs/designs/extension-framework.md
 epic: extension-framework
 areas: [hooks, specs]

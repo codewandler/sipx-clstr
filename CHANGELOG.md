@@ -140,6 +140,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in, because it would **not** have caught `EX-8`: nine `done` stories are cited nowhere in this file,
   and three carry no ticked acceptance box at all.
 
+- **A spec stops deferring to a story that closed** (`EX-13`, found by `CF-16`). `AF-1` landed and
+  [affinity-token](docs/specs/affinity-token.md) §3 made the 64-byte module-fact sub-budget normative;
+  three `hook-framework` rows went on calling it "placeholder until `AF-1`". §5 class (b) no longer
+  restates the constant **at all** — a second copy of a value is what made the drift possible — `G5`
+  cites §3 as the authority and says plainly that it owns the summation and not the bound, and `HF-7`
+  keeps its `72 > 64` arithmetic with the 64 attributed rather than asserted. The number did not move
+  and no row changed coverage class.
+
+  `G5` also gains a forward-compatibility sentence, decided rather than defaulted: §3 explicitly keeps
+  renegotiation open, so deleting the word "provisional" alone would have traded a stale-modality claim
+  for a live contradiction — "not provisional" and "not renegotiable" are different claims. Deferring
+  explicitly makes a future renegotiation a one-spec edit.
+
 - **The deferral ledger says what it is** (`CF-16`). `docs/reference/vector-scope.toml` described
   itself as "the narrow, `PB`-only ancestor" of the conformance registry. That was true when `PB` was
   the only registered prefix, and it survived `CF-8`'s six registrations and `EX-12`'s seventh — by
