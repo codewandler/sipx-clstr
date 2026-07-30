@@ -26,7 +26,8 @@ use sipx_clstr_registrar::{
 use sipx_sip::{
     HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
 };
-use sipx_transport::{Handle, Incoming, Target, TransportKind};
+use sipx_transport::{Handle, Incoming, Responses, Target, TransportKind};
+use tokio::task::JoinSet;
 
 use crate::listen::{Advertised, Listener, ListenerError, Listeners};
 
@@ -855,7 +856,7 @@ async fn proxy_request(
     let key = arrival.key.clone();
     let effects = context.on_input(ProxyInput::Upstream(Box::new(arrival.request.clone())));
 
-    let mut pending = Vec::new();
+    let mut forwarded = Vec::new();
     perform(
         handle,
         store,
@@ -863,74 +864,120 @@ async fn proxy_request(
         &key,
         &mut context,
         effects,
-        &mut pending,
+        &mut forwarded,
     )
     .await?;
 
-    // Drive the branches. One `select` over their streams would be the shape at scale; with M1's
-    // single fork group, awaiting them in order is the same thing and considerably easier to read.
-    while let Some((branch, mut responses)) = pending.pop() {
-        while let Some(event) = responses.next().await {
-            let input = match event {
-                sipx_sip::TuEvent::Response(response) => {
-                    ProxyInput::BranchResponse(response, branch.clone())
-                }
-                sipx_sip::TuEvent::Timeout => {
-                    // The driver design's mapping: a kernel timeout is a `408` from that branch.
-                    match ResponseBuilder::to_request(
-                        &arrival.request,
-                        ok_status(408),
-                        "Request Timeout",
-                    ) {
-                        Ok(builder) => {
-                            ProxyInput::BranchResponse(Box::new(builder.build()), branch.clone())
-                        }
-                        Err(_) => ProxyInput::BranchTransportError(branch.clone()),
-                    }
-                }
-                sipx_sip::TuEvent::TransportError => {
-                    ProxyInput::BranchTransportError(branch.clone())
-                }
-                // An ACK on a client transaction is not ours; counted by being ignored explicitly
-                // rather than by falling through a wildcard.
-                sipx_sip::TuEvent::Ack(_) | sipx_sip::TuEvent::Request(_) => continue,
-            };
-            let effects = context.on_input(input);
-            let mut more = Vec::new();
-            perform(
-                handle,
-                store,
-                config,
-                &key,
-                &mut context,
-                effects,
-                &mut more,
-            )
-            .await?;
-            pending.extend(more);
-            if context.is_finished() {
-                return Ok(());
+    // Drive the branches **concurrently** (`PX-9`), which is what makes parallel forking parallel.
+    //
+    // Awaiting them in order was the shape until this story, on the argument that with a single fork
+    // group it came to the same thing. It does not, and the ordinary two-device registration is the
+    // counterexample: two contacts, both `q=1000`, one group (`lookup.rs` §7 L4). A branch's stream
+    // only ends when its transaction does, so draining one to exhaustion first meant a dead device
+    // held the task until the kernel's Timer B — 64·T1, about thirty seconds — while the live
+    // device's `200 OK` sat unread in the other stream.
+    //
+    // The engine still sees **one input at a time**, in a total order, which is the property the
+    // driver design names and the reason a `JoinSet` rather than a shared context: the branches are
+    // read concurrently and reduced serially. Nothing about §16.7 selection moved into the driver,
+    // and nothing about concurrency moved into the engine.
+    let mut branches = JoinSet::new();
+    watch_all(&mut branches, forwarded);
+
+    while let Some(joined) = branches.join_next().await {
+        let (branch, responses, event) = match joined {
+            Ok(next) => next,
+            Err(error) => {
+                // Only reachable if a task that does nothing but await a channel panicked, or if the
+                // set were aborted — which only happens when it is dropped, after this loop. Said
+                // rather than swallowed: the branch is lost, and a lost branch is a call the context
+                // will wait on until it runs out of branches.
+                tracing::warn!(%error, "a branch reader ended unexpectedly");
+                continue;
             }
-        }
-        // The stream ended with no final. A branch that vanishes is a branch that failed, and
-        // leaving the context waiting on it forever is the failure mode this arm exists to prevent.
-        if !context.is_finished() {
-            let effects = context.on_input(ProxyInput::BranchTransportError(branch));
-            let mut more = Vec::new();
-            perform(
-                handle,
-                store,
-                config,
-                &key,
-                &mut context,
-                effects,
-                &mut more,
-            )
-            .await?;
-            pending.extend(more);
+        };
+        let input = match event {
+            Some(sipx_sip::TuEvent::Response(response)) => {
+                // Re-armed *before* the effects are performed, so the other branches — and this one
+                // — keep being read while a response is going upstream.
+                watch(&mut branches, branch.clone(), responses);
+                ProxyInput::BranchResponse(response, branch)
+            }
+            Some(sipx_sip::TuEvent::Timeout) => {
+                watch(&mut branches, branch.clone(), responses);
+                // The driver design's mapping: a kernel timeout is a `408` from that branch.
+                match ResponseBuilder::to_request(
+                    &arrival.request,
+                    ok_status(408),
+                    "Request Timeout",
+                ) {
+                    Ok(builder) => ProxyInput::BranchResponse(Box::new(builder.build()), branch),
+                    Err(_) => ProxyInput::BranchTransportError(branch),
+                }
+            }
+            Some(sipx_sip::TuEvent::TransportError) => {
+                watch(&mut branches, branch.clone(), responses);
+                ProxyInput::BranchTransportError(branch)
+            }
+            // An ACK on a client transaction is not ours; counted by being ignored explicitly
+            // rather than by falling through a wildcard. The branch is put back: ignoring an event
+            // must not stop the branch being read.
+            Some(sipx_sip::TuEvent::Ack(_) | sipx_sip::TuEvent::Request(_)) => {
+                watch(&mut branches, branch, responses);
+                continue;
+            }
+            // A finished context accepts no further input, so there is nothing left to drive and
+            // holding the task open would hold this transaction's admission permit (`DP-11`) with
+            // it. The loop is left by `return` the instant the context finishes, so this is the
+            // belt to that braces — and it stops rather than spins, because the alternative is a
+            // task that lives until every branch's Timer B for no reason.
+            None if context.is_finished() => break,
+            // The stream ended with no final. A branch that vanishes is a branch that failed, and
+            // leaving the context waiting on it forever is the failure mode this arm exists to
+            // prevent. Not re-armed: there is nothing left to read.
+            None => ProxyInput::BranchTransportError(branch),
+        };
+        let effects = context.on_input(input);
+        let mut more = Vec::new();
+        perform(
+            handle,
+            store,
+            config,
+            &key,
+            &mut context,
+            effects,
+            &mut more,
+        )
+        .await?;
+        // A later `q` group forks when this one concludes (§7 L4), so new branches arrive here.
+        watch_all(&mut branches, more);
+        if context.is_finished() {
+            return Ok(());
         }
     }
     Ok(())
+}
+
+/// One branch's next event, with its stream handed back so the branch can be read again.
+///
+/// The stream travels with the event because [`sipx_transport::Responses`] is consumed by reference
+/// from an `async fn` and is not a `Stream`: the only way to await several at once without a lock is
+/// to move each into a task for one event and take it back.
+type BranchEvent = (BranchId, Responses, Option<sipx_sip::TuEvent>);
+
+/// Read one event from `responses`, concurrently with every other branch.
+fn watch(branches: &mut JoinSet<BranchEvent>, branch: BranchId, mut responses: Responses) {
+    branches.spawn(async move {
+        let event = responses.next().await;
+        (branch, responses, event)
+    });
+}
+
+/// Start reading every branch a round of effects forwarded.
+fn watch_all(branches: &mut JoinSet<BranchEvent>, forwarded: Vec<(BranchId, Responses)>) {
+    for (branch, responses) in forwarded {
+        watch(branches, branch, responses);
+    }
 }
 
 async fn perform(
@@ -940,7 +987,7 @@ async fn perform(
     key: &TransactionKey,
     context: &mut ResponseContext,
     effects: Vec<ProxyEffect>,
-    pending: &mut Vec<(BranchId, sipx_transport::Responses)>,
+    pending: &mut Vec<(BranchId, Responses)>,
 ) -> Result<(), sipx_transport::Error> {
     for effect in effects {
         match effect {
