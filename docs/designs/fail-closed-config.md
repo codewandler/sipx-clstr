@@ -93,6 +93,46 @@ security-behaviour change that `DP-10` deliberately declined to fold into itself
 own failing-first test and its own line in the changelog" — and `FC-4` is resource policy that can
 land without touching the auth path.
 
+### DP-13, added after the fact: the same rule applied to `roles`
+
+`DP-13` (filed as `FC-6`, renumbered when the review backlog landed) was not one of the four. It
+joined this epic's reasoning because the independent review of `v0.12.0` found
+the identical shape one section over, in `cluster.listener[].roles` and the identity a node is
+started with (finding **V-01**): the role set was read, validated, used to select listeners and the
+location store — and then dropped before `NodeConfig` was built, so the driver dispatched on method
+alone. A node started as `inbound-proxy` answered `200 OK` to a REGISTER and stored the binding. That
+is rule 1's third state again — parsed into a struct field that nothing reads — and it is the
+security-relevant kind, because what it silently grants is a registrar.
+
+Three decisions, and the third is the one a reader should push back on if any.
+
+**Roles become a capability set, once, at startup.** [cluster-config](../specs/cluster-config.md) §4
+R3 is explicit that a role "selects which decision paths are wired; it never selects what a request
+decides", and a `match` on the role set inside the request path would violate it in the letter as
+well as the spirit. So `Capabilities { registrar, proxy }` is derived from the identity in
+`startup::node_config` and the driver asks what is *wired*. `inbound-proxy` and `outbound-proxy`
+collapse into one forwarding capability, which is what makes R2's "roles is a set" safe.
+
+**The refusal is `405`, with `Allow`.** RFC 3261 §21.4.6 is the status for a method the server
+understands and does not allow here, and it requires the methods that *are* allowed — which is the
+only way the far end can tell a role boundary from a defect. §4 R5's "projected away" is about
+configuration a node ignores and is not a licence to ignore a *request*. **The one exception is
+ACK**, which RFC 3261 §17.1.1.3 makes a transaction nothing answers: on a node with no forwarding
+path it is dropped and logged, because a `405` there would put a response on a transaction that has
+none. The drop is deliberate, and it is the only one.
+
+**A role this build cannot serve stops the node.** `echo` and `e2e-tester` have no driver here — the
+echo endpoint is a sans-IO UAS in `sipx-clstr-probe` that nothing runs, and `cluster.echo` /
+`cluster.probe` are sections the loader does not descend into — so a node given either of them is
+refused at startup, by name, with the section that would have configured it. The alternative was to
+wire the echo's *answering* half and leave its registration half unbuilt, which would produce an echo
+that cannot be found by the probe and looks configured: rule 1's third state, arrived at from the
+other direction. Before this, such a node came up as a full proxy **and** registrar — the one
+arrangement [e2e-probe](../specs/e2e-probe.md) §9 forbids absolutely.
+
+Considered for upstream (AGENTS.md #6): **no.** Which methods a deployment's role serves is cluster
+orchestration; the kernel has no notion of our roles, and the dispatch this changes is our driver's.
+
 ## Out of scope, named so it is not lost
 
 - **The credential model.** `CredentialStore::password() -> Option<String>` makes recoverable

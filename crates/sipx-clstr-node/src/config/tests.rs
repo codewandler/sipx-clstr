@@ -915,3 +915,96 @@ fn dp12_recognised_but_unread_keys_are_reported_as_unapplied() {
         );
     }
 }
+
+// -------------------------------------------------------- roles, and what they wire (§4, DP-13) ---
+
+/// **CC-R-1.** One binary, four roles, no ambiguity (R2, R3).
+///
+/// The row is about a document that loads, and the second half of it is the part that had no proof:
+/// R3 makes a role select which decision paths are *wired*, so the four call-path roles on one node
+/// have to collapse into a wiring rather than into a question a request would have to ask. Deferred
+/// to `DP-8` until `DP-13`, which is when there was a wiring to compare it against.
+#[test]
+fn cc_r_1_four_roles_on_one_node_load_and_wire_both_paths() {
+    let document = r"
+apiVersion: sipx.dev/v1alpha1
+version: 1
+cluster:
+  name: acme
+  environment: dev
+  zones: [a]
+  listener:
+    - roles: [edge, registrar, inbound-proxy, outbound-proxy]
+      transport: udp
+      bind: 0.0.0.0:5060
+      advertise: 203.0.113.10:5060
+  membership:
+    - node: 1
+      name: node-a
+      zone: a
+      roles: [edge, registrar, inbound-proxy, outbound-proxy]
+  locationStore:
+    backend: memory
+  tenant:
+    - name: default
+      id: 1
+      domains: [acme.example]
+";
+    let who = identity(
+        1,
+        "a",
+        &[
+            Role::Edge,
+            Role::Registrar,
+            Role::InboundProxy,
+            Role::OutboundProxy,
+        ],
+    );
+    let config = load(document.as_bytes(), &who, &env()).expect("four roles on one node load");
+    let projected = project(&config, &who);
+    assert_eq!(projected.listeners.len(), 1);
+    // No ambiguity: `inbound-proxy` and `outbound-proxy` are one forwarding path, not two, and
+    // nothing downstream can ask which of them it is.
+    assert_eq!(Capabilities::of(&who.roles), Capabilities::CALL_PATH);
+}
+
+/// **`DP-13`.** A role wires a path; the roles that wire neither do not silently acquire one.
+///
+/// The projection used the roles and dropped them, so this mapping did not exist anywhere and the
+/// driver dispatched on method alone.
+#[test]
+fn dp13_capabilities_are_the_union_of_what_the_roles_wire() {
+    let wiring = |roles: &[Role]| Capabilities::of(&roles.iter().copied().collect());
+
+    assert_eq!(
+        wiring(&[Role::Registrar]),
+        Capabilities {
+            registrar: true,
+            proxy: false
+        },
+        "a registrar answers REGISTER and forwards nothing (§7)"
+    );
+    assert_eq!(
+        wiring(&[Role::InboundProxy]),
+        Capabilities {
+            registrar: false,
+            proxy: true
+        },
+        "a proxy carries calls and registers nobody"
+    );
+    assert_eq!(wiring(&[Role::Edge]), wiring(&[Role::OutboundProxy]));
+    assert_eq!(
+        wiring(&[Role::Edge, Role::Registrar]),
+        Capabilities::CALL_PATH
+    );
+    // R6 refuses these beside a call-path role, and this build has no path for either: what they
+    // must not do is arrive at the driver looking like a proxy.
+    assert_eq!(
+        wiring(&[Role::Echo]),
+        Capabilities {
+            registrar: false,
+            proxy: false
+        }
+    );
+    assert_eq!(wiring(&[Role::E2eTester]), wiring(&[Role::Echo]));
+}
