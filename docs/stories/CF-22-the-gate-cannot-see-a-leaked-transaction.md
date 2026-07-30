@@ -2,7 +2,7 @@
 id: CF-22
 title: The gate cannot see a leaked transaction
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 epic: conformance-harness
 areas: [gate, node]

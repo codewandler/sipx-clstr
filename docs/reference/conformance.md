@@ -9,9 +9,9 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**131 of 578 rows proved**; 19 covered for shape only; 428 deferred.
+**136 of 583 rows proved**; 19 covered for shape only; 428 deferred.
 
-Σ over the 61 sections below is 578, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 583, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -57,6 +57,8 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-P-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-P-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `403` |
 | `PB-P-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `403` |
+| `PB-P-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-P-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — request forwarding (§7)
 
@@ -67,6 +69,9 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-F-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `480` |
+| `PB-F-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — response processing (§8)
 

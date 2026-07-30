@@ -7,7 +7,65 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A transaction nothing will collect now fails the gate** (`CF-22`). No gate step started a node,
+  completed a call, and watched the transaction accounting return to zero. `scripts/e2e-call.sh` did
+  — and `CF-15` deliberately made it a separate CI job rather than a gate step, so that a red reads
+  "the end-to-end call broke" rather than "the gate is red" and `gate.sh` stays runnable without a
+  second checkout. A good decision, and this is the hole it left: the one check watching resource
+  lifetime was the one contributors never ran.
+
+  **The bound is `128·T1`, not `64·T1`, and the derivation lives in the code rather than in a comment
+  beside a constant.** For a proxied non-INVITE to a silent next hop the two windows are additive and
+  neither is optional: Timer F (`64·T1`, §17.1.2.2) concludes the client transaction — §16.8 confines
+  Timer C to INVITE, so nothing proxy-level ends it sooner — and only then does §16.7 have a final
+  response to forward, at which point Timer J (`64·T1`, §17.2.2) starts. Until then the server
+  transaction sits in Trying/Proceeding, which §17.2.2 gives **no timer at all**.
+
+  The failing-first proof is an **injected hold nothing answers**, and its permanent form asserts the
+  hold is the same size twenty windows later — so it proves unboundedness rather than slowness. The
+  bound is load-bearing rather than decorative, falsified twice: halving it to one window makes the
+  RFC's own worst case fail.
+
+  It also corrects **`scripts/e2e-call.sh`**, whose drain loop waited **50 s** — strictly between one
+  window and two — under a comment that budgeted for one. That threshold reverted a correct fix; the
+  loop now waits past `128·T1`, spells out the arithmetic, and stops calling a bounded drain a leak.
+
 ### Fixed
+
+- **Every `ACK` was resolved as an address of record, and dropped when there was no binding**
+  (`PX-13`, validated review finding `V-03`). An `ACK` went through a path that ignored the `Route`
+  set, treated the Request-URI as an AoR, asked the location service, took the first registration, and
+  **silently dropped the request when there was none**. An ordinary remote `Contact` is not the
+  registered AoR, so a normal call's `ACK` was dropped. Other in-dialog methods were preprocessed
+  correctly by the pure engine and then the driver resolved their next hop as an AoR lookup anyway —
+  a global lookup on the signalling hot path, which non-negotiable #5 calls wrong *by definition*
+  rather than merely slow.
+
+  `ACK` is now split by semantics, specified as `proxy-behavior` §7.2: the kernel's generated
+  downstream `ACK` for a non-2xx stays transaction-scoped, an upstream non-2xx `ACK` is absorbed by
+  its server transaction, and a 2xx `ACK` is a **separately routed request that is never answered**.
+  The two this does not touch were verified against the pinned kernel's own transaction code. In-dialog
+  requests take the core's selected next hop, and an unaddressable branch settles as an explicit
+  `BranchTransportError` — §16.9 `R10` → `R8` — instead of being skipped while the context waits for a
+  response nothing will send.
+
+  **Why the harness never caught it:** the simulation's `ACK`/`BYE` are AoR-shaped, so they resolved by
+  accident. The proof asserts the negative *positively* — two trap sockets registered under the
+  contacts' canonical AoRs must both stay at zero hits, and the pre-fix run **observes** the hit rather
+  than inferring the defect from silence.
+
+  It also narrowed `P1`, which turned out to be required: `is_ours` is host-scoped and port-agnostic,
+  so on a loopback deployment `P1` fired on ordinary mid-dialog requests and replaced the remote target
+  with our own `Record-Route`. Verified in both directions — it cannot consume a route it does not own,
+  and still fires on every value this platform places.
+
+  **This shipped, was reverted, and was re-landed unchanged.** It was reverted for failing
+  `e2e-call.sh`'s drain check; `CF-22` then established by measurement that the *check* was the defect
+  — the store drains at exactly `64.000 s = 128·T1`, which the RFC permits, and the script waited
+  50 s. The old check passed on `main` only because `main` answered a dialog's `BYE` `480` itself
+  instead of delivering it, which is this very defect. It rewarded the bug and punished the fix.
 
 - **One REGISTER could buy a fifth of a second of a core** (`RG-25`). Nothing capped how many contact
   operations a single REGISTER may carry. Roughly 3500 fit inside the 64 KB message limit once

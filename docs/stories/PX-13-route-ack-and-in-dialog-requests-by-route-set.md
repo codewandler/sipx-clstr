@@ -2,12 +2,12 @@
 id: PX-13
 title: Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
 pillar: Signalling
-status: blocked
+status: done
 priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
 areas: [proxy, node]
-note: reverted on a bad threshold, not a leak — it drains at 128·T1, which RFC 3261 permits; blocked on CF-22 correcting the window
+note: re-landed unchanged — the check that reverted it was the defect, and CF-22 corrected it
 ---
 
 # Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
@@ -39,6 +39,12 @@ Request-URI as an address of record and asking the location service about it.
 - [x] `scripts/gate.sh` is green.
 
 ## Progress
+- **RE-LANDED 2026-07-30, unchanged.** `234ab7b` is back on `main` with no edits. `CF-22` corrected
+  the check that reverted it and then executed the corrected `scripts/e2e-call.sh` against a tree
+  carrying this diff: **the exact CI job that reverted this story is green on it.** The coordinator
+  independently falsified the new bound by halving it, which makes the RFC's own worst case fail —
+  the misreading that caused the revert is now itself a test.
+
 - **CORRECTION, 2026-07-30, established by measurement: this story does not leak transactions.** The
   store drains at exactly **`64.000 s` = `128·T1`**. Two absorption windows, both RFC-mandated for a
   proxied non-INVITE to a silent next hop: Timer F (`64·T1`, §17.1.2.2) on the client transaction,
