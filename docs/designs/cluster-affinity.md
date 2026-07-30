@@ -93,6 +93,55 @@ by the dataplane, not by a hop — and it exists only for requests toward connec
 the node set, shard map and token keys come from configuration (`deployment` epic), reloadable
 without restart. A dynamic membership service is a later, separate decision.
 
+**Settled in AF-6** ([cluster-membership](../specs/cluster-membership.md) — the three sections'
+fields, the runbook, and the successor question). The posture above is a sentence; these are the
+decisions it turned out to need:
+
+- *The document is the membership.* A member entry is a **declaration, not an observation** (CM3):
+  it may name a node that has never started, and a running node may have no entry. Nothing waits
+  for the fleet to match the file, because a document that could only be accepted once it did
+  would be a consensus protocol with a YAML syntax. Health and weights are therefore
+  unrepresentable — they are `status`, reported by the operator, never written back.
+- *Rotation's calendar half exists now.* The overlap window `W = max(L, E_max) + S` is
+  [affinity-token](../specs/affinity-token.md) §6 K4's and is unchanged; what AF-6 adds is the
+  arithmetic around it — `E_max` is the **largest** tenant expiry in the document, so one tenant
+  lengthens every rotation for the cluster; the next rotation opens no earlier than
+  `t_activate + W + D`, which is what keeps at most two keys verify-valid and what the one-byte key
+  id is sized for; and the "confirm every node holds B" step is named as an observation
+  (`KeysDistributed`, or the per-node key-id report behind it) rather than left as a deployment
+  concern.
+- *Emergency retirement is restart-class, on purpose.* `cluster-config` §9.3 RL11 refuses a reload
+  that closes a verify window early, and AF-6 deliberately does **not** add a flag to override it:
+  a safety rule switchable from the document is one that gets switched off during the incident it
+  exists for. The compromise path is activate-then-roll, and its exposure is bounded by the roll
+  rather than by `W`.
+- *Nothing may be derived.* `CX-5` — the kernel's digest nonce is a pure function of the second,
+  the realm and the secret, so two clients challenged in one second collide — is the shape a key
+  distribution scheme falls into by looking clever. The rule that forecloses it: **no value that
+  must be unique is a pure function of inputs two nodes share.** Key material is generated from a
+  CSPRNG off-node and transported verbatim; no node derives, wraps or forwards it, so there is no
+  agreement step to disagree about. The one value a node produces alone is its incarnation, and
+  `boot-second` has exactly CX-5's shape — which is why CT2 makes it wait for the next second, and
+  why `incarnationSource: persisted-counter` exists for a clock that may step back
+  ([V-15](../reviews/00-validated-synthesis.md#v-15--the-loop-cookie-key-is-predictable-startup-time-text)
+  is the same lesson one layer down).
+- *The key interface AF-4 consumes is frozen at six attributes* — `id`, `algorithm`, `secret` (by
+  reference), `verifyFrom`, `verifyUntil`, `mint`. AF-4 is proved against §10's vectors, so a
+  rename or a re-typing after it lands is a breaking change to a proved surface; a future key
+  family (a cluster-wide loop cookie, say) arrives as an *additive* field, never as a re-spelling.
+  `PX-15`'s per-process loop-cookie key is not a `keys` entry and is not made one here.
+- *The successor is recorded rather than foreclosed.* A dynamic membership service would replace
+  the **authoring** of `membership` and `shardMap` — producer, not oracle. It would not replace
+  `keys` (a service that distributed key material is a key-exchange protocol, which
+  [affinity-token](../specs/affinity-token.md) §6 forbids, and it would make the node set the trust
+  boundary for the mint key), and a node must still start with none of it reachable, or the design
+  that put routing state in the message to avoid a consensus dependency has reacquired one.
+
+**Considered for upstream: no** — distributing keys across *our* cluster's membership is
+orchestration, not protocol: it names this platform's node set, zones, shard map and configuration
+document, and the primitives underneath (AEAD, HMAC, CSPRNG access) are already kernel- or
+crate-level and are consumed rather than re-implemented.
+
 ## Alternatives considered
 
 - **Global dialog database.** Rejected by principle: adds a strongly consistent read to every
@@ -114,12 +163,18 @@ without restart. A dynamic membership service is a later, separate decision.
   be refreshable on target refresh; decided in AF-1.
 - RPC transport choice (likely the workspace's own framing over TLS; no external broker) —
   settled in AF-3.
-- Key compromise blast radius and rotation cadence; whether tenant ids in tokens require
-  encryption by default.
+- Key compromise blast radius and rotation cadence: **settled in AF-6**
+  ([cluster-membership](../specs/cluster-membership.md) §7.1 RB7 for the cadence floor, RB9 for the
+  compromise path), and whether tenant ids require encryption was settled earlier still —
+  [affinity-token](../specs/affinity-token.md) §4 makes encrypted mode the default and
+  `hmac-sha256-96` the explicit opt-out. What remains open is empirical rather than structural: `D`,
+  the interval from publishing a key to every node confirming it, is a number no deployment has
+  measured yet, and RB7's floor is expressed in terms of it.
 - **Node-id uniqueness is now a correctness input, not a convention** (AF-2 §12.2 CT1): two nodes
   sharing a logical id give two different connections one flow identity, which is the only way to
-  break the reference invariant from outside its spec. AF-6/DP-1 must reject it at config-validation
-  time rather than warn.
+  break the reference invariant from outside its spec. Rejected at config-validation time rather
+  than warned about — [cluster-membership](../specs/cluster-membership.md) MB3, and the loader
+  already enforces it.
 - Key rotation now has to outlast registrations, not only tokens: a reference leaves circulation
   when the binding holding it is refreshed, so the overlap window is `max(token lifetime,
   maximum registration expiry)` (AF-2 wrote that term into the rotation rule and the mint-window
@@ -149,6 +204,9 @@ RPC implemented (AF-7) and delivering to connection-bound clients across nodes; 
 assertion — mid-dialog requests across a 3-node simulated cluster with the cross-node
 dialog-lookup counter at zero.
 
-`PX-15` supplies the immediate per-process secure-randomness seam for loop-cookie keys. `AF-6`
-retains ownership of how keys are distributed, rotated and versioned across a cluster; the proxy
-story must not invent a competing cluster key schema.
+`PX-15` supplies the immediate per-process secure-randomness seam for loop-cookie keys. `AF-6` owns
+how keys are distributed, rotated and versioned across a cluster and has now written it into
+[cluster-membership](../specs/cluster-membership.md); the proxy story must not invent a competing
+cluster key schema, and this one does not absorb its key either — a loop-cookie key stays per
+process, is not a `keys` entry, and would only become one through an additive field if cluster-wide
+loop detection is ever wanted.
