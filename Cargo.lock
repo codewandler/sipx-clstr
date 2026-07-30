@@ -1632,8 +1632,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-sip"
-version = "0.7.0"
-source = "git+https://github.com/codewandler/sipx?tag=v0.7.0#67c21039eaada5bfb609d50bf2d5307ac899201b"
+version = "0.10.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.10.0#f9104b78a19073ccf3d5fffddade4dda0d2ac401"
 dependencies = [
  "bytes",
  "thiserror",
@@ -1642,8 +1642,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-transport"
-version = "0.7.0"
-source = "git+https://github.com/codewandler/sipx?tag=v0.7.0#67c21039eaada5bfb609d50bf2d5307ac899201b"
+version = "0.10.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.10.0#f9104b78a19073ccf3d5fffddade4dda0d2ac401"
 dependencies = [
  "bytes",
  "futures-util",
@@ -1662,8 +1662,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-ua"
-version = "0.7.0"
-source = "git+https://github.com/codewandler/sipx?tag=v0.7.0#67c21039eaada5bfb609d50bf2d5307ac899201b"
+version = "0.10.0"
+source = "git+https://github.com/codewandler/sipx?tag=v0.10.0#f9104b78a19073ccf3d5fffddade4dda0d2ac401"
 dependencies = [
  "bytes",
  "hmac 0.12.1",

@@ -42,6 +42,43 @@ fn the_reported_kernel_version_matches_the_pinned_tag() {
     );
 }
 
+/// The release `CX-4` moved to, named as a literal.
+///
+/// The test above holds the constant and the manifest to *each other*, which is what stops them
+/// drifting — but it passes just as well when both say `0.7.0`, so on its own it cannot say which
+/// kernel this workspace is supposed to be on. Naming the release here is what makes reverting the
+/// pin a failing test rather than a silent return to a protocol core three releases behind. The
+/// literal is meant to be edited by whoever moves the pin next, in the same commit that moves it.
+#[test]
+fn the_reported_kernel_is_the_release_this_workspace_moved_to() {
+    assert_eq!(sipx_clstr_node::KERNEL_VERSION, "0.10.0");
+}
+
+/// `--version` is the half of the claim an operator can actually reach.
+///
+/// `KERNEL_VERSION` being right is necessary and not sufficient: what gets read during an incident
+/// is a line of output, and the published site quotes that line verbatim
+/// (`website/docs/getting-started.md`, `website/docs/reference/cli.md`). Nothing held the constant
+/// and the printed line together, so this runs the binary and reads what it prints — which is also
+/// where those two pages' strings come from rather than being typed by hand.
+#[test]
+fn the_version_flag_prints_the_kernel_it_was_built_against() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_sipx-clstr"))
+        .arg("--version")
+        .output()
+        .expect("the binary under test should run");
+
+    assert!(output.status.success(), "--version should exit zero");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        format!(
+            "sipx-clstr {} (sipx kernel {})",
+            sipx_clstr_node::VERSION,
+            sipx_clstr_node::KERNEL_VERSION
+        ),
+    );
+}
+
 #[test]
 fn a_branch_pin_is_not_mistaken_for_a_tag() {
     // A `branch = "main"` dependency has no tag, and this must read as "no pin" rather than as
