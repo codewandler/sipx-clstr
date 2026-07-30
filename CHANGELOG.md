@@ -7,6 +7,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A documented version banner is now held to the one the binary prints** (`CF-19`). `check-site.py`
+  verified the *flags* a documented command names against `--help` and never what a command is shown
+  as **printing**, so `website/docs/whats-new.md`, `reference/cli.md` and `getting-started.md` all
+  carried `sipx-clstr 0.11.0 (sipx kernel 0.10.0)` after the workspace had moved to `0.12.0` — through
+  a full green gate. It is the defect `DX-12` was written to close, one level down: `DX-12` held
+  documented flags to what the binary *accepts*, and nothing held documented output to what it
+  *produces*.
+
+  The check reads **every fenced block** of every tracked `README.md` and `website/docs` page,
+  whatever the info string — the banner is output, so it lives in exactly the `text` blocks the
+  command check skips — and compares the whole line byte for byte, kernel half included, so a kernel
+  pin bump that leaves the docs behind is red rather than silent.
+
+  It keeps `cli_surface`'s two-reading discipline: `--version` from a built binary, and the banner
+  composed from `Cargo.toml`'s `[workspace.package] version` plus the `sipx-sip` tag pin, so the
+  `docs` workflow — which has no Rust toolchain — really checks rather than skipping. Both present and
+  disagreeing is a failure. **Neither available while banners exist is also a failure**, rather than a
+  green run that read nothing, on this repository's own rule that a check which silently narrows what
+  it looks at is a lie. Every run prints which reading it used.
+
+  This one is release-time by nature: the string only goes stale at a cut, and the site deploys *on
+  release*, so the first reader of a wrong number is a public one. Falsified at integration as well as
+  by the implementor — setting a page one version back turns the gate red and names the file, the
+  line, the documented string and the actual one.
+
 ### Changed
 
 - **The public capability matrix now describes the driver, not the engines** (`FC-6`, `PX-12`,

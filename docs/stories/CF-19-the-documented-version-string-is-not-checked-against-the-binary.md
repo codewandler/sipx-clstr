@@ -2,7 +2,7 @@
 id: CF-19
 title: The documented version string is not checked against the binary
 pillar: Foundation
-status: in-progress
+status: done
 priority: 3
 epic: conformance-harness
 areas: [gate, docs]

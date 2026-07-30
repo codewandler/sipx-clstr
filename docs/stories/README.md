@@ -48,18 +48,24 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
 
 ## Next (ready — take the top one unless the user named a story)
-- [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
 - [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
-
-### Optional session services
-_Dialog-terminating behavior is a separate opt-in service, never a proxy mode._
-- [BS-1 — Accept the optional session-service specification](BS-1-accept-the-optional-session-service-spec.md) · Services · M4 spec-first story; no runtime implementation
+- [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
-- [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
+
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 release blocker — roles select listeners and the store, then disappear before dispatch
+- [DP-14 — Bound registration and refusal work outside the proxy transaction admission ceiling](DP-14-bound-registration-and-refusal-work.md) · Cluster · V-11 — REGISTER and every refusal still spawn without a process-wide work bound
+- [DP-15 — Build release-profile images and pin every input used to prove or publish them](DP-15-build-and-pin-the-artifacts-we-release.md) · Cluster · V-20 — the documented image is dev-profile and release evidence follows mutable tags
+
+### The public documentation site
+_The site a stranger lands on should say what this does and how to run it, not what we plan next._
+- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
+- [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
 
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
@@ -69,10 +75,6 @@ _Accepted means applied, or refused — there is no third state._
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
 - [KO-16 — Make the Helm skeleton advertise only what it actually installs](KO-16-make-the-helm-skeleton-advertise-only-what-it-installs.md) · Cluster · V-19 — metadata promises a full install; the chart emits one unserved custom resource
-
-### Outbound routing & trunks
-_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
-- [RT-12 — Resolve outbound targets and settle every failed branch](RT-12-resolve-outbound-targets-and-settle-every-failed-branch.md) · Signalling · V-12 · outbound selection is UDP-only; hostname/transport failures are logged without a BranchTransportError and can leave no final response
 
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
@@ -88,26 +90,19 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
 
-### Roles, topology & operations
-_The operational contract: roles by config, a reference topology, and an honest HA statement._
-- [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 release blocker — roles select listeners and the store, then disappear before dispatch
-- [DP-14 — Bound registration and refusal work outside the proxy transaction admission ceiling](DP-14-bound-registration-and-refusal-work.md) · Cluster · V-11 — REGISTER and every refusal still spawn without a process-wide work bound
-- [DP-15 — Build release-profile images and pin every input used to prove or publish them](DP-15-build-and-pin-the-artifacts-we-release.md) · Cluster · V-20 — the documented image is dev-profile and release evidence follows mutable tags
+### Outbound routing & trunks
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
+- [RT-12 — Resolve outbound targets and settle every failed branch](RT-12-resolve-outbound-targets-and-settle-every-failed-branch.md) · Signalling · V-12 · outbound selection is UDP-only; hostname/transport failures are logged without a BranchTransportError and can leave no final response
 
-### The public documentation site
-_The site a stranger lands on should say what this does and how to run it, not what we plan next._
-- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
-- [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
+### Optional session services
+_Some features must terminate one dialog and create another. A proxy cannot provide that behavior_
+- [BS-1 — Accept the optional session-service specification](BS-1-accept-the-optional-session-service-spec.md) · Services · M4 spec-first story; no runtime implementation
 
 ## Blocked
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Backlog
-
-### Operational capability baseline
-_The released endpoint and platform are proved and published as one auditable system._
 - [CX-9 — Pin the qualifying released kernel and clear the M4 upstream ledger](CX-9-pin-the-qualifying-kernel-release.md) · Platform · blocked by every M4 kernel story and a tagged release carrying them
-- [CX-10 — Prove every M4 operational capability scenario](CX-10-prove-the-operational-capability-baseline.md) · Platform · blocked by the complete M4 story set and CX-9
 - [CX-11 — Publish the M4 operational capability release](CX-11-publish-the-operational-capability-release.md) · Platform · blocked by CX-10, KO-12, KO-17 and green release gates
 
 ### Cluster affinity & connection ownership
@@ -124,6 +119,15 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-3 — Build the real-network interop harness](CF-3-build-the-real-network-interop-harness.md) · Platform · SIPp + sipx CLI + rtpengine
 - [CF-6 — Seed the conformance registry with the M1 profile](CF-6-seed-the-conformance-registry-with-the-m1-profile.md) · Platform · blocked by EX-2 — the extraction work CF-2's report needs
 - [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · premise died with the docs split — nothing under docs/ is published; superseded by DX-12
+- [CX-10 — Prove every M4 operational capability scenario](CX-10-prove-the-operational-capability-baseline.md) · Platform · blocked by the complete M4 story set and CX-9
+
+### Roles, topology & operations
+_The operational contract: roles by config, a reference topology, and an honest HA statement._
+- [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
+- [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
+- [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
+- [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
+- [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
 
 ### End-to-end call probe (`e2e-tester` role)
 _The outside view: can a real call be placed through this deployment, right now?_
@@ -160,19 +164,6 @@ _The SIP process controls media over a network protocol; it never touches a medi
 - [ME-4 — Design SDP rewrite in the proxy path](ME-4-design-sdp-rewrite-in-the-proxy-path.md) · Media
 - [ME-5 — Implement the media-anchoring module](ME-5-implement-the-media-anchoring-module.md) · Media · blocked by ME-4, ME-2, EX-3
 
-### Outbound routing & trunks
-_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
-- [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
-- [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
-- [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
-- [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone
-- [RT-8 — Express source-IP admission as reviewable config](RT-8-express-source-ip-admission-as-config.md) · Signalling · admission is the whole security boundary when no user is authenticated
-- [RT-9 — Specify tenant-scoped route selection](RT-9-specify-scoped-route-selection.md) · Signalling · several pools can be 'default' at once; a single global default cannot express it
-- [RT-11 — Decide whether a trunk may unconditionally strip a standard header, against the caller's request](RT-11-decide-unconditional-egress-removal-for-standard-headers.md) · Signalling · RT-7 §14 records this as a known gap, not a deferral — and it is a product question first
-- [RT-13 — Authenticate outbound requests for a configured trunk](RT-13-authenticate-outbound-trunk-requests.md) · Signalling · blocked by RT-2, RT-12 and CX-9; policy is local, digest calculation is the released kernel's
-- [RT-14 — Apply ingress verification and egress call-attestation policy](RT-14-apply-call-attestation-policy.md) · Signalling · blocked by RT-2 and released sipx S-20; cryptography upstream, trust/routing policy here
-- [RT-15 — Populate diversion history and a reason for every routing hop](RT-15-populate-diversion-history-and-reason.md) · Signalling · blocked by RT-9 and released sipx S-21; syntax upstream, routing facts here
-
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
@@ -186,18 +177,23 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-22 — Complete GRUU and Outbound reachability through the cluster](RG-22-complete-gruu-and-outbound-reachability.md) · Signalling · M3/M4 · blocked by AF-4 through AF-7, RG-5 and the released kernel GRUU/Outbound surface
 - [RG-23 — Wake a push-registered contact and resume delivery after refresh](RG-23-wake-a-push-registered-contact.md) · Signalling · M3/M4 · blocked by RG-22 and deployment push-adapter configuration
 
+### Outbound routing & trunks
+_Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
+- [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
+- [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
+- [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
+- [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone
+- [RT-8 — Express source-IP admission as reviewable config](RT-8-express-source-ip-admission-as-config.md) · Signalling · admission is the whole security boundary when no user is authenticated
+- [RT-9 — Specify tenant-scoped route selection](RT-9-specify-scoped-route-selection.md) · Signalling · several pools can be 'default' at once; a single global default cannot express it
+- [RT-11 — Decide whether a trunk may unconditionally strip a standard header, against the caller's request](RT-11-decide-unconditional-egress-removal-for-standard-headers.md) · Signalling · RT-7 §14 records this as a known gap, not a deferral — and it is a product question first
+- [RT-13 — Authenticate outbound requests for a configured trunk](RT-13-authenticate-outbound-trunk-requests.md) · Signalling · blocked by RT-2, RT-12 and CX-9; policy is local, digest calculation is the released kernel's
+- [RT-14 — Apply ingress verification and egress call-attestation policy](RT-14-apply-call-attestation-policy.md) · Signalling · blocked by RT-2 and released sipx S-20; cryptography upstream, trust/routing policy here
+- [RT-15 — Populate diversion history and a reason for every routing hop](RT-15-populate-diversion-history-and-reason.md) · Signalling · blocked by RT-9 and released sipx S-21; syntax upstream, routing facts here
+
 ### Optional session services
-_Dialog-terminating behavior is a separate opt-in service, never a proxy mode._
+_Some features must terminate one dialog and create another. A proxy cannot provide that behavior_
 - [BS-2 — Implement the optional two-leg session service](BS-2-implement-the-two-leg-session-service.md) · Services · blocked by BS-1, CX-9, AF-7 and ME-5
 - [BS-3 — Implement a three-party conference focus through external relay control](BS-3-implement-the-conference-focus.md) · Services · blocked by BS-2 and a MediaRelay conference contract
-
-### Roles, topology & operations
-_The operational contract: roles by config, a reference topology, and an honest HA statement._
-- [DP-2 — Author the 3-zone reference topology](DP-2-author-the-3-zone-reference-topology.md) · Cluster
-- [DP-3 — Implement observability that proves the invariants](DP-3-implement-observability-that-proves-the-invariants.md) · Cluster
-- [DP-4 — Publish the HA statement and failure-mode table](DP-4-publish-the-ha-statement-and-failure-mode-table.md) · Cluster
-- [DP-6 — Emit CDRs with a configurable field set](DP-6-emit-cdrs-with-a-configurable-field-set.md) · Cluster · the field list is an external billing contract
-- [DP-7 — Duplicate signalling to a capture target, selectively by transport](DP-7-duplicate-signalling-to-a-capture-target-selectively.md) · Cluster
 
 ## Done
 - [AF-1 — Specify the affinity token](AF-1-specify-the-affinity-token.md) · Cluster
@@ -215,6 +211,7 @@ _The operational contract: roles by config, a reference topology, and an honest 
 - [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
 - [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
 - [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
+- [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
@@ -288,4 +285,5 @@ _The operational contract: roles by config, a reference topology, and an honest 
 - [RT-10 — Close the transform-totality holes before RT-2 implements](RT-10-close-the-normalisation-totality-holes.md) · Routing · found reviewing RT-6 — N12's totality claim does not hold as written
 - [VZ-1 — Implement the SSE replay feed and canvas page](VZ-1-implement-the-sse-replay-feed-and-canvas-page.md) · Platform · the constellation's first feed — a paced sim replay over SSE, one page, zero new runtime deps
 
+_See [CHANGELOG.md](../../CHANGELOG.md) for the full released history._
 <!-- END track:board -->
