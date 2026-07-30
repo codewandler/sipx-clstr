@@ -52,6 +52,7 @@ site · `FC` fail-closed configuration.
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
+- [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._

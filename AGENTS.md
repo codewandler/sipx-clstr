@@ -30,9 +30,14 @@ rather than the kernel now holds it. Three rows are open and unfiled: `CX-5`'s n
 defect and `RG-15`'s `O(n)` replay window, both in `sipx-ua/src/challenge.rs`, which is **one blob at
 `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and kernel `main`** — so no bump short of a new release fixes
 either — and `DP-11`'s per-message overload logging on the loop that must keep timers running. The
+kernel pin is **already current**: `v0.10.0` is both the newest released tag and the commit kernel
+`main` points at, so there is nothing to bump to and those three rows wait on a kernel release rather
+than on a pin. The
 gate is green, and
 M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
 duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
+The last cut is **`0.12.0`** — the release that turned the gate on itself and found a third of its
+own checks could not see what they were believed to check.
 Check the board before assuming any of that is current.
 
 ## Non-negotiables

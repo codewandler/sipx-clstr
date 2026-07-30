@@ -5,7 +5,7 @@ description: "Where sipx-clstr stands, release by release, and what is still mis
 
 # What's new
 
-The current release is **0.11.0**.
+The current release is **0.12.0**.
 
 ## Where this actually is
 
@@ -46,20 +46,56 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 | A user-credential store, without which authentication is applied but cannot protect anything | specified, not shipped |
 | Seventeen of the schema's sections — recognised, contents not validated, applied not at all | partly shipped |
 
-**The measuring instrument now measures everything.** Six specifications used to carry vector tables
-the checker had no registration for — roughly 340 normative rows that nothing executed, and a
-fabricated row in one of those families passed the gate untouched. All ten specs are now registered:
-**134 of 492 rows proved, 358 deferred**, each deferral naming what is specifically missing and the
-story that closes it. The denominator quadrupled and the percentage fell, which is the report
-becoming honest rather than the platform regressing — and 57 rows turned out to be *already covered*
-by tests the report simply could not see. [Conformance](reference/conformance.md) has the live
-numbers.
+**The measuring instrument now measures everything, and it now shows what it measures.** Six
+specifications used to carry vector tables the checker had no registration for — roughly 340
+normative rows that nothing executed, and a fabricated row in one of those families passed the gate
+untouched. Thirteen prefixes are now registered: **125 of 549 rows proved, 19 covered for shape only,
+405 deferred**, each deferral naming what is specifically missing and the story that closes it.
+
+Two of those numbers went the "wrong" way on purpose. *Shape only* is a category `CF-12` created for
+a row whose test runs but never compares the value the row states — a row that used to count as
+proved and no longer does. And the report itself was printing only 138 of the rows it counted, so
+seven whole families were in the denominator and in no table; `CF-17` made the sections cover the
+count. A falling percentage here is the report becoming honest rather than the platform regressing.
+[Conformance](reference/conformance.md) has the live numbers.
 
 ## Releases
 
 Each entry leads with what changed for someone using this. The full detail — findings, rejected
 alternatives, the reasoning behind each decision — is in
 [CHANGELOG.md](https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md).
+
+### 0.12.0 — the gate, pointed at itself
+
+**Mostly a release about trust in the numbers on this site, not about new capability.** A third of
+what changed was a check that could not see the thing it was believed to check — the conformance
+report printed 138 of the 533 rows it counted, thirty-one normative rows sat in a file the gate never
+opened, "this proof runs in CI" was decided by a substring match that a commented-out line would have
+satisfied, and two checkers read prose *about* a directive as the directive. None of it was found by
+a failure; all of it was found by reading each checker and asking what it would have to miss for the
+report to stay green.
+
+What you get from that: the end-to-end call — the evidence behind the claim that a call completes
+with audio — now runs on every push against the kernel's own client, instead of being run by hand and
+cited afterwards. And a row this site calls *proved* is now a row whose test compares the value the
+row states.
+
+Three changes you can actually use:
+
+- **A node bounds how much work it holds at once.** `cluster.admission.maxInFlightTransactions`
+  (default 1024) is taken on the accept loop, and over the bound a node answers `503` with
+  `Retry-After` rather than accepting without limit. `REGISTER` and `ACK` are deliberately outside the
+  bound: a registration storm *is* the overload, and shedding refreshes turns a spike into an outage.
+- **The pinned sipx kernel moved three releases forward to `v0.10.0`**, which brought the declared
+  Rust floor **down** to 1.91.
+- **The `SipxCluster` custom resource is specified** — as one definition with the configuration
+  schema rather than a second copy of it, with a check that fails when the two drift. There is still
+  no operator: the resource is specified, not served.
+
+Still true, and still the two things that will bite you: it is an open registrar, and one address in
+front of both nodes does not work. Newly stated: the digest replay window costs `O(n)` per
+authenticated request, and the challenge nonce is not unique per challenge. Both are in the kernel,
+in a file that is byte-identical at every released kernel tag, so neither is fixable from here.
 
 ### 0.11.0 — two nodes, one registrar, and a call you can hear
 
