@@ -133,6 +133,63 @@ through one can be called through the other. The devspace profile stands that up
 k3d cluster create sipx
 docker build -t sipx-clstr:dev .
 k3d image import sipx-clstr:dev -c sipx
+```
+
+### The phone image
+
+The profile also runs a **greeting** — a phone that answers with a tone — and that greeting is a
+[sipx](https://github.com/codewandler/sipx) CLI phone rather than a platform feature. It runs as a
+pod, so the CLI has to be inside an image the cluster can pull, and **nothing publishes one**. You
+build it, from the same kernel tag this workspace pins — the second version `--version` printed in
+step 1 — so the phone and the node speak the same protocol build:
+
+```bash
+mkdir -p ~/sipx-phone && cd ~/sipx-phone
+git clone --depth 1 --branch v0.10.0 https://github.com/codewandler/sipx kernel
+cargo build --release --bin sipx --manifest-path kernel/Cargo.toml
+cp kernel/target/release/sipx .
+```
+
+It needs something to play. A three-second 440 Hz tone, from the standard library:
+
+```bash
+python3 - tone.wav <<'PY'
+import math, struct, sys, wave
+with wave.open(sys.argv[1], "w") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000)
+    w.writeframes(b"".join(struct.pack("<h", int(12000 * math.sin(2 * math.pi * 440 * i / 8000)))
+                           for i in range(8000 * 3)))
+PY
+```
+
+Then the image itself, and into the cluster. `libopus0` is the one shared library the CLI's media
+side needs, and the `--help` in the build is a smoke test: a phone image that cannot start is much
+cheaper to find here than as a `CrashLoopBackOff` later.
+
+```bash
+cat > phone.Dockerfile <<'EOF'
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libopus0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY sipx /usr/local/bin/sipx
+RUN chmod +x /usr/local/bin/sipx && /usr/local/bin/sipx --help >/dev/null
+COPY tone.wav /tone.wav
+ENTRYPOINT ["/usr/local/bin/sipx"]
+EOF
+docker build -f phone.Dockerfile -t sipx-phone:dev .
+k3d image import sipx-phone:dev -c sipx
+```
+
+Skipping this does not fail loudly. The greeting `Deployment` names `sipx-phone:dev` with
+`imagePullPolicy: IfNotPresent`, so a cluster without it asks the public registry, is told the
+repository does not exist, and settles into `ImagePullBackOff` — while both nodes come up `1/1` and
+look entirely healthy.
+
+### Deploy the profile
+
+Back in the sipx-clstr checkout:
+
+```bash
 kubectl create namespace sipx-clstr-dev
 kubectl -n sipx-clstr-dev apply -f deploy/devspace/manifests/node.yaml
 ```
@@ -149,11 +206,16 @@ kubectl -n sipx-clstr-dev get deploy
 
 ```text
 NAME                  READY   UP-TO-DATE   AVAILABLE
+sipx-clstr-greeting   1/1     1            1
 sipx-clstr-node-a     1/1     1            1
 sipx-clstr-node-b     1/1     1            1
 sipx-clstr-postgres   1/1     1            1
-sipx-clstr-greeting   1/1     1            1
 ```
+
+The nodes may restart once or twice on the way there. They are started in parallel with the location
+service and refuse to run without it — `the configured location store could not be reached` — so the
+first attempts exit until PostgreSQL is accepting connections. That is the intended behaviour, not a
+flap: a node that quietly fell back to its own memory would be the bug.
 
 Check which store each node opened. It must say `postgres` on both — a node that fell back to its own
 memory would look healthy and answer every `REGISTER`, while serving bindings no peer can see:
@@ -163,11 +225,12 @@ kubectl -n sipx-clstr-dev logs deploy/sipx-clstr-node-a | grep 'node listening'
 ```
 
 ```text
-node listening listen=0.0.0.0:5060 advertised=10.42.0.207:5060 tenant=default store="postgres"
+node listening listen=0.0.0.0:5060 advertised=10.42.0.10:5060 tenant=default store="postgres" auth="open"
 ```
 
 Each pod advertises **its own pod IP**, resolved per node from the one document through `${POD_IP}`.
-That is why there is no per-node file.
+That is why there is no per-node file. `auth="open"` is the same disclosure as the caution box above,
+in the node's own words: this tenant declares no `auth`, so the registrar accepts anyone.
 
 ### Two Deployments, not two replicas
 
@@ -182,13 +245,9 @@ The profile also runs a **greeting**: a `sipx` CLI phone that registers as `hell
 tone. It registers *through node-b* and is reached *through node-a*, so hearing it is itself the proof
 that the two nodes share one registrar.
 
-You need the [sipx](https://github.com/codewandler/sipx) CLI — a separate project, deliberately not
-vendored here, because the point of an end-to-end proof is that the other end is an independent
-implementation:
-
-```bash
-cargo build --bin sipx     # in a sipx checkout
-```
+The caller is the same [sipx](https://github.com/codewandler/sipx) CLI, out of the `sipx-phone:dev`
+image you built in step 3 — a separate project, deliberately not vendored here, because the point of
+an end-to-end proof is that the other end is an independent implementation.
 
 Dial it from inside the cluster. The greeting's address-of-record is `hello@sipx-clstr-node-a` —
 node-a's Service name, which is also the domain the profile's tenant declares, because `domains` is
