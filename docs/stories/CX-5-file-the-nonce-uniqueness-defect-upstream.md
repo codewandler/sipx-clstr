@@ -7,7 +7,7 @@ priority: 2
 design:
 epic:
 areas: [upstream, registrar, security]
-note: the nonce is a function of the clock alone, so honest users collide in the replay window
+note: DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 ---
 
 # File the nonce-uniqueness defect upstream and make nonce uniqueness normative
@@ -114,3 +114,26 @@ nonce and share one replay counter, so a correct credential is refused as a repl
 - Fixing it upstream will change what a nonce looks like, so check whether anything here parses a
   nonce's shape rather than treating it as opaque before the bump lands. `CX-4` is the pending kernel
   upgrade and is the natural carrier.
+
+## Integration
+
+**Integrated, and deliberately left open.** The spec rule and the upstream ledger row are in; the
+coverage is not, and `RA-R-8`'s deferral names *this story*. Closing it would leave a deferral pointing
+at work nobody will do — the precise failure `check-vectors.py`'s own header warns about — so the status
+stays open until the row is covered.
+
+Verified independently rather than taken from the report:
+
+- **The defect is real.** `sipx-ua/src/challenge.rs`'s `mint` is `<issued-at hex>.<HMAC(issued-at)>` — a
+  pure function of the clock, the realm and the secret. Two challenges in the same second at one edge
+  produce the identical nonce.
+- **`CX-4` will not fix it, and the story's own note saying it would was wrong.** `challenge.rs` is
+  **byte-identical** across `v0.7.0` → `v0.10.0` → kernel `main`: `git diff` produces no output for that
+  path in either range. The bump moves the pin, not the mint. `CX-4`'s note has been corrected.
+- **The gate demands the new row.** Row count moved 492 → 493 and deferrals 358 → 359, so it is counted
+  and passes only because it is deferred.
+
+What remains: the sipx-side story (the implementor could not write into the kernel checkout), the
+harness scenario, and the two code comments in `auth.rs` and `vectors_register_auth.rs` that claim a
+"fresh nonce" the mechanism does not yet deliver. The spec now says what those comments should say, so
+they become edits against a written rule rather than judgement calls.

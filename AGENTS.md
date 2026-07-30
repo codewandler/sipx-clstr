@@ -22,8 +22,10 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `CHANGELOG.md` | closed stories roll up here | hand-written |
 
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
-criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the whole
-[upstream ledger](docs/upstream.md), so nothing here waits on the kernel. The gate is green, and
+criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the
+[upstream ledger](docs/upstream.md) as it then stood — but two rows are open again: `CF-9`'s MSRV row,
+and `CX-5`'s nonce-uniqueness defect, which the pinned kernel still has and which the `v0.10.0` bump
+does **not** fix. The gate is green, and
 M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
 duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
 Check the board before assuming any of that is current.
