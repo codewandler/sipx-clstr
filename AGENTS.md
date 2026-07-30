@@ -23,9 +23,14 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
 criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the
-[upstream ledger](docs/upstream.md) as it then stood — but two rows are open again: `CF-9`'s MSRV row,
-and `CX-5`'s nonce-uniqueness defect, which the pinned kernel still has and which the `v0.10.0` bump
-does **not** fix. The gate is green, and
+[upstream ledger](docs/upstream.md) as it then stood — but it has not stayed clear. The kernel pin is
+now **`v0.10.0`** (`CX-4`), which closed `CF-9`'s MSRV row — the `TimerQueue` `Default` bound, fixed
+upstream and never filed — and brought the declared Rust floor **down** to 1.91, where local code
+rather than the kernel now holds it. Three rows are open and unfiled: `CX-5`'s nonce-uniqueness
+defect and `RG-15`'s `O(n)` replay window, both in `sipx-ua/src/challenge.rs`, which is **one blob at
+`v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and kernel `main`** — so no bump short of a new release fixes
+either — and `DP-11`'s per-message overload logging on the loop that must keep timers running. The
+gate is green, and
 M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
 duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
 Check the board before assuming any of that is current.

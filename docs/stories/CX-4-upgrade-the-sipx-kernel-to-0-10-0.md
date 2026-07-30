@@ -2,8 +2,7 @@
 id: CX-4
 title: Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0
 pillar: Platform
-status: in-progress
-priority: 2
+status: done
 epic:
 areas: [build, transport]
 note: three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
@@ -34,7 +33,7 @@ protocol core that has since been corrected, and so the next upgrade is one step
 - [x] The published site's version strings are regenerated from the built binary, not edited —
       `website/docs/getting-started.md` and `website/docs/reference/cli.md` both quote
       `sipx-clstr <v> (sipx kernel <v>)`.
-- [ ] Behavioural changes that reach this platform are named in the CHANGELOG entry, not just the
+- [x] Behavioural changes that reach this platform are named in the CHANGELOG entry, not just the
       version number.
 
 ## Progress
