@@ -52,4 +52,11 @@ scripts/check-docs.sh
 step "proof domains"
 scripts/check-proof-domains.py
 
+# `DX-12`. Deliberately **after** the build, because that is what makes it worth more here than in
+# CI: `target/debug/sipx-clstr` exists by now, so the CLI reference is checked against the binary's
+# own `--help` rather than against a static reading of `main.rs`. The `docs` workflow has no Rust
+# toolchain and gets the static reading; the script says which one it used on every run.
+step "site"
+scripts/check-site.py
+
 printf '\n\033[1;32mgate: green\033[0m\n'

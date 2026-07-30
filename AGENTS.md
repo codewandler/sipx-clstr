@@ -111,8 +111,18 @@ two trees and they are published differently:
 
 - Every story's frontmatter is complete and the board regenerated (`/track:board`).
 - New specs carry normative references and test-vector tables, not prose alone.
-- Every page under `website/docs/` is reachable from `website/sidebars.js`; the site build fails
-  on a broken link rather than shipping one.
+- Every page under `website/docs/` is reachable from `website/sidebars.js`, and every doc id the
+  sidebar names exists; the site build fails on a broken link rather than shipping one.
+  `check-site.py` enforces both — an orphan page builds fine and is reachable by nobody, which is
+  the one site defect a green build cannot see.
+- **Every command the documentation shows is checked against the binary**, not proof-read.
+  `check-site.py` reads the fenced blocks that `check-docs.py` deliberately strips, and holds every
+  `sipx-clstr` invocation in `README.md` and the site — and the flag table in `reference/cli.md`, in
+  **both** directions — to the flags `--help` actually reports. It exists because no gate had ever
+  read a documented command, so when `DP-8` replaced the three provisional flags, roughly thirty
+  commands went on naming flags the binary had stopped accepting, through a release, with
+  everything green. Commands needing Docker, Kubernetes or the external `sipx` CLI are not executed;
+  they are listed by name in the script's output rather than silently skipped.
 - **A site page never relative-links into `docs/`.** Nothing under `docs/` is published, so
   `](../../docs/specs/proxy-behavior.md)` resolves on disk and 404s on the site — link the
   **GitHub URL** instead. `check-docs.py` enforces this. It is the inverse of the rule it
