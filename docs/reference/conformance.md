@@ -9,7 +9,7 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**136 of 583 rows proved**; 19 covered for shape only; 428 deferred.
+**154 of 583 rows proved**; 19 covered for shape only; 410 deferred.
 
 Σ over the 61 sections below is 583, so every row counted above is shown in exactly one table.
 
@@ -590,24 +590,24 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `AT-1` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-2` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-3` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-4` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-5` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-6` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-7` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-8` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-9` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-10` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-11` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-12` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-13` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-14` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-15` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-16` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-17` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-18` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-1` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-2` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-3` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `46` |
+| `AT-4` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-5` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `58` |
+| `AT-6` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `114`, `157 B`, `200 B` |
+| `AT-7` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-8` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-9` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `1785326430` |
+| `AT-10` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-11` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-12` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-13` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-14` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-15` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-16` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-17` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `5`, `28`, `20` |
+| `AT-18` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `115`, `114`, `64` |
 
 ## Flow reference — mint, resolution and negative vectors (§14)
 

@@ -6,9 +6,9 @@
 #
 # This is the project's whole deferral ledger, not a corner of it. Two tables:
 #
-#   [[deferred]]    429 rows over fourteen prefixes, naming sixteen stories — `AI` 97, `MR` 90,
-#                   `CC` 52, `NN` 52, `QP` 31, `FR` 22, `AT` 18, `SC` 16, `HF` 13, `PB` 8, `LS` 5,
-#                   `RA` 1, `SS` 12, `OB` 12.
+#   [[deferred]]    410 rows over thirteen prefixes, naming fifteen stories — `AI` 97, `MR` 90,
+#                   `NN` 52, `CC` 51, `QP` 31, `FR` 22, `SC` 16, `HF` 13, `SS` 12, `OB` 12, `PB` 8,
+#                   `LS` 5, `RA` 1.
 #   [[unasserted]]   19 rows — `LS` 9, `RA` 5, `PB` 4, `CC` 1 — covered by a test that never compares
 #                   the value the row states. `CF-12` added these; they do not count as proved.
 #
@@ -881,133 +881,8 @@ reason = """
 Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
 """
 
-# AT — 18 rows, closed by AF-4.
-
-[[deferred]]
-id = "AT-1"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-2"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-3"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-4"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-5"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-6"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-7"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-8"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-9"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-10"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-11"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-12"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-13"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-14"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-15"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-16"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-17"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
-
-[[deferred]]
-id = "AT-18"
-story = "AF-4"
-reason = """
-The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`.
-"""
+# `AT` had 18 rows here and has none now: `AF-4` implemented the mint/verify library and every one
+# is proved. A prefix leaving this file entirely is the outcome the ledger exists to reach.
 
 # CC — 53 rows, closed by DP-8.
 

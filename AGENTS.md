@@ -15,7 +15,7 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 | `docs/stories/` | one file per unit of work; `README.md` there is the **board** | board is generated |
 | `docs/upstream.md` | the ledger of what belongs in the sipx kernel rather than here | hand-written |
 | `docs/architecture.md` | the charts: request paths, roles, deployment control plane | hand-written |
-| `crates/` | the Rust workspace — `-proxy` and `-registrar` are sans-IO, `-node` is the driver layer, `-sim` the harness, `-probe` the e2e-tester | hand-written |
+| `crates/` | the Rust workspace — `-proxy`, `-registrar` and `-affinity` are sans-IO, `-node` is the driver layer, `-sim` the harness, `-probe` the e2e-tester | hand-written |
 | `scripts/` | the gate: `gate.sh` and the checks it runs | hand-written |
 | `deploy/helm/` | the chart, its templates and the default deployment set (`KO-2`) | hand-written |
 | `website/docs/` | the **public** end-user documentation site (Docusaurus), deployed on release | hand-written |

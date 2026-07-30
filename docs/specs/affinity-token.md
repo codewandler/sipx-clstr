@@ -81,13 +81,16 @@ struct Claims { tenant: u32, home_shard: u16, edge: u16, direction: Direction,
 enum Direction { Originating, Terminating }         // §3, §7
 enum Verdict { Valid(Claims), Invalid(Reason) }     // Reason is telemetry-only; never on the wire
 
-fn mint(claims: &Claims, key: &MintKey, nonce: [u8; 12]) -> Token;
+fn mint(claims: &Claims, key: &MintKey, nonce: [u8; 12]) -> Result<Token, MintError>;
 fn verify(bytes: &[u8], keys: &KeySet, now: u32, expect: &Expect) -> Verdict;
 ```
 
 `Expect` carries the ingress context the proxy already has: an optional pinned tenant (a listener
-or interconnect bound to one tenant) and, when a second consecutive platform Route was popped, the
-partner token for the pair check (§8, S9). Verification is stateless by design (§9).
+or interconnect bound to one tenant); when a second consecutive platform Route was popped, the
+partner token for the pair check (§8, S9); and `skew`, because §8 S6 makes `S` configurable while
+this section makes `verify` pure — a configurable value a pure function reads must arrive as an
+argument rather than be looked up. `mint` returns a `Result` because §7 M8 requires it to **reject**
+`F > 64` regardless of the caller, and a rejection needs a channel. Verification is stateless by design (§9).
 `module_facts` is returned verbatim in the verdict — mint and verify never interpret it.
 
 ## 3. Byte layout (version 1)
@@ -413,6 +416,20 @@ ORIG, F=8: 0000000700030005010009000000296a69eb4008deadbeefcafef00d   (28 B)
 ```
 
 ### Round-trip vectors
+
+The six round-trip rows, tabulated — the byte blocks below are the same vectors at full width.
+`AF-4` added this table: the negative vectors were already rows and the round-trip ones were only
+prose, so `scripts/check-vectors.py` could read half of §10 and had no claim to hold the other half
+to. Nothing here restates a byte; it states what each vector must produce.
+
+| # | Given | Expect |
+|---|---|---|
+| AT-1 | mint, encrypted mode, ORIG, empty facts — key `0x01`, nonce `N1` | The 50 token bytes and the parameter below, byte-exact; `Valid` with the fixture claims, direction ORIG, empty facts region |
+| AT-2 | mint, encrypted mode, TERM, empty facts — key `0x01`, nonce `N2` | The 50 token bytes and the parameter below, byte-exact; `Valid`, direction TERM. The pair passes S9 in either pop order |
+| AT-3 | mint, authenticated-only mode, ORIG, empty facts — key `0x02`, nonce `N3` | The 46 token bytes and the parameter below, byte-exact, body cleartext; `Valid` with AT-1's claims |
+| AT-4 | AT-1's parameter value, decoded and re-encoded | Exactly the 50 token bytes; header, tag and ciphertext split as §3, plaintext body byte-exact; re-encoding reproduces the parameter character-exact |
+| AT-5 | mint with an 8-byte module-facts region — key `0x01`, nonce `N4`, `FACTS8` | The 58 token bytes and the parameter below, byte-exact; `Valid`, with the region returned verbatim |
+| AT-6 | mint at the facts ceiling, `F = 64` — key `0x01`, nonce `N5`, `FACTS64` | The 114 token bytes below; the parameter is 157 B, inside F4's 200 B budget; `Valid`, region verbatim |
 
 **AT-1 — mint, encrypted mode, ORIG, empty facts** (key 0x01, nonce N1):
 

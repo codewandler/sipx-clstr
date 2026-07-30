@@ -17,6 +17,9 @@ export RUSTFLAGS="${RUSTFLAGS:--D warnings}"
 
 # crate:features — an empty feature list means --no-default-features on its own.
 combinations=(
+    # No optional features today, and listed anyway: this list is hand-maintained, so a crate that
+    # is not on it is a crate this check cannot see. `AF-4` added the entry with the crate.
+    "sipx-clstr-affinity:"
     "sipx-clstr-registrar:"
     "sipx-clstr-registrar:serde"
     "sipx-clstr-registrar:test-suite"

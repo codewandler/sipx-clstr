@@ -49,6 +49,18 @@ sipx-clstr-registrar = { path = "crates/sipx-clstr-registrar", version = "0.12.0
 sipx-clstr-probe = { path = "crates/sipx-clstr-probe", version = "0.12.0" }
 sipx-clstr-node = { path = "crates/sipx-clstr-node", version = "0.12.0" }
 sipx-clstr-sim = { path = "crates/sipx-clstr-sim", version = "0.12.0" }
+sipx-clstr-affinity = { path = "crates/sipx-clstr-affinity", version = "0.12.0" }
+
+# RFC 8439's AEAD, for `affinity-token` §4's `chacha20-poly1305` algorithm. RustCrypto, the same
+# family `hmac` and `sha2` already come from, so the workspace does not grow a second cipher stack.
+#
+# `default-features = false` is load-bearing rather than tidiness, and it must stay on this line:
+# the default feature set turns on `getrandom`, which would put an operating-system entropy source
+# inside a crate whose whole contract (`affinity-token` §2, AGENTS.md rule 2) is that randomness
+# enters as an injected value. With the features off it is a pure in-place transform over
+# caller-supplied buffers, so the sans-IO rule is enforced by the dependency graph rather than by
+# review. `AF-4`'s review confirmed `getrandom` reaches this crate for none of its three versions.
+chacha20poly1305 = { version = "0.10", default-features = false }
 
 # The kernel, pinned to a released tag rather than to a branch. sipx is not on crates.io, so a
 # git dependency is the only honest way to depend on it; a `tag` rather than a `branch` is what
