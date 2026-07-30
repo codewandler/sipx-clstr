@@ -2,12 +2,12 @@
 id: DX-13
 title: Retire the three-flag CLI from the published surface and from the M1 proof script
 pillar: Foundation
-status: in-progress
+status: blocked
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
 areas: [docs, deploy]
-note: DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
+note: blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 ---
 
 # Retire the three-flag CLI from the published surface and from the M1 proof script
@@ -47,7 +47,24 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       referenced in three places in this repository and built in none; and the `node listening`
       block omitted the `auth="open"` field `FC-3` added. §3 now runs end to end, all four
       Deployments `1/1`. **§4's call does not run, for a reason no edit to this page can fix** — see
-      `## Progress`. `cli.md` was
+      `## Progress
+- **Parked 2026-07-30, blocked by [KO-18](KO-18-give-the-devspace-nodes-a-dialable-address.md).**
+  Five of the six pages run. `getting-started.md` §3 now runs end to end — the page builds and
+  imports the phone image it had only ever assumed, and all four Deployments reach `1/1`, verified
+  against a throwaway k3d cluster rather than read.
+- **What is unresolved:** §4's caller command, and it is not prose. `sipx dial` takes a literal
+  address and port and does not resolve a name, so `sip:hello@sipx-clstr-node-a` exits on a usage
+  error; dialling the ClusterIP instead answers `480`, because the lookup keys on the whole AoR and
+  the stored one is the name. No spelling of the documented command works while the document says
+  what it says.
+- **What would settle it:** `KO-18` — one address that is simultaneously a valid `domains` entry, the
+  greeting's AoR, and a literal a phone can send to. The fix is in
+  `deploy/devspace/manifests/node.yaml` or in `sipx dial`, both outside this story's write set.
+- Found on the way: `sipx-phone:dev` existed on exactly one developer's Docker daemon and carried
+  sipx `0.11.0` while the workspace pins `v0.10.0` — the only machine able to run the k8s proof was
+  running a phone nobody could reproduce. The proof fails on both versions, so the mismatch was
+  hiding nothing but itself.
+`. `cli.md` was
       re-verified line by line against the binary — the two help texts, `--version`, and each quoted
       refusal (`no id`, `cannot read`, the two-problem document refusal, the unresolved `dsnRef`, the
       role refusals) reproduce exactly. Two defects found and fixed by running rather than reading:

@@ -59,11 +59,11 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 release blocker — roles select listeners and the store, then disappear before dispatch
 - [DP-14 — Bound registration and refusal work outside the proxy transaction admission ceiling](DP-14-bound-registration-and-refusal-work.md) · Cluster · V-11 — REGISTER and every refusal still spawn without a process-wide work bound
+- [KO-18 — Give the devspace nodes an address a phone can dial, not only one it can register through](KO-18-give-the-devspace-nodes-a-dialable-address.md) · Cluster · blocks DX-13 — getting-started §4's caller cannot work in any spelling while the AoR is a Service name
 - [DP-15 — Build release-profile images and pin every input used to prove or publish them](DP-15-build-and-pin-the-artifacts-we-release.md) · Cluster · V-20 — the documented image is dev-profile and release evidence follows mutable tags
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
-- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 - [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
 
 ### Fail-closed configuration
@@ -97,6 +97,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [BS-1 — Accept the optional session-service specification](BS-1-accept-the-optional-session-service-spec.md) · Services · M4 spec-first story; no runtime implementation
 
 ## Blocked
+- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Backlog
