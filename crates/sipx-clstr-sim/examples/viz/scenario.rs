@@ -293,6 +293,12 @@ impl Edge {
                     out.push(Effect::Note(format!("cancel {branch}")));
                 }
                 ProxyEffect::AnswerCancel => out.push(Effect::Note("answered cancel".to_owned())),
+                // This scenario mints no affinity token, so P2 never asks. Noted rather than
+                // absorbed, and the note is what the HUD would show: an unanswered verification
+                // request is a context that waits forever.
+                ProxyEffect::VerifyToken { .. } => {
+                    out.push(Effect::Note("unexpected token verification".to_owned()));
+                }
                 ProxyEffect::SetTimer { branch, after, .. } => {
                     if let Some(branch) = branch {
                         let timer = self.timer_id(&branch);

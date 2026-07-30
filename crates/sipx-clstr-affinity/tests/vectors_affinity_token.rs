@@ -22,8 +22,8 @@ use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use pretty_assertions::assert_eq;
 use sipx_clstr_affinity::{
     Algorithm, Claims, DecodeError, Direction, Expect, KeyEntry, KeySet, MAX_FACTS, MintError,
-    MintKey, NonceSource, Reason, Token, Verdict, decode_param_value, encode_param_value, mint,
-    mint_with, verify,
+    MintKey, NonceSource, Reason, TOKEN_PARAM, TOKEN_PARAM_BUDGET, Token, Verdict,
+    WORST_CASE_PARAM_LEN, decode_param_value, encode_param_value, mint, mint_with, verify,
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -305,10 +305,16 @@ fn at_6_mint_at_the_facts_ceiling() {
     // "the budget vector: 114 raw bytes, 152 encoded chars, parameter 157 B ≤ 200 (§5)"
     assert_eq!(token.len(), 114);
     assert_eq!(token.to_param_value().len(), 152);
-    let parameter = format!(";aft={}", token.to_param_value());
+    let parameter = format!(";{TOKEN_PARAM}={}", token.to_param_value());
     assert_eq!(parameter.len(), 157);
-    // proxy-behavior §7 F4's budget, which §5 verifies against this very vector.
-    assert!(parameter.len() <= 200);
+    // proxy-behavior §7 F4's budget, which §5 verifies against this very vector. Three assertions
+    // rather than one literal `<= 200`, because the row states a number *and* `AF-5` gave that
+    // number one owner: the row's value is pinned to the constant, the constant bounds this
+    // parameter, and this vector is by construction the worst case the layout can produce — so a
+    // wider token fails here rather than on somebody's wire.
+    assert_eq!(TOKEN_PARAM_BUDGET, 200);
+    assert!(parameter.len() <= TOKEN_PARAM_BUDGET);
+    assert_eq!(parameter.len(), WORST_CASE_PARAM_LEN);
     assert_eq!(token.to_param_value(), AT_6_PARAM);
 
     assert_eq!(

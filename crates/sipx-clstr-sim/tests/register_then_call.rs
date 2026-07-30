@@ -235,6 +235,12 @@ impl Edge {
                         out.push(Effect::ClearTimer(timer));
                     }
                 }
+                // This edge mints no affinity token — `AF-5`'s `token_round_trip` is the scenario
+                // that does — so no `Route` here carries one and P2 never asks. Noted rather than
+                // absorbed: an unanswered verification request is a context that waits forever.
+                ProxyEffect::VerifyToken { .. } => {
+                    out.push(Effect::Note("unexpected token verification".to_owned()));
+                }
                 ProxyEffect::Terminate => out.push(Effect::Note("terminate".to_owned())),
             }
         }

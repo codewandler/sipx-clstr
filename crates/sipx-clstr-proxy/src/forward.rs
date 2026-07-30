@@ -10,21 +10,17 @@ use sipx_sip::{Header, HeaderName, Request, Uri};
 
 use crate::config::ProxyConfig;
 use crate::cookie::branch_for;
-use crate::types::{BranchId, Target};
+use crate::types::{BranchId, RecordRouteTokens, Target};
 use crate::validate::Validated;
 
-/// The affinity-token URI parameter (affinity-token §6).
+/// The affinity-token URI parameter, and the size budget for it — affinity-token §5.
 ///
-/// Exactly one per platform URI: a `Route` that resolves here carrying zero or several fails
-/// verification, because "which token did you mean" has no safe answer.
-pub const TOKEN_PARAM: &str = "aft";
-
-/// The normative size budget for the token **parameter** — not the header line.
-///
-/// The distinction is the affinity-token spec's own correction to `PB-F-1`'s shorthand: at the
-/// module-facts ceiling the whole `Record-Route` line exceeds 200 B for any realistic host, while
-/// the parameter stays inside it. Asserting on the line would fail a compliant token.
-pub const TOKEN_PARAM_BUDGET: usize = 200;
+/// Re-exported rather than restated. Both used to be literals here, with nothing relating them to
+/// the layout that has to fit inside them: `AT-6` asserted `≤ 200` against a third literal of its
+/// own, so widening the token — a larger module-fact sub-budget, a longer tag — would have spent
+/// §5's measured headroom without anything going red. They now live beside the encoding that
+/// produces the value, where a `const` assertion compares them to `MAX_TOKEN_LEN` at build time.
+pub use sipx_clstr_affinity::{TOKEN_PARAM, TOKEN_PARAM_BUDGET};
 
 /// What the engine needs in order to forward one copy.
 #[derive(Debug, Clone)]
@@ -41,11 +37,12 @@ pub struct ForwardPlan<'a> {
     pub parallel_branches: u32,
     /// Whether to Record-Route (dialog-forming requests the platform must stay in the path for).
     pub record_route: bool,
-    /// The token to carry, opaque here.
+    /// The `Record-Route` pair to carry, opaque here — affinity-token §7 M1/M2.
     ///
-    /// `AF-4` mints the real one. Until then the driver supplies a placeholder, which is what lets
-    /// F4 and its byte budget be implemented and tested before the crypto exists.
-    pub token: Option<Bytes>,
+    /// `None` is a platform with no key set: it stamps the single, tokenless `Record-Route` it
+    /// always has. The pair exists to carry the two *directions*, so without tokens there is
+    /// nothing for a second entry to say and it would be bytes off the MTU budget for nothing.
+    pub tokens: Option<&'a RecordRouteTokens>,
 }
 
 /// Why a copy could not be built.
@@ -97,13 +94,21 @@ pub fn forward(
         &breadth.to_string(),
     );
 
-    // F4 — Record-Route, carrying the token as a URI parameter.
+    // F4 — Record-Route, carrying the affinity token as a URI parameter.
     if plan.record_route {
-        let value = record_route_value(config, plan.token.as_ref())?;
-        request.headers.push_front(
-            Header::build(HeaderName::RecordRoute, value)
-                .map_err(|_| ForwardError::BadRecordRoute)?,
-        );
+        // affinity-token §7 M2 fixes the order, and it is load-bearing rather than cosmetic: the
+        // ORIG entry goes on first and the TERM entry on top of it, so that route-set learning —
+        // RFC 3261 §12.1.1 *in order* for the UAS, §12.1.2 *reversed* for the UAC — hands each
+        // endpoint its own side's entry as the first of the pair. Get it backwards and both ends
+        // present the other side's direction on every mid-dialog request.
+        //
+        // `push_front` prepends one at a time, so pushing ORIG first leaves TERM topmost.
+        for value in record_route_values(config, plan.tokens)? {
+            request.headers.push_front(
+                Header::build(HeaderName::RecordRoute, value)
+                    .map_err(|_| ForwardError::BadRecordRoute)?,
+            );
+        }
     }
 
     // §16.6 step 6 — apply the target's route set. For a contact from the location service that is
@@ -144,6 +149,24 @@ pub fn forward(
     // F10/F11 — forwarding and Timer C are effects, which the engine emits.
 
     Ok((BranchId(branch), request))
+}
+
+/// The `Record-Route` values to push, **in push order** — ORIG first, so TERM ends up on top (M2).
+///
+/// One value without a token, two with: the pair is a property of the token, not of Record-Routing.
+fn record_route_values(
+    config: &ProxyConfig,
+    tokens: Option<&RecordRouteTokens>,
+) -> Result<Vec<String>, ForwardError> {
+    let Some(tokens) = tokens else {
+        return Ok(vec![
+            String::from_utf8_lossy(&config.record_route_uri).into_owned(),
+        ]);
+    };
+    Ok(vec![
+        record_route_value(config, Some(&tokens.originating))?,
+        record_route_value(config, Some(&tokens.terminating))?,
+    ])
 }
 
 /// The `Record-Route` value: the configured URI with the token parameter added.

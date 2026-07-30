@@ -42,6 +42,9 @@ pub use cookie::{CookieInput, branch_for, cookie_of};
 pub use forward::{ForwardError, ForwardPlan, TOKEN_PARAM, TOKEN_PARAM_BUDGET, forward};
 #[cfg(feature = "registrar-targets")]
 pub use from_registrar::targets_from_lookup;
-pub use types::{BranchId, Effect, Input, Kind, ProxyTimer, Target, TargetQuery, TokenVerdict};
+pub use types::{
+    BranchId, Effect, Input, Kind, ProxyTimer, RecordRouteTokens, Target, TargetQuery,
+    TokenCarriage, TokenVerdict,
+};
 pub use validate::Refusal as ValidationRefusal;
 pub use validate::{Refusal, Validated, validate};

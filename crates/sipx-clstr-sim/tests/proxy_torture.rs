@@ -180,6 +180,11 @@ impl Edge {
                         out.push(send(upstream, Message::Response(*response)));
                     }
                 }
+                // No token is minted in this scenario, so P2 never asks. Noted rather than absorbed:
+                // an unanswered verification request is a context that waits forever.
+                ProxyEffect::VerifyToken { .. } => {
+                    out.push(Effect::Note("unexpected token verification".to_owned()));
+                }
                 ProxyEffect::CancelBranch(_) | ProxyEffect::AnswerCancel => {}
                 ProxyEffect::SetTimer { branch, after, .. } => {
                     if let Some(branch) = branch {

@@ -273,8 +273,11 @@ impl Token {
 
     /// The `aft` parameter **value**: base64url, unpadded (§5).
     ///
-    /// The parameter name and its 200-byte budget belong to the forwarding core, which is what
-    /// assembles the URI; this is only the value.
+    /// Only the value. Assembling the URI is the forwarding core's, but the parameter's *name* and
+    /// its budget are §5's like the encoding is, so they live here as
+    /// [`TOKEN_PARAM`](crate::TOKEN_PARAM) and [`TOKEN_PARAM_BUDGET`](crate::TOKEN_PARAM_BUDGET) and
+    /// the forwarding core re-exports them. `AF-5` moved them: two literals in two crates with
+    /// nothing comparing them is how a wider layout spends §5's headroom unnoticed.
     #[must_use]
     pub fn to_param_value(&self) -> String {
         encode_param_value(self.as_bytes())

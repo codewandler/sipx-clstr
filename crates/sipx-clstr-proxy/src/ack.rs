@@ -30,6 +30,7 @@ use sipx_sip::Request;
 use crate::config::ProxyConfig;
 use crate::forward::{ForwardError, ForwardPlan, forward};
 use crate::route;
+use crate::types::{TokenCarriage, TokenVerdict};
 use crate::validate::{Refusal, validate};
 
 /// What to do with an `ACK` for a 2xx (§7.2 K3).
@@ -43,6 +44,19 @@ pub enum AckRoute {
         request: Box<Request>,
         /// The URI whose address it must reach — F7, off the copy.
         next_hop: Bytes,
+    },
+    /// A popped platform `Route` carried a token: it is verified before this `ACK` goes anywhere
+    /// (P2), and [`route_ack`] is called again with the verdict.
+    ///
+    /// The same rule as the response context's [`Effect::VerifyToken`](crate::Effect::VerifyToken)
+    /// and for the same reason — an `ACK` for a 2xx is a separately routed request (K3) and takes
+    /// §5 like any other. What differs is only the answer available when it fails: a context has a
+    /// `403`, and this has a record.
+    Verify {
+        /// The governing token — the first-popped entry's.
+        token: Bytes,
+        /// The pair's other entry, for affinity-token §8 S9.
+        partner: Option<Bytes>,
     },
     /// It cannot be forwarded, and there is no response to send instead. The reason, for the record.
     Unroutable(AckRefusal),
@@ -63,6 +77,14 @@ pub enum AckRefusal {
     /// F1–F9 could not build a forwardable copy — an unparseable target, or `Record-Route`
     /// configuration that does not parse.
     NotForwardable(ForwardError),
+    /// P3 for a method that has no response: a platform `Route` carried a token that did not
+    /// verify.
+    ///
+    /// A request gets `403 Forbidden` and this gets a record, but the *decision* is identical —
+    /// there is no fallback routing and no degraded mode. Forwarding it anyway because an `ACK`
+    /// cannot be refused out loud would make the one message that concludes a call the one message
+    /// a forged token still buys.
+    UnverifiableToken,
 }
 
 impl AckRefusal {
@@ -82,6 +104,7 @@ impl AckRefusal {
                 "Proxy-Require names an unsupported extension"
             }
             Self::NotForwardable(_) => "no forwardable copy could be built",
+            Self::UnverifiableToken => "the Route's affinity token did not verify",
         }
     }
 }
@@ -93,14 +116,35 @@ impl AckRefusal {
 /// that resolved that Request-URI as an address of record would deliver the acknowledgement to
 /// whatever the registrar happened to hold under it — or, finding nothing, drop the one message that
 /// concludes the call.
-pub fn route_ack(request: Request, config: &ProxyConfig) -> AckRoute {
+///
+/// `verdict` is the answer to a previous call's [`AckRoute::Verify`], and `None` on the first call.
+/// A tokened `ACK` therefore cannot reach [`AckRoute::Forward`] without one having been supplied —
+/// the ordering P2/P3 requires, made a property of the signature rather than of a driver's memory.
+pub fn route_ack(
+    request: Request,
+    config: &ProxyConfig,
+    verdict: Option<&TokenVerdict>,
+) -> AckRoute {
     let validated = match validate(&request, config) {
         Ok(validated) => validated,
         Err(refusal) => return AckRoute::Unroutable(AckRefusal::Refused(refusal)),
     };
 
     let mut request = request;
-    route::preprocess(&mut request, config);
+    let carriage = route::preprocess(&mut request, config);
+
+    // §5 P2/P3, before F1–F9 — the same order and the same rules as the response context's, through
+    // the same preprocessing. A private shortcut past them is what `V-03` was.
+    match (carriage, verdict) {
+        (Some(_), Some(TokenVerdict::Invalid)) => {
+            return AckRoute::Unroutable(AckRefusal::UnverifiableToken);
+        }
+        (Some(TokenCarriage { token, partner }), None) => {
+            return AckRoute::Verify { token, partner };
+        }
+        (Some(_), Some(TokenVerdict::Valid { .. })) | (None, _) => {}
+    }
+
     let target = route::predetermined_target(&request);
 
     let plan = ForwardPlan {
@@ -113,7 +157,7 @@ pub fn route_ack(request: Request, config: &ProxyConfig) -> AckRoute {
         // RFC 6141, and the same rule `is_dialog_forming` applies to a re-INVITE: a mid-dialog
         // `Record-Route` does not alter an established route set, so it is bytes for nothing.
         record_route: false,
-        token: None,
+        tokens: None,
     };
     match forward(&plan, config) {
         Ok((_, forwarded)) => {
@@ -188,6 +232,7 @@ mod tests {
                 "70",
             ),
             &config(),
+            None,
         );
         let AckRoute::Forward { request, next_hop } = outcome else {
             panic!("an ACK with a reachable remote target is forwarded: {outcome:?}");
@@ -218,6 +263,7 @@ mod tests {
                 "70",
             ),
             &config(),
+            None,
         );
         let AckRoute::Forward { request, next_hop } = outcome else {
             panic!("forwarded: {outcome:?}");
@@ -232,11 +278,62 @@ mod tests {
 
     #[test]
     fn an_unforwardable_ack_is_an_explicit_outcome_and_never_a_response() {
-        let outcome = route_ack(ack("sip:bob@10.0.0.1:5062", &[], "0"), &config());
+        let outcome = route_ack(ack("sip:bob@10.0.0.1:5062", &[], "0"), &config(), None);
         let AckRoute::Unroutable(refusal) = outcome else {
             panic!("Max-Forwards: 0 cannot be forwarded: {outcome:?}");
         };
         assert_eq!(refusal, AckRefusal::Refused(Refusal::TooManyHops));
         assert_eq!(refusal.describe(), "Max-Forwards reached zero");
+    }
+
+    #[test]
+    fn a_tokened_ack_asks_for_a_verdict_before_it_is_forwarded() {
+        // K3 takes §5 like any other request, so P2 applies: the token is verified *before* the one
+        // message that concludes a call goes anywhere. Answering it out loud is what an `ACK` cannot
+        // do — deciding is not.
+        let tokened = ack(
+            "sip:bob@10.0.0.1:5062",
+            &["<sip:edge-1.example:5060;lr;aft=AQGgoaKj>"],
+            "70",
+        );
+        let AckRoute::Verify { token, partner } = route_ack(tokened.clone(), &config(), None)
+        else {
+            panic!("a carried token is verified before the ACK is forwarded");
+        };
+        assert_eq!(token, Bytes::from_static(b"AQGgoaKj"));
+        assert_eq!(partner, None, "one platform Route is not a pair");
+
+        // P3 — the same hard reject a request gets, in the only currency this method has.
+        let outcome = route_ack(tokened.clone(), &config(), Some(&TokenVerdict::Invalid));
+        let AckRoute::Unroutable(refusal) = outcome else {
+            panic!("a token that did not verify buys no routing: {outcome:?}");
+        };
+        assert_eq!(refusal, AckRefusal::UnverifiableToken);
+
+        // And a verified one routes exactly as an untokened ACK does.
+        let outcome = route_ack(
+            tokened,
+            &config(),
+            Some(&TokenVerdict::Valid {
+                tenant: "t1".to_owned(),
+            }),
+        );
+        let AckRoute::Forward { next_hop, .. } = outcome else {
+            panic!("a verified token routes the ACK: {outcome:?}");
+        };
+        assert_eq!(String::from_utf8_lossy(&next_hop), "sip:bob@10.0.0.1:5062");
+    }
+
+    #[test]
+    fn two_aft_parameters_are_refused_a_layer_below_this_one() {
+        // §5's "exactly one `aft` per platform URI" needs no check here, and this is why: RFC 3261
+        // §19.1.1 forbids a repeated `uri-parameter` name outright, so the kernel refuses the URI
+        // at parse time and the `Route` never becomes an `Address` we could recognize as ours. A
+        // second check in this crate would be unreachable code claiming to hold a rule.
+        let two = Bytes::from_static(b"<sip:edge-1.example:5060;lr;aft=AQGgoaKj;aft=AQGwsbKz>");
+        assert!(
+            sipx_sip::headers::Address::parse(&two, "Route").is_err(),
+            "the kernel is what enforces §19.1.1; if that changes, §5 needs a check here"
+        );
     }
 }
