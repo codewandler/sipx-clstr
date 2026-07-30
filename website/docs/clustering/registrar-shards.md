@@ -140,11 +140,15 @@ wrong.
 
 ## What is true today
 
-One node. Bindings in a process-local, in-memory store — restart the node and every registration is
-gone. No shard map, no owner, nothing to hand off, and no second node to hand off to. The
-PostgreSQL location store is real code with real tests behind a cargo feature, but the binary
-cannot be pointed at it. The registrar also has no authentication path from the CLI, so do not put
-today's binary on a public address; see [What sipx-clstr is](../intro.md).
+**No shard map, no owner, and nothing to hand off** — every node that opens the store sees every
+binding in it, which is the opposite arrangement from the one described above. Two nodes over one
+PostgreSQL location service is what ships; the store is named in the
+[configuration document](../reference/configuration.md) and needs the non-default `postgres` cargo
+feature, and `backend: memory` still means bindings die with the process.
+
+The registrar is also an open one — authentication is applied from the document and there are no user
+credentials behind it — so do not put today's binary on a public address; see
+[What sipx-clstr is](../intro.md).
 
 What already holds is the shape: canonicalisation, the binding schema, the CAS contract and the
 lookup ordering, all vector-tested. Sharding is placement layered on top of a store that was built

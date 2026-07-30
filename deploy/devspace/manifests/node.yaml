@@ -50,7 +50,13 @@ data:
       tenant:
         - name: default
           id: 1
-          domains: [cluster.local]
+          # The domain every address-of-record in this namespace lives in, and it must be one the
+          # phones can actually resolve: `FC-4` answers a REGISTER outside this list `403`, so a
+          # name that merely parses is not enough. `sipx-clstr-node-a` is the per-node ClusterIP
+          # Service defined below — stable across pod restarts, unlike the pod IP this used to be,
+          # and resolvable from any pod in the namespace. Not `[]`, which would mean "any" and
+          # reopen the hole `FC-4` closed. `scripts/check-proof-domains.py` gates the agreement.
+          domains: [sipx-clstr-node-a]
 ---
 # The shared location service. Ephemeral on purpose: a database that survived `devspace purge` would
 # make a stale binding look like a bug in the registrar.
@@ -363,8 +369,12 @@ spec:
               # `answer` to bind. The lease is 3600s and the loop re-registers well inside that, so
               # the binding never lapses. Registered through node-b and called through node-a, which
               # is what makes hearing the tone a cross-node proof rather than a local one.
+              #
+              # The AoR domain is node-a's Service name, spelled out rather than `$A`: it has to be
+              # a literal in the tenant's `domains` above or `FC-4` answers this REGISTER `403`, and
+              # a value resolved at runtime can never be in a document written before the pods exist.
               while true; do
-                sipx register "sip:hello@$A" --target "$B:5060" --local "$ME:5060" --json
+                sipx register "sip:hello@sipx-clstr-node-a" --target "$B:5060" --local "$ME:5060" --json
                 sipx answer --local "$ME:5060" --play /tone.wav --duration 20 --wait 1200 --json
               done
           env:

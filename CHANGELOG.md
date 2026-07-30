@@ -7,6 +7,360 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **A node bounds how much work it holds at once** (`DP-11`). The accept loop was
+  `while let Some(arrival) = incoming.recv().await { … tokio::spawn(…) }` with no limit: the only
+  backpressure was the kernel's *incoming queue*, which bounds arrivals rather than residency, and a
+  node drains that queue as fast as it can while a proxied transaction lives until Timer B. So offered
+  load and resident concurrency were the same number, and the ceiling was whatever ran out first.
+
+  `AdmissionBound::admit` is now taken on the accept loop, before anything is cloned and before a task
+  exists, and the knob is `cluster.admission.maxInFlightTransactions` — default **1024**, matching the
+  kernel's own queue capacity so the two limits are one number rather than two that can disagree; `0`
+  is refused, and the ceiling is 65536. Refusing over the bound is a SIP answer, not a drop: `503` with
+  `Retry-After`, the same shape the kernel sends when *its* queue is full, so a client sees one
+  behaviour whichever layer shed it.
+
+  **`REGISTER` and `ACK` are outside the bound**, and that is the load-bearing decision rather than an
+  omission. A registration storm *is* the overload, and a shed refresh is a phone that becomes
+  unreachable — shedding REGISTER turns a spike into an outage. An ACK for a 2xx has no response in SIP
+  at all (RFC 3261 §17.1.1.3), so "refusing" one could only mean dropping it, which is the call-leaking
+  failure the kernel already counts apart. Every other gated method is subject to the bound, `BYE` and
+  `CANCEL` included: exempting the requests that *end* work is tempting, because shedding them makes
+  overload self-sustaining, but an unbounded method is an unbounded node, and a `503` with `Retry-After`
+  to a `BYE` is a retry rather than a loss.
+
+  The reasoning lives in [cluster-config](docs/specs/cluster-config.md) `V11`, not only in a doc
+  comment, because the person who needs it is an operator reading the schema.
+
+  The kernel's shed counters are also read for the first time: `Handle::shed()` separates shed requests,
+  ACKs and unmatched messages, and nothing in this repository called it — `outstanding()` was the only
+  kernel instrument used. `report_load` now samples all three beside `outstanding`, `in_flight`,
+  `admitted` and `refused`. It is still a log line rather than a metric; a metrics endpoint is `DP-3`'s,
+  and this is its input.
+
+- **The end-to-end call proof runs on every push** (`CF-15`). `scripts/e2e-call.sh` — the evidence
+  `website/docs/guides/registrations-and-calls.md` offers for the headline claim that a call
+  completes with audio — now runs in CI, in its own `e2e` job, against the kernel's own `sipx` CLI
+  built from the tag `Cargo.toml` pins. Reading the tag rather than writing it here means a kernel
+  bump moves the phone with it, instead of leaving the job proving a call against a version nothing
+  else uses; the CLI stays un-vendored, because the property that makes this a proof is that the
+  client side is an independent implementation.
+
+  `DX-12` had recorded this one as not-in-CI because the CLI comes from another repository. That
+  premise was true and the conclusion was wrong: it costs a shallow clone and about forty seconds of
+  `cargo build`, measured at both `v0.7.0` and `v0.10.0`. The cost of *not* running it was `FC-4`
+  breaking this proof — and two of its siblings — for a whole release with nothing watching.
+
+  It is a separate job rather than a gate step so a red says "the end-to-end call broke" rather than
+  "the gate is red", and so `scripts/gate.sh` stays runnable without a second checkout.
+
+  The proof needs `127.0.0.1:5060` literally, which is the port residue `CF-13` handed over. It is
+  settled by constraining rather than varying: location-service §3.2 N7 makes an absent port and an
+  explicit one distinct AoR keys (RFC 3261 §19.1.4), `sipx dial` has no `--target` so the call leg's
+  address is the request-URI's and drags the domain with it, and `check-proof-domains.py` refuses a
+  domain that is not a static literal — the check that makes `FC-4`'s `403`s impossible to repeat
+  silently. So the script is one-run-per-machine by construction, `preflight` says so with exit 2 in
+  0 s instead of failing halfway through, and CI is unaffected because each job gets a fresh VM.
+
+  The three proofs that stay out of CI now name what would change that. `k8s-two-node-call.sh`: the
+  phone *image*, not the cluster. `two-node-call.sh`: both of `DX-12`'s reasons are settled, so the
+  honest reason is that nobody has written the job. `sip_demo.py`: it would have to start its own
+  node, at which point it is `e2e-call.sh` with less coverage.
+
+### Changed
+
+- **How many `done` stories closed with work another document had named them for: three** (`CF-16`).
+  `EX-8` was named in writing as the owner of two changes, closed having landed one, and the orphaned
+  half sat unowned for months while a real capability was missing. A story's acceptance is only ever
+  checked against itself, so the board cannot tell "finished" from "finished the part it wrote down".
+  This is the sweep that asks how many others there are, over all 81 `done` stories, with the number
+  produced before anything was fixed:
+
+  - `CF-8` registered seven vector prefixes and put **none of their thirty families** in the
+    conformance report's render list, so **395 of the 533 rows the report counts appear in no table**
+    — while `CF-8` ticked both "families named" and "the report regenerates". Filed as `CF-17`.
+  - Three `hook-framework` rows still call the affinity-token budget "provisional until `AF-1`", and
+    `AF-1` landed — `affinity-token` §3 made the 64-byte budget normative. `EX-8` diagnosed this in
+    writing and recorded it as adjacent-not-mine; nobody owned it after. Filed as `EX-13`.
+  - Three specifications each defer a gap "for `CX-1` to file", and `docs/upstream.md` has **no row
+    for any of them**. Not `CX-1` failing — all three specs postdate its close. Filed as `CX-6`.
+
+  **The checker was deliberately not built, and the measurement is the argument.** Sixteen
+  delegation constructions over the corpus find 159 delegation-shaped mentions, 100 naming a `done`
+  story, 3 real — 3% precision. The 97 false alarms are unreachable by a better pattern because the
+  discriminator is *tense*, not vocabulary: "until `EX-12` landed the split" (resolved) and "until
+  `CF-8`, this table is unenforced" (open) are the same shape. A check at that precision gets deleted
+  by the third person it interrupts. Prevention is recorded instead, on `CX-6`: **a spec deferring
+  work names a ledger row or an epic, not a story** — a story closes, a row does not.
+
+  A separate defect family surfaced while measuring and is filed apart as `CF-18` rather than folded
+  in, because it would **not** have caught `EX-8`: nine `done` stories are cited nowhere in this file,
+  and three carry no ticked acceptance box at all.
+
+- **The deferral ledger says what it is** (`CF-16`). `docs/reference/vector-scope.toml` described
+  itself as "the narrow, `PB`-only ancestor" of the conformance registry. That was true when `PB` was
+  the only registered prefix, and it survived `CF-8`'s six registrations and `EX-12`'s seventh — by
+  which point `PB` was the third *smallest* family in the file, which now carries 389 deferrals over
+  eleven prefixes and 19 rows covered for shape only. A header describing a file as narrower than it is
+  invites the next reader to add a row without reading the discipline above it, and that discipline is
+  what keeps a coverage report honest.
+
+- **Which failure a caller sees when a fork fails two ways** (`PX-11`). Forking to a contact that is
+  busy and one that is gone used to return `404 Not Found`, because the best final was picked by
+  numeric order. It now returns `486 Busy Here`.
+
+  A branch's final is a statement about one *contact*; what the proxy sends upstream is a statement
+  about the *address of record*. `404` says that address does not exist — which another branch
+  answering has already falsified — and it tells the caller to give up rather than retry. RFC 3261
+  §16.7 step 6 fixes the response *class* and then explicitly permits any response within it, so the
+  RFC does not decide this; the specification now does, in a new §8.1, and cites what the RFC does
+  and does not settle.
+
+  Numeric order was also doing a job it cannot do: it let a `408` from a branch that **never
+  answered** outrank a `486` from one that did, and would have let a downstream `400 Bad Request`
+  outrank both — reporting a fault in our own message as the callee's status. Lowest code survives as
+  the tie-break *within* a rank, which is a job it is good at.
+
+  This was found because a vector row and its own test had asserted opposite outcomes for the life of
+  the project — the row said `486`, the test asserted `404` — and both counted as proved until
+  `CF-12` started requiring a proof to compare what its row claims.
+
+### Fixed
+
+- **"Runs in CI" was a substring match, and would have started passing for the wrong reason**
+  (`CF-15`). `check-site.py` resolved whether a proof runs in CI with `name in text` over
+  `scripts/gate.sh` and `.github/workflows/`. A commented-out line satisfied it, so did a step merely
+  *named* after a proof, and so did a sentence in a comment explaining that the proof is **not** run.
+  It was inert only because nothing in either file mentioned any proof at all — the same shape of
+  false green that `DX-12`'s `not-in-ci:` directive was written to close, one level up.
+
+  Demonstrated before it was fixed, on the real files: adding the single line
+  `# scripts/e2e-call.sh` to `scripts/gate.sh` took the checker from `FAIL` / exit 1 to clean /
+  exit 0, with nothing running the proof.
+
+  The name must now appear where a shell would execute it: comments are stripped, a workflow is read
+  only inside `run:` bodies (inline and block scalar), and the name has to stand in command position
+  — after env assignments and wrappers like `timeout`, never as an argument to something else.
+  Heredoc bodies and `\` continuations are not tracked, which is stated in the module rather than
+  implied to be exact; both fail closed. A `self_test()` runs on every invocation, on
+  `check-vectors.py`'s reasoning that a checker whose own defect was a false green has to carry the
+  proof it is still closed — fifteen cases, including the exact `gate.sh` line above.
+
+- **Thirty-one vector rows were invisible to the gate** (`EX-12`). The quirk-profile rows lived in a
+  design record, and the checker reads rows only from the spec that *owns* a prefix — so no spec owned
+  `QP`, and a fabricated row passed the check. They now live in `hook-framework` §9.1, which owns the
+  prefix, and all 31 carry a deferral naming the work that would prove them rather than being counted
+  as proved. The total goes up, not the proved figure.
+
+  Registering a prefix is no longer something to remember: the checker now fails on any table row
+  shaped like a vector whose prefix no spec owns, across both the spec and design trees. `QP` was the
+  only unowned prefix in the repository, so that rule goes green exactly as this lands.
+
+  The blocker underneath was a story that closed on half its scope. `EX-8` was named in writing as the
+  owner of the `Replace`/`Field` body-claim split and rules `G9`–`G14`; its acceptance covered only
+  the other half, and it closed `done`. Those deltas land here, which is also what makes it possible
+  for a deployment to anchor media and run an SDP quirk at once instead of the two colliding.
+
+- **Two checkouts could not be tested at the same time** (`CF-13`). The node's socket suites bound
+  hard-coded ports, so concurrent runs collided with `Address already in use` — and the failure
+  landed on whichever diff happened to be under test rather than on the one at fault. It cost two
+  separate pieces of work real effort to prove a negative. Every node in the suite now binds port
+  zero and is asked what it got, through the same `listening on` report the node already emits after
+  binding, so no second readiness contract was invented.
+
+  Four tests also waited on a fixed 1500 ms sleep for an event that usually arrived sooner. They now
+  wait on the event: `startup_warns` went from 1.50 s to 0.02 s, and none of them can lose a race
+  against a clock. A test that fails one run in five under load teaches people to re-run instead of
+  read, which costs more than the test is worth.
+
+- **The conformance report counted rows it could not vouch for** (`CF-12`). A row was called
+  *proved* when a test **name** mapped to it, whatever that test asserted. Swept across the 140 rows
+  that carried the label: 61 state a value in their expectation, **41 compare it, and 20 never do**.
+  The published figure moves from 140 to **120 of 498 proved**, with 20 reclassified *shape only*.
+  No test was changed to improve that number — the count is the finding.
+
+  A proved row must now compare the value it claims. The checker reads the row's expectation minus
+  its citations, and the *compared arguments* of the test's assertions — not comments, not the test's
+  own name, not an assertion's message — so quoting a row near a test cannot buy a proof. Rows that
+  state no value are unaffected: ordering, shape and refusal rows are not asked for a number they
+  never had.
+
+  Three of the twenty are worth naming. Five registrar-auth rows state `401` and none compares it, so
+  a challenge wrongly issued as `407` would pass every one. `PB-F-1` — the row that started this — is
+  *still* shape only, because its test compares the armed timer against the code's own constant
+  rather than the value the row states, so moving the constant keeps the test green while the row
+  goes quietly wrong. And `PB-R-5` says the best of a `486` and a `404` is `486` while its own test
+  asserts `404`: a row and its proof that have contradicted each other for the project's whole life.
+  That one needs a specification decision and is filed, not patched.
+
+- **Two gate checkers read prose about their own directives as directives** (`CF-14`). Both took the
+  first match anywhere in a file, so a comment *explaining* a directive was parsed as one — and a
+  correct declaration could be outvoted by an earlier mention of the token. `check-proof-domains.py`
+  failed closed, turning the gate red on a correct script and teaching contributors to avoid spelling
+  the token. `check-site.py`'s was the same defect with the polarity reversed and therefore worse: a
+  prose mention of `not-in-ci:` silently exempted a proof from being checked at all. Both directives
+  are now a line whose entire content is the token and its value.
+
+  The regression evidence is permanent rather than a test fixture: two proof scripts now carry
+  comments that fully explain the directive and spell the token, one of them twice above its real
+  declaration. If the anchoring regresses, the gate goes red on the repository's own documentation.
+
+- **Three site properties held by hand are now checked** (`DX-12`). An authored page that no sidebar
+  entry routes to, and a sidebar entry naming a page that does not exist, both fail the gate — the
+  first is quieter than a broken link and therefore worse, because it does not 404, it is simply
+  never reachable. `reference/cli.md` is verified against the binary in **both** directions, so a
+  flag the page invents and a flag the binary grows without the page are each a failure; proved by
+  temporarily adding a flag to the binary and watching the check catch it.
+
+  The fourth property is the one worth reading: a script a page offers as **proof** must be run by
+  the gate or by CI, or carry a recorded reason why not. An unverified proof and a deliberately
+  unverified proof looked identical from the outside, and the first of those shipped a `403` for a
+  release. All four proof scripts now carry that decision explicitly.
+
+  The check reports what it could not run rather than narrowing quietly: eleven documented commands
+  need Docker, a Kubernetes cluster or the `sipx` CLI, and it says so on every run.
+
+- **An authentication decision left no trace** (`RG-15`). A `REGISTER` that was challenged, refused
+  or admitted produced nothing an operator could see, so a credential-stuffing run against a tenant
+  and a quiet night were the same log. Every outcome now produces exactly one record naming the
+  tenant, the source, the status and the reason — and no credential, nonce, cnonce, response digest
+  or presented username appears in any of them, which is enforced by the reason type being
+  `&'static str` rather than by review.
+
+  The record is owed to the **decision**, not to what follows it. A correct digest followed by a
+  message that then fails to parse used to record nothing at all, because the outcome was read after
+  the principal had been dropped — so a successful authentication was indistinguishable from silence,
+  the exact failure this story exists to remove. Admission now returns the outcome alongside the
+  decision, so no later failure can erase it.
+
+- **The `timers` section was accepted, validated, projected — and armed nothing** (`PX-10`). An
+  operator who set `timers.timerC` in the cluster document got the proxy crate's private 180 s,
+  silently, because nothing ever assigned it: `grep timer_c` over the driver returned no matches.
+  `timerC` is now wired from the document to the engine, and the four keys that still are not wired
+  (`t1`, `timerB`, `timerF`, `maxCallDuration`) are reported as unapplied instead of dropped.
+
+  `proxy-behavior.md` F11 carried the same self-refuting default `DP-12` had just removed from the
+  configuration schema — a floor of `≥ 180 s` under an RFC bound that is strictly greater, with the
+  default sitting exactly on it — and cited §16.8, which states no bound at all. The bound is
+  §16.6 step 11. Both specs now say the same thing, which is what stops this from happening a third
+  time.
+
+  **The caveat, because it qualifies the headline:** the driver still performs no timer effect —
+  `SetTimer` and `ClearTimer` are dropped in the same arm as `CancelBranch`, as they always have
+  been. What changed is the deadline the engine *puts in* the effect. A Timer C is now armed with the
+  right value and still does not fire; making it fire belongs with branch cancellation, since a fired
+  Timer C's first act is to cancel the branch.
+
+- **The two-node cluster proofs answered `403`** (`FC-5`). `FC-4` made a `REGISTER` for a domain the
+  tenant does not serve a `403` — closing a real hole — and `scripts/e2e-call.sh` was updated with
+  it. The two-node proofs were not: they registered in `127.0.0.1` and a Service IP against documents
+  declaring `example.test` and `cluster.local`. So the evidence for this project's headline claim was
+  red, and `README.md`'s statement that `two-node-call.sh` "proves it locally" was false. It passes
+  again.
+
+  The class is closed rather than the three instances: `scripts/check-proof-domains.py` reads every
+  proof under `scripts/` and `deploy/`, resolves the address-of-record it registers through the
+  script's own shell assignments, and compares it against the `tenant.domains` of the document that
+  governs it — running in both the gate and CI. It refuses the three cheap ways to be vacuously
+  green: `domains: []` fails (that is the fail-open `FC-4` removed), a domain only known at runtime
+  fails, and a proof that ships no document and names none fails.
+
+- **A configuration document could be refused for a value the loader itself supplied** (`DP-12`).
+  The schema declared Timer C with a default of 180 s and, in the same rule, `MUST be > 3 minutes`.
+  180 s *is* three minutes, so any document carrying a `timers:` section without naming `timerC` was
+  rejected at startup against a default no operator wrote. RFC 3261 §16.6 step 11 is a MUST over a
+  strict inequality with no rounding language, so the rule stands and the **default moved to 240 s** —
+  the smallest whole minute above the floor, stated in the unit the RFC states the floor in.
+
+  The floor is now checked against whatever value stands, written or defaulted. Previously the check
+  was skipped entirely when a document carried no `timers:` section, which is what let a
+  self-refuting default ship invisibly; a compile-time assertion makes a recurrence a build failure
+  rather than a refusal in every operator's startup. The rule's own vector turned out to be
+  *deferred* rather than proved — the other half of how this survived — and is now proved.
+
+- **`timers.maxCallDuration` and `locationStore.ha` were accepted and silently discarded** (`DP-12`).
+  Both are declared by the schema, read by nothing, and were not reported. They now appear in the
+  loader's unapplied list, so setting one tells you it will not take effect instead of implying it
+  did.
+
+- **The published documentation described a binary that no longer exists** (`DX-13`). The site and
+  `README.md` still taught the three provisional flags that `0.11.0`'s configuration document
+  replaced, and still gave "there is no configuration path" as the reason authentication is off —
+  which stopped being the reason when `FC-3` landed. The real one is that there is no credential
+  store yet, and the two states are distinguishable by running the binary, so the pages now say which
+  is which. Nine status tables were re-derived from the binary and the scripts rather than edited by
+  hand, `run-a-node.md` gained an explicit warning on the public-listener case, and the `Dockerfile`'s
+  inverted feature claim was corrected.
+
+  The README quick start also could not have worked: it declared a tenant serving `example.test`
+  while the demo it tells you to run registers `alice@127.0.0.1`, so the registrar correctly answered
+  `403`. It now declares the domain it actually registers in, matching `scripts/e2e-call.sh`.
+
+- **A rule the extension design asserted turns out to be false** (`EX-11`). The design said the
+  composed quirk set for one attachment point is every trunk-bound and domain-bound profile's rules
+  taken together, and `QP-C-2` was written to match. Derived from the premises the surrounding specs
+  already fix — a quirk applies only on an egress leg toward one peer, and that peer is identified by
+  the route, which names a trunk **or** a domain and never both — the two sets **never intersect**.
+
+  This mattered in practice, not only on paper: under the union reading, one domain-bound profile and
+  one trunk-bound profile writing the same header produced a startup error naming both, and the only
+  documented repair was rejected by the rule governing repairs, because neither binding had a contest
+  at its own attachment point. A two-line configuration was both illegal and unfixable. A new rule
+  `G14` settles what a trunk-valued rule means at a domain binding, and the case the old reading
+  rejected now has a vector.
+
+- **The default Helm chart could not start a single node** (`KO-14`). Its `values.yaml` predated the
+  configuration schema, and nothing checked one against the other: rendering the chart and loading
+  the result produced **22 refusals for every one of the six roles it deploys**. A `media:` block the
+  loader has no key for, listeners keyed `role:` instead of `roles:`, a `transport: http` listener,
+  and a `security.maxForwards: 10` that RFC 3261 §16.6 step 3 fixes at 70 and does not offer as a
+  knob. Four of the six roles had no listener at all, which the schema refuses outright.
+
+  The values are now expressed in the schema's own vocabulary, and `deploy/helm/check-values.sh`
+  renders the chart, rebuilds the node document from the rendered resource, and loads it through the
+  **real loader** once per role — so this class of drift fails loudly next time instead of at the
+  first `helm install`. Media is declared where the media-relay spec actually puts it, per trunk and
+  per pool.
+
+- **A dead contact no longer holds a live contact's answer for half a minute** (`PX-9`). Forking to
+  two registered contacts at equal `q` drove the branches *in order*: a branch's response stream only
+  ends when its transaction does, so a device that never answers held the request task until the
+  kernel's Timer B — 64·T1, about thirty seconds — while the other device's `200 OK` sat unread in a
+  stream nobody was polling. The ordinary two-phone registration is the case that hits it.
+
+  Branches are now read concurrently and reduced serially: a `JoinSet` per fork group yields one
+  event at a time into the proxy engine, so the sans-IO core still sees a single total order of
+  inputs and RFC 3261 §16.7 response selection is untouched. Measured on the failing case, the
+  answer reaches the caller in 1.4 ms rather than 32.0 s.
+
+  One consequence is worth stating because it is observable: aggregated finals are now ordered by
+  arrival rather than by drain order. The selected status is a minimum over the set and so cannot
+  change, but *which* of two equal-status branch responses is relayed, and the order of aggregated
+  `401`/`407` challenges, now depend on which branch answered first. §16.7 prescribes no order among
+  equal-status finals, and preserving the old order would mean preserving the head-of-line blocking
+  that was the defect.
+
+
+### Known gaps
+
+- **The conformance report shows a quarter of the rows it counts** (`CF-17`, found by `CF-16`). Its
+  denominator is every registered vector row — 533 — and it renders only the five families in its
+  render list, so 395 rows are counted and never displayed. Anyone reading the report to see what is
+  covered is reading a table that silently omits `AI`, `AT`, `CC`, `FR`, `LS`, `MR` and `NN`. The
+  registry and the deferral ledger are correct; it is the *report* that is partial. Nothing green
+  contradicts it, because "a registered family also renders" was never a tested condition — which is
+  the same shape as the defect `CF-8` was written to close, one level further out.
+
+- **The digest replay window is `O(n)` per authenticated request** (`RG-15`). Measured on the pinned
+  kernel: 7.5 µs against a one-entry window, 19.2 µs against its full 4096 — about 11.6 µs of pure
+  scan, 2.5× the cost of the verification itself, and it runs under the node-wide authenticator lock,
+  so it is a ceiling on the node rather than on one request. The window is a private field of the
+  kernel's `Authenticator`, and a nonce replay window is an authentication primitive, so building a
+  second one here would shadow-implement kernel logic. Filed in the upstream ledger with a
+  reproduction instead.
+
 ## [0.11.0] — 2026-07-30
 
 The release where "cluster" stops being a design document. Two nodes sharing one PostgreSQL location
@@ -49,6 +403,40 @@ prove, because the thing they do not prove is the next piece of work.
   registry are *recognised but not descended into* and reported in `Config::deferred`. A section
   silently ignored would be configuration nobody applies with nothing saying so, which is the
   failure V2 exists to prevent, one level up.
+
+- **A node is configured by that document at startup, and the provisional flags are gone** (`DP-10`).
+  `DP-8` could read a cluster document and `RG-12` could act on one, and `main.rs` still built its
+  config from three flags, so neither was reachable from a running node. `startup.rs` is the seam: it
+  reads the file, reads the environment, and resolves the references the document deliberately does
+  not contain, so the loader stays pure. The flags were **replaced, not extended** — a transition
+  period where both work is the second configuration surface being removed — and `clap` replaces the
+  hand-rolled parser, whose own comment called the surface "deliberately tiny and provisional", which
+  expired when it grew node-identity semantics.
+
+  Identity comes from **outside** the document (cluster-config §5 P1): node id, zone and role set, from
+  the downward API in Kubernetes or the command line on a host. A document that could name which node
+  is reading it would not be one document for the cluster. `dsnRef` is resolved here rather than in the
+  loader (§8 V9 — resolution is IO), and a reference that does not resolve is a start-up failure naming
+  the reference, never a quiet fall back to the in-memory store. Every loader error is printed, ordered
+  by path, before the process exits `2`.
+
+  TOML became a third encoding in the same change, converted into the same value tree YAML and JSON
+  produce so validation has exactly one path, detected from the bytes rather than the file name, with
+  cluster-config D3 corrected rather than left claiming two. A test asserts the whole `Config` is equal
+  across all three.
+
+  Two defects surfaced by running the node rather than reading it. It printed `listening on` — the
+  documented readiness signal every proof script waits on — and *then* exited when the store was
+  unreachable, so a script proceeded against a dying node; everything that can refuse to start now
+  refuses before anything announces. And logging the store choice would have printed the resolved DSN,
+  password included, undoing V9 in the artefact most likely to be pasted into an issue.
+
+  It also found that `RG-4`'s store could not be driven from a node at all, which its own synchronous
+  tests could not see: the blocking client builds a runtime and `block_on`s it, so the first real call
+  panicked with "Cannot start a runtime from within a runtime", and `block_in_place` turned that into a
+  connection nobody was driving rather than into an error. It is opened on a thread tokio has never
+  touched, behind a `BlockingStore` adapter; the honest fix is `tokio-postgres`, which changes the trait
+  for every backend and is its own story.
 
 - **A node can be pointed at a shared location store** (`RG-12`). `RG-4` built the PostgreSQL
   location service and proved it satisfies the store contract; nothing made it reachable, because

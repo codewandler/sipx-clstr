@@ -20,6 +20,31 @@
 #
 # Usage:  scripts/k8s-two-node-call.sh [--sipx <path>] [--namespace <ns>]
 # Exit:   0 the cross-node call completed · 1 a step failed · 2 environment not ready
+#
+# not-in-ci: needs a live Kubernetes cluster with the devspace profile already deployed, a pod image
+# carrying the external `sipx` CLI, and the pod CIDR reachable from where it runs. That is a
+# different cost class from the rest of the gate and cannot be stood up per push. Run by hand
+# against a real cluster before a release.
+#
+# What would change it, concretely rather than "when it gets easier" (`CF-15`): the phone image is
+# the blocker, not the cluster. A cluster can be stood up inside a job — k3d, exactly as
+# `website/docs/getting-started.md` already has a reader do on a laptop — but the `sipx` CLI phone
+# runs here as an image built by hand and published nowhere a runner could pull from, and this script
+# takes it as already present. Publish that image (or build it in the job from the pinned kernel tag,
+# the way `.github/workflows/ci.yml`'s `e2e` job now builds the CLI) and the remaining work is a
+# deploy-and-wait step, not a proof change. Until then the job cannot be written at all.
+#
+# Recorded by `DX-12` as a decision rather than an omission; `scripts/check-proof-domains.py` checks
+# the registered domains against the ConfigMap named by the `proof-document:` directive below, which
+# is the half a runner can settle.
+#
+# Unlike the local proof this script embeds no cluster document — it registers against one that is
+# already deployed. A `proof-document: <path>` comment names it, so the checker can hold the two to
+# the same `domains`; the last line of this block is machine-read, not decoration. Naming the
+# directive in this paragraph is safe since `CF-14`: it is recognised only as a whole comment line,
+# so prose about it is prose. Before that it was taken by first match anywhere in the file, and this
+# note had to avoid spelling it at all.
+# proof-document: deploy/devspace/manifests/node.yaml
 
 set -uo pipefail
 
@@ -81,13 +106,19 @@ step "two phones, registering through different pods"
 # arrangement a real client would be in.
 kubectl -n "$NS" delete pod sipx-phones --ignore-not-found --wait=true >/dev/null 2>&1
 
-# The address-of-record domain is node-a's address for *both* users, while bob is registered
+# The address-of-record domain is node-a's *Service name* for both users, while bob is registered
 # *through* node-b with `--target`. That is what makes this a cross-node test: bob's binding is
 # written by node-b, and the INVITE that finds it is resolved by node-a. `sipx dial` takes no
-# `--target` — the URI it is given is the destination — so the AoR domain has to be an address, and
-# using one shared address keeps both AoRs in the same namespace for the lookup. No port in the
-# AoR — `register` refuses one there, and `dial` defaults to 5060, which is where the node listens.
-DOMAIN="$NODE_A"
+# `--target` — the URI it is given is the destination — so the AoR domain has to be something that
+# resolves to node-a, and one shared domain keeps both AoRs in the same namespace for the lookup.
+# No port in the AoR — `register` refuses one there, and `dial` defaults to 5060, which is the
+# Service port.
+#
+# The Service name rather than the pod IP `$NODE_A`, which is what this used to be. `FC-4` made a
+# REGISTER outside the tenant's served domains a `403`, and `domains` is a literal list in a
+# ConfigMap that is written before any pod has an IP — so a runtime address can never be in it. A
+# per-node ClusterIP is stable, is in the document, and resolves to exactly the pod the IP named.
+DOMAIN="sipx-clstr-node-a"
 cat > "$work/phones.sh" <<SCRIPT
 set -u
 ME="\$(hostname -i | awk '{print \$1}')"

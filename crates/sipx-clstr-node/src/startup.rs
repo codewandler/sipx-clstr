@@ -11,6 +11,7 @@
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use sipx_transport::TransportKind;
 
@@ -221,6 +222,17 @@ fn node_config(
     // where it recognises a section, so a key that reaches the driver must not appear on it or the
     // startup warning below would say the node ignores a bound it is enforcing.
     config.max_in_flight_transactions = projected.admission.max_in_flight_transactions;
+
+    // `PX-10`, and the same rule as the line above: applied here, therefore **absent from
+    // `unapplied`**. The loader refuses `timerC <= 180 s` (§8 V7), so whatever arrives here already
+    // satisfies F11's floor and this conversion cannot smuggle an illegal value past it.
+    //
+    // The rest of `cluster.timers` — `t1`, `timerB`, `timerF` — is *not* applied and says so, in
+    // `read_timers`. Those three are the kernel's transaction timer constants, and reaching them
+    // means `sipx_transport::Config::timers`, which this build never sets; Timer C is the proxy TU's
+    // own and is the one this story wired. Accepted-and-silently-discarded is the third outcome, and
+    // it is the one that is not available.
+    config.timer_c = Duration::from_millis(projected.timers.timer_c_ms);
 
     // Said out loud at startup rather than discovered as behaviour that never happens — and said by
     // **path**, because the keys that matter are not top level. A set of section names could not have

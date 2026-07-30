@@ -13,8 +13,6 @@
 //! all — it is the driver's, and [proxy-transaction-driver](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/proxy-transaction-driver.md)
 //! says so.
 
-use std::time::Duration;
-
 use bytes::Bytes;
 use sipx_sip::headers::Address;
 use sipx_sip::{HeaderName, Method, Request, Response, ResponseBuilder, StatusCode};
@@ -544,7 +542,8 @@ impl ResponseContext {
         }
     }
 
-    /// R7's class order: the lowest class among received finals, then the lowest code within it.
+    /// R7's order: the lowest class among received finals, then §8.1's within-class rank, then the
+    /// lowest code as a tie-break — which makes the choice total and independent of arrival order.
     ///
     /// 6xx is already forwarded on arrival by R6, so it cannot reach here — but it is included in
     /// the ordering anyway, because a rule that only works because of what happens elsewhere is a
@@ -553,7 +552,7 @@ impl ResponseContext {
         self.finals
             .iter()
             .map(|response| response.status.code())
-            .min_by_key(|status| (status / 100, *status))
+            .min_by_key(|status| (status / 100, within_class_rank(*status), *status))
     }
 
     fn aggregate_challenges(&self, request: &Request, status: u16) -> Option<Response> {
@@ -707,6 +706,24 @@ fn clone_response(response: &Response) -> Response {
     response.clone()
 }
 
+/// §8.1's within-class rank — lower is preferred, and the lowest code breaks a tie inside a rank.
+///
+/// §16.7 step 6 fixes the class and leaves the response inside it to us (`MAY select any response
+/// within that chosen class`), with one steer: prefer what the caller can act on. Bare numeric
+/// order is not that steer — it lets `408`, a branch that never answered, outrank `486`, a branch
+/// that did. Every ranked code is a 4xx, the class the RFC scopes its preference to, so any other
+/// class falls through to the tie-break and is chosen by code alone.
+fn within_class_rank(status: u16) -> u8 {
+    match status {
+        // §16.7 step 6's own SHOULD, verbatim: the caller can change these and retry successfully.
+        401 | 407 | 415 | 420 | 484 => 1,
+        // A branch reached the user and the user's side answered: present, not available now.
+        480 | 486 => 2,
+        // Absence, silence, our own cancellation, and rejections of the message rather than the user.
+        _ => 3,
+    }
+}
+
 fn build_response(request: &Request, status: u16, reason: &str) -> Result<Response, ()> {
     let status = StatusCode::new(status).ok_or(())?;
     Ok(
@@ -742,7 +759,8 @@ fn next_hop_uri(request: &Request) -> Bytes {
 }
 
 /// Timer C's default, exposed so a driver and a test agree on it without repeating the number.
-// Seconds, to match F11's "Default 180 s" and `ProxyConfig::new`, which this constant exists to
-// agree with.
-#[allow(clippy::duration_suboptimal_units)]
-pub const DEFAULT_TIMER_C: Duration = Duration::from_secs(180);
+///
+/// Re-exported rather than restated: it lives beside the floor it has to satisfy
+/// ([`crate::config::TIMER_C_FLOOR`]), because two independently-written copies of this number are
+/// exactly how one of them came to sit on the floor (`PX-10`).
+pub use crate::config::DEFAULT_TIMER_C;

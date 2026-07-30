@@ -59,6 +59,28 @@ pub const DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS: usize = 1024;
 /// describing the absence of one, and an operator who wants that has misread what the knob is for.
 pub const MAX_IN_FLIGHT_CEILING: usize = 65_536;
 
+/// RFC 3261 §16.6 step 11's floor for Timer C, which the timer must be **strictly** above.
+///
+/// "The timer MUST be larger than 3 minutes" — a MUST over a strict inequality, so this value is the
+/// largest one that is *not* admissible rather than the smallest one that is.
+pub const TIMER_C_FLOOR_MS: u64 = 180_000;
+
+/// §8 V7's declared default for Timer C: four minutes.
+///
+/// The smallest whole-minute value above [`TIMER_C_FLOOR_MS`], stated in the unit the RFC states the
+/// floor in. A default *equal* to an exclusive bound is unsatisfiable by omission, and this one was
+/// 180 s until `DP-12`: a document carrying a `timers` section without naming `timerC` was refused
+/// for the value this loader had supplied. It is not raised beyond the smallest compliant value
+/// because Timer C is the only bound on a branch gone quiet since its last provisional
+/// (RFC 3261 §16.7 bullet 2), so every extra minute is a minute a wedged branch holds a proxied
+/// transaction and an admission slot ([`AdmissionSpec`]).
+pub const DEFAULT_TIMER_C_MS: u64 = 240_000;
+
+// The defect `DP-12` closed, made unrepresentable rather than merely fixed: a default that cannot
+// satisfy the rule declared beside it is now a build failure instead of a refusal at every operator's
+// startup.
+const _: () = assert!(DEFAULT_TIMER_C_MS > TIMER_C_FLOOR_MS);
+
 /// The closed role set of §4 R1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Role {
@@ -265,7 +287,7 @@ impl Default for TimersSpec {
             t1_ms: 500,
             timer_b_ms: 64 * 500,
             timer_f_ms: 64 * 500,
-            timer_c_ms: 180_000,
+            timer_c_ms: DEFAULT_TIMER_C_MS,
         }
     }
 }
@@ -831,11 +853,11 @@ fn read_document(
     let zones = read_zones(cluster, &cluster_path, errors);
     let listeners = read_listeners(cluster, &cluster_path, errors, &mut unapplied);
     let membership = read_membership(cluster, &cluster_path, errors);
-    let location_store = read_location_store(cluster, &cluster_path, errors);
+    let location_store = read_location_store(cluster, &cluster_path, errors, &mut unapplied);
     let tenants = read_tenants(cluster, &cluster_path, errors);
     let security = read_security(cluster, &cluster_path, errors);
     let admission = read_admission(cluster, &cluster_path, errors);
-    let timers = read_timers(cluster, &cluster_path, errors);
+    let timers = read_timers(cluster, &cluster_path, errors, &mut unapplied);
 
     check_role_combination(
         &identity.roles,
@@ -1165,11 +1187,17 @@ fn read_location_store(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
     errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
 ) -> Option<LocationStoreSpec> {
     let at = path.field("locationStore");
     let value = cluster.get(Value::from("locationStore"))?;
     let map = as_mapping(value, &at, errors)?;
     closed_world(map, &["backend", "dsnRef", "ha"], &at, errors);
+    // Recognised by §7, held by no field of `LocationStoreSpec` and consulted by no driver, so it is
+    // reported rather than dropped — the same reason `listener[].tls` is, one section over.
+    if map.contains_key(Value::from("ha")) {
+        unapplied.push(at.field("ha"));
+    }
 
     // V9: the value never appears in the document, only a reference to it.
     if map.contains_key(Value::from("dsn")) {
@@ -1510,49 +1538,71 @@ fn read_timers(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
     errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
 ) -> TimersSpec {
     let at = path.field("timers");
     let mut timers = TimersSpec::default();
-    let Some(value) = cluster.get(Value::from("timers")) else {
-        return timers;
-    };
-    let Some(map) = as_mapping(value, &at, errors) else {
-        return timers;
-    };
-    closed_world(
-        map,
-        &["t1", "timerB", "timerC", "timerF", "maxCallDuration"],
-        &at,
-        errors,
-    );
-
-    let mut read_ms = |key: &str, slot: &mut u64| {
-        if let Some(value) = map.get(Value::from(key)) {
-            match value.as_u64() {
-                Some(ms) => *slot = ms,
-                None => errors.push(ConfigError::new(
-                    at.field(key),
-                    "CC-V7",
-                    Some(type_of(value).to_owned()),
-                    "a duration in milliseconds",
-                )),
+    if let Some(value) = cluster.get(Value::from("timers"))
+        && let Some(map) = as_mapping(value, &at, errors)
+    {
+        closed_world(
+            map,
+            &["t1", "timerB", "timerC", "timerF", "maxCallDuration"],
+            &at,
+            errors,
+        );
+        // Of the five keys §7 declares, exactly one reaches a driver: `timerC`, which `PX-10` wired
+        // through `NodeConfig::timer_c` onto the proxy engine's `ProxyConfig`. The other four are
+        // reported rather than dropped, because accepted-and-silently-discarded is the class `FC-2`
+        // added `unapplied` to eliminate — and `DP-12` found `maxCallDuration` alone on this list
+        // while the whole section was in fact unread, which understated it by four keys.
+        //
+        // `t1`, `timerB` and `timerF` are the **kernel's** transaction timer constants (RFC 3261
+        // §17.1.1.2, §17.1.2.2). Applying them means handing them to `sipx_transport::Config::timers`
+        // when the endpoint is built, and this build never sets that field, so a document naming
+        // them gets the kernel's own constants. `maxCallDuration` is a session cap, has no field on
+        // `TimersSpec` at all, and is not Timer C — conflating the two produces a Timer C set to
+        // hours in the belief that it protects long calls, and then the wrong knob is the one tuned.
+        for ignored in ["t1", "timerB", "timerF", "maxCallDuration"] {
+            if map.contains_key(Value::from(ignored)) {
+                unapplied.push(at.field(ignored));
             }
         }
-    };
-    read_ms("t1", &mut timers.t1_ms);
-    read_ms("timerB", &mut timers.timer_b_ms);
-    read_ms("timerF", &mut timers.timer_f_ms);
-    read_ms("timerC", &mut timers.timer_c_ms);
 
-    // V7: Timer C MUST be greater than 3 minutes (RFC 3261 §16.6 step 11). Note this is *not*
-    // `maxCallDuration`, which is a session cap; conflating them produces a Timer C set to hours in
-    // the belief that it protects long calls, and then the wrong knob is the one that gets tuned.
-    if timers.timer_c_ms <= 180_000 {
+        let mut read_ms = |key: &str, slot: &mut u64| {
+            if let Some(value) = map.get(Value::from(key)) {
+                match value.as_u64() {
+                    Some(ms) => *slot = ms,
+                    None => errors.push(ConfigError::new(
+                        at.field(key),
+                        "CC-V7",
+                        Some(type_of(value).to_owned()),
+                        "a duration in milliseconds",
+                    )),
+                }
+            }
+        };
+        read_ms("t1", &mut timers.t1_ms);
+        read_ms("timerB", &mut timers.timer_b_ms);
+        read_ms("timerF", &mut timers.timer_f_ms);
+        read_ms("timerC", &mut timers.timer_c_ms);
+    }
+
+    // V7: Timer C MUST be strictly greater than 3 minutes (RFC 3261 §16.6 step 11). Checked against
+    // whatever value stands — written or defaulted — and not only on the path where the document
+    // said something, because skipping the defaulted path is what let §8 V7 declare a default of
+    // exactly 180 s for a release: the contradiction was invisible until a document happened to
+    // carry a `timers` section, and then it refused the loader's own value (`DP-12`).
+    //
+    // Note this is *not* `maxCallDuration`, which is a session cap; conflating them produces a
+    // Timer C set to hours in the belief that it protects long calls, and then the wrong knob is the
+    // one that gets tuned.
+    if timers.timer_c_ms <= TIMER_C_FLOOR_MS {
         errors.push(ConfigError::new(
             at.field("timerC"),
             "CC-V7",
             Some(format!("{} ms", timers.timer_c_ms)),
-            "greater than 180000 ms (3 minutes), per RFC 3261 §16.6 step 11",
+            &format!("greater than {TIMER_C_FLOOR_MS} ms (3 minutes), per RFC 3261 §16.6 step 11"),
         ));
     }
     timers

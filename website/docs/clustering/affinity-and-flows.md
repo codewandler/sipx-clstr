@@ -6,8 +6,9 @@ description: "What the signed token in Record-Route carries, and how a client's 
 # Affinity and flows
 
 :::caution Preview
-Specified and normative, but **not implemented**. Today one node runs, nothing mints a token, and
-no connection has an owner. Every rule quoted below has an identifier in a spec that already
+Specified and normative, but **not implemented**. Nodes run — two of them, sharing a registrar — and
+still nothing mints a token and no connection has an owner, which is exactly why each node has to be
+addressed individually. Every rule quoted below has an identifier in a spec that already
 exists — "not shipped" is not "not decided". The specs are
 [affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
 and

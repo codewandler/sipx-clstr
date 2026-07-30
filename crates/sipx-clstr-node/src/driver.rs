@@ -11,7 +11,7 @@
 
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -20,13 +20,14 @@ use sipx_clstr_proxy::{
     targets_from_lookup,
 };
 use sipx_clstr_registrar::{
-    Admission, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore, LocationStore,
-    TenantAuth, TenantPolicy, Timestamp, admit, apply,
+    Admission, AuthOutcome, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore,
+    LocationStore, TenantAuth, TenantPolicy, Timestamp, admit_audited, apply,
 };
 use sipx_sip::{
     HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
 };
-use sipx_transport::{Handle, Incoming, Target, TransportKind};
+use sipx_transport::{Handle, Incoming, Responses, Target, TransportKind};
+use tokio::task::JoinSet;
 
 use crate::listen::{Advertised, Listener, ListenerError, Listeners};
 
@@ -72,6 +73,14 @@ pub struct NodeConfig {
     /// why the knob lives where it does, and [`AdmissionBound`] for what the bound does and does not
     /// cover.
     pub max_in_flight_transactions: usize,
+    /// Timer C for INVITE branches (`PX-10`, proxy-behavior F11).
+    ///
+    /// From `cluster.timers.timerC`. It reaches the engine through [`proxy_config`] and nowhere
+    /// else, so this field is the whole of the document→driver→engine path for it. Until `PX-10`
+    /// there was no such path: `cluster.timers` was parsed, validated and projected onto
+    /// `ProjectedConfig`, and then read by nobody, so every INVITE branch was guarded by the proxy
+    /// crate's own default whatever the document said.
+    pub timer_c: Duration,
 }
 
 /// Which location service backs this node (`RG-12`, location-service §6.2).
@@ -106,7 +115,8 @@ impl StoreChoice {
 ///
 /// Provisional alongside [`NodeConfig`] — `DP-1` owns the real schema, and `RG-7` owns arriving at
 /// the credentials from a store rather than from a literal.
-#[derive(Debug, Clone)]
+/// `Debug` is hand-written and prints **no nonce secret** — see the impl below.
+#[derive(Clone)]
 pub struct AuthConfig {
     /// The protection space (registrar-auth §3 A3).
     pub realm: String,
@@ -115,6 +125,23 @@ pub struct AuthConfig {
     pub secret: [u8; 32],
     /// Who may register.
     pub credentials: InMemoryCredentials,
+}
+
+/// The realm, never the secret.
+///
+/// `NodeConfig` derives `Debug` and is the sort of thing that ends up in a startup dump, so a
+/// derived impl here would print the 32-byte nonce key that every outstanding nonce is minted from
+/// — the one value in this struct that lets a reader forge a challenge. `cluster-config` §8 V9
+/// keeps it out of the *document* by reference; this keeps it out of the *output*, which is the
+/// same argument at the other end. Same shape as `sipx-clstr-proxy`'s `CookieKey`.
+impl std::fmt::Debug for AuthConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthConfig")
+            .field("realm", &self.realm)
+            .field("secret", &"<redacted>")
+            .field("credentials", &self.credentials)
+            .finish()
+    }
 }
 
 impl NodeConfig {
@@ -129,6 +156,7 @@ impl NodeConfig {
             domains: Vec::new(),
             store: StoreChoice::InMemory,
             max_in_flight_transactions: crate::config::DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS,
+            timer_c: sipx_clstr_proxy::DEFAULT_TIMER_C,
         }
     }
 
@@ -409,6 +437,30 @@ pub fn open_store(choice: &StoreChoice) -> Result<Arc<dyn LocationStore + Send +
 /// listeners cannot be served as declared. It also fails with [`NodeError::TransportGone`] if the
 /// transport driver stops delivering, which is the one way a *running* node ends today.
 pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
+    run_reporting(config, |_| {}).await
+}
+
+/// Run the node, and hand the address it **actually** bound to `bound` before serving anything.
+///
+/// [`run`] is this with a report that goes nowhere. The two exist because a node may be told to bind
+/// port 0 — the kernel picks the port, and there is then no way to address the node except to ask it.
+/// That is already the contract on stdout: `listening on <addr>` is printed after the bind precisely
+/// so a caller need not guess (`scripts/e2e-call.sh` and `website/docs/guides/run-a-node.md` both
+/// wait on that line). A caller *inside* the process cannot read stdout, so it gets the same fact
+/// through this instead — the same value, at the same moment, from the same place.
+///
+/// `bound` is called after the bind and after every startup refusal, for the reason the `listening
+/// on` line is printed there: a report that a node is up must not precede the last thing that can
+/// stop it coming up.
+///
+/// # Errors
+///
+/// Exactly [`run`]'s. A node that never binds never reports, which is what makes waiting on the
+/// report a sound readiness check rather than a hopeful one.
+pub async fn run_reporting(
+    config: NodeConfig,
+    bound: impl FnOnce(SocketAddr),
+) -> Result<(), NodeError> {
     let advertised = config
         .listeners
         .cleartext()
@@ -436,6 +488,10 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
     // phone registers but nothing rings" needs to see which one went into the messages.
     println!("listening on {}", handle.local_addr());
     println!("advertising {advertised}");
+    // The same announcement, for a caller that shares the process with the node rather than its
+    // stdout. Between the two `println!`s and the log line on purpose: whatever a reader of one of
+    // these learns, a reader of the other learns at the same point in the startup sequence.
+    bound(handle.local_addr());
     tracing::info!(
         listen = %handle.local_addr(),
         %advertised,
@@ -694,6 +750,12 @@ fn proxy_config_keyed(
     let host = speaking_for.map_or("", Listener::advertised_host);
 
     let mut proxy = ProxyConfig::new(host, record_route, cookie_key);
+    // `PX-10` — the document's Timer C, or nothing the document said ever reaches a branch. Assigned
+    // rather than left at `ProxyConfig::new`'s default, which is what `grep -n timer_c driver.rs`
+    // used to return no matches for. The engine still applies F11's floor on top
+    // (`effective_timer_c`), so a value the loader could not have refused — a `NodeConfig` built in
+    // code — cannot arm a Timer C the RFC forbids.
+    proxy.timer_c = config.timer_c;
     // The node answers to every address it advertises, on any port: a client that resolved a port
     // differently, or reached us over another transport, is still talking to this node.
     proxy.identities.clear();
@@ -748,6 +810,82 @@ async fn serve(
 
 // ---------------------------------------------------------------------------------- registrar ---
 
+/// Write one line of the authentication audit trail — [registrar-auth](
+/// https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9, `RG-15`.
+///
+/// Every outcome of §3 gets exactly one record (§9 L1). Before this, the decision computed the
+/// reason for every `401` and `403` — `ChallengeResponse::because` is documented "Why, for logs and
+/// tests" — and this driver dropped it, so a refusal was indistinguishable from silence outside the
+/// process. With no rate limiting and a 300-second nonce lifetime, that is what made brute force
+/// against a tenant undetectable as well as unbounded.
+///
+/// **It takes an [`AuthOutcome`] and not an `Admission`, and that is the fix for the hole `RG-15`'s
+/// first pass left.** An `Admission::Reject` cannot say what §3 decided: a correct digest followed
+/// by a malformed `Contact` arrives there with the proven principal already dropped, so a driver
+/// reading the `Admission` recorded nothing at all — precisely the state §9 L3 forbids, since "an
+/// absent record and an unauthenticated one are different facts". `admit_audited` keeps the record.
+///
+/// **Nothing the far end sent may ride into a record** (§9 L2). Every reason comes from
+/// [`AuthOutcome::describe`], which returns `&'static str` and is therefore structurally incapable
+/// of carrying a nonce, a `cnonce`, a response digest, a presented username or a password. The one
+/// runtime value in a record is §5's principal, which is the identity the digest *proved* and is
+/// already what the binding is stored under — and it is rendered quoted, because an
+/// operator-provisioned username containing CR/LF would otherwise split a record across lines, and
+/// log injection in an audit trail is worth a pair of quotes. The far end is identified by the
+/// address the socket observed, which is the one field in a record no attacker chooses.
+fn record_authentication(edge: &Edge<'_>, arrival: &Incoming, outcome: &AuthOutcome) {
+    let tenant = edge.config.tenant.as_str();
+    let source = arrival.source;
+    let because = outcome.describe();
+    match outcome {
+        // §9 L3 — a success is a record too, and `Unauthenticated` is the trail *saying* nobody was
+        // authenticated (§3 A1) rather than failing to say anything.
+        AuthOutcome::Authenticated(principal) => tracing::info!(
+            tenant,
+            %source,
+            principal = ?String::from_utf8_lossy(principal),
+            because,
+            "authentication succeeded"
+        ),
+        AuthOutcome::Unauthenticated => tracing::info!(
+            tenant,
+            %source,
+            because,
+            "authentication not required: proceeding unauthenticated"
+        ),
+        // A2 is **not** a refusal — it is the first half of a round trip the client is expected to
+        // complete, and every phone's ordinary first REGISTER takes it. Recording it as trouble
+        // would bury the real thing. The split itself is `AuthOutcome`'s, not this driver's.
+        AuthOutcome::Challenged { status } => tracing::info!(
+            tenant,
+            %source,
+            status,
+            because,
+            "authentication challenged"
+        ),
+        AuthOutcome::Refused {
+            status,
+            stale,
+            because: _,
+        } => tracing::warn!(
+            tenant,
+            %source,
+            status,
+            stale,
+            because,
+            "authentication refused"
+        ),
+        // §3 A3.
+        AuthOutcome::Forbidden => tracing::warn!(
+            tenant,
+            %source,
+            status = 403,
+            because,
+            "authentication refused"
+        ),
+    }
+}
+
 fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
     let context = EdgeContext {
         tenant: edge.config.tenant.clone(),
@@ -761,9 +899,40 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
 
     // registrar-auth §2 — before processing, not inside it. The lock spans the decision only; the
     // store work below is outside it, so one slow registration cannot stall every other tenant user.
-    let admission = {
-        let mut auth = edge.auth.lock().unwrap_or_else(PoisonError::into_inner);
-        admit(
+    let (admission, outcome) = {
+        let mut auth = match edge.auth.lock() {
+            Ok(guard) => guard,
+            // **The poison bypass is deliberate, and `RG-15` re-argued it rather than inheriting
+            // it.** Keeping the bypass, because the alternative is worse in the direction that
+            // matters: propagating the poison would make one panic anywhere in the decision stop
+            // *every* REGISTER for this tenant for the life of the process, and a registrar that
+            // stops answering refreshes converts a transient fault into every phone on the tenant
+            // going unreachable.
+            //
+            // What the bypass can cost is bounded, and it is bounded on the safe side. Nothing a
+            // panic can leave half-written makes the edge accept something it should refuse: the
+            // realm, the secret and the algorithm are immutable for the authenticator's life, and
+            // the only mutable state is the replay window, whose torn state is an entry whose count
+            // advanced without its digest. That refuses a *correct* credential as a replay — a
+            // client re-challenged with a fresh nonce, which it answers by itself. Fail-closed.
+            //
+            // What was actually wrong here was that it was silent. A poisoned authentication lock
+            // means something panicked while deciding who a caller is, which is not a fact to
+            // swallow, so it is recorded before it is stepped over.
+            Err(poisoned) => {
+                tracing::error!(
+                    tenant = %edge.config.tenant,
+                    "the authentication lock is poisoned: something panicked while deciding \
+                     authentication. Continuing on the recovered state, which can only refuse a \
+                     correct credential and never accept a wrong one"
+                );
+                poisoned.into_inner()
+            }
+        };
+        // `admit_audited`, not `admit`: the §3 outcome has to survive a `Proceed` that then fails
+        // to become a command, or a correctly authenticated REGISTER with a malformed `Contact`
+        // records nothing at all (§9 L3).
+        admit_audited(
             &arrival.request,
             &mut auth,
             edge.credentials,
@@ -771,6 +940,13 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             now(),
         )
     };
+
+    // registrar-auth §9 — the audit trail. Emitted here, from the driver, and not from the decision
+    // that produced it: the registrar is sans-IO, and a decision function that logs does an effect
+    // the harness cannot replay from a seed. The registrar's job is to produce the fact; this
+    // layer's job is to emit it. Unconditional and before the branch below, so that no path out of
+    // this function can be one that recorded nothing.
+    record_authentication(edge, arrival, &outcome);
 
     let cmd = match admission {
         Admission::Command(cmd) => *cmd,
@@ -786,6 +962,26 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             return response;
         }
         Admission::Reject(rejection) => {
+            // **Not** an authentication record — §3's outcome was written above, unconditionally.
+            // This is the parse diagnostic for a request that authenticated (or needed no
+            // authentication) and then failed to become a command, and it is `debug` because a
+            // malformed REGISTER is a client bug rather than a security event.
+            //
+            // `detail` is bound out of `BadRequest`, whose payload is `&'static str` **by type**,
+            // which is what makes printing it safe. Do not replace this with `%rejection`:
+            // `Rejection` as a whole is not static-only — `BadExtension(Vec<String>)` formats
+            // attacker-supplied option tags with `{0:?}` and `IntervalTooBrief` formats a number —
+            // and only reachability keeps those out of `admit` today.
+            let detail = match &rejection {
+                sipx_clstr_registrar::Rejection::BadRequest(detail) => *detail,
+                _ => "the message could not become a command",
+            };
+            tracing::debug!(
+                tenant = %edge.config.tenant,
+                status = rejection.status(),
+                detail,
+                "a REGISTER could not become a command"
+            );
             return answer(
                 &arrival.request,
                 rejection.status(),
@@ -855,7 +1051,7 @@ async fn proxy_request(
     let key = arrival.key.clone();
     let effects = context.on_input(ProxyInput::Upstream(Box::new(arrival.request.clone())));
 
-    let mut pending = Vec::new();
+    let mut forwarded = Vec::new();
     perform(
         handle,
         store,
@@ -863,74 +1059,120 @@ async fn proxy_request(
         &key,
         &mut context,
         effects,
-        &mut pending,
+        &mut forwarded,
     )
     .await?;
 
-    // Drive the branches. One `select` over their streams would be the shape at scale; with M1's
-    // single fork group, awaiting them in order is the same thing and considerably easier to read.
-    while let Some((branch, mut responses)) = pending.pop() {
-        while let Some(event) = responses.next().await {
-            let input = match event {
-                sipx_sip::TuEvent::Response(response) => {
-                    ProxyInput::BranchResponse(response, branch.clone())
-                }
-                sipx_sip::TuEvent::Timeout => {
-                    // The driver design's mapping: a kernel timeout is a `408` from that branch.
-                    match ResponseBuilder::to_request(
-                        &arrival.request,
-                        ok_status(408),
-                        "Request Timeout",
-                    ) {
-                        Ok(builder) => {
-                            ProxyInput::BranchResponse(Box::new(builder.build()), branch.clone())
-                        }
-                        Err(_) => ProxyInput::BranchTransportError(branch.clone()),
-                    }
-                }
-                sipx_sip::TuEvent::TransportError => {
-                    ProxyInput::BranchTransportError(branch.clone())
-                }
-                // An ACK on a client transaction is not ours; counted by being ignored explicitly
-                // rather than by falling through a wildcard.
-                sipx_sip::TuEvent::Ack(_) | sipx_sip::TuEvent::Request(_) => continue,
-            };
-            let effects = context.on_input(input);
-            let mut more = Vec::new();
-            perform(
-                handle,
-                store,
-                config,
-                &key,
-                &mut context,
-                effects,
-                &mut more,
-            )
-            .await?;
-            pending.extend(more);
-            if context.is_finished() {
-                return Ok(());
+    // Drive the branches **concurrently** (`PX-9`), which is what makes parallel forking parallel.
+    //
+    // Awaiting them in order was the shape until this story, on the argument that with a single fork
+    // group it came to the same thing. It does not, and the ordinary two-device registration is the
+    // counterexample: two contacts, both `q=1000`, one group (`lookup.rs` §7 L4). A branch's stream
+    // only ends when its transaction does, so draining one to exhaustion first meant a dead device
+    // held the task until the kernel's Timer B — 64·T1, about thirty seconds — while the live
+    // device's `200 OK` sat unread in the other stream.
+    //
+    // The engine still sees **one input at a time**, in a total order, which is the property the
+    // driver design names and the reason a `JoinSet` rather than a shared context: the branches are
+    // read concurrently and reduced serially. Nothing about §16.7 selection moved into the driver,
+    // and nothing about concurrency moved into the engine.
+    let mut branches = JoinSet::new();
+    watch_all(&mut branches, forwarded);
+
+    while let Some(joined) = branches.join_next().await {
+        let (branch, responses, event) = match joined {
+            Ok(next) => next,
+            Err(error) => {
+                // Only reachable if a task that does nothing but await a channel panicked, or if the
+                // set were aborted — which only happens when it is dropped, after this loop. Said
+                // rather than swallowed: the branch is lost, and a lost branch is a call the context
+                // will wait on until it runs out of branches.
+                tracing::warn!(%error, "a branch reader ended unexpectedly");
+                continue;
             }
-        }
-        // The stream ended with no final. A branch that vanishes is a branch that failed, and
-        // leaving the context waiting on it forever is the failure mode this arm exists to prevent.
-        if !context.is_finished() {
-            let effects = context.on_input(ProxyInput::BranchTransportError(branch));
-            let mut more = Vec::new();
-            perform(
-                handle,
-                store,
-                config,
-                &key,
-                &mut context,
-                effects,
-                &mut more,
-            )
-            .await?;
-            pending.extend(more);
+        };
+        let input = match event {
+            Some(sipx_sip::TuEvent::Response(response)) => {
+                // Re-armed *before* the effects are performed, so the other branches — and this one
+                // — keep being read while a response is going upstream.
+                watch(&mut branches, branch.clone(), responses);
+                ProxyInput::BranchResponse(response, branch)
+            }
+            Some(sipx_sip::TuEvent::Timeout) => {
+                watch(&mut branches, branch.clone(), responses);
+                // The driver design's mapping: a kernel timeout is a `408` from that branch.
+                match ResponseBuilder::to_request(
+                    &arrival.request,
+                    ok_status(408),
+                    "Request Timeout",
+                ) {
+                    Ok(builder) => ProxyInput::BranchResponse(Box::new(builder.build()), branch),
+                    Err(_) => ProxyInput::BranchTransportError(branch),
+                }
+            }
+            Some(sipx_sip::TuEvent::TransportError) => {
+                watch(&mut branches, branch.clone(), responses);
+                ProxyInput::BranchTransportError(branch)
+            }
+            // An ACK on a client transaction is not ours; counted by being ignored explicitly
+            // rather than by falling through a wildcard. The branch is put back: ignoring an event
+            // must not stop the branch being read.
+            Some(sipx_sip::TuEvent::Ack(_) | sipx_sip::TuEvent::Request(_)) => {
+                watch(&mut branches, branch, responses);
+                continue;
+            }
+            // A finished context accepts no further input, so there is nothing left to drive and
+            // holding the task open would hold this transaction's admission permit (`DP-11`) with
+            // it. The loop is left by `return` the instant the context finishes, so this is the
+            // belt to that braces — and it stops rather than spins, because the alternative is a
+            // task that lives until every branch's Timer B for no reason.
+            None if context.is_finished() => break,
+            // The stream ended with no final. A branch that vanishes is a branch that failed, and
+            // leaving the context waiting on it forever is the failure mode this arm exists to
+            // prevent. Not re-armed: there is nothing left to read.
+            None => ProxyInput::BranchTransportError(branch),
+        };
+        let effects = context.on_input(input);
+        let mut more = Vec::new();
+        perform(
+            handle,
+            store,
+            config,
+            &key,
+            &mut context,
+            effects,
+            &mut more,
+        )
+        .await?;
+        // A later `q` group forks when this one concludes (§7 L4), so new branches arrive here.
+        watch_all(&mut branches, more);
+        if context.is_finished() {
+            return Ok(());
         }
     }
     Ok(())
+}
+
+/// One branch's next event, with its stream handed back so the branch can be read again.
+///
+/// The stream travels with the event because [`sipx_transport::Responses`] is consumed by reference
+/// from an `async fn` and is not a `Stream`: the only way to await several at once without a lock is
+/// to move each into a task for one event and take it back.
+type BranchEvent = (BranchId, Responses, Option<sipx_sip::TuEvent>);
+
+/// Read one event from `responses`, concurrently with every other branch.
+fn watch(branches: &mut JoinSet<BranchEvent>, branch: BranchId, mut responses: Responses) {
+    branches.spawn(async move {
+        let event = responses.next().await;
+        (branch, responses, event)
+    });
+}
+
+/// Start reading every branch a round of effects forwarded.
+fn watch_all(branches: &mut JoinSet<BranchEvent>, forwarded: Vec<(BranchId, Responses)>) {
+    for (branch, responses) in forwarded {
+        watch(branches, branch, responses);
+    }
 }
 
 async fn perform(
@@ -940,7 +1182,7 @@ async fn perform(
     key: &TransactionKey,
     context: &mut ResponseContext,
     effects: Vec<ProxyEffect>,
-    pending: &mut Vec<(BranchId, sipx_transport::Responses)>,
+    pending: &mut Vec<(BranchId, Responses)>,
 ) -> Result<(), sipx_transport::Error> {
     for effect in effects {
         match effect {
@@ -974,6 +1216,15 @@ async fn perform(
                 // rings forever on the losing branch.
                 tracing::info!(%branch, "branch cancellation is PX-6's, not yet wired to a socket");
             }
+            // `SetTimer`/`ClearTimer` reach no clock here, and `PX-10` did **not** change that: what
+            // it changed is the deadline the engine puts in `SetTimer` — the document's Timer C
+            // rather than a private default (see `proxy_config_keyed`). So on this driver a Timer C
+            // is armed with the right value and never fires, and a branch that goes quiet after a
+            // provisional is reaped by the kernel's Timer B or not at all. The deterministic harness
+            // does perform these effects, which is why `PB-C-5`/`PB-C-6` are proved there. Wiring a
+            // real clock to them belongs with `CancelBranch` above — a fired Timer C's first act is
+            // to cancel the branch (§9 C5), so a driver that armed the timer without wiring the
+            // cancel would reap branches it could not tell to stop. `PX-6` owns the pair.
             ProxyEffect::AnswerCancel
             | ProxyEffect::SetTimer { .. }
             | ProxyEffect::ClearTimer { .. }

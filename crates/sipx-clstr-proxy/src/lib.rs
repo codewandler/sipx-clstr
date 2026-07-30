@@ -33,7 +33,7 @@ pub mod from_registrar;
 pub mod types;
 pub mod validate;
 
-pub use config::{CookieKey, EdgeIdentity, ProxyConfig};
+pub use config::{CookieKey, DEFAULT_TIMER_C, EdgeIdentity, ProxyConfig, TIMER_C_FLOOR};
 pub use context::ResponseContext;
 pub use cookie::{CookieInput, branch_for, cookie_of};
 pub use forward::{ForwardError, ForwardPlan, TOKEN_PARAM, TOKEN_PARAM_BUDGET, forward};
