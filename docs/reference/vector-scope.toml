@@ -4,8 +4,21 @@
 # a test or listed here with a reason and the story that will cover it — and a row listed here that
 # *is* covered is an error too, because a stale deferral is how a coverage report starts lying.
 #
-# This is the narrow, PB-only ancestor of the conformance registry `EX-2` specifies and `CF-2`
-# reports from. When that exists, this file folds into it.
+# This is the project's whole deferral ledger, not a corner of it. Two tables:
+#
+#   [[deferred]]    389 rows over eleven prefixes, naming twelve stories — `AI` 97, `MR` 90, `CC` 52,
+#                   `NN` 52, `QP` 31, `FR` 22, `AT` 18, `HF` 13, `PB` 8, `LS` 5, `RA` 1.
+#   [[unasserted]]   19 rows — `LS` 9, `RA` 5, `PB` 4, `CC` 1 — covered by a test that never compares
+#                   the value the row states. `CF-12` added these; they do not count as proved.
+#
+# It read "the narrow, PB-only ancestor" until `CF-16`. That was true when `PB` was the only
+# registered prefix, and it stayed on the file through `CF-8`'s six registrations and `EX-12`'s
+# seventh, by which point `PB` was the third *smallest* family here. A header describing a file as
+# narrower than it is invites the next reader to add a row without checking the discipline above,
+# and that discipline is what keeps a coverage report honest.
+#
+# It remains the pre-registry form: the requirement-grain registry `EX-2` specifies and `CF-2`
+# reports from does not exist yet, and when it does this file folds into it.
 
 [[deferred]]
 id = "PB-C-4"
