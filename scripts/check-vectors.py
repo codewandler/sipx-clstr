@@ -107,6 +107,10 @@ SPECS = {
     # `docs/designs/` would have made a design normative by accident. Same demonstration as `CF-8`'s
     # — a fabricated `QP-Z-999` row passed `--check` until the rows had a spec to live in.
     "QP": (ROOT / "docs" / "specs" / "hook-framework.md", "§9.1"),
+    # `SC` is the `SipxCluster` resource's admission and status rows, registered by `KO-1` in the same
+    # commit that writes them — the lesson `EX-12` paid for is that registration is not something to
+    # do afterwards.
+    "SC": (ROOT / "docs" / "specs" / "sipx-cluster-crd.md", "§10"),
 }
 
 PREFIXES = "|".join(SPECS)
@@ -196,6 +200,8 @@ FAMILIES = {
     ("QP", "A"): "Carrier quirks — one profile applied (§9.1)",
     ("QP", "C"): "Carrier quirks — composition (§9.1)",
     ("QP", "G"): "Carrier quirks — startup validation, G9–G14 (§9.1)",
+    ("SC", "A"): "SipxCluster — admission, cluster-scope (§10)",
+    ("SC", "S"): "SipxCluster — observed status (§10)",
 }
 
 
