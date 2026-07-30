@@ -53,10 +53,6 @@ site · `FC` fail-closed configuration.
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [EX-12 — Register the quirk vectors so the gate can see them, and land the EX-7 spec deltas nobody owns](EX-12-register-the-quirk-vectors-so-the-gate-can-see-them.md) · Platform · the QP rows are decorative — a fabricated row passes --check, because no spec owns the prefix
 
-### Conformance & deterministic harness
-_The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · two specs are unreachable on the published site and nothing notices
-
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
@@ -84,6 +80,7 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-2 — Generate the conformance report from the registry](CF-2-generate-the-conformance-report-from-the-registry.md) · Platform · blocked by EX-2
 - [CF-3 — Build the real-network interop harness](CF-3-build-the-real-network-interop-harness.md) · Platform · SIPp + sipx CLI + rtpengine
 - [CF-6 — Seed the conformance registry with the M1 profile](CF-6-seed-the-conformance-registry-with-the-m1-profile.md) · Platform · blocked by EX-2 — the extraction work CF-2's report needs
+- [CF-11 — Gate that every published doc is reachable from the site](CF-11-gate-that-every-published-doc-is-reachable.md) · Foundation · premise died with the docs split — nothing under docs/ is published; superseded by DX-12
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
