@@ -161,6 +161,21 @@ guarantee; the passthrough vectors assert it):
 | F10 | Forward | `Effect::Forward` — one kernel client transaction per branch |
 | F11 | Timer C for INVITE branches | Default **240 s**, configurable **> 180 s** — RFC 3261 **§16.6 step 11**, "the timer MUST be larger than 3 minutes". The bound is strict and the default does not sit on it, which is the same rule [cluster-config](cluster-config.md) §8 V7 states for `timers.timerC`, the key an operator actually sets; the two must not be read separately. A configured value at or below the floor is **not** silently raised to the floor — the floor is the one value the RFC forbids — so the default stands instead. Reset on every 101–199 |
 
+### 7.1. The queue: which targets go out, and when
+
+**[sipx-clstr]** Targets fork in `q` order, most preferred first. Equal-`q` targets are one **group**
+and fork in parallel; distinct `q` values fork in **sequence**. Only the leading group is forwarded
+— the remainder stays **queued**, and the next group is forwarded when the current one concludes
+without concluding the context. A group wider than `Max-Breadth` is serialized into the same queue
+rather than truncated (PB-V-8): the surplus is a device the user registered, and dropping it is not
+the proxy's call to make.
+
+The queue is therefore a set of requests *not yet sent*, and its lifetime is bounded from the other
+end by **R12** and **C7**: it does not survive a result that concludes the context. Cancelling the
+launched branches and leaving the queue intact is not a partial stop — the next branch to settle
+finds a queue and forks it, so the request is re-originated after it was answered, globally rejected
+or withdrawn.
+
 ## 8. Response processing (§16.7, with RFC 6026)
 
 | # | Rule |
@@ -176,6 +191,7 @@ guarantee; the passthrough vectors assert it):
 | R9 | Branch timeout (kernel timer or Timer C without provisional): behaves as `408 Request Timeout` from that branch |
 | R10 | Branch transport error (§16.9): behaves as `503` from that branch (and therefore R8) |
 | R11 | Forwarding the chosen final response cancels every still-pending branch; hook `BeforeResponseForward` runs before the `Respond` effect |
+| R12 | A result that concludes the context concludes the whole **target set**, not only the branches in flight: a 2xx forwarded by R5 and a 6xx forwarded by R6 discard §7.1's queued groups as well as cancelling the launched branches (R11). A branch final arriving afterwards — typically the `487` settling one of those cancellations — completes selection and MUST NOT resume sequential forking |
 
 ### 8.1. Choosing within the class (§16.7 step 6's `MAY`)
 
@@ -237,6 +253,7 @@ anything this specification said (`PX-11`).
 | C4 | CANCEL matching nothing: forward it statelessly (§16.10 ¶6) — see also §11 |
 | C5 | Timer C fires, branch has seen a provisional: `CancelBranch` (then C3) |
 | C6 | Timer C fires, no provisional: conclude the branch as timeout (R9) |
+| C7 | A CANCEL matching our server transaction discards §7.1's queued groups as well as propagating to the launched branches (C2). The caller has withdrawn the request, so a target that was never tried is never tried — R12's rule, reached by the one route that concludes the target set without any response having been forwarded |
 
 ## 10. Stateless mode (§16.11)
 
@@ -335,6 +352,19 @@ the rows here are the normative behavior matrix.
 | PB-C-4 | CANCEL, no matching transaction | statelessly forwarded |
 | PB-C-5 | Timer C, provisional seen | CancelBranch |
 | PB-C-6 | Timer C, silence | branch concludes as `408` |
+
+**A terminal result and the queued target set (PB-T):**
+
+These are the cross-product the tables above do not reach. PB-F-2 forks sequentially with nothing
+terminal happening; PB-R-3, PB-R-7 and PB-C-2 end contexts that have no queue behind them. Composing
+the two is what §7.1, R12 and C7 are about, so the composition gets its own rows rather than being
+assumed from the halves.
+
+| # | Given | Expect |
+|---|---|---|
+| PB-T-1 | A, B at `q=1.0`, C at `q=0.5`; A answers `200`, B then answers `487` | `200` forwarded and the launched branches cancelled; B's later final produces **no** `Forward` — R5 concluded the target set, so C is never tried |
+| PB-T-2 | A, B at `q=1.0`, C at `q=0.5`; A answers `600`, B then answers `487` | `600` forwarded and everything cancelled; B's later final produces **no** `Forward` — R6 discards the queue too |
+| PB-T-3 | A, B at `q=1.0`, C at `q=0.5`; upstream CANCEL, then both branches answer `487` | `487` upstream and **no** `Forward` anywhere — C7: a withdrawn request never originates a new INVITE |
 
 **Stateless (PB-S):**
 

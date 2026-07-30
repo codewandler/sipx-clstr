@@ -2,7 +2,7 @@
 id: PX-14
 title: A terminal result must not revive a queued lower-q fork group
 pillar: Signalling
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
@@ -17,19 +17,32 @@ Make acceptance, global rejection and upstream cancellation terminal for the who
 only for the branches that had already been launched.
 
 ## Acceptance
-- [ ] A 2xx, a 6xx, or an upstream `CANCEL` clears the queued target groups as well as cancelling the
+- [x] A 2xx, a 6xx, or an upstream `CANCEL` clears the queued target groups as well as cancelling the
       launched branches.
-- [ ] When a cancelling branch later settles, the final-response path does not call
+- [x] When a cancelling branch later settles, the final-response path does not call
       `fork_next_group` for a context that has already concluded.
-- [ ] **Failing-first vector, the cross-product the existing rows miss:** targets A and B at `q=1.0`
+- [x] **Failing-first vector, the cross-product the existing rows miss:** targets A and B at `q=1.0`
       and C at `q=0.5`; A answers `200`, then B answers `487`. Expected: no new request. On `86e6b10`
       A's `200` emits `[Respond, CancelBranch]` and B's `487` then emits `[Forward, SetTimer]` for C —
       a new INVITE after the call was already accepted.
-- [ ] The same is asserted for the 6xx and upstream-cancellation forms, not only the 2xx one.
-- [ ] The new rows are registered in `scripts/check-vectors.py` in the same commit that writes them.
+- [x] The same is asserted for the 6xx and upstream-cancellation forms, not only the 2xx one.
+- [x] The new rows are registered in `scripts/check-vectors.py` in the same commit that writes them.
 
 ## Progress
-- (not started)
+- **Done, gate green.** Spec first: §7.1 names the queue the rules needed to refer to (it was
+  implemented and never specified, which is why the defect violated no written rule), §8 gains **R12**
+  and §9 gains **C7**.
+- The fix is `conclude_target_set()` in `crates/sipx-clstr-proxy/src/context.rs`, called from the R5,
+  R6 and upstream-CANCEL paths. `may_fork_next_group()` replaces the three bare `!queued.is_empty()`
+  tests and additionally refuses to fork an `answered`/`finished` context, so the invariant is stated
+  rather than only implied by the queue being empty. `finish_if_settled` reads the same predicate,
+  which also fixes a context that could never terminate: a 6xx with a queue behind it previously left
+  `finish_if_settled` permanently blocked.
+- Vectors `PB-T-1`/`-2`/`-3` in `crates/sipx-clstr-proxy/tests/vectors_proxy.rs`; the `PB-T` family is
+  registered in `scripts/check-vectors.py` in the same commit, and `docs/reference/conformance.md` is
+  regenerated (552 rows, 128 proved).
+- Verified failing-first at merge base `2cb22dd`: all three emitted `Forward` + `SetTimer` for the
+  `q=0.5` target after the call was concluded.
 
 ## Notes
 - Found by the independent adversarial review of `86e6b10` (`v0.12.0`), finding **V-04**, reproduced

@@ -9,9 +9,9 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**125 of 549 rows proved**; 19 covered for shape only; 405 deferred.
+**128 of 552 rows proved**; 19 covered for shape only; 405 deferred.
 
-Σ over the 58 sections below is 549, so every row counted above is shown in exactly one table.
+Σ over the 59 sections below is 552, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -97,6 +97,14 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-C-4` | deferred | `PX-2` — A CANCEL matching no transaction is forwarded statelessly. By definition no response context exists for it, so it never reaches the engine — it is the driver's, and the driver design says so. It becomes testable when a driver exists to test (PX-4's stateless path, M2). |
 | `PB-C-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-C-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `408` |
+
+## Proxy — a terminal result and the queued target set (§7.1, §8, §9)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `PB-T-1` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `200` |
+| `PB-T-2` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `600` |
+| `PB-T-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `487` |
 
 ## Proxy — stateless mode (§10)
 

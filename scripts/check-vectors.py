@@ -196,6 +196,10 @@ FAMILIES = {
     ("PB", "F"): "Proxy — request forwarding (§7)",
     ("PB", "R"): "Proxy — response processing (§8)",
     ("PB", "C"): "Proxy — CANCEL and Timer C (§9)",
+    # `PX-14`. The family exists because neither of its neighbours owns the rule: it is §8's and §9's
+    # terminal results crossed with §7.1's queue, and being nobody's is exactly how a `487` came to
+    # re-originate an answered call with every row above it green.
+    ("PB", "T"): "Proxy — a terminal result and the queued target set (§7.1, §8, §9)",
     ("PB", "S"): "Proxy — stateless mode (§10)",
     ("PB", "A"): "Proxy — transaction affinity (§11)",
     ("EP", "P"): "Probe — a passing run (§10)",
