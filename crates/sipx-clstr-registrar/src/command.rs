@@ -81,6 +81,16 @@ pub struct TenantPolicy {
     pub max_expires: u32,
     /// How many active bindings one AoR may hold (§5.5).
     pub max_bindings_per_aor: usize,
+    /// How many contact operations one REGISTER may carry (§5.5.1 Q1).
+    ///
+    /// A different quantity from `max_bindings_per_aor`, and neither substitutes for the other: the
+    /// quota bounds the committed *outcome*, this bounds the *request*. A REGISTER made entirely of
+    /// refreshes and removals never grows the set, so the quota cannot refuse it however long it is —
+    /// and reconciliation costs `operations × bindings`, so its length is what has to be capped.
+    ///
+    /// §5.5.1's policy-consistency rule: keep this at least `max_bindings_per_aor`, or a tenant
+    /// cannot refresh its whole binding set in one request.
+    pub max_contact_ops: usize,
 }
 
 impl Default for TenantPolicy {
@@ -90,6 +100,7 @@ impl Default for TenantPolicy {
             min_expires: 60,
             max_expires: 86_400,
             max_bindings_per_aor: 10,
+            max_contact_ops: 64,
         }
     }
 }

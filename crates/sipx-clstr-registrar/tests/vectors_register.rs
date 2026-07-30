@@ -982,3 +982,78 @@ fn ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound() {
         "the replay must not have refreshed CA"
     );
 }
+
+// ---------------------------------------------------- §5.5.1 — the contact-operation bound ------
+
+/// `count` distinct **removals**.
+///
+/// Removals rather than registrations, because that is what makes these rows about §5.5.1 and not
+/// about §5.5: a removal never grows the set, so the quota cannot refuse the request however long
+/// it is (Q5). A row built from additions would be satisfied by the quota alone and would prove
+/// nothing about the bound.
+fn removals(count: usize) -> Vec<ContactOp> {
+    (0..count)
+        .map(|i| {
+            let text = Bytes::from(format!("sip:alice@198.51.100.9:{}", 5060 + i));
+            ContactOp {
+                uri: Uri::parse(text.clone()).expect("a valid contact URI"),
+                verbatim: text,
+                expires: Some(0),
+                q: None,
+                instance_id: None,
+                reg_id: None,
+                push: None,
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn ls_r_24_a_register_above_the_contact_operation_bound_is_refused() {
+    let store = InMemoryStore::new();
+    let policy = policy();
+
+    // 65 removals against the default bound of 64. Every one of them is a removal of a contact that
+    // was never bound, so on the outcome the request is a no-op: §5.5 has nothing to refuse.
+    let (outcome, revision) = run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(removals(policy.max_contact_ops + 1))
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(
+        outcome.status(),
+        403,
+        "a policy refusal on the request's own length (Q1)"
+    );
+    assert_eq!(
+        revision,
+        Revision::INITIAL,
+        "nothing may commit — the refusal precedes reconciliation (Q2)"
+    );
+    assert!(store.read(TENANT, &aor()).0.all().is_empty());
+}
+
+#[test]
+fn ls_r_25_exactly_the_contact_operation_bound_is_accepted() {
+    let store = InMemoryStore::new();
+    let policy = policy();
+
+    // Q3 — the bound is inclusive. One fewer operation than LS-R-24 carries, and the same request
+    // is answered normally.
+    let (outcome, _) = run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(removals(policy.max_contact_ops))
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(
+        outcome.status(),
+        200,
+        "a conforming request is unaffected by the bound"
+    );
+}
