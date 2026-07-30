@@ -91,6 +91,7 @@ FAMILIES = {
     ("RA", "A"): "Registrar auth — algorithm selection (§4)",
     ("RA", "R"): "Registrar auth — replay and retransmission (§3, §6, §7)",
     ("RA", "T"): "Registrar auth — the tenant boundary (§5)",
+    ("RA", "L"): "Registrar auth — the audit trail (§9)",
     ("HF", ""): "Hook framework — startup graph validation (§9)",
 }
 

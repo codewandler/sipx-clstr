@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12, [e2e-pr
 A row is *proved* when a test in the workspace covers it, and *deferred* when
 [vector-scope.toml](vector-scope.toml) says why and names the story that will.
 
-**136 of 494 rows proved**; 358 deferred.
+**140 of 498 rows proved**; 358 deferred.
 
 ## Proxy — request validation (§4)
 
@@ -169,6 +169,15 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 | `RA-T-1` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-T-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-T-3` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+
+## Registrar auth — the audit trail (§9)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `RA-L-1` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-L-2` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
+| `RA-L-3` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs` |
+| `RA-L-4` | proved | `crates/sipx-clstr-node/tests/auth_observable.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 
 ## Hook framework — startup graph validation (§9)
 

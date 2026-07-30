@@ -36,6 +36,15 @@ What is here is the **policy**, which is a deployment's and therefore this platf
 | the identity a successful REGISTER is recorded under | the replay window's data structure |
 | which status a refusal carries, and what the response says | `stale` semantics |
 
+**The replay window's cost is the kernel's too, and it is not free.** `sipx-ua`'s window is a
+`VecDeque` scanned front-to-back (`challenge.rs:194,388` at the pinned `v0.7.0`) while the nonce
+being checked is always the newest entry at the back, so every authenticated request walks all 4096
+entries under whatever lock the caller holds. That is a defect in an auth primitive, so this
+platform may not fix it — it is filed in the [upstream ledger](../upstream.md) as
+*A replay window that is O(1) on the hot path*, and `RG-15` recorded it there rather than building a
+second window here. What this platform owns of the same hot path — its credential store — is `O(1)`
+since `RG-15`.
+
 **Authentication runs before REGISTER processing**, not inside it. It decides whether a request is
 allowed to become a `RegisterCommand` at all; the location service then receives the authenticated
 principal as an input fact ([location-service](location-service.md) §S3, and its `principal`
@@ -358,3 +367,52 @@ Normative. `RG-2`'s tests derive from these.
 | RA-T-1 | Two tenants, same username, different passwords | Each authenticates only against its own tenant's credential |
 | RA-T-2 | Credentials valid in tenant A presented to tenant B | Refused — the realm differs, so RA-D-4 |
 | RA-T-3 | One tenant requires authentication, another does not | Independent; the second is not weakened by the first (A1) |
+
+**The audit trail (RA-L).** The rules are §9, which follows this table because §8 is where every
+vector in this specification lives.
+
+| # | Given | Expect |
+|---|---|---|
+| RA-L-1 | A REGISTER refused under A6 | One record, at `warn`, naming the status and the reason §3 already computed (§9 L1). None of the presented password, nonce, `cnonce`, response digest or username appears in it (§9 L2) |
+| RA-L-2 | A REGISTER challenged under A2 | One record, and **not** as a refusal: nothing was wrong, nothing was offered (§9 L1) |
+| RA-L-3 | A REGISTER that proceeds under A1 | One record saying *unauthenticated*, rather than no record (§9 L3) |
+| RA-L-4 | A REGISTER whose credentials verify under A5, and whose `Contact` then fails to parse | The success record is still emitted, naming §5's principal. §3's outcome does not depend on what happened after §3 (§9 L1) — and the same holds one step down for an A1 proceed that then fails to parse |
+
+## 9. The audit trail
+
+Normative. What an authentication decision must leave behind, and what it must not.
+
+Added by `RG-15`. Until then §3's decision computed *why* it refused — `ChallengeResponse::because`
+is documented "Why, for logs and tests" — and the driver discarded it, so no `401`, `403` or success
+anywhere in the register path produced a single line. §3 A1 already justified the open-tenant
+principal by "`RG-3`'s audit trail must be able to say *unauthenticated*", and nothing wrote that
+anywhere.
+
+1. **L1.** Every outcome of §3 produces exactly one record, naming the outcome and, for a refusal,
+   the reason. A2's challenge is an outcome and is **not** a refusal — it is the first half of a
+   round trip the client is expected to complete, and recording it as trouble buries the real thing
+   under every phone's ordinary first REGISTER. This is the only defence §6's exposure has: with no
+   rate limiting and a 300-second nonce lifetime, a refusal nobody can count makes brute force
+   against a tenant both undetectable and unbounded.
+
+   **The record is owed for the decision, not for what follows it.** A request that A5 authenticates
+   and that then fails to become a `RegisterCommand` — a malformed `Contact`, a missing `Call-ID` —
+   has still had an outcome under §3, and it is recorded with the principal §3 proved. An
+   implementation that reads the outcome off whatever the *whole* admission returned will lose
+   exactly this case, because the rejection it ends at looks identical to one that never
+   authenticated. `RG-15` shipped that bug and `RA-L-4` is why it cannot come back.
+2. **L2.** A record carries **no credential material**: not the password, not the nonce, not the
+   `cnonce`, not the response digest, and not the presented username. Nothing has been proved about
+   a request that failed, so every string in its record comes from a closed set this platform owns.
+   The mechanism is a return type, not a discipline — the reason is a `&'static str`, which cannot
+   carry a runtime value however carelessly a driver writes the line. Same argument as
+   `cluster-config` §8 V9's `dsnRef`: a log line is the artefact most likely to be copied into an
+   issue.
+3. **L3.** A success records the principal of §5 — the identity the digest **proved**, which the
+   binding is already stored under, so naming it adds no exposure. A proceed under A1 records
+   *unauthenticated* explicitly. An absent record and an unauthenticated one are different facts,
+   and a trail that cannot tell them apart cannot answer "who wrote this binding".
+
+**What the record identifies the far end by** is the source address the driver observed, not
+anything the message claimed. It is the field an operator acts on, and it is the one field in the
+record that no attacker chooses.

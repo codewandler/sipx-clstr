@@ -19,7 +19,7 @@ use sipx_sip::headers::Address;
 use sipx_sip::{HeaderName, Request};
 
 use crate::aor::CanonicalAor;
-use crate::auth::{ChallengeResponse, CredentialStore, Decision, TenantAuth};
+use crate::auth::{AuthOutcome, ChallengeResponse, CredentialStore, Decision, TenantAuth};
 use crate::binding::{Push, SourceAddr, Timestamp};
 use crate::command::{ContactOp, ContactOps, RegisterCommand, Rejection};
 
@@ -82,7 +82,34 @@ pub fn admit(
     edge: &EdgeContext,
     now: Timestamp,
 ) -> Admission {
-    match auth.decide(request, credentials, now.as_secs()) {
+    admit_audited(request, auth, credentials, edge, now).0
+}
+
+/// [`admit`], with the §9 audit record of what §3 decided alongside it.
+///
+/// **The record cannot be recovered from the [`Admission`] alone**, which is why this exists. A
+/// `Decision::Proceed` that then fails to become a command arrives as `Admission::Reject`, with the
+/// principal it proved already dropped — so a driver reading only the `Admission` cannot tell a
+/// correctly authenticated REGISTER with a malformed `Contact` from one that was never
+/// authenticated at all. `RG-15`'s first pass did exactly that and left a successful authentication
+/// producing no record, which is the state [registrar-auth](
+/// https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9 L3 exists to
+/// forbid: "an absent record and an unauthenticated one are different facts".
+///
+/// Any driver that keeps an audit trail wants this one; [`admit`] is for callers that do not.
+pub fn admit_audited(
+    request: &Request,
+    auth: &mut TenantAuth,
+    credentials: &impl CredentialStore,
+    edge: &EdgeContext,
+    now: Timestamp,
+) -> (Admission, AuthOutcome) {
+    let decision = auth.decide(request, credentials, now.as_secs());
+    // Taken **before** the decision is consumed below. Everything after this point can discard the
+    // decision freely; the record has already been made.
+    let outcome = decision.outcome();
+
+    let admission = match decision {
         Decision::Challenge(challenge) => Admission::Challenge(challenge),
         // §3 A3 — a realm this edge does not serve. `403` rather than another challenge, since two
         // ends that disagree about which protection space they are in would loop forever.
@@ -102,7 +129,9 @@ pub fn admit(
                 Err(rejection) => Admission::Reject(rejection),
             }
         }
-    }
+    };
+
+    (admission, outcome)
 }
 
 /// Build a command from a REGISTER, or say why it cannot be built.
