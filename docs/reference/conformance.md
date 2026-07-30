@@ -7,7 +7,7 @@ One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12, [e2e-pr
 A row is *proved* when a test in the workspace covers it, and *deferred* when
 [vector-scope.toml](vector-scope.toml) says why and names the story that will.
 
-**134 of 492 rows proved**; 358 deferred.
+**134 of 493 rows proved**; 359 deferred.
 
 ## Proxy — request validation (§4)
 
@@ -160,6 +160,7 @@ A row is *proved* when a test in the workspace covers it, and *deferred* when
 | `RA-R-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs` |
 | `RA-R-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_auth.rs`, `crates/sipx-clstr-sim/tests/register_auth.rs` |
 | `RA-R-7` | proved | `crates/sipx-clstr-sim/tests/register_auth.rs` |
+| `RA-R-8` | deferred | `CX-5` — `N1`, nonce uniqueness per challenge — registrar-auth §6.1. Deferred because it cannot be covered from this repository *and* because it does not hold: nonce minting is `sipx-ua::challenge`'s (an auth primitive, AGENTS.md #6), and at the pinned `v0.7.0` its mint is `<issued-at in hex>.<HMAC over issued-at and realm>` — a pure function of the second, the realm and the secret. Two users of one tenant challenged in the same second hold one nonce and therefore one replay counter, and the second correct credential is refused as `RA-R-2` with a `401` carrying no `stale`. The row states the requirement rather than the current behaviour, so it fails today by construction; that is the point of writing it. Filed as an `open` row in docs/upstream.md with the reproduction. Coverage is CX-5's remaining acceptance — a kernel that mints per-challenge entropy, a pinned release carrying it, and the harness scenario that challenges two users within one simulated second and requires both to authenticate. CX-5 therefore stays open: closing it would leave this deferral naming a story nobody will act on. |
 
 ## Registrar auth — the tenant boundary (§5)
 
