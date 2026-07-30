@@ -48,6 +48,16 @@ pub struct NodeConfig {
     /// nothing look like a node that is up, and a default that quietly invented a realm would put a
     /// protection space in the deployment that nobody configured.
     pub auth: Option<AuthConfig>,
+    /// The tenant's expiry and quota policy, as the document states it (`FC-4`).
+    ///
+    /// Was `TenantPolicy::default()` regardless of the document until `FC-4`, so a
+    /// `maxBindingsPerAor: 3` loaded clean and the effective cap stayed 10.
+    pub policy: TenantPolicy,
+    /// The domains this tenant serves (location-service §5.1 S1). Empty means any.
+    ///
+    /// Enforced since `FC-4`. It parsed into a struct field nothing read for a release, so a
+    /// `REGISTER` for `alice@attacker.invalid` against `domains: [example.test]` was answered `200`.
+    pub domains: Vec<String>,
     /// Where registrations live (`RG-12`).
     ///
     /// In-process by default, which is the only thing a single node needs. Two nodes that must agree
@@ -108,6 +118,8 @@ impl NodeConfig {
             listeners,
             tenant: "default".to_owned(),
             auth: None,
+            policy: TenantPolicy::default(),
+            domains: Vec::new(),
             store: StoreChoice::InMemory,
         }
     }
@@ -267,7 +279,7 @@ pub async fn run(config: NodeConfig) -> Result<(), NodeError> {
         auth = if config.auth.is_some() { "required" } else { "open" },
         "node listening"
     );
-    let policy = TenantPolicy::default();
+    let policy = config.policy;
     // One authenticator for the node, because it holds the replay window: a per-request one would
     // forget every nonce-count the moment it was created, which is a replay window that never says
     // no. `std::sync::Mutex` rather than tokio's — `decide` is a hash and a lookup, and it is never
@@ -483,6 +495,28 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             );
         }
     };
+
+    // location-service §5.1 S1 — the tenant's served domains (`FC-4`). Checked here, after admission
+    // and before the store, because the address-of-record is only canonical once `admit` has produced
+    // it: the domain that matters is the one the registrar will key the binding under, not whatever
+    // spelling arrived. An empty list means "any", which is the only reading of a document that
+    // declares none that does not break every existing deployment.
+    //
+    // `403`, not `404`: the request is well-formed and understood, and the registrar is declining to
+    // serve it. Byte-exact comparison, no case folding — §4's AoR rule, and folding here would make
+    // two domains one.
+    if !edge.config.domains.is_empty() {
+        let domain = cmd.aor.as_str().rsplit('@').next().unwrap_or_default();
+        if !edge.config.domains.iter().any(|served| served == domain) {
+            tracing::warn!(
+                aor = %cmd.aor.as_str(),
+                domain,
+                tenant = %edge.config.tenant,
+                "refused a REGISTER for a domain this tenant does not serve"
+            );
+            return answer(&arrival.request, 403, "Forbidden");
+        }
+    }
 
     let applied = apply(
         edge.store,

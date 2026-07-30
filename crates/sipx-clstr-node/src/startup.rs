@@ -194,6 +194,27 @@ fn node_config(
     }
     config.auth = auth_config(&config.tenant, projected, env)?;
 
+    // `FC-4` — the rest of `tenant[]` reaches the registrar. `tenants.first()` keeps the driver's
+    // one-tenant-per-node shape (`RG-12`'s note); a document declaring more than one is refused
+    // rather than silently served by its first, because honouring one of several is a partial apply.
+    if projected.tenants.len() > 1 {
+        return Err(StartupError::MissingIdentity(format!(
+            "this build serves one tenant per node and the document declares {}. Honouring the first \
+             and ignoring the rest would be a silent partial apply; split them across nodes, or wait \
+             for multi-tenancy.",
+            projected.tenants.len()
+        )));
+    }
+    if let Some(tenant) = projected.tenants.first() {
+        config.policy = sipx_clstr_registrar::TenantPolicy {
+            default_expires: tenant.policy.default_expires,
+            min_expires: tenant.policy.min_expires,
+            max_expires: tenant.policy.max_expires,
+            max_bindings_per_aor: tenant.policy.max_bindings_per_aor,
+        };
+        config.domains.clone_from(&tenant.domains);
+    }
+
     config.store = store_choice(projected, env)?;
 
     // Said out loud at startup rather than discovered as behaviour that never happens — and said by

@@ -638,3 +638,77 @@ fn cc_v2_an_unknown_transport_names_the_closed_set() {
         "must spell the set: {error}"
     );
 }
+
+/// **`FC-4`.** `tenant[]`'s policy keys reach the registrar instead of being dropped.
+///
+/// Before this story `maxBindingsPerAor: 3` loaded clean and the effective cap stayed 10, because the
+/// driver built `TenantPolicy::default()` regardless of the document.
+#[test]
+fn fc4_tenant_policy_is_read_from_the_document() {
+    let document = good().replace(
+        "      domains: [acme.example]\n",
+        "      domains: [acme.example]\n      maxBindingsPerAor: 3\n      expiry: { default: 600, min: 30, max: 1200 }\n",
+    );
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env()).expect("loads");
+    let tenant = config.tenants.first().expect("one tenant");
+
+    assert_eq!(tenant.policy.max_bindings_per_aor, 3);
+    assert_eq!(tenant.policy.default_expires, 600);
+    assert_eq!(tenant.policy.min_expires, 30);
+    assert_eq!(tenant.policy.max_expires, 1_200);
+
+    // And none of it is reported as ignored — FC-2's warning must not lie in either direction.
+    let paths: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
+    assert!(
+        !paths
+            .iter()
+            .any(|p| p.contains("maxBindingsPerAor") || p.contains("expiry")),
+        "applied keys must not be warned about: {paths:?}"
+    );
+}
+
+/// A document that says nothing keeps location-service's own defaults, not a second set.
+#[test]
+fn fc4_absent_policy_keys_keep_the_specs_defaults() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(good().as_bytes(), &who, &env()).expect("loads");
+    let policy = &config.tenants.first().expect("one tenant").policy;
+    assert_eq!(policy.default_expires, 3_600);
+    assert_eq!(policy.min_expires, 60);
+    assert_eq!(policy.max_expires, 86_400);
+    assert_eq!(policy.max_bindings_per_aor, 10);
+}
+
+/// A minimum above the maximum is refused, not silently reordered — which of the two the operator
+/// meant is not this schema's to guess.
+#[test]
+fn fc4_an_inverted_expiry_range_is_refused() {
+    let document = good().replace(
+        "      domains: [acme.example]\n",
+        "      domains: [acme.example]\n      expiry: { min: 9000, max: 60 }\n",
+    );
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    assert!(
+        errors.iter().any(|e| e.path.to_string().contains("expiry")),
+        "{errors:#?}"
+    );
+}
+
+/// A quota of zero is a disabled tenant spelled as a limit, and is refused as such.
+#[test]
+fn fc4_a_zero_quota_is_refused() {
+    let document = good().replace(
+        "      domains: [acme.example]\n",
+        "      domains: [acme.example]\n      maxBindingsPerAor: 0\n",
+    );
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.path.to_string().contains("maxBindingsPerAor")),
+        "{errors:#?}"
+    );
+}

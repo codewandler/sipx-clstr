@@ -142,9 +142,39 @@ pub struct LocationStoreSpec {
 pub struct TenantSpec {
     pub name: String,
     pub id: u32,
+    /// The domains this tenant serves (location-service §5.1 S1). **Enforced** since `FC-4`: a
+    /// `REGISTER` for an address-of-record outside this list is refused. Empty means "any", which is
+    /// the only backward-compatible reading of a document that declares none.
     pub domains: Vec<String>,
+    /// Per-tenant expiry policy (location-service §5.2) and the binding quota (§5.5).
+    pub policy: TenantPolicySpec,
     /// The tenant's digest policy, when the document requires authentication (`FC-3`).
     pub auth: Option<AuthSpec>,
+}
+
+/// Per-tenant expiry and quota, as the document states them.
+///
+/// Defaults are location-service §5.2/§5.5's own — 3600 s granted, 60 s minimum, 86400 s maximum, 10
+/// bindings — adopted unchanged rather than restated differently (§8 V3). Before `FC-4` these keys
+/// loaded and were dropped, so the registrar ran on the library default no matter what the document
+/// said: a `maxBindingsPerAor: 3` was accepted and the effective cap stayed 10.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TenantPolicySpec {
+    pub default_expires: u32,
+    pub min_expires: u32,
+    pub max_expires: u32,
+    pub max_bindings_per_aor: usize,
+}
+
+impl Default for TenantPolicySpec {
+    fn default() -> Self {
+        Self {
+            default_expires: 3_600,
+            min_expires: 60,
+            max_expires: 86_400,
+            max_bindings_per_aor: 10,
+        }
+    }
 }
 
 /// A tenant that requires digest authentication.
@@ -754,7 +784,7 @@ fn read_document(
     let listeners = read_listeners(cluster, &cluster_path, errors, &mut unapplied);
     let membership = read_membership(cluster, &cluster_path, errors);
     let location_store = read_location_store(cluster, &cluster_path, errors);
-    let tenants = read_tenants(cluster, &cluster_path, errors, &mut unapplied);
+    let tenants = read_tenants(cluster, &cluster_path, errors);
     let security = read_security(cluster, &cluster_path, errors);
     let timers = read_timers(cluster, &cluster_path, errors);
 
@@ -1120,7 +1150,6 @@ fn read_tenants(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
     errors: &mut Vec<ConfigError>,
-    unapplied: &mut Vec<Path>,
 ) -> Vec<TenantSpec> {
     let at = path.field("tenant");
     let Some(value) = cluster.get(Value::from("tenant")) else {
@@ -1154,16 +1183,14 @@ fn read_tenants(
             &at,
             errors,
         );
-        // `auth` is now parsed, so it must NOT be reported as ignored — `FC-2`'s warning would then
-        // lie in the other direction. `expiry` and `maxBindingsPerAor` remain unapplied (`FC-4`).
-        for ignored in ["expiry", "maxBindingsPerAor"] {
-            if map.contains_key(Value::from(ignored)) {
-                unapplied.push(at.field(ignored));
-            }
-        }
+        // Every key of `tenant[]` is applied since `FC-4`, so none is reported here. `FC-2`'s
+        // warning must not lie in either direction: a key it names is genuinely ignored, and a key it
+        // omits is genuinely applied. Parsing a value into a struct field is *not* applying it —
+        // `domains` sat in `TenantSpec` unread for a release, which is exactly that mistake.
         let name = required_str(map, "name", &at, "CC-I1", errors);
         let id = required_uint(map, "id", &at, "CC-I1", u64::from(u32::MAX), errors);
         let auth = read_auth(map, &at, errors);
+        let policy = read_tenant_policy(map, &at, errors);
         let domains = map
             .get(Value::from("domains"))
             .and_then(Value::as_sequence)
@@ -1207,6 +1234,7 @@ fn read_tenants(
                 name,
                 id,
                 domains,
+                policy,
                 auth,
             });
         }
@@ -1262,6 +1290,77 @@ fn read_auth(
     } else {
         None
     }
+}
+
+/// Parse `tenant[].expiry` and `tenant[].maxBindingsPerAor` (`FC-4`).
+///
+/// Absent keys keep location-service's own defaults; §8 V3 forbids restating a different one. A
+/// minimum above the maximum is refused rather than silently reordered — an operator who wrote it
+/// meant something, and guessing which half is a policy this schema does not get to invent.
+fn read_tenant_policy(
+    map: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> TenantPolicySpec {
+    let mut policy = TenantPolicySpec::default();
+
+    if let Some(quota) = map.get(Value::from("maxBindingsPerAor")) {
+        match quota.as_u64() {
+            Some(0) => errors.push(ConfigError::new(
+                path.field("maxBindingsPerAor"),
+                "CC-S2",
+                Some("0".into()),
+                "at least 1; a quota of zero is a tenant that can register nothing, which is a \
+                 disabled tenant spelled as a limit",
+            )),
+            Some(value) => {
+                policy.max_bindings_per_aor = usize::try_from(value).unwrap_or(usize::MAX);
+            }
+            None => errors.push(ConfigError::new(
+                path.field("maxBindingsPerAor"),
+                "CC-S2",
+                Some(type_of(quota).to_owned()),
+                "a positive integer",
+            )),
+        }
+    }
+
+    let at = path.field("expiry");
+    if let Some(value) = map.get(Value::from("expiry"))
+        && let Some(block) = as_mapping(value, &at, errors)
+    {
+        closed_world(block, &["default", "min", "max"], &at, errors);
+        for (key, slot) in [
+            ("default", &mut policy.default_expires),
+            ("min", &mut policy.min_expires),
+            ("max", &mut policy.max_expires),
+        ] {
+            if let Some(found) = block.get(Value::from(key)) {
+                match found.as_u64().and_then(|n| u32::try_from(n).ok()) {
+                    Some(seconds) => *slot = seconds,
+                    None => errors.push(ConfigError::new(
+                        at.field(key),
+                        "CC-S2",
+                        Some(type_of(found).to_owned()),
+                        "a duration in seconds",
+                    )),
+                }
+            }
+        }
+        if policy.min_expires > policy.max_expires {
+            errors.push(ConfigError::new(
+                at.clone(),
+                "CC-S2",
+                Some(format!(
+                    "min {} above max {}",
+                    policy.min_expires, policy.max_expires
+                )),
+                "a minimum at or below the maximum; which of the two was meant is not this \
+                     schema's to guess",
+            ));
+        }
+    }
+    policy
 }
 
 fn read_security(
