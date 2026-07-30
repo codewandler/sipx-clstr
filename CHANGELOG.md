@@ -9,6 +9,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The default Helm chart could not start a single node** (`KO-14`). Its `values.yaml` predated the
+  configuration schema, and nothing checked one against the other: rendering the chart and loading
+  the result produced **22 refusals for every one of the six roles it deploys**. A `media:` block the
+  loader has no key for, listeners keyed `role:` instead of `roles:`, a `transport: http` listener,
+  and a `security.maxForwards: 10` that RFC 3261 §16.6 step 3 fixes at 70 and does not offer as a
+  knob. Four of the six roles had no listener at all, which the schema refuses outright.
+
+  The values are now expressed in the schema's own vocabulary, and `deploy/helm/check-values.sh`
+  renders the chart, rebuilds the node document from the rendered resource, and loads it through the
+  **real loader** once per role — so this class of drift fails loudly next time instead of at the
+  first `helm install`. Media is declared where the media-relay spec actually puts it, per trunk and
+  per pool.
+
 - **A dead contact no longer holds a live contact's answer for half a minute** (`PX-9`). Forking to
   two registered contacts at equal `q` drove the branches *in order*: a branch's response stream only
   ends when its transaction does, so a device that never answers held the request task until the

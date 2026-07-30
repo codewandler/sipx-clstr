@@ -2,7 +2,7 @@
 id: KO-14
 title: Bring the chart's values to the config schema, starting with the media block that cannot boot
 pillar: Cluster
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
