@@ -44,7 +44,6 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 
 ## Now (in progress)
 - [AF-4 — Implement the token mint/verify library](AF-4-implement-the-token-mint-verify-library.md) · Cluster · AF-1 is done — unblocked; M2 critical path, next after PX-13
-- [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster · owns cluster key distribution/rotation; PX-15 supplies the per-process secure-randomness seam
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
@@ -76,7 +75,7 @@ _Accepted means applied, or refused — there is no third state._
 - [DP-16 — Load the membership, key and shard-map sections the config loader still refuses](DP-16-load-the-membership-key-and-shard-map-sections.md) · Cluster · AF-6 specified them and DP-8 is closed, so nothing owns loading them — a document written to cluster-membership.md will not start a node
 - [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 — four ingress controls load as applied, validate no values, and change no runtime decision
 - [FC-7 — Expose the contact-operation bound beside the quota it must not contradict](FC-7-expose-the-contact-operation-bound-beside-the-quota-it-must-not-contradict.md) · Cluster · RG-25 made max_contact_ops a per-tenant policy field with no document key — raise maxBindingsPerAor past it and whole-set refreshes start answering 403
-- [FC-8 — A refused configuration value must not echo a secret into the log](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · ConfigError.found carries the offending value, and the offending value for an inline key secret is the secret
+- [FC-8 — Write down the redaction rule the loader already follows](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · the loader already redacts an inline DSN and an inline nonce secret against no written rule — KY3 made it three call sites governed by nothing
 
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
@@ -203,6 +202,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ## Done
 - [AF-1 — Specify the affinity token](AF-1-specify-the-affinity-token.md) · Cluster
 - [AF-2 — Specify flow references and connection ownership](AF-2-specify-flow-references-and-connection-ownership.md) · Cluster
+- [AF-6 — Design config-first membership and key distribution](AF-6-design-config-first-membership-and-key-distribution.md) · Cluster · specified; the ten cluster-config §12 rows that test reload are DP-16's, re-pointed off the closed DP-8
 - [CF-1 — Design the deterministic cluster harness](CF-1-design-the-deterministic-cluster-harness.md) · Platform · UPSTREAM: sipx-testkit split filed as sipx X-14; see docs/upstream.md
 - [CF-4 — Add fault injection to the simulation](CF-4-add-fault-injection-to-the-simulation.md) · Platform · the schedule half; the sim-vs-real fidelity row moved to CF-3, which owns the sockets
 - [CF-5 — Implement the deterministic cluster harness](CF-5-implement-the-deterministic-cluster-harness.md) · Platform · M1 #3 · the harness — PX-7 and RG-3 vector runs depend on it
