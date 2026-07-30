@@ -29,6 +29,7 @@ use sipx_sip::{
 use sipx_transport::{Handle, Incoming, Responses, Target, TransportKind};
 use tokio::task::JoinSet;
 
+use crate::config::Capabilities;
 use crate::listen::{Advertised, Listener, ListenerError, Listeners};
 
 /// How the node is configured.
@@ -39,6 +40,13 @@ use crate::listen::{Advertised, Listener, ListenerError, Listeners};
 pub struct NodeConfig {
     /// What this node binds, and what it advertises on each of them (`DP-5`).
     pub listeners: Listeners,
+    /// Which decision paths this node's declared roles wire up (`FC-6`, `cluster-config` §4 R3).
+    ///
+    /// The roles reached the projection and stopped there: they picked the listeners and the
+    /// location store and were then dropped, so [`serve`] dispatched on method alone and every node
+    /// answered every method. A node started as `inbound-proxy` therefore accepted and stored a
+    /// REGISTER — a registrar nobody deployed, holding state no operator knows about.
+    pub capabilities: Capabilities,
     /// The tenant every registration on this node belongs to.
     ///
     /// One tenant per node is the M1 simplification. The tenant never comes from the message —
@@ -150,6 +158,10 @@ impl NodeConfig {
     pub fn listening(listeners: Listeners) -> Self {
         Self {
             listeners,
+            // A node declared in code is the node these constructors have always produced: both
+            // paths. Every node built from a **document** has this replaced by the wiring its
+            // identity asks for, which is where the roles have to arrive (`FC-6`).
+            capabilities: Capabilities::CALL_PATH,
             tenant: "default".to_owned(),
             auth: None,
             policy: TenantPolicy::default(),
@@ -496,6 +508,10 @@ pub async fn run_reporting(
         listen = %handle.local_addr(),
         %advertised,
         tenant = %config.tenant,
+        // What the declared roles wired (`FC-6`). Printed for the same reason the store and the
+        // tenant are: it is a fact about what this node will answer, and while nothing consumed the
+        // roles there was no way to tell a registrar from a proxy from outside.
+        serves = config.capabilities.describe(),
         store = config.store.describe(),
         // Named for the same reason `RG-12` named the store: an operator reading one line should be
         // able to tell an open tenant from an authenticated one. Today it is always `open`, which is
@@ -792,20 +808,107 @@ struct Edge<'a> {
     credentials: &'a InMemoryCredentials,
 }
 
+/// Which path an arrival takes, given what this node's roles wired (`cluster-config` §4 R3).
+///
+/// A function of the node's [`Capabilities`] and the request's method, and deliberately **not** a
+/// `match` buried inside [`serve`]: R3's whole point is that the role set is consulted when a node is
+/// *wired* and never when a request is *classified*, and a decision that can be exercised without a
+/// socket is the only kind this project keeps (AGENTS.md #2). The unit tests at the foot of this file
+/// are the whole matrix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Dispatch {
+    /// The registrar answers it out of the location service.
+    Registrar,
+    /// The proxy engine carries it onward.
+    Proxy,
+    /// An ACK for a 2xx: forwarded with no transaction of its own, never answered.
+    Stateless,
+    /// No path on this node serves this method — answered `405`, never dropped.
+    NotAllowed,
+    /// An ACK this node cannot forward. RFC 3261 §17.1.1.3 makes an ACK for a 2xx a transaction of
+    /// its own that **nothing answers**, so a node with no forwarding path can only drop it: there is
+    /// no status to send, and inventing one would put a response on a transaction that has none.
+    /// Recorded rather than silent, which is the most a refusal can be here.
+    Unroutable,
+}
+
+impl Dispatch {
+    fn of(capabilities: Capabilities, method: &Method) -> Self {
+        match method {
+            Method::Register if capabilities.registrar => Dispatch::Registrar,
+            Method::Register => Dispatch::NotAllowed,
+            Method::Ack if capabilities.proxy => Dispatch::Stateless,
+            Method::Ack => Dispatch::Unroutable,
+            _ if capabilities.proxy => Dispatch::Proxy,
+            _ => Dispatch::NotAllowed,
+        }
+    }
+}
+
 async fn serve(
     handle: &Handle,
     edge: &Edge<'_>,
     arrival: Incoming,
 ) -> Result<(), sipx_transport::Error> {
-    match arrival.request.method {
-        Method::Register => {
+    let capabilities = edge.config.capabilities;
+    match Dispatch::of(capabilities, &arrival.request.method) {
+        Dispatch::Registrar => {
             let response = register(edge, &arrival);
             handle.respond(&arrival.key, response).await
         }
-        // An ACK for a 2xx is a separate transaction end to end: forwarded, never answered.
-        Method::Ack => forward_statelessly(handle, edge.store, edge.config, &arrival).await,
-        _ => proxy_request(handle, edge.store, edge.config, edge.proxy, arrival).await,
+        Dispatch::Stateless => forward_statelessly(handle, edge.store, edge.config, &arrival).await,
+        Dispatch::Proxy => {
+            proxy_request(handle, edge.store, edge.config, edge.proxy, arrival).await
+        }
+        Dispatch::NotAllowed => {
+            tracing::info!(
+                method = %arrival.request.method,
+                source = %arrival.source,
+                serves = capabilities.describe(),
+                "refused: this node's roles do not wire that method"
+            );
+            let response = not_allowed(&arrival.request, capabilities);
+            handle.respond(&arrival.key, response).await
+        }
+        Dispatch::Unroutable => {
+            tracing::info!(
+                source = %arrival.source,
+                serves = capabilities.describe(),
+                "dropped an ACK: this node has no forwarding path, and an ACK has no response"
+            );
+            Ok(())
+        }
     }
+}
+
+/// The refusal for a method this node's roles do not wire: `405`, naming the methods they do.
+///
+/// **An answer, not a drop.** `cluster-config` §4 R5's "projected away" is about configuration a node
+/// ignores; a *request* it received is a different thing, and silence there is indistinguishable from
+/// a broken listener. RFC 3261 §21.4.6 is the status for a method the server understands and does not
+/// allow here, and it requires the `Allow` header — which is also the only way the far end can tell a
+/// role boundary from a defect.
+fn not_allowed(request: &Request, capabilities: Capabilities) -> Response {
+    let mut response = answer(request, 405, reason_for(405));
+    if let Ok(header) = sipx_sip::Header::build(HeaderName::Allow, allowed(capabilities)) {
+        response.headers.push(header);
+    }
+    response
+}
+
+/// The methods this node's wiring serves, as an `Allow` value (RFC 3261 §20.5).
+///
+/// Derived from the capabilities rather than written out per role, so a node that is both a registrar
+/// and a proxy cannot end up advertising one of the two.
+fn allowed(capabilities: Capabilities) -> String {
+    let mut methods = Vec::new();
+    if capabilities.proxy {
+        methods.extend(["INVITE", "ACK", "BYE", "CANCEL", "OPTIONS"]);
+    }
+    if capabilities.registrar {
+        methods.push("REGISTER");
+    }
+    methods.join(", ")
 }
 
 // ---------------------------------------------------------------------------------- registrar ---
@@ -1312,6 +1415,7 @@ fn reason_for(status: u16) -> &'static str {
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
+        405 => "Method Not Allowed",
         407 => "Proxy Authentication Required",
         420 => "Bad Extension",
         421 => "Extension Required",
@@ -1507,6 +1611,84 @@ mod tests {
         assert!(
             !proxy.is_ours(&uri("sip:10.0.0.7:5060;lr")),
             "the bound address is not an identity"
+        );
+    }
+
+    // ------------------------------------------------------- roles reach dispatch (FC-6, §4 R3) ---
+
+    const REGISTRAR_ONLY: Capabilities = Capabilities {
+        registrar: true,
+        proxy: false,
+    };
+    const PROXY_ONLY: Capabilities = Capabilities {
+        registrar: false,
+        proxy: true,
+    };
+
+    /// **`FC-6`.** A method reaches a path only where the node's roles wired one.
+    ///
+    /// The whole matrix, because the defect was one arm of it: `serve` matched on the method alone,
+    /// so a node with no registrar wiring still ran `register` — accepted a REGISTER, wrote a binding
+    /// and answered `200 OK`.
+    #[test]
+    fn fc6_dispatch_follows_the_wiring_and_not_the_method() {
+        let of = Dispatch::of;
+
+        // A registrar registers; without the wiring the same request is refused rather than served.
+        assert_eq!(of(REGISTRAR_ONLY, &Method::Register), Dispatch::Registrar);
+        assert_eq!(of(PROXY_ONLY, &Method::Register), Dispatch::NotAllowed);
+
+        // A proxy proxies; a registrar is not a proxy (§4 R7 — a role's wiring is the union of the
+        // sections its column marks, and there is no other way to acquire behaviour).
+        for method in [Method::Invite, Method::Bye, Method::Cancel, Method::Options] {
+            assert_eq!(of(PROXY_ONLY, &method), Dispatch::Proxy);
+            assert_eq!(of(REGISTRAR_ONLY, &method), Dispatch::NotAllowed);
+        }
+
+        // Both paths on one node behave as either of them alone — R2's "roles is a set".
+        assert_eq!(
+            of(Capabilities::CALL_PATH, &Method::Register),
+            Dispatch::Registrar
+        );
+        assert_eq!(
+            of(Capabilities::CALL_PATH, &Method::Invite),
+            Dispatch::Proxy
+        );
+    }
+
+    /// An ACK is the one arrival a refusal cannot answer, so it is dropped rather than answered.
+    ///
+    /// RFC 3261 §17.1.1.3: an ACK for a 2xx is a transaction of its own, and nothing responds to it.
+    /// A `405` here would put a response on a transaction that has none, which is a worse fault than
+    /// the drop — so the refusal is a log line, and the drop is deliberate rather than incidental.
+    #[test]
+    fn fc6_an_ack_is_dropped_rather_than_answered_where_nothing_forwards_it() {
+        assert_eq!(
+            Dispatch::of(REGISTRAR_ONLY, &Method::Ack),
+            Dispatch::Unroutable
+        );
+        assert_eq!(Dispatch::of(PROXY_ONLY, &Method::Ack), Dispatch::Stateless);
+    }
+
+    /// The refusal is RFC 3261 §21.4.6's `405`, and it carries the methods the node does serve.
+    #[test]
+    fn fc6_a_refused_method_is_answered_405_with_allow() {
+        let response = not_allowed(&a_request(&Method::Register), PROXY_ONLY);
+        assert_eq!(response.status.code(), 405);
+        let allow = response
+            .headers
+            .get(&HeaderName::Allow)
+            .expect("§21.4.6 requires the methods that are allowed");
+        assert_eq!(
+            String::from_utf8_lossy(allow.value().as_ref()),
+            "INVITE, ACK, BYE, CANCEL, OPTIONS"
+        );
+
+        // …and a registrar advertises the one method it has.
+        assert_eq!(allowed(REGISTRAR_ONLY), "REGISTER");
+        assert_eq!(
+            allowed(Capabilities::CALL_PATH),
+            "INVITE, ACK, BYE, CANCEL, OPTIONS, REGISTER"
         );
     }
 }

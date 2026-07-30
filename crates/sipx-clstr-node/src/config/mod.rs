@@ -127,12 +127,83 @@ impl Role {
         )
     }
 
+    /// The three roles that carry somebody else's request onward (§7's `trunk[]`, `routeRule[]`,
+    /// `timers` and `admission` columns).
+    ///
+    /// `registrar` is on the call path and is **not** one of them: it answers REGISTER out of the
+    /// location service and forwards nothing, and §7 gives it `locationStore`, `registrar` and
+    /// `tenant[]` and no forwarding section at all.
+    #[must_use]
+    pub fn is_proxying(self) -> bool {
+        matches!(self, Role::Edge | Role::InboundProxy | Role::OutboundProxy)
+    }
+
     fn closed_set() -> String {
         Role::ALL
             .iter()
             .map(|role| role.as_str())
             .collect::<Vec<_>>()
             .join(", ")
+    }
+}
+
+/// Which decision paths a node's roles wire up (§4 R3, `FC-6`).
+///
+/// R3 fixes what a role may and may not do, in one sentence: it "selects which decision paths are
+/// wired; it never selects what a request decides". So a role set is turned into this **once**, when
+/// the node is built, and the driver then asks which paths exist rather than which roles it was
+/// given. That is what keeps R2's "roles is a set" safe — `inbound-proxy` and `outbound-proxy` on
+/// one node stay indistinguishable to an arriving request, because neither is consulted when one is
+/// classified.
+///
+/// Until `FC-6` the projection used the roles to pick listeners and the location store and then
+/// dropped them, so the driver dispatched on method alone: a node started as `inbound-proxy`
+/// answered `200 OK` to a REGISTER and stored the binding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Capabilities {
+    /// The registrar path: a REGISTER is admitted, decided against the tenant's policy and stored
+    /// (`registrar`).
+    pub registrar: bool,
+    /// The forwarding path: everything a proxy carries onward (`edge`, `inbound-proxy`,
+    /// `outbound-proxy`).
+    pub proxy: bool,
+}
+
+impl Capabilities {
+    /// Both paths — what a [`crate::driver::NodeConfig`] built in code has always meant.
+    ///
+    /// The document path never uses it: `startup::node_config` derives the wiring from the identity
+    /// the node was started with, which is the whole of this story. It is the constructors that take
+    /// a socket and nothing else ([`crate::driver::NodeConfig::new`]) that need a stated default,
+    /// and theirs is the node they have always produced.
+    pub const CALL_PATH: Self = Self {
+        registrar: true,
+        proxy: true,
+    };
+
+    /// The wiring `roles` asks for.
+    #[must_use]
+    pub fn of(roles: &BTreeSet<Role>) -> Self {
+        Self {
+            registrar: roles.contains(&Role::Registrar),
+            proxy: roles.iter().copied().any(Role::is_proxying),
+        }
+    }
+
+    /// What this node serves, for the line it logs at startup.
+    ///
+    /// An operator reading one line should be able to tell a registrar from a proxy from a node that
+    /// is both — which is exactly the fact that was unobservable while nothing consumed the roles.
+    #[must_use]
+    pub fn describe(self) -> &'static str {
+        match (self.registrar, self.proxy) {
+            (true, true) => "registrar+proxy",
+            (true, false) => "registrar",
+            (false, true) => "proxy",
+            // Unreachable from a document — the empty role set is refused at load (R4) and every
+            // remaining role wires one of the two — and stated rather than assumed.
+            (false, false) => "nothing",
+        }
     }
 }
 

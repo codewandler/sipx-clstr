@@ -48,6 +48,19 @@ pub enum StartupError {
     /// The identity a node must be given from outside was not supplied (§5 P1).
     #[error("{0}")]
     MissingIdentity(String),
+    /// A role in the identity names a path this build does not have (`FC-6`).
+    ///
+    /// The `FC-1`/`FC-3` shape, applied to §4: accepted means applied, or refused. A role that
+    /// nothing wires cannot be honoured, and a node that came up serving *something else* instead is
+    /// the failure this epic exists to remove — it was not hypothetical, either: a node started as
+    /// `echo` came up as a full proxy **and** registrar, which is the one arrangement
+    /// [e2e-probe](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/e2e-probe.md) §9
+    /// forbids absolutely.
+    #[error("this node was started with the `{role}` role, which this build cannot serve: {why}")]
+    RoleNotServed {
+        role: &'static str,
+        why: &'static str,
+    },
 }
 
 /// Where the node's identity comes from, since it is never in the document (§5 P1).
@@ -159,6 +172,34 @@ fn node_config(
     projected: &ProjectedConfig,
     env: &BTreeMap<String, String>,
 ) -> Result<NodeConfig, StartupError> {
+    // `FC-6`, and the first thing this function does: a role this build has no path for stops the
+    // node here, before a socket is bound and before anything else in the document is turned into
+    // behaviour. Refused **by name**, and the reason says which section would have configured it, so
+    // an operator can tell "not yet built" from "you spelled it wrong" — the loader has already
+    // proved the spelling by this point (§4 R1).
+    for role in &projected.identity.roles {
+        // An exhaustive match rather than a set of "unserved" roles, and for the same reason the
+        // transport arm below is written out: adding a role to §4's closed set without deciding what
+        // runs it becomes a compile error here instead of a node that quietly serves something else.
+        let unserved = match role {
+            Role::Edge | Role::Registrar | Role::InboundProxy | Role::OutboundProxy => continue,
+            Role::Echo => Some((
+                role.as_str(),
+                "the echo endpoint is a UAS (e2e-probe §9) that this driver does not run, and \
+                 `cluster.echo` is not a section this loader reads. Until it does, a node given this \
+                 role can only answer as something it is not",
+            )),
+            Role::E2eTester => Some((
+                role.as_str(),
+                "the probe engine is not driven by this binary, and `cluster.probe` is not a section \
+                 this loader reads. Until it is, a node given this role would probe nothing",
+            )),
+        };
+        if let Some((role, why)) = unserved {
+            return Err(StartupError::RoleNotServed { role, why });
+        }
+    }
+
     let mut listeners = Vec::new();
     for declared in &projected.listeners {
         let bind: SocketAddr = declared
@@ -186,6 +227,11 @@ fn node_config(
     }
 
     let mut config = NodeConfig::listening(Listeners::new(listeners)?);
+
+    // `FC-6` — the roles reach dispatch. This is the transfer the finding was about: everything
+    // below this line was already carried across, and the one thing that decides *which* of it a node
+    // may act on was not, so `serve` matched on method alone.
+    config.capabilities = config::Capabilities::of(&projected.identity.roles);
 
     // One tenant per node is still the driver's shape (`RG-12`'s note); the document may declare
     // several, and this takes the first rather than inventing a selection rule the schema does not

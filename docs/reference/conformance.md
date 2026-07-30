@@ -9,7 +9,7 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**125 of 549 rows proved**; 19 covered for shape only; 405 deferred.
+**126 of 549 rows proved**; 19 covered for shape only; 404 deferred.
 
 Σ over the 58 sections below is 549, so every row counted above is shown in exactly one table.
 
@@ -639,7 +639,7 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `CC-R-1` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
+| `CC-R-1` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-R-2` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
 | `CC-R-3` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
 | `CC-R-4` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
