@@ -20,11 +20,25 @@
 #         1 a step failed
 #         2 the environment was not ready (no sipx CLI, no docker, no database)
 #
-# not-in-ci: needs the external `sipx` CLI *and* a PostgreSQL location service in Docker — the exit
-# code above says so itself, and a runner that has neither would report "environment not ready" on
-# every push, which is a green that means nothing. Run by hand before a release. `DX-12` recorded
-# this rather than leaving it unstated; `scripts/check-proof-domains.py` holds the part of it a
-# runner can check, that its phones register in domains its embedded document actually serves.
+# not-in-ci: nobody has written the job yet — and as of `CF-15` that is the whole of the reason,
+# which is a weaker one than what stood here before and is recorded honestly rather than left to be
+# re-read as a live blocker. Both of `DX-12`'s stated reasons have since been settled: the external
+# `sipx` CLI builds from the pinned kernel tag in about forty seconds, which
+# `.github/workflows/ci.yml`'s `e2e` job now does on every push, and the PostgreSQL location service
+# is a service container, which that file's `postgres` job already runs against the same suite.
+#
+# What would change it: a job that composes those two — the `e2e` job's kernel-CLI build step, the
+# `postgres` job's service container — and then runs this script. The fixed `15081`/`15091` below are
+# **not** the obstacle they look like: like `scripts/e2e-call.sh`, this proof needs a literal address
+# its phones can be dialled at (location-service §3.2 N7, and `check-proof-domains.py` requiring a
+# static literal domain), so it is one-run-per-machine by construction — which a dedicated
+# `ubuntu-latest` VM gives it for free. The work is orchestration, not a change to the proof.
+#
+# This is the proof behind the `0.11.0` cluster headline, so leaving it unrun is the same bet
+# `DX-12` took on `scripts/e2e-call.sh` and `FC-4` collected on.
+#
+# `scripts/check-proof-domains.py` holds the part of it a runner can check today, that its phones
+# register in domains its embedded document actually serves.
 #
 # That checker finds the cluster document a proof runs against in one of two places: embedded in the
 # file, as here — the heredoc below is this proof's document — or named by a `proof-document: <path>`

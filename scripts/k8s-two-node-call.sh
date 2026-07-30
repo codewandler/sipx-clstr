@@ -24,9 +24,19 @@
 # not-in-ci: needs a live Kubernetes cluster with the devspace profile already deployed, a pod image
 # carrying the external `sipx` CLI, and the pod CIDR reachable from where it runs. That is a
 # different cost class from the rest of the gate and cannot be stood up per push. Run by hand
-# against a real cluster before a release. Recorded by `DX-12` as a decision rather than an
-# omission; `scripts/check-proof-domains.py` checks the registered domains against the ConfigMap
-# named by the `proof-document:` directive below, which is the half a runner can settle.
+# against a real cluster before a release.
+#
+# What would change it, concretely rather than "when it gets easier" (`CF-15`): the phone image is
+# the blocker, not the cluster. A cluster can be stood up inside a job — k3d, exactly as
+# `website/docs/getting-started.md` already has a reader do on a laptop — but the `sipx` CLI phone
+# runs here as an image built by hand and published nowhere a runner could pull from, and this script
+# takes it as already present. Publish that image (or build it in the job from the pinned kernel tag,
+# the way `.github/workflows/ci.yml`'s `e2e` job now builds the CLI) and the remaining work is a
+# deploy-and-wait step, not a proof change. Until then the job cannot be written at all.
+#
+# Recorded by `DX-12` as a decision rather than an omission; `scripts/check-proof-domains.py` checks
+# the registered domains against the ConfigMap named by the `proof-document:` directive below, which
+# is the half a runner can settle.
 #
 # Unlike the local proof this script embeds no cluster document — it registers against one that is
 # already deployed. A `proof-document: <path>` comment names it, so the checker can hold the two to

@@ -29,7 +29,10 @@ stops it happening again, and it reads exactly what the link checker deliberatel
 4. **Every documented `sipx-clstr` invocation parses.** Command lines in fenced blocks across
    `README.md` and the site are held to the same flag set, and a repository path a command names
    (`scripts/…`, `deploy/…`, `Dockerfile`) has to exist.
-5. **Every proof the site offers is in CI, or says why not.** See `PROOF_DIRECTIVE`.
+5. **Every proof the site offers is in CI, or says why not.** "In CI" means the gate or a workflow
+   **invokes** it — parsed as a command, not matched as a substring, so a commented-out line or a
+   step merely *named* after a proof does not count. See `PROOF_DIRECTIVE` for the other branch and
+   `invokes` for this one; `self_test` pins both against the ways they can be faked.
 
 ## Where the CLI surface comes from, and why it is two sources
 
@@ -146,6 +149,124 @@ REPO_PATH = re.compile(
 # its module docstring, which is why the comment marker is optional.
 PROOF_DIRECTIVE = re.compile(r"^[ \t]*#?[ \t]*not-in-ci:[ \t]*(\S[^\n]*)", re.M)
 CI_REFERENCES = ("scripts/gate.sh", ".github/workflows")
+
+# `CF-15`. "Runs in CI" used to be resolved with `name in text` over the files above — a bare
+# substring test, which a commented-out line satisfies, and so does a step *named* after a proof, and
+# so does a sentence in a comment explaining that the proof is **not** run. It was inert only because
+# nothing in either file mentioned any proof at all; the moment one did, it would have started
+# passing for the wrong reason, which is the same false green `PROOF_DIRECTIVE` was anchored to close.
+#
+# So the name has to appear where a shell would *execute* it. `shell_commands` removes comments and
+# splits on the operators that start a new command; `invokes` then requires the name in command
+# position rather than as an argument.
+#
+# Where this is still approximate, stated plainly rather than implied to be exact — a checker whose
+# predecessor failed open has no business overselling its successor:
+#
+#   - **Heredoc bodies are read as if they were code.** A `<<YAML` block in `scripts/gate.sh` with a
+#     line beginning `scripts/e2e-call.sh` would be counted, wrongly. Neither the gate nor any
+#     workflow currently contains such a heredoc, and the proof scripts that do are not read by this.
+#   - **A line continued with `\` is judged on its own.** The continuation of `echo foo \` reads as a
+#     fresh command. Continuations of real invocations therefore work, and the pathological case is a
+#     wrapped `echo`, which nothing here does.
+#   - Command substitution needs no special case: splitting on `(` puts `$(scripts/e2e-call.sh)`'s
+#     body in command position, which is correct — that form does run it.
+#
+# All three are narrow and none of them is the failure being fixed. The one that mattered — a
+# commented-out line, or a mention in prose — is closed, and `self_test` holds it closed.
+ENV_ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+COMMAND_SEPARATOR = re.compile(r"&&|\|\||[;|&()]")
+
+# Words that may precede the real command without making it an argument. `timeout` also takes a
+# duration, which is why a bare number is tolerated. `echo` is deliberately **not** here.
+COMMAND_PREFIXES = frozenset(
+    {"exec", "time", "sudo", "nohup", "setsid", "timeout", "env", "bash", "sh", "python3", "python"}
+)
+
+# One YAML construct, read by hand: `run:`, inline or as a block scalar. There is no third-party
+# dependency in this script and the `docs` job installs a bare interpreter, so PyYAML is not
+# available — but the narrow reader is also the point rather than a concession. Everything outside a
+# `run:` body is ignored, so a step whose `name:` quotes a proof does not count as running it.
+RUN_KEY = re.compile(r"^(\s*)(?:-\s+)?run:\s*(.*)$")
+
+
+def strip_comment(line: str) -> str:
+    """`line` with any trailing shell comment removed.
+
+    Quote-aware to the depth this needs: a `#` inside quotes is text, and a `#` that does not start a
+    word is not a comment either (`--color=#fff`). Backslash escapes are not tracked.
+    """
+    kept: list[str] = []
+    quote: str | None = None
+    for index, char in enumerate(line):
+        if quote:
+            kept.append(char)
+            if char == quote:
+                quote = None
+        elif char in "'\"":
+            quote = char
+            kept.append(char)
+        elif char == "#" and (index == 0 or line[index - 1].isspace()):
+            break
+        else:
+            kept.append(char)
+    return "".join(kept)
+
+
+def workflow_run_lines(text: str) -> list[str]:
+    """Every line a workflow's `run:` steps hand to the shell."""
+    lines = text.splitlines()
+    body: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = RUN_KEY.match(lines[index])
+        index += 1
+        if not match:
+            continue
+        indent, rest = match.group(1), match.group(2).strip()
+        if not rest.startswith(("|", ">")):
+            body.append(rest)  # An inline scalar: the whole command is on this line.
+            continue
+        # A block scalar: every following line indented past the key belongs to it. A `#` in there is
+        # shell, not YAML — the block is handed to `bash` verbatim — so it is stripped as shell below.
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip()) <= len(indent):
+                break
+            body.append(line)
+            index += 1
+    return body
+
+
+def shell_commands(lines: list[str]) -> list[str]:
+    """The command segments a shell would execute, comments removed."""
+    return [
+        segment.strip()
+        for line in lines
+        for segment in COMMAND_SEPARATOR.split(strip_comment(line))
+        if segment.strip()
+    ]
+
+
+def invokes(segment: str, name: str) -> bool:
+    """Is `name` the command this segment runs, rather than a word inside it?"""
+    for token in segment.split():
+        candidate = token.strip("'\"")
+        candidate = candidate[2:] if candidate.startswith("./") else candidate
+        if candidate == name:
+            return True
+        if ENV_ASSIGNMENT.match(token) or token.startswith("-") or token.isdigit():
+            continue
+        if candidate.rsplit("/", 1)[-1] in COMMAND_PREFIXES:
+            continue
+        return False  # A real command, and it is not ours — the name can only be an argument now.
+    return False
+
+
+def runs_in_ci(text: str, name: str, *, yaml: bool) -> bool:
+    """Does `text` — a shell script, or a workflow — actually invoke `name`?"""
+    lines = workflow_run_lines(text) if yaml else text.splitlines()
+    return any(invokes(segment, name) for segment in shell_commands(lines))
 
 
 def tracked(*roots: str) -> list[pathlib.Path]:
@@ -506,7 +627,10 @@ def check_proofs_are_gated() -> list[str]:
                 text = file.read_text(encoding="utf-8")
             except (UnicodeDecodeError, OSError):
                 continue
-            referenced |= {name for name in offered if name in text}
+            yaml = file.suffix in (".yml", ".yaml")
+            referenced |= {
+                name for name in offered if runs_in_ci(text, name, yaml=yaml)
+            }
 
     problems = []
     for name, cited_by in sorted(offered.items()):
@@ -526,7 +650,108 @@ def check_proofs_are_gated() -> list[str]:
     return problems
 
 
+def self_test() -> list[str]:
+    """The ways "it runs in CI" can be made to look true without being true.
+
+    `CF-15`. The substring test this replaces was demonstrated failing open by adding one line —
+    `# scripts/e2e-call.sh` — to `scripts/gate.sh`: the checker went from FAIL to clean on a proof
+    that nothing ran. Run on every invocation rather than as a separate suite, on `check-vectors.py`'s
+    reasoning: a checker whose own defect is a false green has to carry the proof it is still closed.
+    """
+    failures: list[str] = []
+    proof = "scripts/e2e-call.sh"
+
+    def check(claim: str, held: bool) -> None:
+        if not held:
+            failures.append(claim)
+
+    # The line that flipped the verdict, and its neighbours.
+    check(
+        "a commented-out invocation is not an invocation — the CF-15 case",
+        not runs_in_ci('step "site"\n# scripts/e2e-call.sh\n', proof, yaml=False),
+    )
+    check(
+        "nor is one commented without a space",
+        not runs_in_ci("#scripts/e2e-call.sh\n", proof, yaml=False),
+    )
+    check(
+        "nor a trailing comment on a line that runs something else",
+        not runs_in_ci(
+            "scripts/check-site.py  # unlike scripts/e2e-call.sh, this one runs\n",
+            proof,
+            yaml=False,
+        ),
+    )
+    check(
+        "nor prose that says the proof is deliberately not run",
+        not runs_in_ci("# The proofs (scripts/e2e-call.sh) are run by hand.\n", proof, yaml=False),
+    )
+    check(
+        "nor the name as an argument to another command",
+        not runs_in_ci('echo "run scripts/e2e-call.sh before a release"\n', proof, yaml=False),
+    )
+
+    # And the forms that genuinely are an invocation, so this does not fail closed on real wiring.
+    for shell in (
+        "scripts/e2e-call.sh\n",
+        "scripts/e2e-call.sh --port 5060\n",
+        "./scripts/e2e-call.sh\n",
+        "timeout 600 scripts/e2e-call.sh\n",
+        "cargo build --bin sipx-clstr && scripts/e2e-call.sh\n",
+        'SIPX="$PWD/sipx" scripts/e2e-call.sh\n',
+    ):
+        check(f"a real invocation counts: {shell.strip()}", runs_in_ci(shell, proof, yaml=False))
+
+    # The same distinctions through the workflow reader.
+    check(
+        "a step *named* after a proof does not run it",
+        not runs_in_ci(
+            "      - name: runs scripts/e2e-call.sh\n        run: echo nothing\n", proof, yaml=True
+        ),
+    )
+    check(
+        "a commented-out YAML step does not run it",
+        not runs_in_ci("      # - run: scripts/e2e-call.sh\n", proof, yaml=True),
+    )
+    check(
+        "nor a commented line inside a block scalar",
+        not runs_in_ci(
+            "      - name: proof\n        run: |\n          # scripts/e2e-call.sh\n",
+            proof,
+            yaml=True,
+        ),
+    )
+    check(
+        "an inline `run:` counts",
+        runs_in_ci("      - run: scripts/e2e-call.sh\n", proof, yaml=True),
+    )
+    check(
+        "a block-scalar `run:` counts",
+        runs_in_ci(
+            "      - name: proof\n        run: |\n          scripts/e2e-call.sh --port 5060\n",
+            proof,
+            yaml=True,
+        ),
+    )
+    check(
+        "a `run:` body ends where the indentation does",
+        not runs_in_ci(
+            "      - name: proof\n        run: |\n          cargo test\n"
+            "      - name: scripts/e2e-call.sh is not run here\n        run: echo nothing\n",
+            proof,
+            yaml=True,
+        ),
+    )
+    return failures
+
+
 def main() -> int:
+    if failures := self_test():
+        for failure in failures:
+            print(f"self-test: {failure}")
+        print(f"\nsite: FAIL — this checker is not holding its own invariant ({len(failures)})")
+        return 2
+
     surface, where, drift = cli_surface()
     commands, verified, unrunnable = check_documented_commands(surface, where)
     problems = (
