@@ -42,11 +42,10 @@ listener:
 ```
 
 ```text
-sipx-clstr: `0.0.0.0` cannot be advertised: an unspecified address is where to listen, not where to be reached
-Declare `advertise` on the listener with the address peers reach this node on.
+sipx-clstr: cluster.listener: `0.0.0.0` cannot be advertised: an unspecified address is where to listen, not where to be reached
 ```
 
-Exit code `2`. This is deliberate. `0.0.0.0` is a valid answer to "where should I listen" —
+Exit code `2`, and the message names the path in the document that has to change. This is deliberate. `0.0.0.0` is a valid answer to "where should I listen" —
 every interface — and a meaningless answer to "where can you be reached". A node that put
 `0.0.0.0` into a `Record-Route` would take calls that could never be transferred or hung up,
 because every in-dialog request would be addressed to nowhere.
