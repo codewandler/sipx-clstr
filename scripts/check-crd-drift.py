@@ -39,6 +39,13 @@ What is compared, and against what:
    top-level key the chart writes under `cluster:` is named by a row; and a row that says the default
    set omits a section is checked to have actually omitted it. A key the chart grows and the table
    does not is drift in the direction the table is supposed to prevent.
+5. **The `deployment:` half is closed and declared too.** Every path the chart writes under
+   `deployment:` — one level below each key — is either an operator-half row of §5 or a row of §5's
+   chart-local table, and every chart-local row resolves. §5 has always said that a `values.yaml` key
+   with no `SipxCluster` field is either a chart-managed dependency or a defect, and for two stories
+   nothing read that sentence: `deployment.rtpengine.enabled` sat under it as a second spelling of
+   `cluster.mediaPool[].mode: managed`, recorded in §11 and green in the gate (`KO-15`). Reading one
+   level down is what makes a switch added *inside* a declared block as visible as a new block.
 
 What this does NOT check: that the resource is a valid CRD (there is no CRD manifest until `KO-3`),
 that the operator honours any of it, or that the chart's rendered document loads — the last is
@@ -100,6 +107,12 @@ OPERATOR_KEYS_ASSIGNMENT = re.compile(r"OPERATOR_KEYS\s*=\s*\(([^)]*)\)")
 # without this parser having an opinion about them.
 CONFIG, OPERATOR = "config", "operator"
 ABSENT = "—"
+
+# A row of §5's chart-local table: three cells, the first a backticked `deployment.` path. The
+# three-cell shape alone is not enough — the Kubernetes-native table beside it is also three cells —
+# so the `deployment.` prefix is what tells them apart, and it is also the only prefix this table is
+# allowed to carry: a chart-local row is by definition a key that reaches no `SipxCluster` field.
+CHART_LOCAL_PATH = re.compile(r"^`(deployment\.[A-Za-z][\w.-]*)`$")
 
 
 def cells(line: str) -> list[str] | None:
@@ -199,6 +212,42 @@ def operator_keys(text: str) -> list[str]:
         return []
     named = found.group(1).replace('"', "").replace("'", "").split(",")
     return [key.strip() for key in named if key.strip()]
+
+
+def chart_local_paths(text: str) -> list[str]:
+    """The `deployment:` paths §5's chart-local table declares — the keys that reach no `spec` field.
+
+    Read by prefix rather than by position, so the table can move within §5 and so the
+    Kubernetes-native table's three-cell rows beside it are not mistaken for declarations.
+    """
+    paths: list[str] = []
+    for line in text.splitlines():
+        row = cells(line)
+        if not row or len(row) != 3:
+            continue
+        if found := CHART_LOCAL_PATH.match(row[0]):
+            paths.append(found.group(1))
+    return paths
+
+
+def chart_deployment_paths(deployment: dict, mapped: set[str]) -> list[str]:
+    """The `deployment:` paths the chart writes that a chart-local row has to declare.
+
+    A key the mapping table sends to `spec` is copied verbatim and is not descended into: its fields
+    belong to the resource, and §5 names the key rather than the tree under it. Everything else is
+    the chart's own and is read **one level down**, so that a switch added inside an already-declared
+    block — which is exactly the shape `KO-15` removed — is as visible as a whole new block. Deeper
+    than one level is a value's shape rather than a fact the chart decides.
+    """
+    paths: list[str] = []
+    for key, value in deployment.items():
+        if f"deployment.{key}" in mapped:
+            continue
+        if isinstance(value, dict) and value:
+            paths.extend(f"deployment.{key}.{sub}" for sub in value)
+        else:
+            paths.append(f"deployment.{key}")
+    return paths
 
 
 def resolve(tree: object, path: str) -> tuple[bool, object]:
@@ -338,6 +387,48 @@ def check() -> list[str]:
                 f"table names no row for it — the mapping is field by field or it is decoration"
             )
 
+    # ── 5. the `deployment:` half is closed and declared too ─────────────────────────────────────
+    # The operator half is four rows of the mapping table; everything else under `deployment:` is the
+    # chart's own and has to say so in §5's chart-local table, with a reason. Undeclared is not
+    # "probably a dependency" — it is the state `deployment.rtpengine.enabled` was in.
+    mapped_deployment = {
+        row.values_path
+        for row in rows
+        if row.half == OPERATOR and row.values_path.startswith("deployment.")
+    }
+    declared_local = chart_local_paths(crd_text)
+    deployment = values.get("deployment")
+    if not isinstance(deployment, dict):
+        problems.append(
+            "deploy/helm/values.yaml has no `deployment:` tree — it is one of the two trees the "
+            "chart is made of, and this check reads it as the operator half's source"
+        )
+    elif not declared_local:
+        problems.append(
+            "sipx-cluster-crd.md §5 declares no chart-local `deployment.` rows — every key under "
+            "`deployment:` that reaches no `SipxCluster` field needs one, and an empty read would "
+            "pass every key the chart grows"
+        )
+    else:
+        for path in chart_deployment_paths(deployment, mapped_deployment):
+            if path not in declared_local:
+                problems.append(
+                    f"deploy/helm/values.yaml writes `{path}` and sipx-cluster-crd.md declares no "
+                    f"row for it — a `deployment:` key with no `SipxCluster` field is either a "
+                    f"chart-local one §5 declares with a reason or a defect (M7)"
+                )
+        for path in declared_local:
+            if f"deployment.{path.split('.')[1]}" in mapped_deployment:
+                problems.append(
+                    f"sipx-cluster-crd.md declares `{path}` chart-local and the mapping table sends "
+                    f"that key to `spec` — K4: no key is in both halves"
+                )
+            elif not resolve(values, path)[0]:
+                problems.append(
+                    f"sipx-cluster-crd.md declares `{path}` as a chart-local key and "
+                    f"deploy/helm/values.yaml has no such key — the chart dropped it, or the row did"
+                )
+
     return problems
 
 
@@ -374,6 +465,13 @@ MAPPING_FIXTURE = """
 | `values.yaml` path | Where it goes | Why |
 |---|---|---|
 | `apiVersion` | the resource's own `apiVersion` | one version field |
+"""
+
+CHART_LOCAL_FIXTURE = """
+| `values.yaml` path | What the chart does with it | Why it is not a field of this resource |
+|---|---|---|
+| `deployment.operator.replicas` | sizes the operator's own Deployment | the operator is not a cluster node |
+| `deployment.affinity` | pod affinity for the objects the chart creates | K3's operator half is closed |
 """
 
 
@@ -440,6 +538,30 @@ def self_test() -> list[str]:
         == ["image", "roles", "nodeSelector"],
     )
 
+    local = chart_local_paths(CHART_LOCAL_FIXTURE)
+    check_that(
+        f"a chart-local row is read by its `deployment.` prefix, found {local}",
+        local == ["deployment.operator.replicas", "deployment.affinity"],
+    )
+    check_that(
+        "the Kubernetes-native table's three-cell rows are not chart-local declarations",
+        chart_local_paths(MAPPING_FIXTURE) == [],
+    )
+
+    written = chart_deployment_paths(
+        {"image": {"tag": ""}, "rtpengine": {"enabled": True, "replicas": 1}, "affinity": {}},
+        {"deployment.image"},
+    )
+    check_that(
+        f"a key mapped to `spec` is a verbatim subtree and is not descended into, read as {written}",
+        written
+        == ["deployment.rtpengine.enabled", "deployment.rtpengine.replicas", "deployment.affinity"],
+    )
+    check_that(
+        "a switch added inside an already-declared block is undeclared — KO-15's own shape",
+        "deployment.rtpengine.enabled" in written and "deployment.rtpengine.enabled" not in local,
+    )
+
     check_that(
         "a dotted path is resolved through the tree",
         resolve({"cluster": {"tenant": [1]}}, "cluster.tenant") == (True, [1])
@@ -466,7 +588,8 @@ def main() -> int:
         return 1
     print(
         "crd-drift: the custom resource and cluster-config §7 are one definition — "
-        "one schema version, every section named, the mapping 1:1 with the chart"
+        "one schema version, every section named, the mapping 1:1 with the chart, "
+        "the `deployment:` half declared"
     )
     return 0
 

@@ -1,7 +1,7 @@
 # Design: Outbound routing & trunks
 
 **Status:** accepted (RT-1) · **Pillar:** Signalling · **Epic:** `routing-trunks` ·
-**Stories:** RT-1 … RT-9
+**Stories:** RT-1 … RT-15
 
 ## Why
 
@@ -239,3 +239,10 @@ The union of RT-1 … RT-4: a RoutePlan consumed by the proxy driver with specif
 semantics passing harness vectors (including DNS failover mid-transaction); trunks enforcing
 CPS/concurrency with breaker transitions observable; overload control demonstrated in the
 simulated cluster without collapse (M3 exit criterion).
+
+## Validated review remediation (2026-07-30)
+
+`RT-12` consumes the kernel resolver delivered by `T-17`, preserves its selected transport in the
+outbound Via and target, tries DNS failover candidates, and reports every materialization or send
+failure back to the sans-IO proxy as `BranchTransportError`. Flow-reference delivery remains
+`AF-7`'s ownership boundary.

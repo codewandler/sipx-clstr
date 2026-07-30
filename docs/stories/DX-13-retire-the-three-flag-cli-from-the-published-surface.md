@@ -2,12 +2,12 @@
 id: DX-13
 title: Retire the three-flag CLI from the published surface and from the M1 proof script
 pillar: Foundation
-status: ready
+status: blocked
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
 areas: [docs, deploy]
-note: DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
+note: blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 ---
 
 # Retire the three-flag CLI from the published surface and from the M1 proof script
@@ -39,7 +39,32 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       selling point is that every flag and error message was produced by running the binary, and it
       now documents a hand-rolled parser's messages against a `clap` one.
 
-      **Every command on five of the six ran here**; one is blocked on a fenced file. `cli.md` was
+      **Still five of six, and the sixth is now diagnosed rather than merely unobserved.** The k3d
+      half of `getting-started.md` §3 was executed for the first time, against a throwaway cluster
+      created for the run and deleted after. Two defects found and fixed, both invisible to reading:
+      the page never built or imported `sipx-phone:dev`, so the greeting `Deployment` sat in
+      `ImagePullBackOff` while the page's own `get deploy` block claimed it `1/1` — the image is
+      referenced in three places in this repository and built in none; and the `node listening`
+      block omitted the `auth="open"` field `FC-3` added. §3 now runs end to end, all four
+      Deployments `1/1`. **§4's call does not run, for a reason no edit to this page can fix** — see
+      `## Progress
+- **Parked 2026-07-30, blocked by [KO-18](KO-18-give-the-devspace-nodes-a-dialable-address.md).**
+  Five of the six pages run. `getting-started.md` §3 now runs end to end — the page builds and
+  imports the phone image it had only ever assumed, and all four Deployments reach `1/1`, verified
+  against a throwaway k3d cluster rather than read.
+- **What is unresolved:** §4's caller command, and it is not prose. `sipx dial` takes a literal
+  address and port and does not resolve a name, so `sip:hello@sipx-clstr-node-a` exits on a usage
+  error; dialling the ClusterIP instead answers `480`, because the lookup keys on the whole AoR and
+  the stored one is the name. No spelling of the documented command works while the document says
+  what it says.
+- **What would settle it:** `KO-18` — one address that is simultaneously a valid `domains` entry, the
+  greeting's AoR, and a literal a phone can send to. The fix is in
+  `deploy/devspace/manifests/node.yaml` or in `sipx dial`, both outside this story's write set.
+- Found on the way: `sipx-phone:dev` existed on exactly one developer's Docker daemon and carried
+  sipx `0.11.0` while the workspace pins `v0.10.0` — the only machine able to run the k8s proof was
+  running a phone nobody could reproduce. The proof fails on both versions, so the mismatch was
+  hiding nothing but itself.
+`. `cli.md` was
       re-verified line by line against the binary — the two help texts, `--version`, and each quoted
       refusal (`no id`, `cannot read`, the two-problem document refusal, the unresolved `dsnRef`, the
       role refusals) reproduce exactly. Two defects found and fixed by running rather than reading:
@@ -122,6 +147,45 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       `args: [run, --config, /etc/sipx-clstr/cluster.yaml]` with identity from the environment.
 
 ## Progress
+
+- **The k3d half was run, and it does not work — the failure is in a fenced file, not on the page.**
+  A throwaway `k3d` cluster (`sipx`, created for this and deleted after; the pre-existing
+  `babelforce` cluster was not touched) took §3 end to end. §3 is now green: the phone image is
+  built and imported by the page, and all four Deployments reach `1/1`.
+
+  §4 is red, and it has **never** been able to run. `sipx dial` requires a literal address and port
+  — it does not resolve a name — so the documented caller exits on a usage error before a packet
+  leaves the pod:
+
+  ```text
+  {"status":"usage","error":"sip:hello@sipx-clstr-node-a must name an address and port,
+   e.g. sip:bob@192.0.2.1:5060"}
+  ```
+
+  That is not a stale page. `FC-5` moved the tenant's `domains` and the greeting's address-of-record
+  from a pod IP to the **Service name** `sipx-clstr-node-a`, because `FC-4` made `domains`
+  enforceable and a ConfigMap written before any pod exists cannot contain a runtime IP. Correct for
+  `REGISTER`, which takes an explicit `--target` — both phones register fine. Fatal for `dial`,
+  whose URI *is* the destination. `scripts/k8s-two-node-call.sh` fails the same way and for the same
+  reason, at `[FAIL] the cross-node call did not complete`; `FC-5` declined to deploy, so neither was
+  ever executed after the change.
+
+  Checked, not assumed: dialling node-a's ClusterIP instead answers **`480 Temporarily Unavailable`**,
+  because the location lookup keys on the whole address-of-record and the stored one is
+  `hello@sipx-clstr-node-a`. So there is no spelling of the caller command that works while the
+  document says what it says. **The fix is in `deploy/devspace/manifests/node.yaml`, which is fenced
+  for this story**: give the per-node Service a static `clusterIP` and put that literal in `domains`
+  and in the greeting's AoR, or resolve names in `sipx dial` upstream — the latter is a kernel change
+  and belongs in `docs/upstream.md`, not here. Left alone rather than worked around.
+
+- **The phone image is undocumented infrastructure, and that is the defect §3 actually had.**
+  `sipx-phone:dev` is named by `deploy/devspace/manifests/node.yaml`, `scripts/k8s-two-node-call.sh`
+  and `getting-started.md` §4, and built by nothing in this repository. It existed only as a
+  hand-built image on one developer's machine — and that image carries **sipx 0.11.0**, while this
+  workspace pins the kernel at `v0.10.0` and CI builds the CLI from the pinned tag. So the one
+  machine that could run the proof was running a phone no one else could reproduce. The page now
+  builds it from the pinned tag, and the recipe is reproducible: two independent runs produced the
+  identical image digest `sha256:2ea7bce9…`.
 
 - **Unblocked, `blocked` → `ready` (coordinator).** Both blockers are gone. `FC-5` landed, so the
   local half of getting-started §3–4 runs as written. The fenced-ledger item is done above. **One

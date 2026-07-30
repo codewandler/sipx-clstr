@@ -2,7 +2,7 @@
 id: KO-15
 title: One media-pool fact has two spellings in the chart
 pillar: Cluster
-status: ready
+status: done
 priority: 2
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
@@ -27,23 +27,69 @@ two is read by anything.
 
 ## Acceptance
 
-- [ ] The duplication is resolved in **one** direction, and the direction is recorded: either
+- [x] The duplication is resolved in **one** direction, and the direction is recorded: either
       `deployment.rtpengine.enabled` is derived from `cluster.mediaPool[].mode` (the schema is the
       single source, matching `KO-1`'s single-definition rule) or it is removed and the workload
       condition reads the mode directly. Not both, and not a validation rule that merely refuses
       disagreement — a refusal still leaves two places to write the same fact.
-- [ ] **Failing-first**: a check or a rendered-template assertion that fails while the two keys can
+      → **Removed.** `deployment.rtpengine.enabled` is gone from `deploy/helm/values.yaml:129`; the
+      condition is `deploy/helm/templates/_helpers.tpl`'s `sipx-clstr.mediaPool.managed`, which reads
+      `cluster.mediaPool[].mode` directly. Direction recorded in
+      `docs/specs/sipx-cluster-crd.md` §5 (the paragraph under the chart-local table) and §11.
+- [x] **Failing-first**: a check or a rendered-template assertion that fails while the two keys can
       disagree — set `deployment.rtpengine.enabled: false` with `cluster.mediaPool[0].mode: managed`
       and show that nothing today objects, or that the render silently follows one of them.
-- [ ] Whatever `KO-1`'s CRD-drift checker (`scripts/check-crd-drift.py`) can hold of this is held by
+      → Both halves shown: at the merge base, `enabled: false` beside `mode: managed` passes
+      `check-crd-drift.py` with exit 0; the new fifth axis fails on the unmodified chart naming
+      exactly `deployment.rtpengine.enabled`. See Progress.
+- [x] Whatever `KO-1`'s CRD-drift checker (`scripts/check-crd-drift.py`) can hold of this is held by
       it, rather than by a second checker. If it cannot, say why in one line.
-- [ ] `deploy/helm/check-values.sh` and the default deployment set still pass, and the chart still
+      → Held by it, as a fifth axis; no second checker. What it cannot hold in one line: it reads
+      names, so it cannot judge that a *reason* written in the declaration table is true — it can
+      only make the declaration compulsory.
+- [x] `deploy/helm/check-values.sh` and the default deployment set still pass, and the chart still
       renders exactly one `SipxCluster` (`KO-2`'s first acceptance item is unaffected).
-- [ ] `scripts/gate.sh` green.
+- [x] `scripts/gate.sh` green.
 
 ## Progress
 
-- (running log)
+- **Direction: the key is removed, the mode is the only switch.** The alternative — deriving
+  `deployment.rtpengine.enabled` from the mode — would have kept a values key an overlay can still
+  write, so a `--set deployment.rtpengine.enabled=false` would silently beat the derivation or be
+  silently ignored; either way there would still be two places to write the fact, which is what the
+  Acceptance rules out. Removing it leaves `cluster.mediaPool[].mode` as the single source, which is
+  also the direction sipx-cluster-crd K1/K4 already fix (the document decides, the chart reads) and
+  the one `cluster.probe` has had since `KO-14` for the same reason.
+- **What is left under `deployment.rtpengine`** — `image`, `replicas`, `hostNetwork` — is the managed
+  workload's *shape*, and the configuration document carries none of it: `mediaPool[]` has no image
+  field, and in `mode: managed` the operator owns the node list (`KO-7`), so the replica count has
+  nothing to disagree with. Removing the whole block would have left `KO-2` with no image to run.
+- **The condition** is `deploy/helm/templates/_helpers.tpl`'s `sipx-clstr.mediaPool.managed`: "true"
+  when any declared pool is `managed`, empty otherwise. `KO-2`'s rtpengine workload guards on it.
+  Nothing renders it yet — verified out-of-tree against a copy of the chart with a probe template:
+  default → `true`, `--set 'cluster.mediaPool[0].mode=external'` → empty, no `mediaPool` → empty.
+- **Held by `KO-1`'s checker, as a fifth axis** (`scripts/check-crd-drift.py`), not a second script:
+  *the `deployment:` half is closed and declared too*. Every path the chart writes under
+  `deployment:` is either an operator-half row of sipx-cluster-crd §5 or a row of §5's new
+  chart-local table, checked in both directions **one level below each key** — which is what makes a
+  switch re-added *inside* an already-declared block as red as a whole new block. Rule M7 in §4; the
+  self-test gained four assertions, one of which replays this story's own shape.
+  Its limit, in one line: it reads names, so it forces a reason to be written for every chart-local
+  key and cannot judge whether that reason is true.
+- **Failing-first, at `git merge-base main HEAD` = `2cb22dd`:**
+  - the base checker, on the base chart with `deployment.rtpengine.enabled: false` beside
+    `cluster.mediaPool[0].mode: managed`, exits **0** — "the mapping 1:1 with the chart". Nothing
+    objected to the two keys contradicting each other.
+  - the new axis, run against the **unmodified** `deploy/helm/values.yaml`, exits 1 with exactly one
+    problem: "deploy/helm/values.yaml writes `deployment.rtpengine.enabled` and sipx-cluster-crd.md
+    declares no row for it — a `deployment:` key with no `SipxCluster` field is either a chart-local
+    one §5 declares with a reason or a defect (M7)".
+- **Gate green**, and `deploy/helm/check-values.sh` still loads the rendered document for all six
+  identities; `helm template` still renders exactly one `SipxCluster`.
+- **Not fixed here** (noted for `KO-2`): `deployment.affinity` is chart-local while `nodeSelector`
+  and `tolerations` reach the resource, so the third member of that triple stops at the chart. It is
+  now declared with that fact written down rather than unremarked; adding a fifth operator field is a
+  change to sipx-cluster-crd K3 and §4's three lists at once, which is not this story's.
 
 ## Notes
 

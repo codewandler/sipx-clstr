@@ -7,7 +7,7 @@ priority:
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity, deploy]
-note: feeds DP-1 — this story owns the membership/key schema sections
+note: owns cluster key distribution/rotation; PX-15 supplies the per-process secure-randomness seam
 ---
 
 # Design config-first membership and key distribution
@@ -26,3 +26,7 @@ the full config schema (AF-6 first, DP-1 second — the circular reference is re
 
 ## Notes
 - Design: [cluster-affinity](../designs/cluster-affinity.md).
+- Cross-link for validated synthesis finding [V-15](../reviews/00-validated-synthesis.md#v-15--the-loop-cookie-key-is-predictable-from-startup-time).
+- `PX-15` owns only secure per-process loop-cookie key sourcing. This story owns distribution,
+  rotation, overlap and versioning when that seam becomes cluster-wide; it must consume rather than
+  duplicate the proxy's injected-key interface.

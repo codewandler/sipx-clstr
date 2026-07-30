@@ -1,7 +1,7 @@
 # Design: The public documentation site
 
 **Status:** active · **Pillar:** Foundation · **Epic:** `docs-site` ·
-**Stories:** DX-1 … DX-9
+**Stories:** DX-1 … DX-14
 
 ## Why
 
@@ -106,3 +106,10 @@ the problem.
 - Every command shown on the site has been executed, not just written.
 - The ladder is complete from "what is this" to autoscaling, with unshipped sections marked in
   the sidebar and in their own text.
+
+## Validated review remediation (2026-07-30)
+
+`DX-14` makes release-facing capability, specification and conformance counts derive from the same
+evidence as the generated report. Until driver-level proof exists, the public matrix distinguishes
+engine behavior from behavior demonstrated on real sockets instead of copying an engine claim into
+the “today” column.

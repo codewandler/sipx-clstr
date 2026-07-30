@@ -6,19 +6,31 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-29:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
+_As of 2026-07-30:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
 written and cross-reconciled — proxy behavior, location service, affinity token, hook framework
 — the deterministic-harness design is accepted with its sipx-testkit upstream split decided, and
 `CX-1` has filed the kernel gaps as stories in the sipx repo. M1 is scoped below: fourteen
 stories, in order, with exit criteria that name the vectors that prove them. `CX-2` creates the
 Cargo workspace as its first act.
 
-The sipx kernel this platform builds on has shipped its own M0–M4 — sans-IO core, transactions,
-UDP/TCP/**TLS/WS/WSS** transports, DNS, digest *client*, media, CLI phone — all released in
-0.2.0, which is the version M1 pins. What the kernel still owes this platform is four small
-things, none of which M1 blocks on: header editing operations (`S-15`), the server side of
-digest (`S-16`), the `Service-Route` header (`T-16`) and the testkit's timer queue and loopback
-link (`X-14`). See the [upstream ledger](upstream.md).
+The workspace now pins sipx `v0.10.0`. The original M1 kernel gaps landed, but the
+[upstream ledger](upstream.md) is open again: nonce uniqueness, replay-window complexity and
+per-message overload logging remain unfiled, and the validated review added outgoing proxy CANCEL
+and exact listener-selection gaps for `CX-7` to file. A kernel bump alone cannot be assumed to
+close any row; every row is re-read against the pinned tag.
+
+### Validated review remediation
+
+Three reviewers independently inspected protocol/state, security/operations, and
+assurance/documentation at `86e6b10`; the coordinator reproduced and deduplicated their claims into
+20 validated findings. The reports and exact finding-to-story ownership live in
+[`docs/reviews/`](reviews/00-validated-synthesis.md).
+
+The work stays in the existing epics. The five validated release blockers are owned by `DP-13`,
+`PX-12`–`PX-14`, and `RG-16`, with `CX-7` supplying `PX-12`'s kernel prerequisite. The High and
+Medium corrections remain explicit rather than being promoted in severity: `RG-17`–`RG-20`,
+`FC-1`, `FC-6`, `DP-14`, `RT-12`, `PX-15`, `CF-20`, `KO-16`, `RG-21`, and `DP-15`. `ET-7`,
+`CF-3`, and `DX-14` make dialog and release claims match what independent evidence proves.
 
 ## Milestones
 
@@ -46,9 +58,13 @@ link (`X-14`). See the [upstream ledger](upstream.md).
   with Outbound through an edge and is reachable; a push wakes an unregistered client into an
   answered call; session timers reap dead dialogs; overload sheds load in the simulated cluster
   without collapse.
-- **M4 — Service families.** SUBSCRIBE/NOTIFY framework (RFC 6665), REFER and transfer, presence,
-  STIR/PASSporT, SIPREC, IMS profile options, and the B2BUA service (queues, IVR, conference).
-  Scope is selected when M3 nears completion, not now.
+- **M4 — Operational capability baseline.** The released endpoint/kernel capability set; completed
+  proxy, registrar, modern reachability, trunks, external media control and three-zone operations;
+  an optional two-dialog bridge and conference focus; immutable packages; and one executable release
+  proof. *Done means:* every prerequisite in
+  [`operational-capability-baseline.md`](specs/operational-capability-baseline.md) is released and
+  `OB-1` … `OB-12` pass against the exact artifacts that are published. Presence, SIPREC, IMS,
+  queues and IVR stay after M4 rather than entering through an unbounded “service families” label.
 
 ### M1 in detail
 
@@ -130,6 +146,24 @@ it was free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/doc
 **closed it** — B4's base is the granted duration, not the absolute deadline — and it was the first
 thing after M1 rather than an M2 subject.
 
+### M4 in detail
+
+M4 is a **release gate**, not a feature-count milestone. M2 and M3 remain independently
+demonstrable prerequisites; M4 holds them together with the endpoint paths, session-service slice,
+evidence and distribution required to make an end-to-end capability claim.
+
+The canonical story membership, repository boundary and twelve proof scenarios are in
+[`docs/specs/operational-capability-baseline.md`](specs/operational-capability-baseline.md).
+`CX-8` stays open for the lifetime of the milestone. `CX-9` accepts only a tagged kernel release,
+`CX-10` proves immutable candidate artifacts, and `CX-11` publishes those same artifacts. This
+ordering prevents a local checkout, an unreleased fix or a post-proof rebuild from satisfying the
+gate.
+
+The only M4 dialog-terminating service is the bridge/conference slice in
+[`session-service.md`](specs/session-service.md). It is opt-in and separate from the proxy. Queues,
+IVR, presence, SIPREC and IMS remain explicit later work; transcription and endpoint ICE
+restart/relay candidates are likewise not smuggled into this milestone.
+
 ## Delivered
 
 - **M1 — one node that proxies and registers** (0.5.0): all fourteen stories, every exit criterion
@@ -148,14 +182,14 @@ thing after M1 rather than an M2 subject.
 
 ## Next
 
-- `RG-9` — say what digest actually protects. Priority 1 now that `RG-8` has closed: the response
-  digest covers method and Request-URI only, so a captured `Authorization` reattached to a REGISTER
-  with a different `Contact`, `CSeq` or `Expires` hashes identically and is accepted, where
-  [registrar-auth](specs/registrar-auth.md) `RA-R-2` reads as though it is refused. A spec decision
-  about what the platform accepts, not a patch.
-- Then M2: the affinity token (`AF-*`) is the defining subsystem, and `DP-1`'s config schema
-  replaces the node's provisional one. The operator epic advances in parallel (`KO-2` in progress)
-  and the kernel stories `CX-1` filed advance on sipx's own schedule.
+- Close the release-blocking review findings first. `/track:next` remains the authority for the
+  exact take order; dependencies are carried in story frontmatter and notes rather than duplicated
+  here.
+- `CX-7` is the upstream edge: `PX-12` waits for a released outgoing-CANCEL primitive, while
+  `FC-1` must refuse TCP-only configuration until exact listener selection exists. `RG-20` is local
+  because typed `Expires` parsing already exists in the pinned kernel.
+- Resume the M2 affinity, routing, media and deployment sequence after the reviewed release surface
+  is honest and its real-driver behavior is proved.
 
 ## Epics
 
@@ -277,9 +311,11 @@ real deployment. A dev tool, never part of the deployment surface.
 
 ### B2BUA services
 
-Deferred placeholder, recorded so the layers below are designed with it in mind: call queues,
-IVR, conference focus and other dialog-terminating features, as a separate service consuming the
-platform. Not scheduled before M3 nears completion. [Design](designs/services-b2bua.md).
+The optional dialog-terminating path, as a separate service consuming the platform and released
+kernel call primitives — never as a proxy mode. M4 scopes it to a two-leg bridge and three-party
+conference focus with all media controlled through the external relay; queues and IVR remain later
+consumers. Done when `SS-1` … `SS-12` pass and disabling the service leaves the proxy path unchanged.
+[Spec](specs/session-service.md) · [Design](designs/services-b2bua.md).
 
 ### The public documentation site
 

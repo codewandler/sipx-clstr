@@ -242,9 +242,16 @@ model matches reality.
 
 ## Acceptance / done
 
-The union of CF-1 … CF-6: harness design accepted (M0, CF-1) and implemented early in M1 (CF-5)
+The union of CF-1 … CF-20: harness design accepted (M0, CF-1) and implemented early in M1 (CF-5)
 so the proxy core's first vectors run under it; the M2 cluster assertions (node kill, partition,
 zero cross-node lookups) expressed as seeded scenarios in the code-as-scenarios format decided
 here; the registry seeded with the M1 profile's normative requirements (CF-6) and the
 conformance report generated from it with all four coverage kinds (CF-2); SIPp + CLI interop
 green in CI against the reference deployment.
+
+## Validated review remediation (2026-07-30)
+
+`CF-3` labels same-kernel process tests as integration and reserves interoperability claims for an
+independently implemented peer. `CF-20` makes proof discovery fail closed: a vector counts only when
+an enabled test is listed and executed, while the e2e assertion requires exactly one observable UDP
+socket owned by the node and treats unavailable or ambiguous inspection as failure.

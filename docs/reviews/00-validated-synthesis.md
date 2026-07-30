@@ -54,6 +54,34 @@ boundary. The current binary should not be represented as a production-ready clu
 an untrusted network until the release blockers and the high-priority ingress/store issues below are
 closed or the public capability matrix is narrowed.
 
+## Story traceability
+
+Each validated finding has exactly one primary delivery story. Supporting stories own a distinct
+dependency or proof and do not duplicate the primary acceptance contract.
+
+| Finding | Primary story | Supporting story(s) |
+|---|---|---|
+| V-01 | `DP-13` | — |
+| V-02 | `PX-12` | `CX-7` |
+| V-03 | `PX-13` | `ET-7` |
+| V-04 | `PX-14` | — |
+| V-05 | `RG-16` | — |
+| V-06 | `FC-6` | — |
+| V-07 | `FC-1` | `CX-7` |
+| V-08 | `RG-17` | — |
+| V-09 | `RG-18` | — |
+| V-10 | `RG-19` | — |
+| V-11 | `DP-14` | — |
+| V-12 | `RT-12` | — |
+| V-13 | `RG-20` | `CX-7` (kernel re-read; no new gap filed) |
+| V-14 | `RG-21` | — |
+| V-15 | `PX-15` | `AF-6` (cross-link) |
+| V-16 | `CF-20` | — |
+| V-17 | `CF-3` | — |
+| V-18 | `DX-14` | — |
+| V-19 | `KO-16` | — |
+| V-20 | `DP-15` | — |
+
 ## Validated release blockers
 
 ### V-01 — Configured roles do not control runtime behavior

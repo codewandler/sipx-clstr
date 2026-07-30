@@ -111,6 +111,10 @@ SPECS = {
     # commit that writes them — the lesson `EX-12` paid for is that registration is not something to
     # do afterwards.
     "SC": (ROOT / "docs" / "specs" / "sipx-cluster-crd.md", "§10"),
+    # M4 target specifications are registered when written. Their rows remain explicitly deferred
+    # in vector-scope.toml until the implementation and milestone-proof stories land.
+    "SS": (ROOT / "docs" / "specs" / "session-service.md", "§6"),
+    "OB": (ROOT / "docs" / "specs" / "operational-capability-baseline.md", "§5"),
 }
 
 PREFIXES = "|".join(SPECS)
@@ -249,6 +253,8 @@ FAMILIES = {
     ("AI", "X"): "Asserted identity — byte-exact forms (§7.1)",
     ("SC", "A"): "SipxCluster — admission, cluster-scope (§10)",
     ("SC", "S"): "SipxCluster — observed status (§10)",
+    ("SS", ""): "Optional session service — call and conference behavior (§6)",
+    ("OB", ""): "Operational capability baseline — release proof (§5)",
 }
 
 

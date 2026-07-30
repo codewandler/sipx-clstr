@@ -160,6 +160,7 @@ check are what make that a mechanical change rather than a reconciliation.
 | M4 | **The operator half has three spellings and they MUST agree**: K3's four fields, `node-document.py`'s `OPERATOR_KEYS`, and the keys `templates/sipxcluster.yaml` writes into `spec` itself. This one has teeth beyond tidiness: those three lists decide *which half of `spec` a node reads*, so a key the template starts writing and the others do not know about is subtracted into the configuration document, where §8 V2's closed world refuses it by name and a node does not start. |
 | M5 | **The `values.yaml` mapping is 1:1 and checked in both directions** (§5): every path the table names resolves in the chart, every top-level key the chart writes under `cluster:` has a row, and a row that says the default set omits a section is checked to have omitted it. |
 | M6 | **The check reads names, never contents.** Whether a section's *content* is the document [cluster-config](cluster-config.md) specifies is `deploy/helm/check-values.sh`'s question, and it answers it the only way that means anything: by feeding the rendered tree to the real loader. The two checks are deliberately disjoint, and neither is a substitute for the other. |
+| M7 | **The `deployment:` half is closed and declared too.** Every path the chart writes under `deployment:` is either an operator-half row of §5 or a row of §5's chart-local table, and §4's check holds both directions **one level below each key** — so a switch added inside an already-declared block is as visible as a new block. §5 has said since `KO-1` that a `values.yaml` key with no `SipxCluster` field is either a chart-managed dependency or a defect; nothing read that sentence, and `deployment.rtpengine.enabled` sat under it for two stories as a second spelling of `cluster.mediaPool[].mode: managed`, recorded in §11 and green in the gate (`KO-15`). A key the chart grows is now declared with a reason in the same commit, or it is red. |
 
 ## 5. `spec`, and the `values.yaml` mapping field by field
 
@@ -211,11 +212,32 @@ only three:
 | — | `metadata.name`, from the Helm release name | K5 — the resource's identity follows the release, so an overlay upgrades in place |
 | — | the document's `version`, from `metadata.generation` | G4 — only the API server can make it monotonic |
 
-Everything else under `deployment:` in the chart — the operator's own replicas and resources, the
-managed PostgreSQL and rtpengine dependencies, the service account — is **the chart's**, producing
-objects Helm creates directly rather than fields of this resource. That is why it has no row: a
-`values.yaml` key with no `SipxCluster` field is either a chart-managed dependency or a defect, and
-§11 records the one case where it is currently the latter.
+**The chart-local `deployment:` keys** — everything under `deployment:` that reaches no field of this
+resource, producing objects Helm creates directly. A `values.yaml` key with no `SipxCluster` field is
+either one of these or a defect, and until `KO-15` that sentence was the whole of the mechanism: the
+list below is what §4's check reads, one level below each key, in both directions (M7).
+
+| `values.yaml` path | What the chart does with it | Why it is not a field of this resource |
+|---|---|---|
+| `deployment.operator.replicas` | sizes the operator's own Deployment | the operator is not a cluster node — no section of the document describes it, and it is the thing that reads the document |
+| `deployment.operator.resources` | that Deployment's requests and limits | as above |
+| `deployment.affinity` | pod affinity for the workloads the chart creates | K3's operator half is closed at four fields, and `nodeSelector`/`tolerations` reached the resource while this did not; whether the operator needs a fifth field is `KO-2`'s question, and adding one changes this spec and §4's three lists together |
+| `deployment.postgresql.enabled` | whether the chart stands up a PostgreSQL for the local set | not `cluster.locationStore` in a second spelling: the document says which store a node uses and names its DSN by reference, this says whether the chart creates one for that reference to point at. A deployment with its own database sets it `false` and the document does not change. |
+| `deployment.postgresql.storage` | the volume claim size for that PostgreSQL | a property of an object Helm creates, invisible to a node |
+| `deployment.rtpengine.image` | the image the managed rtpengine pods run | the pool's *shape*, which the document does not carry: `cluster.mediaPool[]` has no image field and a node never reads one |
+| `deployment.rtpengine.replicas` | how many managed rtpengine pods exist | in `mode: managed` the operator owns the workload and therefore the node list (KO-7), so the count has no spelling in the document to disagree with |
+| `deployment.rtpengine.hostNetwork` | whether those pods run host-networked | as above — a pod spec field, not a configuration fact |
+| `deployment.serviceAccount.create` | whether Helm creates the ServiceAccount and its RBAC | Kubernetes objects the operator runs as, not configuration a node reads |
+| `deployment.serviceAccount.name` | the account to use when the chart does not create one | as above |
+
+There is deliberately **no `deployment.rtpengine.enabled`** (`KO-15`). Whether this deployment runs
+its own rtpengine is `cluster.mediaPool[].mode: managed` — the configuration document's own answer,
+carried verbatim into `spec.mediaPool` — and the chart derives the workload's existence from it in
+one place, `templates/_helpers.tpl`'s `sipx-clstr.mediaPool.managed`. The direction is K1 and K4's:
+the document decides, the chart reads. The `enabled` boolean was the other direction and was never
+derived from anything, so an operator who flipped the mode got a pool the chart did not create and no
+error anywhere. `cluster.probe` has had this shape since `KO-14` for the same reason — the probe runs
+iff a node runs the `e2e-tester` role, and a second switch would be a way for the two to disagree.
 
 ## 6. Admission: the whole document, plus what one node cannot see
 
@@ -321,7 +343,7 @@ Named here so that they are tracked rather than discovered. None is performed by
 | Where | What must change, and why |
 |---|---|
 | `deploy/helm/templates/sipxcluster.yaml` (`KO-2`) | `apiVersion` may become a template constant now that G1 pins it. It stays a values key today because that is the spelling `scripts/check-crd-drift.py` compares against the loader's constant; constantising it means moving the comparison, not deleting it. |
-| `deploy/helm/values.yaml` (`KO-2`, `KO-7`) | `deployment.rtpengine.enabled` is a **second spelling of `cluster.mediaPool[].mode: managed`** — its own comment says it mirrors that field — and two switches for one fact can disagree. In managed mode the operator owns the rtpengine workload (KO-7), so the mode is the only switch there should be. Nothing consumes the key yet, which is why this is a note and not a gate failure: the fix belongs to the story that writes the rtpengine workload. `deployment.postgresql.enabled` is the same class and weaker — the CR says which store, the chart says whether it creates one. |
+| `deploy/helm/values.yaml` (`KO-2`, `KO-7`) | **Done — `KO-15`.** `deployment.rtpengine.enabled` was a second spelling of `cluster.mediaPool[].mode: managed`: its own comment said it mirrored that field, nothing made it do so, and setting it `false` beside a `managed` pool passed the whole gate. It is gone rather than reconciled — a rule that refuses disagreement still leaves two places to write one fact. The mode is now the only switch, the chart derives the workload from it in `templates/_helpers.tpl` (`sipx-clstr.mediaPool.managed`, which `KO-2`'s workload guards on), and §5's chart-local table declares what is left of `deployment.rtpengine` — image, replicas, host networking — none of which the document carries. `deployment.postgresql.enabled` stayed, declared in that table with its reason: which store a node uses and whether Helm creates one to point at are separable facts, and a deployment with an external database changes only the second. |
 | [k8s-deployment-operator](../designs/k8s-deployment-operator.md) | Its `SipxCluster` field list predates seven §7 sections (`security`, `rateLimit`, `normalisation`, `domain`, `ingress`, `admission`, `observability`) and its role list omits `echo`, which [cluster-config](cluster-config.md) §13 already records. §5 here is the current list; the design's paragraph is narrative and should cite rather than enumerate. |
 | `KO-2`'s story record | Its Progress says the API version is "held in `values.crd`". `KO-14` removed that block — it is the top-level `apiVersion` key — and the group and version are no longer provisional. |
 | `docs/reference/vector-scope.toml` | The sixteen `SC-*` rows of §10 need their deferrals to `KO-3`; until they are there, `scripts/check-vectors.py` reports every one as a spec row nothing covers. |

@@ -127,11 +127,29 @@ deployment:
   affinity: {}
 
   # Managed dependencies — a local convenience, never the production path.
+  #
+  # Every key here is declared, with its reason, in sipx-cluster-crd §5's chart-local
+  # table: a `deployment:` key that reaches no SipxCluster field is either one of those
+  # or a defect, and `scripts/check-crd-drift.py` now reads that table one level below
+  # each key in both directions (§4 M7). A knob added under here without a row is a red
+  # gate rather than a discovery two stories later.
   postgresql:
     enabled: true
     storage: 1Gi
+  # No `enabled` key, deliberately (KO-15). Whether this deployment runs its own
+  # rtpengine is `cluster.mediaPool[].mode: managed` below — the configuration
+  # document's own answer, carried verbatim into the resource — and the chart derives
+  # the workload from it in exactly one place, `templates/_helpers.tpl`'s
+  # `sipx-clstr.mediaPool.managed`. The direction is sipx-cluster-crd K1/K4's: the
+  # document decides and the chart reads, never the reverse. The boolean that used to
+  # sit here said it "mirrors cluster.mediaPool[0].mode" and nothing made it do so, so
+  # flipping the mode got you a pool the chart would not create, with no error
+  # anywhere. `probe:` below has had this shape since KO-14 for the same reason.
+  #
+  # What is left is the managed workload's shape, which the document does not carry:
+  # mediaPool has no image, and in managed mode the operator owns the node list (KO-7)
+  # so the replica count has nothing to disagree with.
   rtpengine:
-    enabled: true               # mirrors cluster.mediaPool[0].mode == "managed"
     replicas: 1
     hostNetwork: true
     image:
@@ -382,6 +400,11 @@ cluster:
   # The RTP range deliberately sits below Kubernetes' default NodePort range
   # (30000-32767): rtpengine runs host-networked here, so the old
   # 30000-30200 claimed the same host ports a NodePort Service would be given.
+  #
+  # `mode` is also the *only* switch for whether this deployment runs its own
+  # rtpengine at all (KO-15): the chart derives that from here — see
+  # `templates/_helpers.tpl` — rather than carrying a second boolean under
+  # `deployment:` that could say otherwise.
   mediaPool:
     - mode: managed
       portRange: { min: 16384, max: 16584 }

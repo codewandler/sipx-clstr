@@ -1,7 +1,7 @@
 # Design: Fail-closed configuration
 
 **Status:** proposed · **Pillar:** Cluster · **Epic:** `fail-closed-config` ·
-**Stories:** FC-1 … FC-4
+**Stories:** FC-1 … FC-6
 
 ## Why
 
@@ -111,7 +111,14 @@ land without touching the auth path.
 ## What a reader should not conclude
 
 None of this makes the node secure. Authentication that is wired is still one tenant's digest over a
-cleartext hop unless `FC-1`'s TLS path is also real, and the published documentation still describes
-a CLI that no longer exists (`DX-13`). This epic makes the configuration surface *honest* — a
-declaration is applied or the node refuses to start — which is a precondition for the security
-claims, not one of them.
+cleartext hop while TLS is refused rather than implemented; `FC-1` makes that refusal and the
+cleartext listener exposure honest. `DX-13` separately owns the remaining obsolete CLI examples.
+This epic makes the configuration surface *honest* — a declaration is applied or the node refuses
+to start — which is a precondition for security claims, not one of them.
+
+## Validated review remediation (2026-07-30)
+
+`FC-1` now owns exact transport exposure: a TCP-only declaration either binds only TCP through a
+released kernel capability or is refused. `FC-6` owns `cluster.security`: every non-empty policy is
+applied by a specified consumer or the node refuses to start. Neither may remain
+accepted-but-discarded.

@@ -7,6 +7,75 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Five ledger rows three specs promised, and a gate against the dead letter that hid them**
+  (`CX-6`). `asserted-identity` §2, `number-normalisation` §1 and `proxy-behavior` §1 each named
+  candidate upstream rows and deferred the filing to `CX-1` — which closed `done` without filing any
+  of them, so three specs pointed at a ledger entry that did not exist and a closed story was the
+  only thing standing behind them.
+
+  **Five rows rather than three**, because two of those paragraphs say "*both* are candidate ledger
+  rows": filing three would have left half of each pointing at nothing, which is the same dead letter
+  one indirection down. Each is **decided rather than assumed**, per non-negotiable #6 and `CX-1`'s
+  own precedent with `T-17` — four decided upstream and not yet filed, and one **declined**: the RFC
+  5393 loop-detection branch cookie stays here, because it is a keyed MAC over the engine's own
+  routing state with no kernel caller, and the row records the local plan and the three symbols that
+  would move if that ever changes.
+
+  Every citation was re-read in the pinned `v0.10.0` checkout rather than inherited. That is not
+  ceremony: `CX-4` had to correct a row whose line numbers were **wrong when filed** rather than
+  merely stale.
+
+  The gate now refuses the shape that caused it. `check-docs.py` fails a `docs/specs/` paragraph that
+  names a ledger row without linking the ledger, and fails one that defers filing to a *story* — a
+  story closes, the ledger does not. The ledger's own opening sentence attributed all filing to
+  `CX-1`, which was the root of it, and is amended.
+
+- **One switch decides whether the deployment runs its own rtpengine** (`KO-15`).
+  `deploy/helm/values.yaml` stated that fact **twice** — a `deployment.rtpengine.enabled` flag beside
+  the media pool's own `mode` — so a chart could be installed saying both yes and no, and nothing
+  objected. Resolved by **removal rather than derivation**: deriving the flag from the mode would have
+  left a values key an overlay can still `--set`, which is still two places to write one fact. The
+  media pool's `mode` is now the only switch, and `templates/_helpers.tpl` carries the one condition.
+
+  Held mechanically by a fifth axis on `KO-1`'s `check-crd-drift.py` rather than a second checker: the
+  `deployment:` half of the chart is now **closed and declared**, so a `deployment:` key with no
+  `SipxCluster` field must be a chart-local one the spec declares *with a reason*, or it is a defect
+  (`sipx-cluster-crd` §4 `M7`, table in §5). That turns a sentence the spec already contained into
+  something a gate can enforce — the same declared-inclusion mechanism `KO-1` chose for the other four
+  axes, and the reason it is not "the two keys must agree": an agreement rule is what the story
+  forbade, because it keeps both spellings alive.
+
+  The failing-first proof has two halves, and the second is the load-bearing one: the new axis is red
+  on the duplication, **and the previous checker was green on it** — which is what shows that nothing
+  in the gate had ever objected. Falsified again at integration by putting the duplicate key back.
+
+- **A documented version banner is now held to the one the binary prints** (`CF-19`). `check-site.py`
+  verified the *flags* a documented command names against `--help` and never what a command is shown
+  as **printing**, so `website/docs/whats-new.md`, `reference/cli.md` and `getting-started.md` all
+  carried `sipx-clstr 0.11.0 (sipx kernel 0.10.0)` after the workspace had moved to `0.12.0` — through
+  a full green gate. It is the defect `DX-12` was written to close, one level down: `DX-12` held
+  documented flags to what the binary *accepts*, and nothing held documented output to what it
+  *produces*.
+
+  The check reads **every fenced block** of every tracked `README.md` and `website/docs` page,
+  whatever the info string — the banner is output, so it lives in exactly the `text` blocks the
+  command check skips — and compares the whole line byte for byte, kernel half included, so a kernel
+  pin bump that leaves the docs behind is red rather than silent.
+
+  It keeps `cli_surface`'s two-reading discipline: `--version` from a built binary, and the banner
+  composed from `Cargo.toml`'s `[workspace.package] version` plus the `sipx-sip` tag pin, so the
+  `docs` workflow — which has no Rust toolchain — really checks rather than skipping. Both present and
+  disagreeing is a failure. **Neither available while banners exist is also a failure**, rather than a
+  green run that read nothing, on this repository's own rule that a check which silently narrows what
+  it looks at is a lie. Every run prints which reading it used.
+
+  This one is release-time by nature: the string only goes stale at a cut, and the site deploys *on
+  release*, so the first reader of a wrong number is a public one. Falsified at integration as well as
+  by the implementor — setting a page one version back turns the gate red and names the file, the
+  line, the documented string and the actual one.
+
 ### Changed
 
 - **The public capability matrix now describes the driver, not the engines** (`FC-6`, `PX-12`,
