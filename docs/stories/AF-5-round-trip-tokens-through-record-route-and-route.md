@@ -2,8 +2,8 @@
 id: AF-5
 title: Round-trip tokens through Record-Route and Route
 pillar: Cluster
-status: backlog
-priority: 
+status: in-progress
+priority: 1
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity, proxy]
