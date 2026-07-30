@@ -108,7 +108,10 @@ phones actually put in their address-of-record, or leave `domains` out to serve 
 > fix that: digest is implemented and vector-proved, but there is no credential store yet, so a node
 > whose nonce `secretRef` resolves **refuses to start** and one whose reference does not resolve
 > challenges every `REGISTER` into a `401` nobody can answer. There is no configuration today that
-> gives you an authenticated registrar. With `backend: memory` a restart also forgets every binding.
+> gives you an authenticated registrar — and the digest that *is* there carries a known kernel defect:
+> the nonce has nothing per-challenge in it, so two users of one tenant challenged in the same second
+> share a nonce and a replay counter, and the second correct password is refused
+> ([filed upstream](docs/upstream.md)). With `backend: memory` a restart also forgets every binding.
 > Keep it on loopback or a trusted network.
 
 A node is configured by a document — YAML, JSON or TOML — not by flags. Two nodes sharing one

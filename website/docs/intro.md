@@ -63,13 +63,22 @@ the two**, and that is the next thing that has to exist.
 
 Three things will bite you, and none is obvious from the outside.
 
-**It is an open registrar.** Digest authentication is implemented, proved against the RFCs' own test
-vectors, and reachable from the document — and it still cannot protect this node, because there is no
-user-credential store yet. Declare `tenant[].auth` and the node either **refuses to start** (if its
-nonce `secretRef` resolves) or challenges every `REGISTER` into a `401` nobody can answer (if it does
-not). Declare nothing and the node accepts any `REGISTER` for any address-of-record in a served
-domain, from anyone who can reach the port. There is no third option today. Do not put it on a public
-address.
+**It is an open registrar.** Digest authentication is implemented and vector-proved against
+[our own normative spec](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md)
+— 23 of its 29 rows proved, 5 covered for shape only, 1 deferred — and reachable from the document.
+It still cannot protect this node, because there is no user-credential store yet. Declare
+`tenant[].auth` and the node either **refuses to start** (if its nonce `secretRef` resolves — refusing
+beats running a registrar that answers `401` to everyone while *looking* protected) or challenges
+every `REGISTER` into a `401` nobody can answer (if it does not). Declare nothing and the node accepts
+any `REGISTER` for any address-of-record in a served domain, from anyone who can reach the port. There
+is no third option today. Do not put it on a public address.
+
+The deferred row is not bookkeeping: `RA-R-8` requires two users of one tenant challenged in the same
+second to both authenticate, and **today they do not**. The kernel's nonce is a function of the
+second, the realm and the secret with nothing per-challenge in it, so both users are handed the
+identical nonce, share one replay counter, and the second correct password is refused. It is an auth
+primitive and so the kernel's to fix; it is filed upstream with a reproduction and is not fixable from
+here.
 
 **Registrations are only durable if you ask for them to be.** With `backend: memory` a restart loses
 every binding. `backend: postgres` shares them across nodes and survives a restart, and it needs the
@@ -80,8 +89,10 @@ address into `Record-Route`, so in-dialog requests come back to the node that fo
 single Service or VIP in front and a `BYE` will land on whichever node the load balancer picks, which
 has no idea about the dialog. That is what affinity tokens are for, and they are not implemented.
 
-The first two are configuration; see [Configuration](reference/configuration.md). The third is
-architecture, and it is the next thing that has to be built.
+Only the **second** is configuration — see [Configuration](reference/configuration.md). The first
+looks like configuration and is not: no value of `tenant[].auth` produces an authenticated registrar
+today, which is why it is worth stating plainly rather than leaving a reader to search for the
+setting. The third is architecture, and it is the next thing that has to be built.
 
 ## How it is built
 
