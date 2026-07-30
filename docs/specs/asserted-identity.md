@@ -140,8 +140,13 @@ argument that moved the `Headers` surgery API (upstream ledger `S-15`/PX-3):
    §9.1's one-or-two rule and the scheme pairing, and that reads a message carrying the two values
    on one comma-separated line and on two header lines identically (RFC 3261 §7.3.1).
 
-Both are candidate ledger rows for `CX-1` to file against sipx; the implementing story (RT-2's
-trunk model) is what waits on them, not this spec.
+Both are ledger rows in [upstream.md](../upstream.md) — *A parsed `Privacy` header* and *A typed
+`P-Asserted-Identity` / `P-Preferred-Identity` value list* — decided **upstream** and not yet filed
+against sipx. Reading the number inside a `tel` value is a third row there, *A public RFC 3966 split
+of a `tel:` URI*, shared with [number-normalisation](number-normalisation.md) §1 through §6.1's
+seam: one kernel change serves both, so it is one row. The implementing story (RT-2's trunk model)
+is what waits on them, not this spec — and what this paragraph points at is the **row**, because a
+row outlives whichever story eventually files it.
 
 ## 3. The trust declaration
 
