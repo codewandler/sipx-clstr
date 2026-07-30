@@ -143,16 +143,49 @@ fn explicit(
         .all()
         .iter()
         .map(|binding| {
-            #[cfg(debug_assertions)]
-            CONTACT_PARSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            #[cfg(test)]
+            parse_meter::record();
             sipx_sip::Uri::parse(binding.contact.clone()).ok()
         })
         .collect();
+
+    // S8 — the quota, refused **before** the mutation loop but **after** the match view (`RG-14`).
+    //
+    // Why this is sound, and why a cheaper version of it is not. A binding is added only by an op
+    // with a positive granted expiry that matches **no** stored binding; an op that matches is a
+    // refresh, and a refresh cannot grow the set — the LS-R-15 vector pins exactly that ("the quota
+    // refuses a new binding but never a refresh"). So the *maximum* number of active bindings this
+    // request can end with is `current_active + genuine_additions`, and if even that fits the quota,
+    // the committed set cannot exceed it. If it does not fit, the final check rejects with the
+    // identical `Forbidden`, because at least one addition necessarily survives.
+    //
+    // That makes the two checks the same test at two costs. The first draft of this ran *before*
+    // the match view and counted every positive-expiry op as an addition — which refused a refresh
+    // it could not yet tell from a new contact, and LS-R-15 caught it. Distinguishing a refresh from
+    // an addition *is* the reconciliation, so the cheapest sound place for this is right here: one
+    // parse per stored binding, and no per-op re-parse.
+    let current_active = current.active_count(cmd.now);
+    let additions = ops
+        .iter()
+        .zip(granted.iter())
+        .filter(|(op, grant)| {
+            **grant > 0
+                && !parsed
+                    .iter()
+                    .any(|stored| stored.as_ref().is_some_and(|s| s.equivalent(&op.uri)))
+        })
+        .count();
+    if current_active + additions > policy.max_bindings_per_aor {
+        return Outcome::Reject(Rejection::Forbidden(
+            "the address-of-record already holds its maximum bindings",
+        ));
+    }
 
     for (op, granted) in ops.iter().zip(granted.iter().copied()) {
         // §5.3 — binding identity by §19.1.4 comparison. Equivalence is non-transitive, so an
         // incoming contact can match more than one stored binding; the first in creation order is
         // the one updated, which is a deterministic choice a vector can assert.
+
         // Equivalence is non-transitive, so an incoming contact can match more than one stored
         // binding; the first in creation order is the one updated, which is a deterministic choice a
         // vector can assert. Matching reads the parsed view computed above, so the cost per op is a
@@ -221,12 +254,40 @@ fn explicit(
     }
 }
 
-/// How many times a stored contact has been parsed during reconciliation (`RG-14`).
+/// A test-only meter over how many times a **stored** contact URI is parsed while reconciling one
+/// REGISTER (`RG-14`).
 ///
-/// An instrument, not part of the contract: the test that proves the contact path is linear counts
-/// parses rather than wall-clock time, which would be flaky. `release` builds do not carry it.
-#[cfg(debug_assertions)]
-pub static CONTACT_PARSES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+/// The amplification this story fixes is not visible in wall-clock time without flakiness, so the
+/// cost is made observable: parsing a stored contact once per comparison is `ops · bindings` work,
+/// and parsing each once is `bindings`.
+///
+/// **A thread-local rather than an atomic**, and that distinction is load-bearing. `process` runs
+/// synchronously on its caller's thread, so a thread-local lets each test see only its own parses.
+/// A global atomic does not: the suite runs tests in parallel, and a sibling test's parses leak into
+/// the delta — which is exactly how the first version of this meter reported 3 where 2 was correct.
+#[cfg(test)]
+pub(crate) mod parse_meter {
+    use std::cell::Cell;
+
+    thread_local! {
+        static STORED_PARSES: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Forget every parse counted so far on this thread.
+    pub(crate) fn reset() {
+        STORED_PARSES.with(|count| count.set(0));
+    }
+
+    /// Count one parse of a stored contact URI.
+    pub(crate) fn record() {
+        STORED_PARSES.with(|count| count.set(count.get() + 1));
+    }
+
+    /// How many stored-contact parses have happened on this thread since the last [`reset`].
+    pub(crate) fn count() -> usize {
+        STORED_PARSES.with(Cell::get)
+    }
+}
 
 /// Whether the stored binding already is what this command asks for — B4's precise condition.
 fn already_holds(stored: &crate::binding::Binding, cmd: &RegisterCommand, granted: u32) -> bool {
@@ -306,8 +367,6 @@ mod rg14_tests {
     /// Counted, not timed: wall-clock would be flaky, a parse is the expensive unit.
     #[test]
     fn rg14_reconciliation_parses_each_stored_contact_once() {
-        use std::sync::atomic::Ordering::Relaxed;
-
         // Ten bindings already stored for this address-of-record.
         let mut current = BindingSet::new();
         for i in 0..10 {
@@ -320,9 +379,15 @@ mod rg14_tests {
             .collect();
         let cmd = command(contacts);
 
-        let before = CONTACT_PARSES.load(Relaxed);
-        let _ = process(&cmd, &current, &TenantPolicy::default());
-        let parses = CONTACT_PARSES.load(Relaxed) - before;
+        // A quota big enough not to interfere: this test is about *parses*, and the early quota
+        // refusal (RG-14) would otherwise return before any reconciliation ran, reading as 0.
+        let generous = TenantPolicy {
+            max_bindings_per_aor: 64,
+            ..TenantPolicy::default()
+        };
+        parse_meter::reset();
+        let _ = process(&cmd, &current, &generous);
+        let parses = parse_meter::count();
 
         assert_eq!(
             parses, 10,
@@ -373,5 +438,125 @@ mod rg14_tests {
             push: None,
             principal: None,
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod rg14_quota_tests {
+    use super::*;
+    use crate::binding::{Binding, Timestamp};
+    use crate::command::{ContactOp, ContactOps, RegisterCommand};
+    use bytes::Bytes;
+    use sipx_sip::Uri;
+
+    fn aor(uri: &str) -> crate::CanonicalAor {
+        crate::CanonicalAor::parse(uri.to_owned()).expect("a well-formed AoR")
+    }
+
+    fn policy(max: usize) -> TenantPolicy {
+        TenantPolicy {
+            max_bindings_per_aor: max,
+            ..TenantPolicy::default()
+        }
+    }
+
+    fn op(contact: &str, expires: u32) -> ContactOp {
+        ContactOp {
+            uri: Uri::parse(Bytes::copy_from_slice(contact.as_bytes())).expect("a valid contact"),
+            verbatim: Bytes::copy_from_slice(contact.as_bytes()),
+            expires: Some(expires),
+            q: None,
+            instance_id: None,
+            reg_id: None,
+            push: None,
+        }
+    }
+
+    fn command(contacts: Vec<ContactOp>) -> RegisterCommand {
+        RegisterCommand {
+            tenant: "t".to_owned(),
+            aor: aor("sip:alice@example.test"),
+            call_id: Bytes::from_static(b"rg14-quota"),
+            cseq: 1,
+            contacts: ContactOps::Explicit(contacts),
+            expires_header: None,
+            path: Vec::new(),
+            supports_path: false,
+            require: Vec::new(),
+            received: None,
+            flow_ref: None,
+            principal: None,
+            now: Timestamp::from_secs(1000),
+        }
+    }
+
+    fn binding(contact: &str, expires_at: u64) -> Binding {
+        Binding {
+            contact: Bytes::copy_from_slice(contact.as_bytes()),
+            q: 1000,
+            call_id: Bytes::from_static(b"other"),
+            cseq: 1,
+            expires_at: Timestamp::from_secs(expires_at),
+            registered_at: Timestamp::from_secs(1),
+            refreshed_at: Timestamp::from_secs(1),
+            path: Vec::new(),
+            received: None,
+            instance_id: None,
+            reg_id: None,
+            flow_ref: None,
+            push: None,
+            principal: None,
+        }
+    }
+
+    /// **The quota half of `RG-14`.** A request that cannot fit must be refused without paying for
+    /// the full reconciliation. Distinguishing a refresh (never refused) from a new binding (may be
+    /// refused) *requires* the match view, which is one parse per stored binding — so the honest
+    /// floor is exactly that, not zero. The per-op × per-binding re-parse the amplifier was is what
+    /// this is measured against.
+    #[test]
+    fn rg14_an_over_quota_request_is_refused_before_reconciliation() {
+        // The address-of-record holds two active bindings; the quota is three. Two additions follow.
+        let mut current = BindingSet::new();
+        current.insert(binding("sip:alice@10.0.0.1:5060", 3600));
+        current.insert(binding("sip:alice@10.0.0.2:5060", 3600));
+
+        let cmd = command(vec![
+            op("sip:alice@198.51.100.1:5060", 3600),
+            op("sip:alice@198.51.100.2:5060", 3600),
+        ]);
+
+        parse_meter::reset();
+        let outcome = process(&cmd, &current, &policy(3));
+        let parses = parse_meter::count();
+
+        assert!(
+            matches!(outcome, Outcome::Reject(Rejection::Forbidden(_))),
+            "2 active + 2 additions over a quota of 3 must be refused, got {outcome:?}"
+        );
+        // One parse per stored binding to build the match view — the floor, not the amplifier's
+        // ops × bindings. 2 stored bindings, 2 parses, no more.
+        assert_eq!(
+            parses, 2,
+            "a refusal costs one parse per stored binding to distinguish a refresh from a new binding; got {parses}"
+        );
+    }
+
+    /// The early check must not change *which* requests are accepted. A request that fits within the
+    /// upper bound proceeds to the same answer it gave before — a refresh of an existing contact.
+    #[test]
+    fn rg14_a_request_that_fits_is_accepted_unchanged() {
+        let mut current = BindingSet::new();
+        current.insert(binding("sip:alice@10.0.0.1:5060", 3600));
+
+        // One refresh against a quota of 2: 1 active + 1 add of the *same* contact = still 2.
+        let cmd = command(vec![op("sip:alice@10.0.0.1:5060", 3600)]);
+        let outcome = process(&cmd, &current, &policy(2));
+
+        assert!(
+            matches!(outcome, Outcome::Commit { .. } | Outcome::Noop { .. }),
+            "a refresh that does not grow the set must be accepted, got {outcome:?}"
+        );
     }
 }

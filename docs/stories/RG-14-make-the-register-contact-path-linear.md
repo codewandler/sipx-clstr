@@ -53,7 +53,24 @@ and the per-address quota is applied only after all of that work has been done a
   trivial, but `Binding` is serialized to PostgreSQL and `Uri` is not `Serialize` — so it broke the
   persistence path. The parse-once-per-reconciliation view achieves the same asymptotic result
   without touching the stored shape, which is why it is the answer.
-- **The quota ordering was NOT changed, and the acceptance is marked accordingly.** The comment in
+- **The quota ordering WAS changed, after the analysis it needed.** (An earlier pass here recorded it
+  as deliberately skipped; that was the right call *at the time* and is now superseded.)
+- **What made it sound.** A binding is added only by an op with a positive granted expiry that matches
+  **no** stored binding. An op that matches is a refresh, and a refresh cannot grow the set. So the
+  maximum active count this request can reach is `current_active + genuine_additions`; if that fits
+  the quota the committed set cannot exceed it, and if it does not fit the final check would reject
+  identically. Two evaluations of the same test at different costs.
+- **The version that was wrong, and what caught it.** The first attempt ran the check *before* the
+  match view and counted every positive-expiry op as an addition — which refuses a **refresh**. The
+  `LS-R-15` vector is named "the quota refuses a new binding but never a refresh" and failed
+  immediately with `403` where `200` was required. Distinguishing a refresh from an addition *is* the
+  reconciliation, so the cheapest sound placement is after the parse-once view and before the mutation
+  loop. That is where it now sits.
+- **The parse meter had to become thread-local.** As a global atomic it reported 3 parses where 2 was
+  correct, because the suite runs tests in parallel and a sibling's parses leaked into the delta. A
+  thread-local is right because `process` runs synchronously on its caller's thread. This was the
+  fix a prior implementor had already reasoned out before its run ended.
+- **Superseded note:** The comment in
   `process.rs` already says the quota is checked against the *committed outcome* "so a refresh or a
   removal can never trip it". Moving the check earlier risks altering *which* requests are accepted,
   not just when the refusal happens — a registration that grows the set past the limit is refused
@@ -65,10 +82,6 @@ and the per-address quota is applied only after all of that work has been done a
 - Gate green, shared location-service suite unchanged.
 
 ## Notes
-
-- Quota half not done here — see Progress. The check stayed where it is because moving it risks
-  changing which requests are accepted, and that needs its own analysis, not an optimisation folded
-  into a linearisation.
 
 ## Notes
 
