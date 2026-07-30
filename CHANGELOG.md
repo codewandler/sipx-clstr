@@ -7,6 +7,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The public capability matrix now describes the driver, not the engines** (`FC-6`, `PX-12`,
+  `PX-13`, `PX-14`, `RG-16`). An [independent adversarial review](docs/reviews/00-validated-synthesis.md)
+  of `86e6b10` — the `0.12.0` cut — three lenses filed without reading each other, then validated
+  against the source by a coordinator — found five release blockers, all of the same shape: a pure
+  decision core produces the right
+  effects, and the real node does not perform them. The engines were never wrong; the **claims** were,
+  because a vector row proves what the engine *emits* and nothing was checking that the driver
+  performed it.
+
+  What the README and [intro](website/docs/intro.md) had been calling current, and no longer do:
+
+  - **Matched `CANCEL` and Timer C.** `driver.rs` matches
+    `AnswerCancel | SetTimer { .. } | ClearTimer { .. } | Terminate => {}` — a literal discard — and
+    says so in its own comment: on this driver "a Timer C is armed with the right value and never
+    fires". `PX-6` is not a dishonest close; its Acceptance is engine-scoped and the deterministic
+    harness *does* perform these effects, which is why `PB-C-5`/`PB-C-6` pass. Nothing owned the
+    driver half, so `PX-12` now does.
+  - **Role separation.** The projected roles pick listeners and the location store and are then
+    dropped before `NodeConfig` is built, so dispatch is by method alone. A node started as
+    `inbound-proxy` accepts and stores a `REGISTER` — reproduced against the real binary. `FC-6`.
+  - **In-dialog routing.** Every `ACK` is resolved as an address of record and silently dropped when
+    no binding exists; an ordinary remote `Contact` is not the registered AoR. The harness missed it
+    because its `ACK`/`BYE` are AoR-shaped and resolve by accident. `PX-13`.
+
+  Two engine defects were validated with reproductions and are filed rather than papered over: a
+  terminal 2xx, 6xx or upstream cancellation leaves never-launched targets `queued`, so a later `487`
+  starts a fresh INVITE after the call was already accepted (`PX-14`); and multi-contact `REGISTER`
+  reconciliation resolves every operation against indices computed once, so a removal alongside an
+  addition can commit the wrong binding set (`RG-16`). Single-contact `REGISTER` — every existing
+  proof — cannot expose the second.
+
+- **Release-facing counts were stale on the README** — the badge and the capability table still read
+  `134/492 proved, 358 deferred` and "Ten specifications" after `CF-8`, `CF-12`, `EX-12` and `KO-1`
+  had moved all four numbers. Now `125/549`, 19 shape only, 405 deferred, eleven specs. The site's
+  copies were corrected in the `0.12.0` cut and the README's were missed, which is the same defect
+  one file over: nothing in the gate reads a published number and compares it to the generator.
+  `CF-19` covers the version string; this row is why it should cover the counts too.
+
 ## [0.12.0] — 2026-07-30
 
 The release where the gate was pointed at itself, and did not come off well. A third of the entries

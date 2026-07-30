@@ -42,9 +42,12 @@ the two**, and that is the next thing that has to exist.
 
 | | | |
 |---|---|---|
-| **Proxy** | RFC 3261 §16 forwarding, forking, `CANCEL`, Timer C, loop detection (RFC 5393) | today |
+| **Proxy** | RFC 3261 §16 forwarding, forking, loop detection (RFC 5393) | today |
+| **Proxy — `CANCEL`, Timer C** | Modelled in the decision core and **not performed by the driver**: the effects are produced and discarded, so a Timer C is armed with the right value and never fires | engine only |
 | **Registrar** | `REGISTER`, AoR canonicalisation, bindings, compare-and-swap location store | today |
-| **Transports** | UDP and TCP on one listener | today |
+| **Node roles** | Declared in the document and used to pick listeners and the store — then dropped before dispatch, so **any node answers every method**. A node started as `inbound-proxy` will accept and store a `REGISTER` | engine only |
+| **In-dialog routing** | `ACK` and in-dialog requests are resolved by address-of-record lookup rather than by the `Route` set and the dialog's remote target | engine only |
+| **Transports** | UDP and TCP on one listener; outbound target selection is UDP-only | partly |
 | **Media** | Flows directly between endpoints; the platform never touches RTP | today |
 | **Configuration** | One cluster-scoped document in YAML, JSON or TOML; refuses to start rather than apply half of it | today |
 | **Tenant policy** | Served domains (`403` for any other), the per-AoR binding quota, the expiry bounds, and a bound on in-flight transactions (`503` above it) | today |

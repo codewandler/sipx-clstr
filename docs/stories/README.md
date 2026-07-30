@@ -58,9 +58,23 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · DP-10 deferred the docs pass on purpose; e2e-call.sh was on its must-move list and did not move
 
+### Fail-closed configuration
+_Accepted means applied, or refused — there is no third state._
+- [FC-6 — Apply or refuse the declared node roles, so a node cannot answer a method its role excludes](FC-6-apply-or-refuse-the-declared-node-roles.md) · Cluster · release blocker — roles pick listeners and the store, then are dropped; an inbound-proxy accepts and stores a REGISTER
+
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
+
+### Proxy engine
+_The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
+- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker — PX-6 proved the effects are produced; nothing performs them, and a Timer C is armed and never fires
+- [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
+- [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
+
+### Registrar & location service
+_The one place the platform is allowed durable state — so its updates must serialize._
+- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · release blocker — a REGISTER carrying several contacts can commit the wrong binding set
 
 ## Blocked
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
