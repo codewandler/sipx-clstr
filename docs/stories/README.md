@@ -55,6 +55,7 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
+- [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
