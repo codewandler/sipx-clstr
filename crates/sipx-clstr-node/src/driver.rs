@@ -11,7 +11,7 @@
 
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -748,6 +748,94 @@ async fn serve(
 
 // ---------------------------------------------------------------------------------- registrar ---
 
+/// Write one line of the authentication audit trail — [registrar-auth](
+/// https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9, `RG-15`.
+///
+/// Every outcome of §3 gets exactly one record (§9 L1). Before this, the decision computed the
+/// reason for every `401` and `403` — `ChallengeResponse::because` is documented "Why, for logs and
+/// tests" — and this driver dropped it, so a refusal was indistinguishable from silence outside the
+/// process. With no rate limiting and a 300-second nonce lifetime, that is what made brute force
+/// against a tenant undetectable as well as unbounded.
+///
+/// **Nothing the far end sent may ride into a record** (§9 L2). The reason comes from
+/// `ChallengeResponse::describe` and `Rejection`'s `Display`, both of which are `&'static str` and
+/// therefore structurally incapable of carrying a nonce, a `cnonce`, a response digest, a presented
+/// username or a password. The far end is identified by the address the socket observed, which is
+/// the one field in the record that no attacker chooses.
+fn record_authentication(edge: &Edge<'_>, arrival: &Incoming, admission: &Admission) {
+    let tenant = edge.config.tenant.as_str();
+    let source = arrival.source;
+    match admission {
+        // §9 L3 — a success is a record too. `principal: None` is the trail *saying*
+        // unauthenticated (§3 A1) rather than failing to say anything, which is the distinction
+        // A1 gives the open-tenant principal its shape to preserve.
+        Admission::Command(cmd) => {
+            if let Some(principal) = &cmd.principal {
+                tracing::info!(
+                    tenant,
+                    %source,
+                    // §5's principal: the identity the digest **proved**, and already what the
+                    // binding is stored under. Naming it here adds no exposure, and it is the
+                    // question an audit trail exists to answer.
+                    principal = %String::from_utf8_lossy(principal),
+                    "authentication succeeded"
+                );
+            } else {
+                tracing::info!(
+                    tenant,
+                    %source,
+                    "authentication not required: proceeding unauthenticated"
+                );
+            }
+        }
+        // A2 is **not** a refusal — it is the first half of a round trip the client is expected to
+        // complete, and every phone's ordinary first REGISTER takes it. Recording it as trouble
+        // would bury the real thing. A6 and A7 are refusals, and are `warn`.
+        Admission::Challenge(challenge) if challenge.because.is_none() && !challenge.stale => {
+            tracing::info!(
+                tenant,
+                %source,
+                status = challenge.status,
+                because = challenge.describe(),
+                "authentication challenged"
+            );
+        }
+        Admission::Challenge(challenge) => {
+            tracing::warn!(
+                tenant,
+                %source,
+                status = challenge.status,
+                stale = challenge.stale,
+                because = challenge.describe(),
+                "authentication refused"
+            );
+        }
+        // §3 A3's `403`, and only that. `admit` produces `Forbidden` from A3 alone — everything
+        // else it can reject with comes from the message failing to become a command
+        // (`parse::command` yields `BadRequest` and nothing else), which authenticated fine and
+        // then turned out to be malformed. Recording that as an authentication refusal would fill
+        // the trail an operator reads to find an attack with ordinary client bugs.
+        Admission::Reject(rejection @ sipx_clstr_registrar::Rejection::Forbidden(_)) => {
+            tracing::warn!(
+                tenant,
+                %source,
+                status = rejection.status(),
+                because = %rejection,
+                "authentication refused"
+            );
+        }
+        Admission::Reject(rejection) => {
+            tracing::debug!(
+                tenant,
+                %source,
+                status = rejection.status(),
+                because = %rejection,
+                "a REGISTER could not become a command"
+            );
+        }
+    }
+}
+
 fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
     let context = EdgeContext {
         tenant: edge.config.tenant.clone(),
@@ -762,7 +850,35 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
     // registrar-auth §2 — before processing, not inside it. The lock spans the decision only; the
     // store work below is outside it, so one slow registration cannot stall every other tenant user.
     let admission = {
-        let mut auth = edge.auth.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut auth = match edge.auth.lock() {
+            Ok(guard) => guard,
+            // **The poison bypass is deliberate, and `RG-15` re-argued it rather than inheriting
+            // it.** Keeping the bypass, because the alternative is worse in the direction that
+            // matters: propagating the poison would make one panic anywhere in the decision stop
+            // *every* REGISTER for this tenant for the life of the process, and a registrar that
+            // stops answering refreshes converts a transient fault into every phone on the tenant
+            // going unreachable.
+            //
+            // What the bypass can cost is bounded, and it is bounded on the safe side. Nothing a
+            // panic can leave half-written makes the edge accept something it should refuse: the
+            // realm, the secret and the algorithm are immutable for the authenticator's life, and
+            // the only mutable state is the replay window, whose torn state is an entry whose count
+            // advanced without its digest. That refuses a *correct* credential as a replay — a
+            // client re-challenged with a fresh nonce, which it answers by itself. Fail-closed.
+            //
+            // What was actually wrong here was that it was silent. A poisoned authentication lock
+            // means something panicked while deciding who a caller is, which is not a fact to
+            // swallow, so it is recorded before it is stepped over.
+            Err(poisoned) => {
+                tracing::error!(
+                    tenant = %edge.config.tenant,
+                    "the authentication lock is poisoned: something panicked while deciding \
+                     authentication. Continuing on the recovered state, which can only refuse a \
+                     correct credential and never accept a wrong one"
+                );
+                poisoned.into_inner()
+            }
+        };
         admit(
             &arrival.request,
             &mut auth,
@@ -771,6 +887,12 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             now(),
         )
     };
+
+    // registrar-auth §9 — the audit trail. Emitted here, from the driver, and not from the decision
+    // that produced it: the registrar is sans-IO, and a decision function that logs does an effect
+    // the harness cannot replay from a seed. The registrar's job is to produce the fact; this
+    // layer's job is to emit it.
+    record_authentication(edge, arrival, &admission);
 
     let cmd = match admission {
         Admission::Command(cmd) => *cmd,

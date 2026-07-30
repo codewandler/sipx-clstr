@@ -11,6 +11,8 @@
 //! Sans-IO like the rest of this crate: `now` is an argument, and the nonce secret is supplied
 //! rather than drawn, so a harness scenario replays byte for byte from its seed.
 
+use std::collections::HashMap;
+
 use bytes::Bytes;
 use sipx_sip::{HeaderName, Request};
 use sipx_ua::challenge::{Authenticator, Presented, Verdict};
@@ -31,9 +33,15 @@ pub trait CredentialStore {
 }
 
 /// A credential store held in memory, for the harness and for single-tenant deployments.
+///
+/// Keyed rather than scanned (`RG-15`). It was a `Vec` walked with `find`, which is `O(users)` per
+/// REGISTER **under the node-wide authenticator lock** — harmless while every deployment's
+/// credentials were empty, and a throughput ceiling the moment one is not. Two maps rather than one
+/// keyed on a pair, because a `HashMap<(String, String), _>` cannot be probed with `(&str, &str)`
+/// without allocating a key per lookup, on the hot path, to answer a question about cost.
 #[derive(Debug, Default, Clone)]
 pub struct InMemoryCredentials {
-    entries: Vec<(String, String, String)>,
+    tenants: HashMap<String, HashMap<String, String>>,
 }
 
 impl InMemoryCredentials {
@@ -44,6 +52,11 @@ impl InMemoryCredentials {
     }
 
     /// Record a password for a user of a tenant.
+    ///
+    /// **The first password recorded for a `(tenant, username)` wins**, which is what the `Vec` and
+    /// its `find` did. Preserved rather than tidied into last-wins: the two differ only for a
+    /// caller that declares one user twice, and silently changing which credential such a caller
+    /// authenticates against is not a change to make while nobody is looking.
     #[must_use]
     pub fn with(
         mut self,
@@ -51,18 +64,58 @@ impl InMemoryCredentials {
         username: impl Into<String>,
         password: impl Into<String>,
     ) -> Self {
-        self.entries
-            .push((tenant.into(), username.into(), password.into()));
+        self.tenants
+            .entry(tenant.into())
+            .or_default()
+            .entry(username.into())
+            .or_insert_with(|| password.into());
         self
     }
 }
 
 impl CredentialStore for InMemoryCredentials {
     fn password(&self, tenant: &str, username: &str) -> Option<String> {
-        self.entries
-            .iter()
-            .find(|(t, u, _)| t == tenant && u == username)
-            .map(|(_, _, password)| password.clone())
+        self.tenants.get(tenant).and_then(|users| {
+            // One credential slot, whatever the tenant holds: a hash probe examines at most one
+            // entry, so this is where the meter's count stops depending on how full the store is.
+            #[cfg(test)]
+            lookup_meter::record();
+            users.get(username).cloned()
+        })
+    }
+}
+
+/// A test-only meter over how many stored credentials one lookup has to touch (`RG-15`).
+///
+/// The same shape as [`crate::process`]'s parse meter, and for the same reason: the cost this
+/// story is about is not visible in wall-clock time without flakiness, so it is counted instead.
+/// A lookup whose count grows with the store is `O(users)` **under the node-wide authenticator
+/// lock**, which is a throughput ceiling the moment a deployment has users.
+///
+/// **A thread-local rather than an atomic.** `password` runs synchronously on its caller's thread,
+/// so a thread-local lets each test see only its own lookups; a global atomic does not, because the
+/// suite runs tests in parallel and a sibling's lookups leak into the delta.
+#[cfg(test)]
+pub(crate) mod lookup_meter {
+    use std::cell::Cell;
+
+    thread_local! {
+        static TOUCHED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Forget every touch counted so far on this thread.
+    pub(crate) fn reset() {
+        TOUCHED.with(|count| count.set(0));
+    }
+
+    /// Count one stored credential examined.
+    pub(crate) fn record() {
+        TOUCHED.with(|count| count.set(count.get() + 1));
+    }
+
+    /// How many stored credentials have been examined on this thread since the last [`reset`].
+    pub(crate) fn count() -> usize {
+        TOUCHED.with(Cell::get)
     }
 }
 
@@ -97,6 +150,40 @@ pub struct ChallengeResponse {
     pub because: Option<Reason>,
     /// Whether the value carries `stale=true` (§3 A7).
     pub stale: bool,
+}
+
+impl ChallengeResponse {
+    /// Why this challenge was issued, in the words the audit trail is allowed to use
+    /// ([registrar-auth](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9 L2).
+    ///
+    /// **The return type is the guarantee.** `&'static str` cannot carry a nonce, a `cnonce`, a
+    /// response digest, a presented username or a password, because none of those exist at compile
+    /// time — so a driver that logs this cannot leak them however carelessly it writes the line.
+    /// That is `StoreChoice::describe()`'s discipline, which returns a backend's name and never its
+    /// resolved DSN, applied to the other end of the same problem: a log line is the artefact most
+    /// likely to be copied into an issue, and here every input is attacker-controlled.
+    ///
+    /// The match is exhaustive over the kernel's [`Reason`] on purpose. A `_` arm would make a
+    /// variant added upstream silently render as "refused", and a reason that stops being reported
+    /// is how an audit trail starts lying; this way the pin bump does not compile.
+    #[must_use]
+    pub fn describe(&self) -> &'static str {
+        // A7 before A6: an expiry arrives as `stale` with no reason attached, and reporting it as a
+        // bad password is the confusion §3 A7 exists to prevent — users answer that by changing
+        // passwords that were fine.
+        if self.stale {
+            return "the nonce had expired";
+        }
+        match self.because {
+            // A2 — nothing was wrong, because nothing was offered.
+            None => "no credentials were offered",
+            Some(Reason::Mismatch) => "the credentials did not match",
+            Some(Reason::ForeignNonce) => "a nonce this edge did not mint",
+            Some(Reason::Replay) => "a nonce-count that had already been used",
+            Some(Reason::QopMismatch) => "credentials answered without qop=auth",
+            Some(Reason::Algorithm) => "an algorithm this edge did not offer",
+        }
+    }
 }
 
 /// One tenant's authentication policy, and the kernel authenticator that enforces it.
@@ -214,9 +301,15 @@ impl TenantAuth {
         let method = request.method.to_string();
 
         // A4. **A missing username takes the same path as a wrong one.** Verification runs against
-        // a placeholder rather than returning early, so the answer is identical in content *and* in
-        // the work done to produce it: an early return would make "no such user" measurably faster
-        // than "wrong password", which is a user-enumeration oracle built out of a stopwatch.
+        // a placeholder rather than returning early, so the answer is identical in content and the
+        // SHA-256 work behind it is done either way: an early return here would make "no such user"
+        // measurably faster than "wrong password", which is a user-enumeration oracle built out of
+        // a stopwatch.
+        //
+        // Not a constant-time claim, and it was written as one until `RG-15`. The lookup itself is
+        // a hash probe whose cost differs between a hit and a miss; what the placeholder buys is
+        // that the *digest* runs regardless, which is the part that dominates. A store with a
+        // genuinely data-dependent lookup would need more than this.
         //
         // Safe against the replay window too — the kernel records a nonce-count only on success, so
         // a guess at a username cannot spend counts a real client is about to use.
@@ -281,6 +374,65 @@ mod tests {
         // Byte-exact, no case folding: two spellings of one username are two principals, and
         // deciding they are the same is an authorization question this layer does not answer.
         assert_eq!(auth.principal("Alice"), Bytes::from_static(b"acme:Alice"));
+    }
+
+    /// How many credentials the big store holds. The kernel's replay window is 4096 entries, and
+    /// this is deliberately the same number: both sit under the same lock on the same request, and
+    /// the point of the comparison is that neither may be walked to serve one REGISTER.
+    const MANY: usize = 4096;
+
+    /// A store of `count` users for one tenant, the last of which is `last`.
+    fn a_store_of(count: usize, last: &str) -> InMemoryCredentials {
+        let mut store = InMemoryCredentials::new();
+        for index in 0..count.saturating_sub(1) {
+            store = store.with("acme", format!("filler-{index}"), "irrelevant");
+        }
+        store.with("acme", last, "irrelevant")
+    }
+
+    /// How many stored credentials looking `username` up in `store` had to touch.
+    fn cost_of_looking_up(store: &InMemoryCredentials, username: &str) -> usize {
+        lookup_meter::reset();
+        let _ = store.password("acme", username);
+        lookup_meter::count()
+    }
+
+    /// **A failing-first test for `RG-15`.** The credential lookup's cost must not depend on how
+    /// many credentials the tenant holds.
+    ///
+    /// It runs under the node-wide authenticator lock, once per authenticated REGISTER, which is
+    /// what makes an `O(users)` scan a ceiling on the whole node rather than on one request. Both
+    /// lookups ask for the **last** user in the store, so a linear scan pays its worst case and a
+    /// lookup pays the same thing twice.
+    #[test]
+    fn the_credential_lookup_does_not_scan_the_tenant() {
+        let small = a_store_of(1, "zoe");
+        let big = a_store_of(MANY, "zoe");
+
+        let in_a_small_store = cost_of_looking_up(&small, "zoe");
+        let in_a_big_store = cost_of_looking_up(&big, "zoe");
+
+        assert_eq!(
+            in_a_small_store, in_a_big_store,
+            "looking one user up touched {in_a_small_store} credentials in a store of 1 and \
+             {in_a_big_store} in a store of {MANY}; the cost must not depend on how full it is"
+        );
+    }
+
+    /// A username the store does not hold must cost the same as one it does — §3 A4's "same path"
+    /// measured rather than asserted. A scan that returns early on a hit makes an absent user the
+    /// *expensive* case, which is the enumeration oracle pointing the other way.
+    #[test]
+    fn an_absent_user_costs_what_a_present_one_costs() {
+        let store = a_store_of(MANY, "zoe");
+
+        let present = cost_of_looking_up(&store, "zoe");
+        let absent = cost_of_looking_up(&store, "no-such-user");
+
+        assert_eq!(
+            present, absent,
+            "a present user cost {present} and an absent one {absent}; §3 A4 wants one path"
+        );
     }
 
     #[test]
