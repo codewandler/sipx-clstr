@@ -7,6 +7,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Which failure a caller sees when a fork fails two ways** (`PX-11`). Forking to a contact that is
+  busy and one that is gone used to return `404 Not Found`, because the best final was picked by
+  numeric order. It now returns `486 Busy Here`.
+
+  A branch's final is a statement about one *contact*; what the proxy sends upstream is a statement
+  about the *address of record*. `404` says that address does not exist — which another branch
+  answering has already falsified — and it tells the caller to give up rather than retry. RFC 3261
+  §16.7 step 6 fixes the response *class* and then explicitly permits any response within it, so the
+  RFC does not decide this; the specification now does, in a new §8.1, and cites what the RFC does
+  and does not settle.
+
+  Numeric order was also doing a job it cannot do: it let a `408` from a branch that **never
+  answered** outrank a `486` from one that did, and would have let a downstream `400 Bad Request`
+  outrank both — reporting a fault in our own message as the callee's status. Lowest code survives as
+  the tie-break *within* a rank, which is a job it is good at.
+
+  This was found because a vector row and its own test had asserted opposite outcomes for the life of
+  the project — the row said `486`, the test asserted `404` — and both counted as proved until
+  `CF-12` started requiring a proof to compare what its row claims.
+
 ### Fixed
 
 - **Two checkouts could not be tested at the same time** (`CF-13`). The node's socket suites bound

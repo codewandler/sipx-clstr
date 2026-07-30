@@ -2,7 +2,7 @@
 id: PX-11
 title: Settle which 4xx wins when two branches fail, because the row and its test say different things
 pillar: Platform
-status: in-progress
+status: done
 priority: 1
 epic:
 areas: [proxy, docs]
