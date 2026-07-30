@@ -17,14 +17,18 @@ step "clippy"
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # `CF-22`. A step of its own, ahead of the suite that also contains it, and both halves of that are
-# deliberate. **Ahead**, because a proxy that leaks one transaction per call is a slow, quiet outage
-# and this is the cheapest thing in the gate that would notice — it is one crate's test binary and it
-# runs in virtual time, so thirty-two seconds of RFC 3261 absorption cost nothing. **Named**, because
-# the failure it exists for is a resource lifetime rather than a wrong answer: `PX-13` passed this
-# whole file twice and an adversarial review, and CI's `e2e` job then found it holding three
-# transactions fifty seconds after the call. A red here has to say *which resource*, and "tests" does
-# not. `cargo test --workspace` below runs it a second time for a few milliseconds; that is the price
-# of the step naming itself, and it is worth paying.
+# deliberate. **Ahead**, because a node holding a transaction no timer will collect is a slow, quiet
+# outage and this is the cheapest thing in the gate that would notice — one crate's test binary, run
+# in virtual time, so RFC 3261's full 128·T1 costs nothing. **Named**, because the failure it exists
+# for is a resource lifetime rather than a wrong answer, and a red here has to say *which resource*;
+# "tests" does not. `cargo test --workspace` below runs it a second time for a few milliseconds, and
+# that is the price of the step naming itself.
+#
+# It also carries the number `scripts/e2e-call.sh` got wrong. Its bound is **128·T1**, derived and
+# measured rather than assumed: a proxied request to a silent next hop spends Timer F (or B) on the
+# client transaction before §16.7 has a final response to forward, and only then does Timer J (or H)
+# start on the server transaction. A one-window bound rejects correct code — it is what reverted
+# `PX-13` — so the test that measures the worst case goes red if this bound is halved.
 step "transaction drain"
 cargo test -p sipx-clstr-sim --test transaction_drain
 

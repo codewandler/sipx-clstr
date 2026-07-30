@@ -1,33 +1,60 @@
-//! `CF-22` — a completed call leaves the node holding nothing.
+//! `CF-22` — a completed call leaves the node holding nothing, and an unbounded hold fails.
 //!
-//! One node, one call, and then the question no other check in the gate asks: **does the
-//! transaction store come back to zero?** RFC 3261 §17 keeps a concluded transaction alive for its
-//! absorption timer — 64·T1, thirty-two seconds with the kernel's default constants — so that a
-//! retransmission arriving after the final response is answered from the transaction rather than
-//! delivered to the application twice. Asserting "empty immediately" would be asserting a bug. What
-//! this asserts is that one absorption window later the store is **empty**, not merely smaller.
+//! One node, one call, and then the question no other check in the gate asks: **does the transaction
+//! accounting come back to zero?** RFC 3261 §17 keeps a concluded transaction alive for its
+//! absorption timer, so that a retransmission arriving after the final response is answered from the
+//! transaction rather than delivered to the application twice. Asserting "empty immediately" would
+//! be asserting a bug. What this asserts is that the **worst case the RFC actually permits** later,
+//! the store is **empty** — not merely smaller.
 //!
-//! **Why zero rather than "it went down".** `PX-13` passed `scripts/gate.sh` in its worktree,
-//! passed it again on the integration branch, passed an independent review and passed the local
-//! two-node call proof, and was merged. CI's `e2e` job then failed on
-//! `scripts/e2e-call.sh`'s drain check with `outstanding=3 after 50s`, and the merge was reverted
-//! (`a02cd7c`). The count on that run went 6 → 11 → 16 → 10 → 5 → 3 and stopped: a check that only
-//! required the number to fall would have passed it.
+//! # The bound is 128·T1, and that took a reverted merge to establish
 //!
-//! **Why here.** `scripts/e2e-call.sh` is the only thing that watched this, and `CF-15` made it a
-//! separate CI job on purpose, so that a red there reads "the end-to-end call broke" rather than
-//! "the gate is red" and so `gate.sh` stays runnable without a second checkout. That was a good
-//! decision, and this is the hole it leaves: the one check that watches resource lifetime is the one
-//! contributors never run. This harness observes the same counter in virtual time, with no Docker,
-//! no PostgreSQL and no external `sipx` CLI, so thirty-two seconds of absorption cost nothing and
-//! the check can sit in the gate.
+//! It is tempting to write 64·T1 here, because that is the number in every absorption timer. It is
+//! wrong for a **proxied** request, and the check that says 64·T1 rejects correct code. A proxy
+//! forwarding to a next hop that never answers spends two windows end to end:
 //!
-//! **What the node here is.** The kernel's own [`TransactionLayer`] — the same sans-IO state
-//! machines `sipx-transport`'s endpoint drives behind `sipx-clstr-node`'s socket — with the real
-//! forwarding engine above it and the real registrar beside it. `outstanding` is counted the way
-//! the endpoint counts it for `Handle::outstanding()`: the transactions **plus** the per-transaction
-//! bookkeeping the driver keeps beside them, because an entry that outlives its transaction is
-//! exactly the leak a count of transactions alone would miss.
+//! - §17.1.2.2 — Timer F = 64·T1 on the non-INVITE **client** transaction (Timer B, likewise 64·T1,
+//!   for an INVITE). §16.8 confines Timer C to INVITE, so for a non-INVITE no proxy-level timer can
+//!   conclude the branch any sooner.
+//! - §16.7 — the proxy MUST forward the *best* final response, and there is none until the branch
+//!   concludes. Until then the **server** transaction sits in Trying/Proceeding, which §17.2.2 gives
+//!   **no timer at all**. Nothing is wrong and nothing can be collected.
+//! - §17.2.2 — Timer J = 64·T1 (Timer H for an INVITE) starts only *when the final response is
+//!   sent*, which is after the first window has already elapsed.
+//!
+//! The pinned kernel implements exactly that — `timing.rs:69` `timeout() = t1 * 64`, `:100`
+//! `timer_j(Unreliable) = timeout()` — and [`the_worst_case_the_rfc_permits_is_inside_the_bound`]
+//! measures it here rather than taking it on faith: still held at 127·T1, empty by 128·T1 + slack.
+//!
+//! `PX-13` was reverted on this mistake. Its end-to-end drain took 64.000 s = 128·T1, and
+//! `scripts/e2e-call.sh` waited 50 s — strictly between one window and two — so a **correct** fix
+//! read as a leak. The threshold there is corrected by this story; the number here is the same
+//! number, derived once.
+//!
+//! # What "leak" means, then
+//!
+//! Not "slow". **Unbounded** — a transaction no §17 timer will ever collect.
+//! [`a_hold_no_timer_collects_is_caught`] injects the real shape of one: a server transaction the
+//! application never answers, which §17.2.2 leaves in Trying with no timer, held for the life of the
+//! process. The kernel's own endpoint carries a backstop for it (`abandon_unanswered`), documented
+//! as *"a backstop against never, not a deadline"*. That is the distinction this file exists to
+//! draw, and it is the distinction the first version of it got wrong.
+//!
+//! # Why here
+//!
+//! `scripts/e2e-call.sh` is the only thing that watched this, and `CF-15` made it a separate CI job
+//! on purpose, so that a red there reads "the end-to-end call broke" rather than "the gate is red"
+//! and so `gate.sh` stays runnable without a second checkout. That was a good decision, and this is
+//! the hole it leaves: the one check that watches resource lifetime is the one contributors never
+//! run. This harness watches the same accounting in virtual time, with no Docker, no PostgreSQL and
+//! no external `sipx` CLI, so sixty-four seconds of absorption cost nothing.
+//!
+//! # What the node here is
+//!
+//! The kernel's own [`TransactionLayer`] — the same sans-IO state machines `sipx-transport`'s
+//! endpoint drives behind `sipx-clstr-node`'s socket — with the real forwarding engine above it and
+//! the real registrar beside it. See [`Outstanding`] for exactly what is counted, and for the one
+//! part of the endpoint's own count this cannot reproduce.
 //!
 //! Considered for upstream: **no.** The counter and the state machines are the kernel's and are
 //! already exported; asserting that this platform's driver returns them to zero is orchestration.
@@ -61,32 +88,54 @@ const CALL: &str = "cf22-the-call";
 /// The value this node record-routes, and the identity it answers to.
 const RECORD_ROUTE: &[u8] = b"<sip:edge-1.example;lr>";
 
-/// Bob's device: a contact with an **explicit port**, which is a different location-service key
-/// from his address of record (location-service §3 N7, RFC 3261 §19.1.4). That is what an ordinary
-/// dialog's remote target looks like, and keeping it distinct from the AoR is what stops this
-/// scenario proving anything by accident.
+/// Bob's device, as a dialog's remote target: a `Contact`, at the device's own host.
+///
+/// **The host is what makes it a different location-service key** from his address of record — a
+/// canonical AoR carries the host, and `10.0.0.1` is not `atlanta.example` (location-service §3,
+/// RFC 3261 §19.1.4). The explicit port is belt to that brace (N7 makes an explicit port and an
+/// absent one distinct too), not the mechanism. Either way this is what an ordinary call's remote
+/// target looks like, and keeping it off the AoR is what stops the scenario resolving by accident.
 const BOB_CONTACT: &str = "sip:bob@10.0.0.1:5061";
 
 /// Alice's device, on the same terms.
 const ALICE_CONTACT: &str = "sip:alice@10.0.0.9:5062";
 
-/// RFC 3261 §17's absorption window, 64·T1 with the kernel's default T1 of 500 ms.
-///
-/// Every timer that collects a concluded transaction — J for a non-INVITE server, L and M for the
-/// RFC 6026 `Accepted` states, D for a client — is this long or shorter, so one window after the
-/// last message of a call there is nothing left for §17 to collect.
-const ABSORPTION: Duration = Duration::from_secs(32);
+/// T1 — the kernel's default round-trip estimate (`Timers::default`), and the unit every timer in
+/// RFC 3261 §17 is a multiple of. Every duration below is written in terms of it, so that the
+/// numbers in the assertions are the RFC's numbers rather than seconds someone once measured.
+const T1: Duration = Duration::from_millis(500);
 
-/// Slack on top of [`ABSORPTION`], so the assertion is not a race with the instant a timer fires.
-///
-/// T2, the retransmission ceiling. Deliberately small: the failure this exists to catch overran the
-/// window by a **whole second window**, and a slack generous enough to hide that would be a check
-/// that passes the thing it was written for.
-const SLACK: Duration = Duration::from_secs(4);
+/// One absorption window: 64·T1 — 32 s at the default T1.
+const ABSORPTION: Duration = T1.saturating_mul(64);
 
-/// How long the call itself is given. Everything in it is one hop on a clean link, so this is two
-/// orders of magnitude more than it needs and still far below [`ABSORPTION`].
+/// The bound the check holds the node to: **two** absorption windows, 128·T1.
+///
+/// Not one. See this file's header: a proxied request to a silent next hop spends Timer F (or B) on
+/// the client transaction *before* §16.7 lets a final response go upstream, and only then does
+/// Timer J (or H) start on the server transaction. Both are 64·T1 and they are strictly sequential,
+/// so 128·T1 is the worst case RFC 3261 permits — not a slack allowance, a derived number.
+/// `PX-13` was reverted for taking 64.000 s against a threshold of 50 s.
+///
+/// Written as the derivation rather than as `64`, so that the two-windows claim is in the code and
+/// not only in the prose above it.
+const BOUND: Duration = ABSORPTION.saturating_mul(2);
+
+/// Slack on top of [`BOUND`], so the assertion is not a race with the instant a timer fires.
+///
+/// T2, the retransmission ceiling — 8·T1. Deliberately small: virtual time is exact, so this only
+/// has to clear the instant a timer fires, and a slack large enough to hide a third window would
+/// defeat the check.
+const SLACK: Duration = T1.saturating_mul(8);
+
+/// How long the call itself is given. Every message in it is one hop on a clean link and lands at
+/// `t = 0`, so this is only the point at which the scenario's own preconditions are checked.
 const CALL_WINDOW: Duration = Duration::from_secs(1);
+
+/// How far past [`BOUND`] the leak test looks before calling a hold unbounded rather than slow.
+///
+/// Ten windows. Nothing in §17 runs longer than 64·T1, and the one proxy-level timer that does —
+/// Timer C, INVITE-only, cleared when a branch concludes, 240 s by default — is inside this too.
+const LONG_AFTER: Duration = ABSORPTION.saturating_mul(20);
 
 fn uri(text: &str) -> Uri {
     Uri::parse(Bytes::copy_from_slice(text.as_bytes())).expect("a valid URI")
@@ -105,6 +154,20 @@ fn header_of(message: &Message, name: &HeaderName) -> String {
 // ---------------------------------------------------------------------------------------------
 
 /// What the node is still holding, broken out so a red says which map rather than only "not zero".
+///
+/// **This is the harness's own accounting, not a reading of `Handle::outstanding()`** — that one
+/// needs a socket. It is counted on the same principle: the kernel layer's transactions **plus** the
+/// per-transaction bookkeeping the driver keeps beside them, because an entry that outlives its
+/// transaction is exactly the leak a count of transactions alone cannot see.
+///
+/// One term of the endpoint's own sum is deliberately absent, and it is worth knowing which.
+/// `sipx-transport` also counts `handed_over` — one entry per request given to the application,
+/// cleared when the transaction terminates — which is how `Handle::outstanding()` reports three
+/// entries for one held server transaction where this reports two. There is nothing to mirror it
+/// with: `sipx-clstr-node` keeps a proxied request's context in a **per-request task**
+/// (`driver.rs:1153`), not in a map, so the analogue here would be an invention rather than a model.
+/// The consequence is a difference in the *number*, never in whether it is zero, and zero is the
+/// whole assertion.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct Outstanding {
     /// Client transactions the kernel's layer still holds.
@@ -112,8 +175,7 @@ struct Outstanding {
     /// Server transactions, including the ones held only for their absorption timer.
     servers: usize,
     /// The driver's per-transaction map — where a transaction's messages go. The endpoint's
-    /// `destinations`, and counted for the same reason it is: an entry that outlives its
-    /// transaction is a leak a count of transactions alone cannot see.
+    /// `destinations`.
     peers: usize,
 }
 
@@ -121,6 +183,32 @@ impl Outstanding {
     fn total(self) -> usize {
         self.clients + self.servers + self.peers
     }
+
+    /// The breakdown, for an assertion message that says which resource.
+    fn describe(self) -> String {
+        format!(
+            "{} client, {} server, {} per-transaction entries",
+            self.clients, self.servers, self.peers
+        )
+    }
+}
+
+/// A hold injected into the node, so that "unbounded" can be tested rather than argued.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Hold {
+    /// Nothing injected. The node behaves.
+    None,
+    /// A server transaction for this method is created and then **never answered and never
+    /// forwarded**.
+    ///
+    /// This is what an unbounded hold actually looks like, and it is not hypothetical: RFC 3261
+    /// §17.2.2 gives a server transaction in Trying no timer at all, because its model is that the
+    /// transaction user always responds. An application that drops a method it does not implement,
+    /// or that wedges in a handler, leaves exactly this — and nothing in §17 ever collects it, so
+    /// the store grows for as long as traffic arrives. The kernel's endpoint carries a backstop for
+    /// it (`abandon_unanswered`), which documents itself as "a backstop against never, not a
+    /// deadline"; this harness has no such backstop, which is what makes the hold visible here.
+    NeverAnswer(Method),
 }
 
 /// A timer this node has armed, in the two families it owns.
@@ -153,12 +241,14 @@ struct Edge {
     reachable: HashMap<String, NodeId>,
     /// Armed timers, by the id the scheduler hands back.
     slots: Vec<Slot>,
+    /// What this node has been told to hold on to, if anything.
+    hold: Hold,
     /// The current virtual time, captured on every input. A lookup is evaluated against it.
     now: Timestamp,
 }
 
 impl Edge {
-    fn new(name: &str, reachable: HashMap<String, NodeId>) -> Self {
+    fn new(name: &str, reachable: HashMap<String, NodeId>, hold: Hold) -> Self {
         Self {
             name: name.to_owned(),
             layer: TransactionLayer::new(Timers::default()),
@@ -172,6 +262,7 @@ impl Edge {
             key_branch: HashMap::new(),
             reachable,
             slots: Vec::new(),
+            hold,
             now: Timestamp::ZERO,
         }
     }
@@ -297,6 +388,15 @@ impl Edge {
         request: &Request,
         origin: Option<NodeId>,
     ) -> Vec<Effect> {
+        // The injected hold, and it is injected *here* — at the seam where a real application
+        // decides what to do with a request — rather than by reaching into the layer, because the
+        // hold this models is an application that never answers, not a broken state machine.
+        if self.hold == Hold::NeverAnswer(request.method.clone()) {
+            return vec![Effect::Note(format!(
+                "swallowed {}: nothing will answer this transaction",
+                request.method
+            ))];
+        }
         if request.method == Method::Register {
             let (note, response) = self.register(request);
             let mut out = vec![Effect::Note(note)];
@@ -431,15 +531,29 @@ impl Edge {
                     }
                     out.extend(self.drive(call, more));
                 }
-                // `..` because the engine's hop is `PX-13`'s to add: this file has to compile
-                // against the tree with that branch and against the tree without it, or the
-                // failing-first proof compares two different tests.
+                // `..`, and it hides `next_hop` — which is `PX-13`'s field, absent on `main`, so a
+                // file that named it could not run against both trees and the story's "`PX-13` is
+                // green" could not be demonstrated. **What that costs is real and is guarded
+                // below**: the target is what goes into the Request-URI and the hop is where the
+                // copy is sent, and the two differ for every surviving `Route` and every registered
+                // `Path`. Resolving `target.uri` is exactly the mistake `next_hop` exists to
+                // prevent, so rather than rely on this scenario never growing a route set, the
+                // condition under which the two are the same is asserted rather than assumed.
                 ProxyEffect::Forward {
                     branch,
                     request,
                     target,
                     ..
                 } => {
+                    assert!(
+                        request.headers.get(&HeaderName::Route).is_none(),
+                        "a forwarded request still carries a Route, so its next hop is that route \
+                         and not `{}`. This harness resolves `target.uri` because it must compile \
+                         against a tree without `Effect::Forward::next_hop`; the moment a scenario \
+                         here has a surviving Route, that shortcut routes wrong. Read the hop, or \
+                         keep the scenario route-free.",
+                        String::from_utf8_lossy(&target.uri)
+                    );
                     let hop = String::from_utf8_lossy(&target.uri).into_owned();
                     let Some(node) = self.reachable.get(&hop).copied() else {
                         out.push(Effect::Note(format!("no address for {hop}")));
@@ -716,13 +830,22 @@ impl Caller {
 struct Callee {
     name: String,
     edge: NodeId,
+    /// Whether he answers the `INVITE` at all.
+    ///
+    /// A device that registers and then goes silent is the ordinary way a proxy meets RFC 3261's
+    /// worst case: the branch produces nothing, so the client transaction has to run Timer B to
+    /// 64·T1 before §16.7 has a final response to forward, and only then does the server
+    /// transaction start its own. Not exotic — a phone on a dropped network looks exactly like it.
+    answers: bool,
     registered: bool,
     /// The `Record-Route` list as it arrived on the `INVITE` — his route set (§12.1.1).
     route_set: Vec<String>,
     /// The caller's `Contact` — his remote target.
     remote_target: String,
+    /// Whether the `ACK` reached him — which is also "has hung up", because the `BYE` goes out on
+    /// the same input. One flag rather than two: they could never disagree, and a second bool that
+    /// is always equal to the first is a state machine pretending to be two.
     acknowledged: bool,
-    hung_up: bool,
     /// The final status his `BYE` was answered with, if it ever was.
     bye_answered: Option<u16>,
     cseq: u32,
@@ -755,6 +878,9 @@ impl SimNode for Callee {
 impl Callee {
     fn on_request(&mut self, from: NodeId, request: &Request) -> Vec<Effect> {
         match request.method {
+            Method::Invite if !self.answers => {
+                vec![Effect::Note(format!("{} is silent", self.name))]
+            }
             Method::Invite => {
                 self.route_set = request
                     .headers
@@ -794,7 +920,6 @@ impl Callee {
                     return Vec::new();
                 }
                 self.acknowledged = true;
-                self.hung_up = true;
                 let bye = self.bye();
                 vec![
                     Effect::Note(format!("{} acknowledged, hanging up", self.name)),
@@ -916,7 +1041,7 @@ const EDGE_NODE: NodeId = NodeId::from_index(0);
 const ALICE: NodeId = NodeId::from_index(1);
 const BOB: NodeId = NodeId::from_index(2);
 
-fn scenario(seed: u64) -> Sim {
+fn scenario(seed: u64, answers: bool, hold: Hold) -> Sim {
     let mut sim = Sim::new(seed);
     sim.link_default(LinkKind::Datagram, LinkPolicy::CLEAN);
 
@@ -924,7 +1049,7 @@ fn scenario(seed: u64) -> Sim {
     reachable.insert(BOB_CONTACT.to_owned(), BOB);
     reachable.insert(ALICE_CONTACT.to_owned(), ALICE);
 
-    sim.add_node(Box::new(Edge::new("edge", reachable)));
+    sim.add_node(Box::new(Edge::new("edge", reachable, hold)));
     sim.add_node(Box::new(Caller {
         name: "alice".to_owned(),
         edge: EDGE_NODE,
@@ -939,27 +1064,23 @@ fn scenario(seed: u64) -> Sim {
     sim.add_node(Box::new(Callee {
         name: "bob".to_owned(),
         edge: EDGE_NODE,
+        answers,
         registered: false,
         route_set: Vec::new(),
         remote_target: String::new(),
         acknowledged: false,
-        hung_up: false,
         bye_answered: None,
         cseq: 0,
     }));
     sim
 }
 
-#[test]
-fn the_transaction_store_returns_to_zero_after_a_call() {
-    let mut sim = scenario(0x4346_2201);
-
-    // The call itself: two registrations, an INVITE, a 200, an ACK, and a hang-up.
+/// A call that is answered, acknowledged and hung up — and asserted to have been, because a drain
+/// assertion over a scenario that quietly stopped after the REGISTER would pass perfectly.
+fn a_completed_call(seed: u64) -> Sim {
+    let mut sim = scenario(seed, true, Hold::None);
     sim.advance(CALL_WINDOW).expect("the call runs");
 
-    // The drain assertion is only worth anything if the call actually happened, so each step of it
-    // is asserted before the store is looked at. A scenario that quietly stopped after the
-    // REGISTER would otherwise "drain" perfectly.
     let alice = sim.node::<Caller>(ALICE).expect("alice is in the sim");
     let bob = sim.node::<Callee>(BOB).expect("bob is in the sim");
     assert_eq!(
@@ -974,48 +1095,173 @@ fn the_transaction_store_returns_to_zero_after_a_call() {
         sim.trace().render()
     );
     assert!(
-        bob.acknowledged && bob.hung_up,
+        bob.acknowledged,
         "the callee never saw the ACK and hung up\n{}",
         sim.trace().render()
     );
+    sim
+}
 
-    // One absorption window on top, which is what RFC 3261 §17 asks for and all it asks for.
-    sim.advance(ABSORPTION + SLACK).expect("the store drains");
+/// A virtual instant this many after the scenario began.
+///
+/// Every scenario here starts its call at `t = 0` — one hop, clean link, no latency — so an offset
+/// from the start *is* an offset from the call, and every deadline below can be an absolute instant.
+/// That matters: a probe expressed as "advance by [`BOUND`]" moves when `BOUND` moves, so it can
+/// never catch `BOUND` being wrong, which is the mistake that parked the first version of this file.
+fn at(offset: Duration) -> SimTime {
+    SimTime::from_nanos(u64::try_from(offset.as_nanos()).unwrap_or(u64::MAX))
+}
 
-    let edge = sim.node::<Edge>(EDGE_NODE).expect("the edge is in the sim");
-    let held = edge.outstanding();
+/// What the node is holding right now.
+fn held_by(sim: &Sim) -> Outstanding {
+    sim.node::<Edge>(EDGE_NODE)
+        .expect("the edge is in the sim")
+        .outstanding()
+}
+
+/// **The check.** Hold the node to [`BOUND`] and require the accounting to be empty.
+///
+/// One function, used by every test below and by the gate's `transaction drain` step, so that the
+/// assertion which passes for a well-behaved node is character-for-character the one that fails for
+/// a leaking one. `what` names the scenario, so the message says what was being drained rather than
+/// only that something was not.
+fn assert_drains_within_the_bound(sim: &mut Sim, what: &str) {
+    sim.run_until(at(BOUND + SLACK)).expect("the sim runs");
+    let held = held_by(sim);
     assert_eq!(
         held.total(),
         0,
-        "the node still holds {} transaction(s) {:?} after the call ended — \
-         {} client, {} server, {} per-transaction entries. RFC 3261 §17's absorption window is \
-         64·T1 = {:?}, and everything a completed call leaves behind is collected inside it.\n{}",
+        "after {what}, the node still holds {} — {}. RFC 3261's worst case for a proxied request \
+         to a silent next hop is 128·T1 = {:?} (Timer F or B on the client transaction, and only \
+         then Timer J or H on the server transaction, because §16.7 has no final response to \
+         forward until the branch concludes and §17.2.2 gives Trying no timer); this waited {:?}. \
+         Something is being held that no §17 timer will collect.\n{}",
         held.total(),
-        ABSORPTION + SLACK,
-        held.clients,
-        held.servers,
-        held.peers,
-        ABSORPTION,
+        held.describe(),
+        BOUND,
+        BOUND + SLACK,
         sim.trace().render()
     );
 }
 
-/// The same store, looked at **before** the window: it is deliberately not empty.
+/// The gate's headline: a call that completes leaves the node holding nothing.
+#[test]
+fn a_completed_call_leaves_the_node_holding_nothing() {
+    let mut sim = a_completed_call(0x4346_2201);
+    assert_drains_within_the_bound(&mut sim, "a completed call");
+}
+
+/// The store one second after the call: deliberately **not** empty.
 ///
-/// Without this the assertion above would pass just as well against a node that tore a transaction
+/// Without this, the assertion above would pass just as well against a node that tore a transaction
 /// down the instant it answered — which is the bug §17 exists to prevent, because a retransmission
 /// arriving afterwards would then be delivered to the application a second time.
 #[test]
 fn the_store_is_deliberately_not_empty_before_the_window() {
-    let mut sim = scenario(0x4346_2202);
-    sim.advance(CALL_WINDOW).expect("the call runs");
-
-    let edge = sim.node::<Edge>(EDGE_NODE).expect("the edge is in the sim");
-    let held = edge.outstanding();
+    let sim = a_completed_call(0x4346_2202);
+    let held = held_by(&sim);
     assert!(
         held.total() > 0,
         "a concluded transaction is held for its absorption timer; finding none a second after \
          the call means §17's window is not being kept\n{}",
+        sim.trace().render()
+    );
+}
+
+/// **The bound is 128·T1 because the RFC permits 128·T1**, and here is the case that spends it.
+///
+/// Bob registers and then goes silent, so the branch produces nothing: the client transaction runs
+/// Timer B to 64·T1, only then does §16.7 have a final response to forward upstream, and only then
+/// does the server transaction start Timer H for its own 64·T1. It empties at **64.000 s exactly**,
+/// which is 128·T1 and is the number `PX-13`'s end-to-end run produced. A one-window bound calls
+/// that a leak; it is not one.
+///
+/// Both halves are asserted, at **absolute** instants rather than offsets from [`BOUND`]: still held
+/// at 127·T1, empty by 128·T1 + slack. That is what makes this a measurement of the bound rather
+/// than a restatement of it — set `BOUND` to one window and this test goes red, which is exactly
+/// what the first version of this file failed to do.
+#[test]
+fn the_worst_case_the_rfc_permits_is_inside_the_bound() {
+    let mut sim = scenario(0x4346_2203, false, Hold::None);
+    sim.advance(CALL_WINDOW).expect("the call runs");
+    assert_eq!(
+        sim.node::<Caller>(ALICE).and_then(|alice| alice.answered),
+        None,
+        "the callee is supposed to be silent, so nothing should have answered alice yet\n{}",
+        sim.trace().render()
+    );
+
+    // 127·T1. Timer H has not fired, so anything asserting a one-window bound is red here.
+    sim.run_until(at(ABSORPTION.saturating_mul(2).saturating_sub(T1)))
+        .expect("the sim runs");
+    let held = held_by(&sim);
+    assert!(
+        held.total() > 0,
+        "a branch to a silent next hop is still being absorbed at 127·T1, and finding nothing here \
+         means the bound below is not measuring two windows at all — {}\n{}",
+        held.describe(),
+        sim.trace().render()
+    );
+
+    assert_drains_within_the_bound(&mut sim, "a call to a callee that never answered");
+}
+
+/// **The failing-first proof, and the distinction the story is about.**
+///
+/// A server transaction the application never answers. §17.2.2 gives one in Trying no timer at all,
+/// so nothing in the RFC will ever collect it — this is a leak in the sense that matters, as against
+/// the merely-slow case above. The check is the same function, so this is the assertion from
+/// [`a_completed_call_leaves_the_node_holding_nothing`] doing its job rather than a second opinion.
+///
+/// It is checked twice: at the bound, where the check would fire, and ten windows out, which is what
+/// separates *unbounded* from *slow*. Nothing in §17 runs past 64·T1, and the one proxy-level timer
+/// that runs longer — Timer C, 240 s — is INVITE-only and inside [`LONG_AFTER`] anyway.
+#[test]
+fn a_hold_no_timer_collects_is_caught() {
+    // The same call as the headline test, with one fault injected into it: the node takes the
+    // hang-up and never answers it. Everything before the BYE is untouched, so what this measures
+    // is the hold and not a scenario that fell over early.
+    let mut sim = scenario(0x4346_2204, true, Hold::NeverAnswer(Method::Bye));
+    sim.advance(CALL_WINDOW).expect("the call runs");
+    let alice = sim.node::<Caller>(ALICE).expect("alice is in the sim");
+    let bob = sim.node::<Callee>(BOB).expect("bob is in the sim");
+    assert_eq!(
+        alice.answered,
+        Some(200),
+        "the call was not answered, so the hold below is not being injected into a call\n{}",
+        sim.trace().render()
+    );
+    assert!(
+        bob.acknowledged,
+        "the callee never hung up, so no BYE was there to swallow\n{}",
+        sim.trace().render()
+    );
+
+    sim.run_until(at(BOUND + SLACK)).expect("the sim runs");
+    let held = held_by(&sim);
+    assert!(
+        held.total() > 0,
+        "the injected hold was collected, so this proves nothing about the check. A server \
+         transaction the application never answers has no §17 timer and must still be held.\n{}",
+        sim.trace().render()
+    );
+
+    // Unbounded, not slow. If this drains, the hold was a long timer and the check above is only
+    // measuring patience.
+    sim.run_until(at(BOUND + LONG_AFTER)).expect("the sim runs");
+    let later = held_by(&sim);
+    assert!(
+        later.total() > 0,
+        "the injected hold drained {LONG_AFTER:?} after the call, so it was bounded after all and \
+         is not the leak this test claims to inject\n{}",
+        sim.trace().render()
+    );
+    assert_eq!(
+        later.total(),
+        held.total(),
+        "an unbounded hold does not shrink: {} at the bound, {} ten windows later\n{}",
+        held.describe(),
+        later.describe(),
         sim.trace().render()
     );
 }
