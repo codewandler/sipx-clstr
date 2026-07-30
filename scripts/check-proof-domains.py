@@ -13,7 +13,8 @@ So the agreement is checked rather than remembered. A **proof** is any tracked f
 or `deploy/` that runs `sipx register` or `sipx dial` against a `sip:` URI. For each one this reads:
 
 - the **served domains** — every `tenant.domains` entry of the cluster document that governs it,
-  which is either embedded in the file or named by a `proof-document:` comment in it;
+  which is either embedded in the file or named by a `proof-document: <path>` comment occupying a
+  line of its own in it;
 - the **registered domains** — the host of every address-of-record it registers or dials, with shell
   variables resolved back to the literal they are assigned;
 
@@ -62,7 +63,27 @@ ASSIGN = re.compile(
 )
 
 VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
-DOC_DIRECTIVE = re.compile(r"proof-document:\s*(\S+)")
+
+# The document a proof names rather than embeds — anchored to a **whole comment line**: the token, a
+# path, and nothing else on the line.
+#
+# Anchored rather than searched for anywhere, because a checker has to survive being documented.
+# Unanchored, the first `proof-document:` in a file won, so a comment *explaining* the directive was
+# read as the directive: one sentence about it in `k8s-two-node-call.sh` aimed this at a backtick and
+# turned the gate red on a script that was correct (`CF-14`). That taught the opposite of what it
+# should — the next person needs the description, and the checker was training people not to write
+# it.
+#
+# `check-docs.py` met the same class with links inside code fences and answered it by stripping code
+# before scanning (`prose`). Anchoring is chosen here instead for two reasons: a shell comment has no
+# fence or code span to strip, and this states the rule positively — the directive is a *declaration*
+# occupying its own line, and every other appearance of the token is prose. Renaming the token to
+# something prose is unlikely to contain was the third option and is the worst of them: it trades one
+# silent failure for a rarer one and makes the directive harder to write about, which is the defect.
+#
+# The comment marker is optional so a Python proof can declare it in a module docstring, the way
+# `sip_demo.py` carries its `not-in-ci:`.
+DOC_DIRECTIVE = re.compile(r"^[ \t]*#?[ \t]*proof-document:[ \t]*(\S+)[ \t]*$", re.M)
 DOMAINS = re.compile(r"^(\s*)domains:\s*(.*)$")
 
 
@@ -168,6 +189,10 @@ def governing_document(path: pathlib.Path, text: str) -> tuple[pathlib.Path, str
 
     An explicit `proof-document:` beats an embedded one: a script that deploys a manifest and also
     happens to quote some YAML should be held to what it deployed.
+
+    Only a line that is *nothing but* the directive counts — see `DOC_DIRECTIVE`. A file that talks
+    about the directive without declaring one therefore falls through to the embedded document, or
+    to the "names none" failure below, rather than being pointed at a fragment of the sentence.
     """
     directive = DOC_DIRECTIVE.search(text)
     if directive:
@@ -179,7 +204,7 @@ def governing_document(path: pathlib.Path, text: str) -> tuple[pathlib.Path, str
         return path, text
     return (
         "it embeds no cluster document and names none — add a `proof-document: <path>` "
-        "comment pointing at the document it registers against"
+        "comment, on a line of its own, pointing at the document it registers against"
     )
 
 
