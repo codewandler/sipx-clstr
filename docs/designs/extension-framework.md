@@ -601,12 +601,17 @@ otherwise the same entry.
   ([routing-trunks](routing-trunks.md)) is the egress peer; a **domain** is the registering side.
   There is no third, and no free-form selector — a selector is a condition (B3) with a config file
   around it.
-- **Several may apply, and the union is disjoint.** The composed rule set for one attachment is
-  every trunk-bound and domain-bound profile's rules together. G10 requires the composition to be
-  **disjoint on targets**. Two *distinct* applicable profiles writing the same target is a **startup
+- **Several may apply, and the composition is per attachment object.** The composed rule set at one
+  attachment point is every profile bound to **that one object** — one `trunk[]` entry or one
+  `domain[]` entry ([cluster-config](../specs/cluster-config.md) §7 S4: a quirk binding lives on the
+  object it binds to) — and never a trunk's rules together with a domain's. This sentence read "every
+  trunk-bound and domain-bound profile's rules together" until `EX-11` derived what those two sets
+  actually share, which is nothing: §*Whether the two attachment points ever compose* is the
+  derivation, and this bullet is its correction. G10 requires each composition to be **disjoint on
+  targets**. Two *distinct* profiles bound to one object and writing the same target is a **startup
   error naming both**, not a precedence rule. One profile bound at both attachment points — as
-  `sdp-direction-explicit` is above — contributes each of its rules once and contests nothing; a
-  contest needs two profiles.
+  `sdp-direction-explicit` is above — contributes each of its rules once to each of the two composed
+  sets and contests nothing; a contest needs two profiles at one object.
 - **A target is elementary, so disjointness is overlap and not tuple equality.** A target is one
   catalogue row at one *elementary* message class: `(CatalogHeader, ElementaryClass)` or
   `(SdpScope, CatalogSdpField, ElementaryClass)`, where an elementary class is one method for a
@@ -624,8 +629,10 @@ otherwise the same entry.
   **target**, and the **winning profile id**. They are not interchangeable: a profile id says who
   wins, and only a target says what is won. It is also **not directional**: the commonest contest is
   between two profiles bound to the same trunk, which a trunk-beats-domain escape could not reach at
-  all, and which does not depend on the trunk-bound and domain-bound sets ever intersecting (a
-  question this design asserts more thinly than it states — see *Risks*).
+  all, and which does not depend on the trunk-bound and domain-bound sets ever intersecting — a
+  question `EX-11` has since answered in the negative (§*Whether the two attachment points ever
+  compose*), and the answer makes a directional escape not merely too narrow but a precedence rule
+  over a contest that cannot arise.
 - **An override deletes the losing rule at composition, before any message is evaluated.** The
   losing profiles' rules for that one target are dropped from the composed set at **startup**, so the
   set that reaches H9/H11 is disjoint by construction and the idempotence and confluence claims above
@@ -647,16 +654,146 @@ otherwise the same entry.
   (QP-G-15). The escape is scoped to the thing it exists for — two writers on one target — and cannot
   reach a boot check.
 - **Closed world.** Every bound profile id is in the shipped catalogue; every trunk and domain named
-  exists; every `ConfigKey` is declared by the DP-1 schema and type-checks; every literal parses;
-  every override names a target and a winner that exist. All at startup — an invalid combination
-  fails deployment, never a call.
+  exists; every `ConfigKey` is declared by the DP-1 schema, type-checks, and names **the side the
+  binding is on** (G14, below); every literal parses; every override names a target and a winner that
+  exist. All at startup — an invalid combination fails deployment, never a call.
+
+#### Whether the two attachment points ever compose — derived (`EX-11`)
+
+The bullets above say a composition is per attachment object. That is a correction: the rule read
+"every trunk-bound and domain-bound profile's rules together", and `QP-C-2` asserted that a
+trunk-bound and a domain-bound profile both apply to one message. Neither was ever shown, and under
+this design's own definitions — a trunk is the egress peer, a domain is the registering side — the
+two describe different peers. What follows is the derivation the assertion owed, and its result is
+that **the assertion was wrong**: the sets do not intersect, so a union was never the composed set
+and a cross-attachment contest is not a thing that can arise.
+
+**The premises, each already fixed elsewhere.** Nothing below is new policy; the derivation is the
+consequence of four rules this platform states for other reasons.
+
+| # | Premise | Where it is already fixed |
+|---|---|---|
+| P1 | A quirk is applied at exactly two points, and each is **one egress leg toward one peer**: H9 per branch toward the branch's target, H11 toward the peer the request arrived from. There is no phase at which a quirk sees a message that is not on its way to one identified peer | §*Where it runs* — egress only, one egress point per direction; H1–H4 and H7 permit no `PatchHeaders` at all |
+| P2 | An **egress** leg's peer is identified by the route, and a target has exactly one provenance: `TargetsResolved` is answered by the location service *or* by routing policy, and only a routing-policy target carries a trunk. A location-service target is a contact bound to an address-of-record in a **served domain** | [proxy-behavior](../specs/proxy-behavior.md) §2 (`Input::TargetsResolved`), §7 F2 ("Contact from location service keeps its parameters"); [routing-trunks](routing-trunks.md) RT-1 (`RoutePlan` = attempts + *the trunk it belongs to*); [location-service](../specs/location-service.md) §5.1 S1 and §5.5 (the AoR's domain is served by the tenant configuration) |
+| P3 | The **ingress** peer is classified once, and the classification names one object: source-address admission attributes a source to a trunk or an internal zone, and an authenticated registrant is a registrant of one served domain. H2 publishes the result as a single `quirks:ingress` fact, and H11 reads that fact | §*Where it runs*; RT-8 owns the ingress-scope vocabulary, [asserted-identity](../specs/asserted-identity.md) §2 keys its receiving side on the same grain |
+| P4 | A domain binding cannot mean "the domain in the message". `MessageClass` ranges over method, status class and direction, and nothing in the grammar reads a header value (B3); applicability computed from a Request-URI or `To` host would be precisely the free-form selector §*Binding* refuses. So "domain" in a binding means **the peer on this leg is a registrant of this domain** | B3; §*Binding*'s first rule ("no free-form selector — a selector is a condition with a config file around it") |
+
+P2 is the load-bearing one, and it is stronger than "a peer is a trunk or a registrant". It says the
+binding follows **the route the leg took**, not the peer's inventory of identities — so even a peer
+that appears in configuration as a `trunk[]` entry *and* holds a registration in a served domain
+attaches to exactly one object per leg: the object whose target the engine actually resolved. A
+dual-natured peer produces two different bindings on two different legs, never two bindings on one.
+
+P2 also fills a gap in §*Where it runs*, which named only the trunk case. The location-service case
+is not a choice: the served domain of the address-of-record whose binding produced the target is the
+only object in configuration that identifies that peer, and the alternative — no binding at all on a
+contact leg — would make `domain[].quirks` unreachable on the request path, contradicting the binding
+example above, where `sdp-direction-explicit` is bound to `example.net` and its rules fire on
+requests as well as responses. The H9 row is corrected accordingly.
+
+**The enumeration, and it is closed.** Both columns range over closed sets: by P2 and P3 a peer is a
+configured trunk, a registrant of a served domain, or neither (and then its composed set is empty); by
+P1 a transaction either forwards or terminates locally, and every response leaving upstream attaches
+to the same one object however many responses there are, because they all go back to the one peer the
+request came from.
+
+| # | Ingress peer | Egress leg | Attachment at H9 | Attachment at H11 | Two kinds on one leg? |
+|---|---|---|---|---|---|
+| 1 | trunk `t1` | routing-policy target on `t2` | trunk `t2` | trunk `t1` | no |
+| 2 | trunk `t1` | location-service contact in `d2` | domain `d2` | trunk `t1` | no |
+| 3 | trunk `t1` | none (locally originated final) | — | trunk `t1` | no |
+| 4 | registrant of `d1` | routing-policy target on `t2` | trunk `t2` | domain `d1` | no |
+| 5 | registrant of `d1` | location-service contact in `d2` | domain `d2` | domain `d1` | no |
+| 6 | registrant of `d1` | none (the registrar's own `200`) | — | domain `d1` | no |
+
+A fork adds rows, never objects to a row: H9 is per branch (and deliberately so), so *n* branches are
+*n* independent evaluations, each against the one object its own target resolved through — a fork may
+perfectly well have one branch on a trunk and another on a registered contact, which is rows 1 and 2
+of one transaction rather than a seventh case.
+
+**Three conclusions.**
+
+- **C1 — The composed set at one attachment point is the profiles bound to that object, and the union
+  sentence was wrong.** Every cell above holds one object; no leg holds two. The error is also not
+  specific to trunk-versus-domain: row 5 puts two *domains* in play on one transaction, and unioning
+  them would be wrong for the same reason. Corrected in §*Binding* above.
+- **C2 — A trunk-bound and a domain-bound profile can never contest a target.** A contest is a
+  property of one composed set (G10), and no composed set mixes the two. So G10's disjointness check
+  is per attachment object, and a G13 override can only ever be resolving a contest between profiles
+  bound to the *same* object. That is already the shape configuration has —
+  [cluster-config](../specs/cluster-config.md) §7 S4 puts the binding and its `quirkOverrides` on the
+  object, and §8 V5 phrases the check as "not contested **at that binding**" — so this derivation
+  changes nothing outside this design, and the schema written after `EX-10` turns out to have encoded
+  the derived model before it was derived.
+- **C3 — "Both apply to one message" is false; "both apply to one transaction" is true, in exactly
+  two rows.** Rows 2 and 4 are the reachable cases, and they are mirror images: in row 4 the
+  trunk-bound profile writes the forwarded *request* and the domain-bound one the forwarded
+  *response*; in row 2, a trunk calling a registered contact, it is the other way round. Either way
+  that is two messages, two legs, two composed sets, and no interaction between them — which is also
+  why "which of the two wins" has no meaning to ask. `QP-C-2` asserted the one-message reading and is
+  corrected to the two-leg one; a new `QP-C-4` covers the configuration the union reading would have
+  rejected.
+
+**The intersection condition, stated positively.** Two profiles bound at different attachment points
+apply to one evaluation **iff one leg's peer is identified by a `trunk[]` entry and a `domain[]` entry
+at the same time**. By P2 that is impossible on an egress leg, because the leg has one target with one
+provenance. On the ingress leg it is impossible only because P3 says the classification is
+single-valued — and P3 is RT-8's to state, not this design's. So the condition is not vacuous by
+accident: it is empty under a premise another story owns, which is why it is named as a premise and
+carried in *Risks* rather than assumed away.
+
+**The worked case, both readings.** Two profiles, each writing `P-Charging-Vector` on
+`request:INVITE` — the same elementary target — bound at different attachment points. Rendered in the
+document's own spelling ([cluster-config](../specs/cluster-config.md) §7):
+
+```yaml
+domain:
+  - name: example.net
+    quirks: [house-charging-headers]        # writes P-Charging-Vector on request:INVITE
+trunk:
+  - name: trunk-a
+    quirks: [peer-a-charging]               # writes P-Charging-Vector on request:INVITE
+```
+
+*Under the union reading* the composed set holds two rules on one target, so G10 is a startup error
+naming both profiles — and the configuration is then **unrepairable**, not merely rejected. The one
+escape is a `quirkOverrides` entry, which is declared at a binding and whose `winner` must be one of
+the profiles contesting the target *at that attachment point* (G13). At `trunk-a` only
+`peer-a-charging` is bound, at `example.net` only `house-charging-headers`, so neither binding has a
+contest for an override to resolve and G13 rejects the entry wherever it is written. A reading that
+makes a two-line configuration both illegal and unfixable is not a reading of this model.
+
+*Under the derived reading* the two are never composed: `trunk-a`'s composed set is
+`{peer-a-charging → (P-Charging-Vector, request:INVITE)}` and `example.net`'s is
+`{house-charging-headers → (P-Charging-Vector, request:INVITE)}`, each a singleton, each trivially
+disjoint. It boots. A call from a registrant of `example.net` out over `trunk-a` (row 4) forwards the
+INVITE with `peer-a-charging`'s value and returns the `200` with `house-charging-headers`' value, and
+each leg's composition record names the one profile that ran on it. Nothing is lost in
+expressiveness: a deployment that wants both values on one message binds both profiles to the object
+that leg actually attaches to, and then it is an ordinary same-object contest with an ordinary
+override.
+
+**Which side a rule's config leaves may name.** The same derivation settles a question `G10`'s
+closed-world clause left open: it requires every `ConfigKey` to type-check but does not say against
+which side, so a domain-bound profile carrying `ValueLeaf::TrunkConfig` is well-formed today and
+unresolvable at runtime. Because a leg evaluates exactly one attachment object, that leaf is
+unresolvable at **every** evaluation rather than at some, which makes it a startup error and not a
+runtime case — G14 below.
+
+The alternative — resolve `TrunkConfig` against the trunk the message will egress toward — is not
+available, and it is worth saying why rather than only that. On the two legs where a domain-bound
+profile actually runs there is often no trunk anywhere in the transaction (rows 5 and 6), so the leaf
+would have no value at all; and where there is one on the *other* leg, reading it would make a
+domain-bound rule a function of the route, which is a condition on the message arriving by the back
+door (B3) and which destroys confluence outright — a fork over two trunks would give the single
+response leg two different values for one rule.
 
 #### Where it runs — one egress point per direction
 
 | What | Phase | Effect | How the binding is known |
 |---|---|---|---|
 | The ingress binding, published once | H2 `RequestValidated` | `Annotate` (fact `quirks:ingress`) | The source peer is known to the engine; the fact is class (a) `Scratch { published: true }` |
-| Headers and SDP fields on a request leaving toward a peer | H9 `BeforeForward` | `PatchHeaders` · `RewriteBody` | The branch's target, whose `RoutePlan` carries its trunk (RT-1) |
+| Headers and SDP fields on a request leaving toward a peer | H9 `BeforeForward` | `PatchHeaders` · `RewriteBody` | The branch's target: a routing-policy target through its `RoutePlan`'s trunk (RT-1), a location-service contact through the served domain of its address-of-record ([location-service](../specs/location-service.md) §5.1 S1). One or the other, never both — §*Whether the two attachment points ever compose* |
 | Headers and SDP fields on a response leaving toward a peer | H11 `BeforeResponseForward` | `PatchHeaders` · `RewriteBody` | The `quirks:ingress` fact — the response goes back the way the request came |
 | Which profiles applied | any of the above | `Annotate` · `Record` | — for CDRs (DP-6) and for answering "why did that peer get that header" |
 
@@ -774,14 +911,21 @@ composed on one trunk — so the shipped set demonstrates composition rather tha
 
 | Profile | Rules | Vectors |
 |---|---|---|
-| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7, QP-G-11, QP-G-15 |
+| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7, QP-G-11, QP-G-15, QP-G-16 |
 | `sdp-direction-explicit` | `EnsureExplicit(Direction)` at `Session` and `Media(Audio)`, on requests and responses carrying a body | QP-A-5 … QP-A-9, QP-C-1, QP-C-3 |
 
 Rows use the `QP` prefix in the three-part `QP-X-n` shape, so registering them in the vector gate is
-registration only — [CF-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/CF-8-bring-every-spec-under-the-vector-gate.md)'s
-work, and they are unenforced until it or EX-8 lands. Every "message unchanged" expectation below is
-a **byte** expectation, which the kernel's lossless model makes meaningful: an untouched byte
-re-serializes verbatim (hook-framework §1, PX-3).
+registration only. It has not happened yet, and
+[CF-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/CF-8-bring-every-spec-under-the-vector-gate.md)
+is why it could not: the gate reads rows **only out of the spec that owns a prefix**, and these rows
+live in a design, so `QP` had nothing to be registered against. They become enforceable when the
+quirk-profile section reaches a spec, with the `SyntaxDecl` split and G9–G14. §*What this hands to the
+spec* names `EX-8` for that delta, but `EX-8`'s acceptance carried `EX-6`'s half only and `EX-8` is
+closed — `media_types_rewritten` is still a flat list in hook-framework §6 — so the hand-off is
+currently owned by nobody, and it needs a story rather than a mention here. Until then a `QP` row is a
+claim this design owes a spec, not a claim the gate is checking. Every "message unchanged" expectation below is a **byte** expectation, which
+the kernel's lossless model makes meaningful: an untouched byte re-serializes verbatim
+(hook-framework §1, PX-3).
 
 *Application — `QP-A`:*
 
@@ -802,8 +946,9 @@ re-serializes verbatim (hook-framework §1, PX-3).
 | # | Given | Expect |
 |---|---|---|
 | QP-C-1 | Both shipped profiles bound to `trunk-a` — the worked example | Both applied; and the forwarded bytes are identical under either evaluation order, which is the confluence claim asserted rather than argued |
-| QP-C-2 | A domain-bound profile and a trunk-bound profile writing disjoint targets | Both applied; the trace names both |
+| QP-C-2 | One INVITE transaction from a registrant of `example.net` out over `trunk-a`, with a profile bound to each — enumeration row 4 | Both applied, to **two different messages**: the trunk-bound profile writes the forwarded request at H9, the domain-bound one the forwarded response at H11. The trace names both, each against the leg it ran on, and no composed set contains rules from both bindings. This row asserted "both apply to one message" until `EX-11` derived that no leg carries both attachments |
 | QP-C-3 | `media-anchor` selected alongside `sdp-direction-explicit` | The relay's replacement body is produced first, the field write lands on **it**, and the forwarded body carries both the relay's `c=`/`m=` and the materialized direction. The G9 ordering assertion |
+| QP-C-4 | A domain-bound and a trunk-bound profile writing the **same** elementary target — `(P-Charging-Vector, request:INVITE)` — with no override anywhere | **Boots**, and each applies on its own leg (QP-C-2's shape, same target). The row that fails if the derived condition is violated: under the union reading this is a G10 startup error, and G13 cannot repair it, because an override is declared at one binding and its winner must be contesting *there* |
 
 *Startup validation — `QP-G`:*
 
@@ -824,6 +969,9 @@ re-serializes verbatim (hook-framework §1, PX-3).
 | QP-G-13 | An override whose `target` no two applicable profiles write — the contest was removed, the override was not | Startup error (G13) naming the binding and the target. The override that outlives its contest fails the boot instead of silently doing nothing |
 | QP-G-14 | An override whose `winner` is bound at that attachment point but writes no rule for the named target | Startup error (G13) naming the binding, the target and the winner: naming a profile does not name a target, and the schema does not let one stand in for the other |
 | QP-G-15 | `sec-agree-headers` (asserting `Srtp`) on a trunk declaring `SrtpPolicy::Disabled`, with an override deleting **every** one of its rules at that trunk | Still a startup error (G11). An override deletes rules, never assertions; the profile is still bound, so the assertion is still checked |
+| QP-G-16 | `sec-agree-headers`, whose `Set(Security-Client)` reads `ValueLeaf::TrunkConfig`, bound to a **domain**; and the mirror — a profile carrying `ValueLeaf::DomainConfig` bound to a trunk | Startup error (G14) naming the binding, the profile, the rule and the key: a domain binding has no trunk configuration to read, at any evaluation. Two independent reasons reject this profile at a domain — G12 for its `requires_media` and G14 for its leaves — and G14 is the one that survives if a future profile drops the assertion |
+| QP-G-17 | QP-C-4's configuration, plus a `quirkOverrides` entry at `trunk-a` naming that target with the **domain**-bound profile as `winner` — the operator reading the composition as a union and trying to resolve it | Startup error (G13) naming the binding, the target and the winner: at `trunk-a` the target is written by one profile, and the winner is bound elsewhere. A specialization of QP-G-13 rather than a new rule, and the row exists because the union reading would have made this entry the *repair* for QP-C-4 instead of an error — and G13 would have rejected it anyway, which is what made the union reading unrepairable |
+| QP-G-18 | Three profiles bound to `trunk-b` all writing `(P-Charging-Vector, request:INVITE)`, with one override naming one `winner` | Boots. The winner's rule is in the composed set, **both** losers' rules for that target are not, and the composition record names the override once. A `winner` is a single profile id, so a three-way contest needs no second entry |
 
 B1–B4 get no vector, and should not: they are properties of the type, not of a run. Their test is
 that the grammar has no recursive constructor, no environment and no conditional — visible in a
@@ -864,15 +1012,16 @@ got wrong:
    story. A bound that tells you when you have left it is doing more work than a bound that merely
    holds.
 
-#### Startup validation — five new G-rules
+#### Startup validation — six new G-rules
 
 | # | Rule | On violation |
 |---|---|---|
 | G9 | **Body claims are kind-scoped and ordered.** `Replace(t)` is exclusive per `(t, phase)`; `Field(t, f)` is exclusive per `(t, f, phase)`; a `Replace` and a `Field` on the same media type coexist, and every `Field` writer is ordered after every `Replace` writer at that phase by the framework | Startup error naming both modules and the contested claim (QP-G-8, QP-G-9) |
-| G10 | **Bindings resolve and compose disjointly.** Every bound profile id, trunk, domain and `ConfigKey` exists and type-checks; every literal parses against its row's ABNF; every rule names a catalogue row; every field's op is in that row's op set; the composed rule set at one attachment point is disjoint on targets — a target being one catalogue row at one *elementary* message class, so two rules contest on every elementary class their classes share — once the overrides declared at that binding (G13) have been applied | Startup error naming the profile, the rule and the offending id, value or contested target (QP-G-1 … QP-G-5) |
+| G10 | **Bindings resolve and compose disjointly.** Every bound profile id, trunk, domain and `ConfigKey` exists and type-checks (and names the side its binding is on — G14); every literal parses against its row's ABNF; every rule names a catalogue row; every field's op is in that row's op set; the composed rule set at one attachment point — one `trunk[]` or one `domain[]` entry, and never the two together (§*Whether the two attachment points ever compose*) — is disjoint on targets, a target being one catalogue row at one *elementary* message class, so two rules contest on every elementary class their classes share, once the overrides declared at that binding (G13) have been applied | Startup error naming the profile, the rule and the offending id, value or contested target (QP-G-1 … QP-G-5) |
 | G11 | **Media assertions hold.** Every `MediaAssertion` on a trunk-bound profile is satisfied by the bound trunk's declared `SrtpPolicy` — `Srtp` holds for any variant but `Disabled`. The same check as media-relay's G-M5; the error content is G-M5's, not restated richer here | Startup error naming the trunk and the profile (QP-G-6, = media-relay's MR-C-3) |
 | G12 | **Media assertions need a trunk.** A profile carrying a non-empty `requires_media` bound to a domain is rejected: only a trunk binding has a `TrunkMediaPolicy` to check it against | Startup error naming the profile and the domain (QP-G-11) |
-| G13 | **An override resolves one live contest, and reaches nothing else.** An override is declared at a **binding**, never in a profile, and names one contested `target` and one `winner` profile id. At startup that target must actually be contested at that attachment point by two or more distinct bound profiles, and the winner must be one of them; the losing rules for that target are then deleted from the composed set before any message is evaluated, so what G10 checks for disjointness is the set after overrides. A `requires_media` assertion has no target, so no override can name one and none suppresses G11 or G12 | Startup error naming the binding, the target, and the winner where the winner is not among the profiles contesting it (QP-G-13 … QP-G-15; the resolving cases are QP-G-3 and QP-G-12) |
+| G13 | **An override resolves one live contest, and reaches nothing else.** An override is declared at a **binding**, never in a profile, and names one contested `target` and one `winner` profile id. At startup that target must actually be contested at that attachment point by two or more distinct profiles bound **to that same object**, and the winner must be one of them — a winner bound only at the other attachment point is rejected by this rule and not accommodated by it, because no contest spans the two (§*Whether the two attachment points ever compose*, QP-G-17). Where three or more profiles contest one target, one entry names one winner and every other contesting profile's rule for that target is dropped (QP-G-18). The losing rules for that target are deleted from the composed set before any message is evaluated, so what G10 checks for disjointness is the set after overrides. A `requires_media` assertion has no target, so no override can name one and none suppresses G11 or G12 | Startup error naming the binding, the target, and the winner where the winner is not among the profiles contesting it (QP-G-13 … QP-G-15, QP-G-17; the resolving cases are QP-G-3, QP-G-12 and QP-G-18) |
+| G14 | **A rule's config leaves name the side its binding is on.** `ValueLeaf::TrunkConfig` may appear in a profile bound to a **trunk** and `ValueLeaf::DomainConfig` in a profile bound to a **domain**; each mirror case is rejected. Checked per **binding**, never per profile, so a catalogue profile reading trunk configuration may be bound to any number of trunks and to no domain, and a profile with no side-specific leaf and no `requires_media` — `sdp-direction-explicit` — is bindable at both. This is G12's shape for the same reason: a leg evaluates one attachment object, so a leaf naming the other side is unresolvable at every evaluation rather than at some, which makes it a boot failure and not a runtime case | Startup error naming the binding, the profile, the rule and the key (QP-G-16) |
 
 Same discipline as G1–G8: an invalid combination fails deployment, never a call.
 
@@ -913,12 +1062,17 @@ does not have to rediscover them, all belong to
 - **§7** — G9 (body-claim kinds and their computed ordering), G10 (bindings resolve and compose
   disjointly, over elementary targets), G11 (media assertions hold — the same check media-relay
   states as G-M5), G12 (media assertions need a trunk binding), G13 (a binding-level override
-  resolves one contested target, and must be resolving a live one). G2 is unchanged and does the
-  catalogue invariant for free.
+  resolves one contested target, and must be resolving a live one), G14 (a rule's config leaves name
+  the side its binding is on). G2 is unchanged and does the catalogue invariant for free.
 - **§8** — the shipped profile catalogue is a profile-level value, so EX-5's catalogue carries the
   bindings — and the overrides declared beside them — alongside `hook_budget`.
-- **§9** — vectors `QP-A-1` … `QP-G-15` above, and the `QP` prefix registered in the vector gate
-  (CF-8's `SPECS`/`FAMILIES`, fenced from this story).
+- **§9** — vectors `QP-A-1` … `QP-G-18` above, and the `QP` prefix registered in the vector gate
+  (CF-8's `SPECS`/`FAMILIES`, fenced from this story). Registration is not optional bookkeeping and
+  cannot precede the section: `check-vectors.py` reads rows out of the spec that owns a prefix, so
+  `QP` becomes gateable in the same change that gives these rules a spec to live in, and not before.
+- **Whose story this is** — not `EX-8`'s any more. `EX-8` closed with `EX-6`'s deltas only, so the
+  four bullets above are unowned; carrying them needs a story of its own, and `EX-11` deliberately
+  did not create one from inside a design.
 
 ## Alternatives considered
 
@@ -991,7 +1145,8 @@ does not have to rediscover them, all belong to
   asserts it (QP-G-3) require a target; profile ids and targets are not interchangeable. And being
   trunk-over-domain it could not reach the commonest contest at all, two profiles bound to one
   trunk, while working only in the case where the trunk-bound and domain-bound sets intersect —
-  which this design has not yet derived.
+  which `EX-11` has since shown is no case at all, so the shape would have been a precedence rule
+  whose entire subject was empty.
 - **Let a quirk force an SDP direction** (the live requirement read literally). Rejected: it would
   let a configuration file unhold a held call (RFC 3264 §8.4) or contradict an answer's §6.1
   consistency. `EnsureExplicit` materializes the RFC 8866 §6.7 default, satisfies the same peer, and
@@ -1053,15 +1208,21 @@ does not have to rediscover them, all belong to
   and transcoding assertions are not in v1 and should not be added until a peer needs one; each would
   owe the same required/optional-axis argument `Srtp` just settled, made fresh against
   `CodecPolicy`/`Transcode` rather than assumed from this one.
-- **When a trunk-bound and a domain-bound rule set actually intersect is asserted, not derived
-  (EX-7).** The composition rule says the composed set at one attachment point is "every trunk-bound
-  and domain-bound profile's rules together" and `QP-C-2` asserts both apply to one message, but
-  under this design's own definitions — a trunk is the egress peer, a domain is the registering
-  side — nothing says which messages carry both attachments at H9/H11. EX-10 removed the *escape's*
-  dependence on the answer: a per-target override with a named winner resolves a contest between any
-  two profiles at any one attachment point, and holds whether or not the two sets ever meet. The
-  union sentence and `QP-C-2` still owe the derivation, and that is its own story rather than a
-  guess made here.
+- **Whether the ingress classification is single-valued is RT-8's, and the intersection question
+  reduces to it (EX-11).** `EX-11` derived that trunk-bound and domain-bound rule sets never compose,
+  and the derivation rests on four premises (§*Whether the two attachment points ever compose*). Three
+  are settled here or in a spec; the fourth, P3, is not: it says a source peer's ingress
+  classification names **one** object, and RT-8 owns that vocabulary. A peer admitted by source
+  address as a trunk that *also* holds a registration in a served domain is the one shape that could
+  make `quirks:ingress` name two objects, and with it H11's binding ambiguous — the sole route back to
+  a cross-attachment contest. Three ways RT-8 could close it, none chosen here because the
+  vocabulary is not this design's: state the classification as a total function with a declared
+  order, which costs one rule and makes the ambiguous peer's binding predictable but arbitrary-looking;
+  refuse the configuration, which cannot be a startup check at all, because the registration arrives
+  at runtime and configuration cannot see it; or let the fact carry both objects and reject at startup
+  only when the two contest a target, which is exact and re-opens precisely the cross-attachment
+  contest the derivation closed. The first is the cheapest and the third is the only one that keeps
+  both bindings; whichever RT-8 picks, `EX-11`'s result is conditional on it and says so.
 - **Bindings are per trunk and per domain, and a large deployment has many (EX-7).** Nothing here
   bounds how many profiles one binding may carry or how many bindings a node validates at startup.
   Startup cost is the only exposure — evaluation is O(rules) per message — but a config surface that
