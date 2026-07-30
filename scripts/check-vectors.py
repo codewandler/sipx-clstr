@@ -50,6 +50,10 @@ Ways to fail, and the last two are the ones that matter:
    does not already record it as shape only. This is what stops a new row joining the class.
 5. A row recorded as shape only that **is** now asserted, or is not covered at all — the same stale
    entry rule as a deferral, and what makes that list a ratchet that can only shrink.
+6. A table row *shaped* like a vector whose prefix no spec owns. Reading only the owning spec is
+   what stops a design inventing rows, and its cost is silence the other way: `EX-12` found 31
+   `QP-*` rows in a design record, looking exactly like vectors, read by nothing — a fabricated
+   `QP-Z-999` among them passed `--check` too. Registration is not something to remember now.
 
 Also writes `docs/reference/conformance.md`: generated, never hand-edited, and checked in so a
 reader who does not run the suite can still see what is proved. `--check` fails if the committed file
@@ -97,6 +101,12 @@ SPECS = {
     "FR": (ROOT / "docs" / "specs" / "affinity-token.md", "§10"),
     "CC": (ROOT / "docs" / "specs" / "cluster-config.md", "§12"),
     "AI": (ROOT / "docs" / "specs" / "asserted-identity.md", "§13"),
+    # `QP` is `hook-framework`'s second table, and the second prefix that spec owns. Registered by
+    # `EX-12`, which had to move the rows out of `docs/designs/extension-framework.md` first: a
+    # design record is not normative, `spec_rows` reads only the owner, and a prefix aimed at
+    # `docs/designs/` would have made a design normative by accident. Same demonstration as `CF-8`'s
+    # — a fabricated `QP-Z-999` row passed `--check` until the rows had a spec to live in.
+    "QP": (ROOT / "docs" / "specs" / "hook-framework.md", "§9.1"),
 }
 
 PREFIXES = "|".join(SPECS)
@@ -108,6 +118,15 @@ COVERS = re.compile(rf"//\s*covers:\s*((?:(?:{PREFIXES})-(?:[A-Z]-)?\d+[,\s]*)+)
 # A vector-table line whose *first* cell is a row ID — as opposed to a line that merely cites one,
 # which is why the ID has to be anchored at the start rather than found anywhere.
 CLAIM_LINE = re.compile(rf"^\|\s*`?({PREFIXES})-(?:([A-Z])-)?(\d+)`?\s*\|(.*)$")
+
+# `CLAIM_LINE` with the prefix left open. A table row in that shape is a vector by every visual
+# convention this repo has, so one whose prefix `SPECS` does not own is a row no gate can read —
+# which is the whole `EX-12` defect, and the reason it survived two stories: `QP` rows looked
+# exactly like `HF` rows and were checked by nothing. Anchored at the start for `CLAIM_LINE`'s
+# reason: a line that merely cites a row is not a row.
+ANY_ROW_LINE = re.compile(r"^\|\s*`?([A-Z]{2})-(?:[A-Z]-)?\d+`?\s*\|")
+# Where a vector table may legitimately live. Designs are scanned too, and that is the point.
+TABLE_TREES = ("docs/specs", "docs/designs")
 
 # A citation is not a claim. Every one of these is a number the row *points at* — a document, a
 # section, a rule, another row, a digest width — rather than a quantity it pins, and leaving them in
@@ -174,6 +193,9 @@ FAMILIES = {
     ("RA", "T"): "Registrar auth — the tenant boundary (§5)",
     ("RA", "L"): "Registrar auth — the audit trail (§9)",
     ("HF", ""): "Hook framework — startup graph validation (§9)",
+    ("QP", "A"): "Carrier quirks — one profile applied (§9.1)",
+    ("QP", "C"): "Carrier quirks — composition (§9.1)",
+    ("QP", "G"): "Carrier quirks — startup validation, G9–G14 (§9.1)",
 }
 
 
@@ -211,6 +233,31 @@ def spec_rows() -> set[str]:
             if found == prefix
         )
     return rows
+
+
+def unowned_rows() -> list[str]:
+    """Table rows shaped like vectors whose prefix no spec owns.
+
+    `spec_rows` reads only the owner of a prefix, which is what stops a design doc inventing a row.
+    The cost of that is silence in the other direction: a table of `QP-*` rows sat in
+    `docs/designs/extension-framework.md` through two stories, looking exactly like a vector table,
+    proving nothing, and passing `--check` — a fabricated row among them passed too. Registration is
+    therefore not something to remember; an unowned row is an error with the fix in the message.
+    """
+    problems: list[str] = []
+    for tree in TABLE_TREES:
+        for path in sorted((ROOT / tree).rglob("*.md")):
+            for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                found = ANY_ROW_LINE.match(line)
+                if found and found.group(1) not in SPECS:
+                    problems.append(
+                        f"{path.relative_to(ROOT)}:{number}: a table row with the shape of a "
+                        f"vector, but no spec owns the prefix `{found.group(1)}` — register it in "
+                        f"SPECS against the spec that states it, or stop writing it as a row"
+                    )
+    return problems
 
 
 def stated(expect: str) -> list[str]:
@@ -652,6 +699,23 @@ def self_test() -> list[str]:
         "a value the code holds in ms answers a row that states seconds",
         compares(compared(function_body(milliseconds.splitlines(), 0)), "240 s"),
     )
+
+    # `EX-12`'s half: the row shape is recognised even when nobody owns the prefix, which is what
+    # turns "a table no gate reads" from invisible into an error.
+    check(
+        "a row whose prefix no spec owns is still recognised as a row",
+        (found := ANY_ROW_LINE.match("| QP-Z-999 | a stimulus | an expectation |")) is not None
+        and found.group(1) == "QP",
+    )
+    check(
+        "a registered prefix is not reported as unowned",
+        (found := ANY_ROW_LINE.match("| HF-9 | given | expect |")) is not None
+        and found.group(1) in SPECS,
+    )
+    check(
+        "a line that merely cites a row is not a row",
+        ANY_ROW_LINE.match("| `media-anchor` | claims SDP | QP-A-1 … QP-A-4 |") is None,
+    )
     return failures
 
 
@@ -678,6 +742,7 @@ def main() -> int:
     problems += ledger_problems
     claimed = claims()
     verdicts = {row: verdict(row, proofs[row], claimed) for row in proofs}
+    problems += unowned_rows()
 
     for row in sorted(rows, key=sort_key):
         if row not in proofs and row not in waived:

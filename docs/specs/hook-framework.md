@@ -1,7 +1,8 @@
 # Spec: Hook framework
 
 **Status:** normative · **Crate:** _future — created by CX-2_ ·
-**Stories:** EX-1, EX-8 · **Implemented by:** EX-3 ·
+**Stories:** EX-1, EX-8, EX-7/EX-12 (§6 body claims, §7 G9–G14, §8.1, §9.1) ·
+**Implemented by:** EX-3 ·
 **Design:** [extension-framework](../designs/extension-framework.md)
 
 ## 1. Normative references
@@ -23,6 +24,14 @@
   method `UPDATE`) and RFC 3325 §5 with RFC 3323 (`P-Asserted-Identity`, `Privacy`) — used as
   example modules in the vectors; their behavior is specified by their own future stories, not
   here.
+- RFC 8866 §5–6 (SDP: the session-level and media-level grammar §8.1's `SdpScope` ranges over)
+  and §6.7 (the direction attributes `sendrecv`/`sendonly`/`recvonly`/`inactive`, and the rule
+  that their absence at media level defaults to the session level rather than to nothing — why
+  `EnsureExplicit` materializes a value and never overwrites a negotiated one).
+- RFC 3329 §5 (`Security-Client`, `Security-Server`, `Security-Verify` — catalogue rows §8.1's
+  shipped `sec-agree-headers` profile writes), RFC 5009 (`P-Early-Media`) and RFC 3455 §4.3–4.6
+  (`P-Charging-Vector`, `P-Charging-Function-Addresses`) — catalogue rows only; this spec governs
+  *whether a profile may write them*, never what a peer does with them.
 - sipx kernel contract consumed: the lossless message model — a module changes a message only
   through typed surgery on declared headers/bodies; every untouched byte re-serializes verbatim
   (the `Headers` surgery primitives, upstream ledger, PX-3).
@@ -202,9 +211,11 @@ not answer for never becomes "proceed" by omission.
   spec §§5–7); a module that needs them is a core edit wearing a manifest. (`Path` is not on
   the list — inserting `Path` on a proxied REGISTER is a legitimate module, RFC 3327.)
 - **E3 — Patches are scoped by declaration.** `PatchHeaders` may touch only the module's
-  `headers_owned`; `RewriteBody` only its `media_types_rewritten`; `ContributeTokenFact` only
-  its declared fact ids within their byte bounds. A violating effect at runtime is a bug the
-  harness must catch, but the *declaration* is checked at startup (§7 G6).
+  `headers_owned`; `RewriteBody` only what its `body` claims cover — a `Replace(t)` claim
+  permits replacing a body of media type `t` whole, a `Field(t, f)` claim permits writing field
+  `f` of such a body and nothing else of it; `ContributeTokenFact` only its declared fact ids
+  within their byte bounds. A violating effect at runtime is a bug the harness must catch, but
+  the *declaration* is checked at startup (§7 G6).
 - **E4 — `Query` is a suspension, never a blocking call.** A `Query` names a declared store
   (§5 class c) or a declared owned-resource client (e.g. `MediaRelay`, ME-1). The engine
   suspends that module's phase run, performs the query as driver I/O, and re-invokes the
@@ -329,9 +340,26 @@ pub struct SyntaxDecl {
     pub headers_owned: &'static [HeaderName],         // exclusive · PatchHeaders scope · E2 applies
     pub option_tags_consumed: &'static [OptionTag],
     pub option_tags_advertised: &'static [OptionTag], // exclusive · → Supported, V6 acceptance
-    pub media_types_rewritten: &'static [MediaType],  // exclusive · RewriteBody scope
+    pub body: &'static [BodyClaim],                   // RewriteBody scope · exclusivity per G9
+}
+
+/// What a module claims of a body. Ownership is per claim *kind* and per field, the same
+/// refinement `headers_owned` already embodies: ownership is per header *name*, never "all
+/// headers".
+pub enum BodyClaim {
+    Replace(MediaType),                 // exclusive per (media type, phase)
+    Field(MediaType, CatalogSdpField),  // exclusive per (media type, field, phase)
 }
 ```
+
+**A whole-body replacement and a field write are different claims, and a flat media-type list
+could not tell them apart.** A relay that takes complete SDP and returns rewritten SDP as opaque
+bytes (`media-anchor`; [media-relay](media-relay.md) §3.2 O3) and a module that materializes one
+SDP field (`carrier-quirks`, §8.1) would both have declared `media_types_rewritten:
+["application/sdp"]`, which G2 reads as an exclusive claim and therefore as an implicit conflict —
+so **a deployment could not anchor media and run an SDP quirk at the same time**, which is the
+common case rather than an exotic one. Split into `Replace` and `Field`, the two coexist, and G9
+gives them the ordering the combination requires.
 
 Ordering constraints name **capabilities, not modules and not indices** — `After("auth-provider")`
 survives swapping which module provides authentication; a raw position number is a hidden
@@ -413,7 +441,7 @@ pub const MANIFEST: Manifest = Manifest {
         HookDecl { phase: BeforeResponseForward, order: &[], effects: &[RewriteBody, Query] },
         HookDecl { phase: DialogTerminated,     order: &[], effects: &[Record] },
     ],
-    syntax: SyntaxDecl { media_types_rewritten: &["application/sdp"], ..SyntaxDecl::NONE },
+    syntax: SyntaxDecl { body: &[BodyClaim::Replace("application/sdp")], ..SyntaxDecl::NONE },
     state: &[TokenFact { id: "media-node", max_bytes: 8 }],
     queries: &[QueryDecl { id: "relay", target: Resource("MediaRelay"),
                            phases: &[BeforeForward, BeforeResponseForward] }],
@@ -488,13 +516,19 @@ deployment, never a call. **[sipx-clstr] rules:**
 | # | Rule | On violation |
 |---|---|---|
 | G1 | **Dependency closure.** Every `requires` capability is provided by some selected module | Startup error naming the module and the missing capability (HF-2) |
-| G2 | **Conflict rejection.** No selected module names a `conflicts` capability that another selected module provides (symmetric — either side's declaration suffices). Exclusive claims are implicit conflicts: two modules owning the same header, advertising the same option tag, or rewriting the same media type | Startup error naming both modules and the contested capability/claim (HF-3, HF-6) |
+| G2 | **Conflict rejection.** No selected module names a `conflicts` capability that another selected module provides (symmetric — either side's declaration suffices). Exclusive claims are implicit conflicts: two modules owning the same header, or advertising the same option tag. Body claims are exclusive too, but per claim kind rather than per media type — G9 states them, and this rule defers to it | Startup error naming both modules and the contested capability/claim (HF-3, HF-6) |
 | G3 | **Deterministic total order per phase.** Topological sort of the `Before`/`After` constraint edges; a constraint naming a capability absent from the profile is ignored (it constrains nothing). **Tiebreak:** among modules with no unsatisfied constraint, the byte-wise lexicographically smallest `id` runs first — repeatedly. The resulting order is a pure function of the selected set | Cycle → startup error listing the cycle (HF-8) |
 | G4 | **Capability advertisement is derived, never hand-listed.** `Supported` = the union of `option_tags_advertised` over selected modules. `Allow` = the union of `methods_advertised` plus only what the engine itself terminates (`CANCEL` per proxy spec C1; `REGISTER` when the registrar role is active). No configuration key can append a bare string to either. The derived `Supported` set **is** the acceptance set for proxy spec V6: a `Proxy-Require` tag outside it → `420` with `Unsupported` listing the offenders | — (derivation; HF-5) |
 | G5 | **Token budget.** Σ `TokenFact.max_bytes` over the selected set ≤ the module-fact sub-budget (§5 class b; provisional 64 bytes until AF-1) | Startup error naming the modules and the sum (HF-7) |
 | G6 | **Effect and scope legality.** Every `HookDecl.effects` ⊆ its phase's closed set (§3 table); `headers_owned` respects E2; every `ContributeTokenFact`, `Query`, timer and patch scope refers to a declared manifest entry; `option_tags_consumed` are advertised by some selected module (self counts) | Startup error naming the module, phase and effect (HF-4) |
 | G7 | **The outcome map is total, and the budget holds.** Every `QueryDecl.on` covers all seven `QueryOutcome` variants (§4) exactly once; `Answered` maps to `Apply` and no other arm does; `retries` ≤ 1; every declared `timeout` is > 0 and ≤ the profile's `hook_budget` (§8); and for each of the two request paths, Σ `timeout` ≤ `hook_budget`, summed over every selected module's query declared at each query-permitting phase on that path — proxy: H3, H7, H9, H11; registrar: H3, H5, H11. Within a phase the terms sum because queries there run serially (Q5); H9 contributes once because branches overlap in wall-clock rather than summing | Startup error naming the module, the query id and the missing or duplicated outcome, or the offending sum (HF-9, HF-10) |
 | G8 | **Dispositions resolve.** Every `Proceed(DefaultRef)` names a `defaults` entry that exists, type-checks against the fact it feeds, and satisfies the **closed world** — a pool that is a configured trunk, an identity the trunk's asserted-identity and privacy policy admits (RT-7); every `Reject(Status)` is in the closed set `{403, 404, 480, 500, 503}`, and **6xx is forbidden**; a `Reject` arm is declared only for a query whose `phases` all permit the `Reject` effect (H3, H5, H7 — see §3's † footnote), and at H9 and H11 every non-`Answered` arm is therefore `Proceed(_)` or `ProceedWithout`; `ProceedWithout` appears only where the consuming `Scratch` (§5 class (a)) is declared optional | Startup error naming the module, the query id and the offending disposition (HF-11, HF-12, HF-13) |
+| G9 | **Body claims are kind-scoped and ordered.** `Replace(t)` is exclusive per `(t, phase)`; `Field(t, f)` is exclusive per `(t, f, phase)`; a `Replace` and a `Field` on the same media type coexist, and every `Field` writer is ordered after every `Replace` writer at that phase by the framework | Startup error naming both modules and the contested claim (QP-G-8, QP-G-9) |
+| G10 | **Bindings resolve and compose disjointly.** Every bound profile id, trunk, domain and `ConfigKey` exists and type-checks (and names the side its binding is on — G14); every literal parses against its row's ABNF; every rule names a catalogue row; every field's op is in that row's op set; the composed rule set at one attachment point — one `trunk[]` or one `domain[]` entry, and never the two together (§8.1) — is disjoint on targets, a target being one catalogue row at one *elementary* message class, so two rules contest on every elementary class their classes share, once the overrides declared at that binding (G13) have been applied | Startup error naming the profile, the rule and the offending id, value or contested target (QP-G-1 … QP-G-5) |
+| G11 | **Media assertions hold.** Every `MediaAssertion` on a trunk-bound profile is satisfied by the bound trunk's declared `SrtpPolicy` — `Srtp` holds for any variant but `Disabled`. The same check as [media-relay](media-relay.md)'s G-M5; the error content is G-M5's, not restated richer here | Startup error naming the trunk and the profile (QP-G-6, = media-relay's MR-C-3) |
+| G12 | **Media assertions need a trunk.** A profile carrying a non-empty `requires_media` bound to a domain is rejected: only a trunk binding has a `TrunkMediaPolicy` to check it against | Startup error naming the profile and the domain (QP-G-11) |
+| G13 | **An override resolves one live contest, and reaches nothing else.** An override is declared at a **binding**, never in a profile, and names one contested `target` and one `winner` profile id. At startup that target must actually be contested at that attachment point by two or more distinct profiles bound **to that same object**, and the winner must be one of them — a winner bound only at the other attachment point is rejected by this rule and not accommodated by it, because no contest spans the two (§8.1, QP-G-17). Where three or more profiles contest one target, one entry names one winner and every other contesting profile's rule for that target is dropped (QP-G-18). The losing rules for that target are deleted from the composed set before any message is evaluated, so what G10 checks for disjointness is the set after overrides. A `requires_media` assertion has no target, so no override can name one and none suppresses G11 or G12 | Startup error naming the binding, the target, and the winner where the winner is not among the profiles contesting it (QP-G-13 … QP-G-15, QP-G-17; the resolving cases are QP-G-3, QP-G-12 and QP-G-18) |
+| G14 | **A rule's config leaves name the side its binding is on.** `ValueLeaf::TrunkConfig` may appear in a profile bound to a **trunk** and `ValueLeaf::DomainConfig` in a profile bound to a **domain**; each mirror case is rejected. Checked per **binding**, never per profile, so a catalogue profile reading trunk configuration may be bound to any number of trunks and to no domain, and a profile with no side-specific leaf and no `requires_media` — `sdp-direction-explicit` — is bindable at both. This is G12's shape for the same reason: a leg evaluates one attachment object, so a leaf naming the other side is unresolvable at every evaluation rather than at some, which makes it a boot failure and not a runtime case | Startup error naming the binding, the profile, the rule and the key (QP-G-16) |
 
 Rationale: G3's tiebreak makes the order a function of the module set alone — the same
 profile computes the same order on every node and every boot. Two edges running different
@@ -512,6 +546,18 @@ be able to say it. One interaction is carried rather than decided here: proxy sp
 does not apply to it — but a second platform node upstream of this one will rewrite it, and
 whether a locally originated `503` needs a distinguishing marker is open in the design's *Risks*
 until the multi-node topology exists.
+
+G9–G14 extend the same discipline to §8.1's quirk profiles, and every one of them is a *startup*
+rule for the same reason G1–G8 are: an invalid combination fails deployment, never a call. Two of
+them are worth their rationale here. **G9's ordering is computed, not declared**, because a field
+write onto a body that is about to be replaced is silently lost — and "silently" is the
+disqualifying word: it would be a correct-looking manifest producing a message the vectors did not
+predict. Leaving it to an `After("media-anchoring")` constraint in the field writer's own manifest
+would work exactly until someone wrote a second replacer, which is what G-rules are for.
+**G13 refuses an override that resolves nothing** because an override that has outlived its
+contest — the other profile unbound, or its rules changed — is a profile that silently stops
+applying long after anyone remembers binding it. An implicit "more specific wins" is a policy
+nobody wrote down; refusing to boot is the only version of it a reader can check.
 
 ## 8. Profiles
 
@@ -535,6 +581,125 @@ domain), the shipped profile catalog (CoreProxy, ModernRegistrar, CarrierInterco
 WebSocketUA) and its compatibility semantics — is specified by EX-5 on top of this section.
 EX-5 adds checks; it does not relax any G-rule.
 
+### 8.1 Quirk profiles — the data G10–G14 range over
+
+A **quirk profile** is a versioned, shipped-catalogue value carrying header and SDP rules for one
+peer's deviations. It is the vocabulary G10–G14 check; the module that executes it,
+`carrier-quirks`, is an ordinary module under this spec (§9's cast).
+
+```rust
+pub struct QuirkProfile {
+    pub id: ProfileId,                       // lowercase-kebab, unique in the shipped catalogue
+    pub version: Version,                    // semver — a profile change is a versioned change
+    pub headers: &'static [HeaderRule],
+    pub sdp:     &'static [SdpRule],
+    pub requires_media: &'static [MediaAssertion],   // asserted at startup, never applied
+}
+
+pub struct HeaderRule { pub header: CatalogHeader, pub on: MessageClass, pub op: HeaderOp }
+pub struct SdpRule    { pub scope: SdpScope, pub field: CatalogSdpField,
+                        pub op: SdpOp, pub on: MessageClass }
+
+pub enum MessageClass {                      // a message *class*, never message content
+    Request  { methods: &'static [Method] },
+    Response { to_methods: &'static [Method], classes: &'static [StatusClass] },
+}
+
+pub enum HeaderOp {
+    Set(HeaderValue),          // the header has exactly this value; existing values removed
+    AddIfAbsent(HeaderValue),  // present only where the message carried none
+    Remove,                    // the header is not present
+}
+
+pub struct HeaderValue {
+    pub base:   ValueLeaf,
+    pub params: &'static [(ParamName, ValueLeaf)],   // depth stops here — params do not nest
+}
+
+pub enum ValueLeaf {
+    Literal(&'static str),     // fixed in the profile; parsed at startup against the row's ABNF
+    TrunkConfig(ConfigKey),    // a typed value from the bound trunk's configuration — G14
+    DomainConfig(ConfigKey),   // a typed value from the bound domain's configuration — G14
+}
+
+pub enum SdpScope    { Session, Media(MediaKind) }
+pub enum MediaKind   { Audio, Video, Application, Image, Text }
+pub enum SdpOp       { EnsureExplicit, Set(ValueLeaf) }
+pub enum CatalogHeader   { SecurityClient, SecurityServer, SecurityVerify,
+                           PEarlyMedia, PChargingVector, PChargingFunctionAddresses }
+pub enum CatalogSdpField { Direction, SessionName }
+pub enum MediaAssertion  { Srtp }   // any SrtpPolicy but Disabled — media-relay §13.1
+```
+
+**A profile is data, and only data.** There is no `Fact` leaf and no selector: a value drawn from
+the message would make the transform a function of the message — a condition wearing a data
+structure — and a profile that knew where it applied would put "which transform did this peer get"
+back out of reach of the configuration file. `CatalogHeader` is deliberately not `HeaderName` and
+`CatalogSdpField` is deliberately not a string, so *which* things a quirk may write has a
+type-level answer rather than a documented convention. A quirk transforms and never decides:
+`carrier-quirks` declares `PatchHeaders`, `RewriteBody`, `Annotate` and `Record` and no others, so
+it never suspends and never draws on `hook_budget` (G7).
+
+**Binding.** Configuration binds a profile to a **trunk** ([routing-trunks](../designs/routing-trunks.md) —
+the egress peer) or to a **domain** (the registering side). There is no third attachment point.
+
+```toml
+[trunks.trunk-a]
+quirks = ["sec-agree-headers", "sdp-direction-explicit"]
+
+[trunks.trunk-a.quirk_config.sec-agree-headers]
+security_client = "sdes-srtp;mediasec"     # parsed at startup against the row's ABNF
+security_verify = "sdes-srtp;mediasec"
+
+[domains."example.net"]
+quirks = ["sdp-direction-explicit"]
+
+[[trunks.trunk-b.quirk_overrides]]
+target = { header = "P-Charging-Vector", on = "request:INVITE" }
+winner = "peer-b-charging"
+```
+
+The SDP form of `target` names a scope and a field instead of a header —
+`{ sdp_scope = "media:audio", sdp_field = "Direction", on = "response:INVITE:2xx" }` — and is
+otherwise the same entry.
+
+**The composition is per attachment object.** The composed rule set at one attachment point is
+every profile bound to **that one object** — one `trunk[]` entry or one `domain[]` entry
+([cluster-config](cluster-config.md) §7 S4) — and never a trunk's rules together with a domain's.
+The two sets never intersect: a leg evaluates one attachment object, so no message ever carries
+both attachments, and there is no composition spanning the two for a rule to be disjoint over.
+One profile bound at both points contributes its rules once to each composed set and contests
+nothing; a contest needs two distinct profiles at one object.
+
+**A target is elementary.** A target is one catalogue row at one *elementary* message class:
+`(CatalogHeader, ElementaryClass)` or `(SdpScope, CatalogSdpField, ElementaryClass)`, where an
+elementary class is one method for a request and one `(method, status class)` pair for a response.
+A rule's `MessageClass` ranges over a **set** of those, and two rules contest on every elementary
+class their sets share. Stated as tuple equality instead, `Request { methods: [INVITE, REGISTER] }`
+and `Request { methods: [INVITE] }` would be different targets, the G10 disjointness check would be
+defeated by widening a method set, and an override could not name what it was conceding.
+
+**A quirk asserts media policy; it never assigns it.** There is no op for `m=` proto, `a=crypto`,
+ICE candidates or transport addresses — they are not catalogue rows and cannot become rule targets.
+SRTP mode, codecs and transcoding are the trunk's `TrunkMediaPolicy`
+([media-relay](media-relay.md) §13.1, MP11). `MediaAssertion::Srtp` is satisfied by any
+`SrtpPolicy` but `Disabled`: the assertion is "this leg runs some SRTP mode", not "this leg runs
+`Sdes`", because asserting a mechanism would let a profile pick the keying method by which profile
+matched — the per-call pattern MP6 forbids.
+
+**Where rules run.** One egress point per direction: `BeforeForward` (H9) for a request, per
+branch, and `BeforeResponseForward` (H11) for a response. H9 is per branch deliberately — a fork
+can have two branches on two trunks wanting two different header sets.
+
+**The shipped catalogue, v1.** Two profiles, and the worked example is the two composed on one
+trunk, so the shipped set demonstrates composition rather than asserting it. Adding a profile is a
+configuration change plus a vector.
+
+| Profile | Rules | Vectors |
+|---|---|---|
+| `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7, QP-G-11, QP-G-15, QP-G-16 |
+| `sdp-direction-explicit` | `EnsureExplicit(Direction)` at `Session` and `Media(Audio)`, on requests and responses carrying a body | QP-A-5 … QP-A-9, QP-C-1, QP-C-3 |
+
 ## 9. Test vectors
 
 Vectors are set-in / result-out; the graph vectors run against §7 with manifests as given.
@@ -546,7 +711,11 @@ Module manifests referenced: `media-anchor` (§6 example), `session-timer` (prov
 `path`; owns `Path`), `external-route` (§6.1's complete example: provides
 `external-route-decision`; owns `P-Asserted-Identity`, `Privacy`; one `QueryDecl` `route` against
 `Resource("route-oracle")` at `BeforeTargetResolution`), `geo-tag` (one `QueryDecl` `lookup`
-against `Store("geo")` at `BeforeForward`, effects `Annotate`).
+against `Store("geo")` at `BeforeForward`, effects `Annotate`), `carrier-quirks` (§8.1's executor:
+owns the six `CatalogHeader` rows as `headers_owned`; declares
+`body: &[BodyClaim::Field("application/sdp", Direction), BodyClaim::Field("application/sdp",
+SessionName)]`; hooks `BeforeForward` and `BeforeResponseForward` with effects `PatchHeaders`,
+`RewriteBody`, `Annotate`, `Record`; no `QueryDecl`).
 
 The `HF-9` … `HF-13` rows all run against a profile whose `hook_budget` is the default 2000 ms,
 and each names the single manifest field it changes relative to that example — so what fails the
@@ -567,3 +736,65 @@ boot is exactly the declaration under test.
 | HF-11 | `external-route` declares `(ServerError, Proceed("fallback_pool"))` and an empty `defaults` | Startup error (G8): `module "external-route": query "route" disposition Proceed("fallback_pool") names no entry in defaults`. Same error when the entry exists but does not type-check against the fact it feeds |
 | HF-12 | `external-route` declares `(Declined, Reject(603))` | Startup error (G8): `module "external-route": query "route" disposition Reject(603) is outside the permitted status set {403, 404, 480, 500, 503}; 6xx is forbidden`. `Reject(486)` fails the same way, on the set membership rather than on the 6xx clause |
 | HF-13 | `external-route` declares `(ServerError, Proceed("fallback_pool"))` with `defaults: &[("fallback_pool", Pool("carrier-z"))]`, and no trunk `carrier-z` is configured | Startup error (G8): `module "external-route": query "route" default "fallback_pool" names pool "carrier-z", which is not a configured trunk`. The closed world is checked at the boundary the answer would cross, so an oracle — or a fallback — cannot name an egress into existence |
+
+### 9.1 Carrier quirk profiles — `QP`
+
+The `QP` rows run against §8.1: `QP-A` applies one profile to one message, `QP-C` composes several,
+and `QP-G` is startup validation against G9–G14 with profiles and bindings as given. Every "message
+unchanged" expectation is a **byte** expectation, which the kernel's lossless model makes meaningful:
+an untouched byte re-serializes verbatim (§1, PX-3).
+
+These rows lived in [extension-framework](../designs/extension-framework.md) until `EX-12` moved
+them here. That was not tidying: `scripts/check-vectors.py` reads rows only out of the spec that
+*owns* a prefix, so while they sat in a design record no gate could read them, and a fabricated row
+inserted among them passed `--check` untouched. A vector table in a design record is prose that
+looks like a measurement.
+
+(A row ID is deliberately not spelled out in that sentence: the gate reads row IDs from anywhere in
+an owning spec, so naming a fabricated one here would conjure the very row it describes.)
+
+*Application — `QP-A`:*
+
+| # | Given | Expect |
+|---|---|---|
+| QP-A-1 | `sec-agree-headers` bound to `trunk-a`; outbound INVITE on a branch to `trunk-a` | Both headers present at the configured values, with the `mediasec` parameter carried through; every other byte of the F5 draft unchanged |
+| QP-A-2 | Same, an outbound OPTIONS (method not in the rule's `MessageClass`) | Request byte-identical; **no** `PatchHeaders` effect in the trace |
+| QP-A-3 | Same profile; a branch to `trunk-b`, which binds no profile | Byte-identical. The profile is bound, not matched — the assertion that binding is the only selector |
+| QP-A-4 | Same, applied to a draft that already carries `Security-Client` at the configured value | Byte-identical result and one effect: idempotence |
+| QP-A-5 | `sdp-direction-explicit`; offer with no direction attribute at session or `m=audio` | `a=sendrecv` materialized at both declared scopes (RFC 8866 §6.7); every other byte of the body unchanged |
+| QP-A-6 | Same, an offer carrying `a=sendonly` on `m=audio` and nothing at session scope | `m=audio` **untouched**; session scope materialized. The literal P3 assertion — a negotiated value is never overwritten |
+| QP-A-7 | Same profile on the response path (H11), 200 OK carrying an answer | Same two rules, same outcome; direction is materialized on the answer body |
+| QP-A-8 | A request with no body | No `RewriteBody` effect, no error |
+| QP-A-9 | A request whose body is `application/isup` | Untouched — the declared media type scopes the effect (E3) |
+
+*Composition — `QP-C`:*
+
+| # | Given | Expect |
+|---|---|---|
+| QP-C-1 | Both shipped profiles bound to `trunk-a` — the worked example | Both applied; and the forwarded bytes are identical under either evaluation order, which is the confluence claim asserted rather than argued |
+| QP-C-2 | One INVITE transaction from a registrant of `example.net` out over `trunk-a`, with a profile bound to each — enumeration row 4 | Both applied, to **two different messages**: the trunk-bound profile writes the forwarded request at H9, the domain-bound one the forwarded response at H11. The trace names both, each against the leg it ran on, and no composed set contains rules from both bindings. This row asserted "both apply to one message" until `EX-11` derived that no leg carries both attachments |
+| QP-C-3 | `media-anchor` selected alongside `sdp-direction-explicit` | The relay's replacement body is produced first, the field write lands on **it**, and the forwarded body carries both the relay's `c=`/`m=` and the materialized direction. The G9 ordering assertion |
+| QP-C-4 | A domain-bound and a trunk-bound profile writing the **same** elementary target — `(P-Charging-Vector, request:INVITE)` — with no override anywhere | **Boots**, and each applies on its own leg (QP-C-2's shape, same target). The row that fails if the derived condition is violated: under the union reading this is a G10 startup error, and G13 cannot repair it, because an override is declared at one binding and its winner must be contesting *there* |
+
+*Startup validation — `QP-G`:*
+
+| # | Given | Expect |
+|---|---|---|
+| QP-G-1 | A profile naming a header outside the catalogue | Startup error naming the profile, the rule and the header: not a catalogue row |
+| QP-G-2 | Two distinct applicable profiles both writing `Security-Client` on an overlapping message class, with no override declared at the binding | Startup error (G10) naming both profiles and the contested target — the elementary class they share, not the classes they do not |
+| QP-G-3 | Same, with the binding declaring an override naming that target and one of the two profiles as `winner` | Boots; the winner's rule is in the composed set and the loser's is not, and the startup composition record names the override |
+| QP-G-4 | A configured value that does not parse against the row's ABNF | Startup error (G10) naming the profile, the key and the parse failure |
+| QP-G-5 | A binding naming a trunk that does not exist | Startup error (G10) |
+| QP-G-6 | `sec-agree-headers` (asserting `Srtp`) bound to a trunk declaring `SrtpPolicy::Disabled` | Startup error (G11, media-relay's G-M5/MR-C-3) naming the trunk and the profile |
+| QP-G-7 | Same profile on a trunk declaring `SrtpPolicy::Sdes { .. }` or `SrtpPolicy::DtlsSrtp { .. }` | Boots |
+| QP-G-8 | A second module declaring `Replace("application/sdp")` at `BeforeForward` alongside `media-anchor` | Startup error (G9) naming both modules and the claim |
+| QP-G-9 | Two modules declaring `Field("application/sdp", Direction)` at the same phase | Startup error (G9) naming both and the field |
+| QP-G-10 | A catalogue row for a header a selected module owns (`Session-Expires`, `session-timer`) | Startup error as an ordinary G2 exclusive-claim conflict, naming `carrier-quirks` and `session-timer` — the catalogue invariant, enforced by machinery that already exists |
+| QP-G-11 | `sec-agree-headers` (asserting `Srtp`) bound to a domain rather than a trunk | Startup error (G12) naming the profile and the domain: no `TrunkMediaPolicy` exists for a domain to check the assertion against |
+| QP-G-12 | Two profiles bound to the **same trunk** contesting `P-Charging-Vector` on INVITE, resolved by an override at that trunk | Boots. The escape is not trunk-over-domain: the commonest contest is at one attachment point, and a directional rule could not reach it |
+| QP-G-13 | An override whose `target` no two applicable profiles write — the contest was removed, the override was not | Startup error (G13) naming the binding and the target. The override that outlives its contest fails the boot instead of silently doing nothing |
+| QP-G-14 | An override whose `winner` is bound at that attachment point but writes no rule for the named target | Startup error (G13) naming the binding, the target and the winner: naming a profile does not name a target, and the schema does not let one stand in for the other |
+| QP-G-15 | `sec-agree-headers` (asserting `Srtp`) on a trunk declaring `SrtpPolicy::Disabled`, with an override deleting **every** one of its rules at that trunk | Still a startup error (G11). An override deletes rules, never assertions; the profile is still bound, so the assertion is still checked |
+| QP-G-16 | `sec-agree-headers`, whose `Set(Security-Client)` reads `ValueLeaf::TrunkConfig`, bound to a **domain**; and the mirror — a profile carrying `ValueLeaf::DomainConfig` bound to a trunk | Startup error (G14) naming the binding, the profile, the rule and the key: a domain binding has no trunk configuration to read, at any evaluation. Two independent reasons reject this profile at a domain — G12 for its `requires_media` and G14 for its leaves — and G14 is the one that survives if a future profile drops the assertion |
+| QP-G-17 | QP-C-4's configuration, plus a `quirkOverrides` entry at `trunk-a` naming that target with the **domain**-bound profile as `winner` — the operator reading the composition as a union and trying to resolve it | Startup error (G13) naming the binding, the target and the winner: at `trunk-a` the target is written by one profile, and the winner is bound elsewhere. A specialization of QP-G-13 rather than a new rule, and the row exists because the union reading would have made this entry the *repair* for QP-C-4 instead of an error — and G13 would have rejected it anyway, which is what made the union reading unrepairable |
+| QP-G-18 | Three profiles bound to `trunk-b` all writing `(P-Charging-Vector, request:INVITE)`, with one override naming one `winner` | Boots. The winner's rule is in the composed set, **both** losers' rules for that target are not, and the composition record names the override once. A `winner` is a single profile id, so a three-way contest needs no second entry |

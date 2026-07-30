@@ -816,14 +816,15 @@ response leg two different values for one rule.
   of `(binding, message class)` with no external cost, so evaluating it per branch is not only safe
   but required — a fork can have two branches on two trunks wanting two different header sets.
 
-#### Claiming SDP — the one thing that needs a spec change
+#### Claiming SDP — the one thing that needed a spec change
 
 `media-anchor`'s `RewriteBody` is a **whole-body replacement**: the relay takes complete SDP and
 returns rewritten SDP as opaque bytes end to end ([media-relay](../specs/media-relay.md) §3.2 O3,
-media-control). `carrier-quirks`'s `RewriteBody` is a **field write**. Under hook-framework §6 both
-declare `media_types_rewritten: ["application/sdp"]`, and G2 makes exclusive claims an implicit
-conflict — so as the spec stands today, **a deployment cannot anchor media and run an SDP quirk at
-the same time.** That is not an acceptable answer; it is the common case.
+media-control). `carrier-quirks`'s `RewriteBody` is a **field write**. Under the original
+hook-framework §6 both declared `media_types_rewritten: ["application/sdp"]`, and G2 makes exclusive
+claims an implicit conflict — so until `EX-12` landed the split, **a deployment could not anchor
+media and run an SDP quirk at the same time.** That was not an acceptable answer; it is the common
+case.
 
 The fix is the same refinement `headers_owned` already embodies. Ownership is per header *name*, not
 "all headers"; body ownership should likewise be per claim *kind* and per field:
@@ -842,8 +843,9 @@ manifest producing a message the vectors did not predict. Leaving it to an `Afte
 constraint in the quirk module's own manifest would work exactly until someone wrote a second
 replacer, which is what G-rules are for.
 
-This is a change to a **closed** spec (hook-framework §6 `SyntaxDecl`, §7 G2). It is not edited in
-here; it is handed to EX-8 below with the rest.
+This was a change to a **closed** spec (hook-framework §6 `SyntaxDecl`, §7 G2), so it was handed on
+rather than made here. `EX-12` made it: §6 now carries `BodyClaim`, and the ordering rule above is
+G9.
 
 #### Media policy — a quirk asserts, and never configures
 
@@ -914,64 +916,22 @@ composed on one trunk — so the shipped set demonstrates composition rather tha
 | `sec-agree-headers` | `Set(Security-Client)` and `Set(Security-Verify)` from trunk config, on a declared method set; `requires_media: [Srtp]` | QP-A-1 … QP-A-4, QP-G-4, QP-G-6, QP-G-7, QP-G-11, QP-G-15, QP-G-16 |
 | `sdp-direction-explicit` | `EnsureExplicit(Direction)` at `Session` and `Media(Audio)`, on requests and responses carrying a body | QP-A-5 … QP-A-9, QP-C-1, QP-C-3 |
 
-Rows use the `QP` prefix in the three-part `QP-X-n` shape, so registering them in the vector gate is
-registration only. It has not happened yet, and
+Rows use the `QP` prefix in the three-part `QP-X-n` shape, and `EX-12` registered it in the vector
+gate. That took a story rather than a line of configuration, and
 [CF-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/CF-8-bring-every-spec-under-the-vector-gate.md)
-is why it could not: the gate reads rows **only out of the spec that owns a prefix**, and these rows
-live in a design, so `QP` had nothing to be registered against. They become enforceable when the
-quirk-profile section reaches a spec, with the `SyntaxDecl` split and G9–G14. §*What this hands to the
-spec* names `EX-8` for that delta, but `EX-8`'s acceptance carried `EX-6`'s half only and `EX-8` is
-closed — `media_types_rewritten` is still a flat list in hook-framework §6 — so the hand-off is
-currently owned by nobody, and it needs a story rather than a mention here. Until then a `QP` row is a
-claim this design owes a spec, not a claim the gate is checking. Every "message unchanged" expectation below is a **byte** expectation, which
-the kernel's lossless model makes meaningful: an untouched byte re-serializes verbatim
-(hook-framework §1, PX-3).
+is why: the gate reads rows **only out of the spec that owns a prefix**, and these rows lived in a
+design, so `QP` had nothing to be registered *against* — pointing the prefix at a design record
+would have made this document normative by accident. Registration therefore had to wait on the
+quirk-profile section reaching a spec, with the `SyntaxDecl` split and G9–G14. §*What this hands to
+the spec* named `EX-8` for that delta, but `EX-8`'s acceptance carried `EX-6`'s half only and `EX-8`
+closed without it, so the hand-off was owned by nobody until `EX-12` picked it up. Until then a `QP`
+row was a claim this design owed a spec rather than a claim the gate was checking — demonstrated,
+not assumed: a fabricated row inserted into the table below passed `--check` untouched.
 
-*Application — `QP-A`:*
-
-| # | Given | Expect |
-|---|---|---|
-| QP-A-1 | `sec-agree-headers` bound to `trunk-a`; outbound INVITE on a branch to `trunk-a` | Both headers present at the configured values, with the `mediasec` parameter carried through; every other byte of the F5 draft unchanged |
-| QP-A-2 | Same, an outbound OPTIONS (method not in the rule's `MessageClass`) | Request byte-identical; **no** `PatchHeaders` effect in the trace |
-| QP-A-3 | Same profile; a branch to `trunk-b`, which binds no profile | Byte-identical. The profile is bound, not matched — the assertion that binding is the only selector |
-| QP-A-4 | Same, applied to a draft that already carries `Security-Client` at the configured value | Byte-identical result and one effect: idempotence |
-| QP-A-5 | `sdp-direction-explicit`; offer with no direction attribute at session or `m=audio` | `a=sendrecv` materialized at both declared scopes (RFC 8866 §6.7); every other byte of the body unchanged |
-| QP-A-6 | Same, an offer carrying `a=sendonly` on `m=audio` and nothing at session scope | `m=audio` **untouched**; session scope materialized. The literal P3 assertion — a negotiated value is never overwritten |
-| QP-A-7 | Same profile on the response path (H11), 200 OK carrying an answer | Same two rules, same outcome; direction is materialized on the answer body |
-| QP-A-8 | A request with no body | No `RewriteBody` effect, no error |
-| QP-A-9 | A request whose body is `application/isup` | Untouched — the declared media type scopes the effect (E3) |
-
-*Composition — `QP-C`:*
-
-| # | Given | Expect |
-|---|---|---|
-| QP-C-1 | Both shipped profiles bound to `trunk-a` — the worked example | Both applied; and the forwarded bytes are identical under either evaluation order, which is the confluence claim asserted rather than argued |
-| QP-C-2 | One INVITE transaction from a registrant of `example.net` out over `trunk-a`, with a profile bound to each — enumeration row 4 | Both applied, to **two different messages**: the trunk-bound profile writes the forwarded request at H9, the domain-bound one the forwarded response at H11. The trace names both, each against the leg it ran on, and no composed set contains rules from both bindings. This row asserted "both apply to one message" until `EX-11` derived that no leg carries both attachments |
-| QP-C-3 | `media-anchor` selected alongside `sdp-direction-explicit` | The relay's replacement body is produced first, the field write lands on **it**, and the forwarded body carries both the relay's `c=`/`m=` and the materialized direction. The G9 ordering assertion |
-| QP-C-4 | A domain-bound and a trunk-bound profile writing the **same** elementary target — `(P-Charging-Vector, request:INVITE)` — with no override anywhere | **Boots**, and each applies on its own leg (QP-C-2's shape, same target). The row that fails if the derived condition is violated: under the union reading this is a G10 startup error, and G13 cannot repair it, because an override is declared at one binding and its winner must be contesting *there* |
-
-*Startup validation — `QP-G`:*
-
-| # | Given | Expect |
-|---|---|---|
-| QP-G-1 | A profile naming a header outside the catalogue | Startup error naming the profile, the rule and the header: not a catalogue row |
-| QP-G-2 | Two distinct applicable profiles both writing `Security-Client` on an overlapping message class, with no override declared at the binding | Startup error (G10) naming both profiles and the contested target — the elementary class they share, not the classes they do not |
-| QP-G-3 | Same, with the binding declaring an override naming that target and one of the two profiles as `winner` | Boots; the winner's rule is in the composed set and the loser's is not, and the startup composition record names the override |
-| QP-G-4 | A configured value that does not parse against the row's ABNF | Startup error (G10) naming the profile, the key and the parse failure |
-| QP-G-5 | A binding naming a trunk that does not exist | Startup error (G10) |
-| QP-G-6 | `sec-agree-headers` (asserting `Srtp`) bound to a trunk declaring `SrtpPolicy::Disabled` | Startup error (G11, media-relay's G-M5/MR-C-3) naming the trunk and the profile |
-| QP-G-7 | Same profile on a trunk declaring `SrtpPolicy::Sdes { .. }` or `SrtpPolicy::DtlsSrtp { .. }` | Boots |
-| QP-G-8 | A second module declaring `Replace("application/sdp")` at `BeforeForward` alongside `media-anchor` | Startup error (G9) naming both modules and the claim |
-| QP-G-9 | Two modules declaring `Field("application/sdp", Direction)` at the same phase | Startup error (G9) naming both and the field |
-| QP-G-10 | A catalogue row for a header a selected module owns (`Session-Expires`, `session-timer`) | Startup error as an ordinary G2 exclusive-claim conflict, naming `carrier-quirks` and `session-timer` — the catalogue invariant, enforced by machinery that already exists |
-| QP-G-11 | `sec-agree-headers` (asserting `Srtp`) bound to a domain rather than a trunk | Startup error (G12) naming the profile and the domain: no `TrunkMediaPolicy` exists for a domain to check the assertion against |
-| QP-G-12 | Two profiles bound to the **same trunk** contesting `P-Charging-Vector` on INVITE, resolved by an override at that trunk | Boots. The escape is not trunk-over-domain: the commonest contest is at one attachment point, and a directional rule could not reach it |
-| QP-G-13 | An override whose `target` no two applicable profiles write — the contest was removed, the override was not | Startup error (G13) naming the binding and the target. The override that outlives its contest fails the boot instead of silently doing nothing |
-| QP-G-14 | An override whose `winner` is bound at that attachment point but writes no rule for the named target | Startup error (G13) naming the binding, the target and the winner: naming a profile does not name a target, and the schema does not let one stand in for the other |
-| QP-G-15 | `sec-agree-headers` (asserting `Srtp`) on a trunk declaring `SrtpPolicy::Disabled`, with an override deleting **every** one of its rules at that trunk | Still a startup error (G11). An override deletes rules, never assertions; the profile is still bound, so the assertion is still checked |
-| QP-G-16 | `sec-agree-headers`, whose `Set(Security-Client)` reads `ValueLeaf::TrunkConfig`, bound to a **domain**; and the mirror — a profile carrying `ValueLeaf::DomainConfig` bound to a trunk | Startup error (G14) naming the binding, the profile, the rule and the key: a domain binding has no trunk configuration to read, at any evaluation. Two independent reasons reject this profile at a domain — G12 for its `requires_media` and G14 for its leaves — and G14 is the one that survives if a future profile drops the assertion |
-| QP-G-17 | QP-C-4's configuration, plus a `quirkOverrides` entry at `trunk-a` naming that target with the **domain**-bound profile as `winner` — the operator reading the composition as a union and trying to resolve it | Startup error (G13) naming the binding, the target and the winner: at `trunk-a` the target is written by one profile, and the winner is bound elsewhere. A specialization of QP-G-13 rather than a new rule, and the row exists because the union reading would have made this entry the *repair* for QP-C-4 instead of an error — and G13 would have rejected it anyway, which is what made the union reading unrepairable |
-| QP-G-18 | Three profiles bound to `trunk-b` all writing `(P-Charging-Vector, request:INVITE)`, with one override naming one `winner` | Boots. The winner's rule is in the composed set, **both** losers' rules for that target are not, and the composition record names the override once. A `winner` is a single profile id, so a three-way contest needs no second entry |
+*The vectors — `QP-A` (application), `QP-C` (composition) and `QP-G` (startup validation) — are
+[hook-framework](../specs/hook-framework.md) §9.1, and the `QP` prefix is registered in the vector
+gate against that section. They were listed here until `EX-12`; a design record is not normative, so
+rows kept here were read by no gate. What stays in this design is the reasoning that produced them.*
 
 B1–B4 get no vector, and should not: they are properties of the type, not of a run. Their test is
 that the grammar has no recursive constructor, no environment and no conditional — visible in a
@@ -1047,32 +1007,38 @@ about it. The requirement is recorded here so ME-4 inherits it rather than redis
 
 #### What this hands to the spec
 
-EX-7 is a design decision, not a normative text — the same posture EX-6 took, and for the same
-reason: [hook-framework](../specs/hook-framework.md) is closed. The deltas, named so the next agent
-does not have to rediscover them, all belong to
-[EX-8](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/EX-8-make-the-async-query-declaration-normative.md):
+EX-7 was a design decision rather than a normative text — the same posture EX-6 took, and for the
+same reason: [hook-framework](../specs/hook-framework.md) was closed. **`EX-12` has since landed
+every delta below**, so this list is a record of what moved and where, not a to-do:
 
-- **§4** — no change. The effect enum is sufficient; `PatchHeaders` and `RewriteBody` already exist.
+- **§4** — no change to the effect enum; `PatchHeaders` and `RewriteBody` already existed. E3's
+  wording did change, because the scope it names is now a body *claim* rather than a media type.
 - **§3** — no change. **No new phase.** H2, H9 and H11 already permit everything `carrier-quirks`
   emits, and the H-table is untouched.
-- **§6** — `SyntaxDecl`'s `media_types_rewritten` becomes the `BodyClaim` split (`Replace` /
-  `Field`); `carrier-quirks` joins the §9 manifest cast with its catalogue as `headers_owned`. This
-  is the one **structural** change EX-7 needs, and the one worth reviewing hardest, because it edits
-  a claim other modules already declare.
-- **§7** — G9 (body-claim kinds and their computed ordering), G10 (bindings resolve and compose
-  disjointly, over elementary targets), G11 (media assertions hold — the same check media-relay
-  states as G-M5), G12 (media assertions need a trunk binding), G13 (a binding-level override
-  resolves one contested target, and must be resolving a live one), G14 (a rule's config leaves name
-  the side its binding is on). G2 is unchanged and does the catalogue invariant for free.
-- **§8** — the shipped profile catalogue is a profile-level value, so EX-5's catalogue carries the
-  bindings — and the overrides declared beside them — alongside `hook_budget`.
-- **§9** — vectors `QP-A-1` … `QP-G-18` above, and the `QP` prefix registered in the vector gate
-  (CF-8's `SPECS`/`FAMILIES`, fenced from this story). Registration is not optional bookkeeping and
-  cannot precede the section: `check-vectors.py` reads rows out of the spec that owns a prefix, so
-  `QP` becomes gateable in the same change that gives these rules a spec to live in, and not before.
-- **Whose story this is** — not `EX-8`'s any more. `EX-8` closed with `EX-6`'s deltas only, so the
-  four bullets above are unowned; carrying them needs a story of its own, and `EX-11` deliberately
-  did not create one from inside a design.
+- **§6** — done: `SyntaxDecl`'s `media_types_rewritten` is now the `BodyClaim` split (`Replace` /
+  `Field`), and `carrier-quirks` is in the §9 manifest cast with its catalogue as `headers_owned`.
+  This was the one **structural** change EX-7 needed and the one worth reviewing hardest, because it
+  edits a claim other modules already declare — `media-anchor`'s §6 example moved with it.
+- **§7** — done: G9 (body-claim kinds and their computed ordering), G10 (bindings resolve and
+  compose disjointly, over elementary targets), G11 (media assertions hold — the same check
+  media-relay states as G-M5), G12 (media assertions need a trunk binding), G13 (a binding-level
+  override resolves one contested target, and must be resolving a live one), G14 (a rule's config
+  leaves name the side its binding is on). G2 keeps the catalogue invariant, and now defers its
+  body-claim clause to G9.
+- **§8** — done as **§8.1**, which carries the profile types, the binding form, the elementary-target
+  definition and the shipped catalogue. EX-5's catalogue still carries the bindings and the overrides
+  declared beside them, alongside `hook_budget`; §8.1 is what EX-5 validates against.
+- **§9** — done as **§9.1**: the vectors `QP-A-1` … `QP-G-18` moved out of this design into the spec,
+  and `QP` is registered in the gate (`SPECS`/`FAMILIES`). Registration was not optional bookkeeping
+  and could not precede the section: `check-vectors.py` reads rows out of the spec that owns a
+  prefix, so `QP` became gateable in the same change that gave these rules a spec to live in. All 31
+  rows are deferred in [vector-scope.toml](../reference/vector-scope.toml) against `EX-3` — visible
+  and counted, because a row that becomes visible and is silently waived has only been hidden
+  somewhere new.
+- **Whose story this was** — `EX-8`'s in name, nobody's in fact. `EX-8` closed with `EX-6`'s deltas
+  only, which left these bullets unowned until `EX-12`; `EX-11` deliberately did not create that
+  story from inside a design. The lesson worth keeping: a story that closes on half a named scope
+  orphans the other half silently, and nothing in the board notices.
 
 ## Alternatives considered
 
@@ -1187,12 +1153,14 @@ does not have to rediscover them, all belong to
 - **Breaker scope for external resources (EX-6)** is the same per-node-versus-shared question
   routing-trunks has open for trunk breakers (RT-2). EX-6 adopts per-node to match; if RT-2
   settles it the other way, both move together.
-- **The `SyntaxDecl` body-claim split (EX-7) edits a closed spec.** G9 needs
+- **The `SyntaxDecl` body-claim split (EX-7) edited a closed spec.** G9 needed
   `media_types_rewritten` to become `Replace`/`Field`, which changes a declaration `media-anchor`
-  already makes. It is the sharpest review item EX-7 hands to EX-8, and until it lands **a
-  deployment cannot both anchor media and run an SDP quirk** — G2 rejects the pair at startup. The
-  ordering half is deliberately a G-rule rather than an `After` constraint, but that decision is
-  worth re-testing once a second body-replacing module actually exists.
+  already makes. It was the sharpest review item EX-7 handed on, and while it was unlanded **a
+  deployment could not both anchor media and run an SDP quirk** — G2 rejected the pair at startup.
+  `EX-12` landed it; the residual risk is that no module yet *declares* a `BodyClaim`, so the split
+  is proved by nothing until `EX-3` builds the validator (`QP-G-8`, `QP-G-9`). The ordering half is
+  deliberately a G-rule rather than an `After` constraint, but that decision is worth re-testing once
+  a second body-replacing module actually exists.
 - **How narrow is too narrow (EX-7).** The v1 catalogues are three header families and two SDP
   fields. If the fourth peer needs a fourth row, the "config change plus a vector" promise holds
   only for peers the catalogue already anticipates, and everyone else waits for a release. The
