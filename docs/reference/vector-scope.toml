@@ -84,7 +84,7 @@ story = "CX-5"
 reason = """
 `N1`, nonce uniqueness per challenge — registrar-auth §6.1. Deferred because it cannot be covered
 from this repository *and* because it does not hold: nonce minting is `sipx-ua::challenge`'s (an auth
-primitive, AGENTS.md #6), and at the pinned `v0.7.0` its mint is `<issued-at in hex>.<HMAC over
+primitive, AGENTS.md #6), and at the pinned `v0.10.0` its mint is `<issued-at in hex>.<HMAC over
 issued-at and realm>` — a pure function of the second, the realm and the secret. Two users of one
 tenant challenged in the same second hold one nonce and therefore one replay counter, and the second
 correct credential is refused as `RA-R-2` with a `401` carrying no `stale`. The row states the

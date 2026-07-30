@@ -582,17 +582,18 @@ Every row is normative. Rows whose values are policies and facts are **decision-
 against `egress_identity` directly with no message in sight. Rows written as header lines are
 **message-level**: bytes in, bytes out, through E1–E3 in the harness.
 
-**Registration is deferred to `CF-8`, and the reason is not that it was forgotten.** The `AI`
-prefix is not registered in `scripts/check-vectors.py`, and `docs/reference/vector-scope.toml` and
-`docs/reference/conformance.md` carry no `AI` rows: those three files were fenced to another story
-during the implementation wave that wrote this spec, which is the same wall `ME-1` and `AF-2` hit
-and the reason `CF-8` exists. `CF-8`'s goal — every spec that carries a vector table — covers this
-one by construction, but its inventory table was written before this spec existed and needs an
-`AI` row adding alongside `LS`, `MR`, `AT`, `FR` and `HF`. The rows use the three-part `XX-Y-n`
-shape already registered for `PB`, `EP` and `RA`, so they need registration only, not renumbering.
-Every row here is deferrable on one reason — the types of §4 are a spec contract and no Rust exists
-yet; `RT-2`'s trunk model is the story that lands them. Until `CF-8`, this table is unenforced,
-which is exactly the condition that check exists to prevent.
+**Registration has landed; coverage has not, and the distinction is the point.** The `AI` prefix is
+registered in `scripts/check-vectors.py`, `docs/reference/vector-scope.toml` carries every row here
+with a reason, and `docs/reference/conformance.md` prints them under this spec's eight families —
+`CF-8` did the registration and `CF-17` gave the families their report sections, having found that a
+registered prefix with no `FAMILIES` entry was counted in the denominator and shown in no table. So
+this table is enforced: a row added here and left uncovered fails the gate rather than passing
+unnoticed, which is the condition that check exists to create.
+
+What remains deferred is the coverage itself, on one reason for every row: the types of §4 are a
+spec contract and no Rust implements them yet; `RT-2`'s trunk model is the story that lands them.
+The rows use the three-part `XX-Y-n` shape already registered for `PB`, `EP` and `RA`, so they
+needed registration only, never renumbering.
 
 **The fixture.** Trunk `carrier-a` with policy `carrier-a` exactly as §11 writes it, unless a row
 says otherwise. The request is a dialog-forming INVITE:
