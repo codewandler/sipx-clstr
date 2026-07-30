@@ -47,7 +47,6 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
-- [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
@@ -79,6 +78,7 @@ _One `values.yaml` to a running, healthy, resizable cluster — delivered and ke
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-15 — Source per-process loop-cookie keys from operating-system randomness](PX-15-source-loop-cookie-keys-from-os-randomness.md) · Signalling · V-15 — the HMAC key is predictable text derived entirely from process startup time
+- [PX-16 — An out-of-dialog request with a pre-existing route set must not lose the callee's URI](PX-16-a-pre-existing-route-set-must-not-lose-the-callee-uri.md) · Signalling · found by PX-13, which fixed the in-dialog half; F2 overwrites the Request-URI with a location answer about the first Route
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
@@ -91,7 +91,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
-- [RT-12 — Resolve outbound targets and settle every failed branch](RT-12-resolve-outbound-targets-and-settle-every-failed-branch.md) · Signalling · V-12 · outbound selection is UDP-only; hostname/transport failures are logged without a BranchTransportError and can leave no final response
+- [RT-12 — Resolve outbound targets and settle every failed branch](RT-12-resolve-outbound-targets-and-settle-every-failed-branch.md) · Signalling · V-12 · outbound selection is UDP-only; since PX-13 this is live on real dialogs — an in-dialog request to a TLS Record-Route goes out as a UDP datagram to the TLS port
 
 ### Optional session services
 _Some features must terminate one dialog and create another. A proxy cannot provide that behavior_
@@ -269,6 +269,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [PX-9 — Drive fork branches concurrently instead of draining them in order](PX-9-drive-fork-branches-concurrently.md) · Signalling · a user with one dead device waits for Timer B before their live device's 200 OK is relayed
 - [PX-10 — Arm the Timer C the document asks for, and settle F11's copy of the self-refuting default](PX-10-arm-the-timer-c-the-document-asks-for.md) · Platform · timerC now reaches the engine from the document and F11 defaults to 240 s; the rest of the timers section is reported unapplied rather than dropped
 - [PX-11 — Settle which 4xx wins when two branches fail, because the row and its test say different things](PX-11-settle-which-4xx-wins-when-two-branches-fail.md) · Platform · PB-R-5 claims 486 is forwarded; its own test asserts 404, and the spec settles neither
+- [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · release blocker — every ACK is resolved as an AoR and silently dropped when no binding exists
 - [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found

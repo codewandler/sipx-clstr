@@ -9,6 +9,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Every `ACK` was resolved as an address of record, and dropped when there was no binding**
+  (`PX-13`, validated review finding `V-03`). An `ACK` went through a path that ignored the `Route`
+  set, treated the Request-URI as an AoR, asked the location service, took the first registration, and
+  **silently dropped the request when there was none**. An ordinary remote `Contact` is not the
+  registered AoR, so a normal call's `ACK` was dropped. Other in-dialog methods were preprocessed
+  correctly by the pure engine and then the driver resolved their next hop as an AoR lookup anyway —
+  a global lookup on the signalling hot path, which non-negotiable #5 calls wrong by definition rather
+  than merely slow.
+
+  `ACK` is now split by semantics, specified as `proxy-behavior` §7.2: the kernel's generated
+  downstream `ACK` for a non-2xx stays transaction-scoped, an upstream non-2xx `ACK` is absorbed by its
+  server transaction, and a 2xx `ACK` is a **separately routed request that is never answered**. The
+  two this does not touch were verified against the pinned kernel's own transaction code rather than
+  assumed. In-dialog requests take the core's selected next hop; the driver no longer edits the message
+  after the engine has applied route preprocessing. An unaddressable branch settles as an explicit
+  `BranchTransportError` — §16.9 `R10` → `R8`, a `500` to the caller — instead of being skipped while
+  the context waits for a response nothing will send.
+
+  **Why the harness never caught it:** the simulation's `ACK`/`BYE` are AoR-shaped, so they resolved by
+  accident. The new proof asserts the negative *positively* — two trap sockets registered under the
+  contacts' canonical AoRs must both stay at zero hits, and the pre-fix run observes the hit rather
+  than inferring the defect from silence.
+
+  It also narrowed `P1`, which the story did not ask for and which turned out to be required:
+  `is_ours` is host-scoped and port-agnostic, so on a loopback deployment `P1` fired on ordinary
+  mid-dialog requests and replaced the remote target with our own `Record-Route`. §5 now states the
+  rule §16.4 always meant. Reviewed in both directions — it cannot consume a route it does not own, and
+  it still fires on every value this platform places.
+
+  `Effect::Forward` gained a `next_hop` field, so the simulated drivers key on the dialog's next hop
+  rather than the target URI. The two coincided in every existing scenario except `Path`, which is the
+  case the harness previously could not see.
+
 - **A node answered every method, whatever roles it was given** (`DP-13`, validated review finding
   `V-01`, filed as `FC-6` before the review backlog renumbered it). The projected role set was read,
   validated, and used to select listeners and the location store — and then **dropped** before

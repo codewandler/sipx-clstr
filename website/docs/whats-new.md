@@ -49,7 +49,7 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 **The measuring instrument now measures everything, and it now shows what it measures.** Six
 specifications used to carry vector tables the checker had no registration for — roughly 340
 normative rows that nothing executed, and a fabricated row in one of those families passed the gate
-untouched. Fifteen prefixes are now registered: **129 of 576 rows proved, 19 covered for shape only,
+untouched. Fifteen prefixes are now registered: **134 of 581 rows proved, 19 covered for shape only,
 428 deferred**, each deferral naming what is specifically missing and the story that closes it.
 
 Two of those numbers went the "wrong" way on purpose. *Shape only* is a category `CF-12` created for

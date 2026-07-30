@@ -2,7 +2,7 @@
 id: PX-13
 title: Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup
 pillar: Signalling
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
@@ -35,10 +35,35 @@ Request-URI as an address of record and asking the location service about it.
       2xx returns on the existing Via path. This fails on `86e6b10`, where the ACK is dropped.
 - [x] `ET-7` owns correcting the synthetic probe after this real-node path lands; PX-13's socket test
       uses a protocol-correct test UA and cannot pass with AoR-shaped ACK/BYE shortcuts.
-- [ ] The two-node proofs continue to pass, and one of them uses a remote target that is not an AoR.
+- [x] The two-node proofs continue to pass, and one of them uses a remote target that is not an AoR.
 - [x] `scripts/gate.sh` is green.
 
 ## Progress
+- **The two-node proof was run at integration and passes** on the merged tree, against the `sipx` CLI
+  built from the pinned `v0.10.0` tag: two nodes on `127.0.0.1:5060` and `127.0.0.2:5060`, one
+  PostgreSQL store holding two binding rows written by different nodes, `RESULT: PASS`. That satisfies
+  the item as worded — "continue to pass", i.e. no regression — and **it is not evidence the fix
+  works**: this same script reported `PASS` while the ACK was being dropped, which is exactly why this
+  story added the header comment recording that. The fix's evidence is the socket test.
+- **Independent review: `PASS`,** having re-run the failing-first proof at the true merge base
+  `f949336` (the story cited `86e6b10`, an ancestor — the evidence stands, the citation did not) and
+  verified the `P1` narrowing in both directions: it cannot hijack a Record-Route it does not own, and
+  it still fires on every value this platform places, since those are always `;lr` with the token as a
+  URI parameter and never a user part.
+- **Two claims in this record were overstated and are corrected here.** `register_then_call.rs`'s
+  `Path` scenario does **not** discriminate keying on `next_hop` from keying on `target.uri` — its path
+  URI points at the same node as bob's first contact, so it passes either way. Nothing was loosened (a
+  required `reachable` entry was added, without which the branch goes unreachable), but it is not the
+  strengthening claimed. And `PB-F-4`'s edited row *is* more correct rather than more convenient — the
+  strict router in the Request-URI is what §16.6 step 12 requires — which was worth confirming rather
+  than asserting.
+- **Known, not fixed, and now recorded where they will be found:** `F7`'s `lr` test is not total across
+  `F6` — a route set of `[ours;lr, strict(no lr), p2;lr]` skips the strict router the swap exists to
+  traverse, and the `F7` row overstates what the code does. And `P3`'s reject can no longer precede the
+  forward for in-dialog requests, because `Input::Upstream` now returns `on_targets` synchronously —
+  unreachable today (`TokenFact` has no producer), but `AF-4` must place token verification before the
+  T1 branch or inside the engine.
+
 
 **Done, except that the two-node proofs could not be *run* here** — they need Docker, PostgreSQL and
 the external `sipx` CLI, none of which this environment has. What is settled about them: both already
