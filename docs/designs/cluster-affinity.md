@@ -89,6 +89,90 @@ and an explicit failure answer (owner unreachable ≠ flow dead ≠ flow rejecte
 cross-node signalling hop the platform itself performs — transaction affinity above is provided
 by the dataplane, not by a hop — and it exists only for requests toward connection-bound clients.
 
+**Settled in AF-3** ([owner-rpc](../specs/owner-rpc.md) — the channel, the authentication, the
+carriage, the taxonomy on the wire, and the bounds). The sketch above is three adjectives and a
+list; these are the decisions it turned out to need, and the first one reframes the other five:
+
+- *It is not a new protocol — it is one more SIP hop whose next hop is a **flow** rather than a
+  URI.* The sketch's own open question guessed "the workspace's own framing over TLS", and that is
+  what changed. The payload is a SIP request and the answer is a SIP response, so a second framing
+  would have carried SIP inside it: a second parser, a second serializer, and a second place for the
+  kernel's lossless re-serialization guarantee to stop holding. The failure answers already have SIP
+  spellings (`503` for a refusal now, `430 Flow Failed` in M3), so a bespoke code space would have
+  been a mapping table to keep in step with the codes it maps to. It costs no dependency, adds no
+  variant to [proxy-behavior](../specs/proxy-behavior.md) §2's effect set, and — the argument that
+  settled it — the deterministic harness executes it as it stands, because a simulated node already
+  exchanges SIP messages. A framing the harness could not carry would have made the taxonomy
+  untestable until a socket existed, which is the definition of a design that is wrong here
+  (AGENTS.md rule 2).
+- *The reference rides in the **user part of a Route URI**, which is RFC 5626 §5.2's own
+  construction.* [affinity-token](../specs/affinity-token.md) §11.2's canonical text form is
+  base64url, and `-` and `_` are `mark` characters — therefore `unreserved` — in RFC 3261 §25.1's
+  `user` production, so it is a legal user part verbatim with no escaping — and "is this the same reference?" never becomes a
+  question about encodings. The owner pops it with the loose-routing rule it already has
+  ([proxy-behavior](../specs/proxy-behavior.md) §5 P2). It also makes M3 continuous rather than a
+  replacement: the same URI shape is what a Path carriage would use.
+- *Authentication is mutual TLS, and `keys[]` is deliberately **not** it.* The task the constraint
+  set was to avoid inventing a second key mechanism, and the honest answer is that `keys[]`
+  structurally cannot do this job. It is a **group** secret held byte-identically by every node, so
+  possession proves "some cluster node" and can never prove "the node this reference names"; its
+  rotation calendar is derived from record circulation (`max(L, E_max) + S`) and has nothing to do
+  with how long a channel should be trusted; and using it as a pre-shared key would make the
+  record-minting secret an input to a node-to-node key agreement, which is one restatement away from
+  the key exchange [cluster-membership](../specs/cluster-membership.md) §4 KY9 and §10 forbid
+  outright. What is used instead is not a new mechanism either: TLS material is what a `sips`
+  listener already has, named by reference under
+  [cluster-config](../specs/cluster-config.md) §8 V9. The identities need **no new configuration
+  field** — the caller's reference identity is the `rpc` host it dialled, and the owner accepts a
+  peer whose certificate identity is the `rpc` host of some member, which is a check against a
+  document every node already holds byte-identically.
+- *And peer authentication is not what keeps a request out of a stranger's socket.* That is the
+  reference's own `node` field: a reference presented to the wrong node resolves `FlowDead` at
+  §13.2 RS1 before anything is written. Worth stating positively, because
+  [cluster-membership](../specs/cluster-membership.md) MB6 records that nothing re-checks that the
+  answer came from the endpoint the reference named — RS1 is why that is a reachability property
+  rather than a safety one, and it is why the two mechanisms must not be asked to carry each other's
+  weight.
+- *At-most-once is a property of the transport choice, not a rule bolted on top.* The channel is a
+  reliable stream, so no transaction timer retransmits across it; UDP between nodes is refused for
+  exactly that reason. The rule that does the work is the caller's: **it never retries.** A caller
+  that failed cannot distinguish "it never arrived" from "it arrived, was written, and the answer was
+  lost", so a retry is precisely the second case turned into a duplicate. The cost is recorded rather
+  than argued away — under a failure this hop *loses* requests, and a request that was delivered may
+  be reported undelivered and answered `480` while the device is ringing. That is chosen over a retry
+  that rings a device twice, and it is asserted by a named harness scenario rather than asserted in
+  prose.
+- *The only queue is the owner's, it is per flow, and it is short.* The caller keeps none: a delivery
+  is attempted now or it fails now, because a caller-side queue is a place a request waits for a node
+  that may never come back. Two timers bound the rest — `T_write` (2 s) at the owner, so a client
+  that has stopped reading produces a specific answer rather than a stall, and `T_owner` (4 s) at the
+  caller, which bounds **delivery, not the call**. That last distinction needed a positive delivery
+  signal to exist at all, and `100 Trying` on a completed write is it (RFC 4320 §4.1 makes `100` the
+  one provisional every method may carry). Without it a device that takes five seconds to ring would
+  time the caller out, the target would be removed, the next contact would be tried — and the first
+  device would still be ringing, delivered.
+- *The taxonomy is carried, not re-invented.* AF-2 fixed four outcomes and what each costs the
+  request; AF-3 fixes only how each is produced and observed. Two mechanisms do it: `100 Trying`
+  means the bytes are in the client's socket, and an RFC 3326 `Reason` marker means "the owner is
+  speaking about delivery" rather than "the client answered". The marker is the discriminator rather
+  than the status code, because M2's dead-flow answer is `480` and a client may legitimately send
+  `480` itself. The `430` mapping is decided now so it is not re-litigated in M3: the owner's answer
+  becomes `430`, the marker becomes redundant for that one cause, the caller-side consequence does
+  not change, and `430` is never forwarded upstream.
+- *One rule elsewhere had to be narrowed, and it is named rather than absorbed.*
+  [proxy-behavior](../specs/proxy-behavior.md) R10 makes a branch transport error behave as `503`
+  from that branch. On a **peer-channel** branch it is `OwnerUnreachable` instead, and the target is
+  removed — because AF-2 already fixed that consequence, and a caller that could not reach the owner
+  has learned nothing about the flow and must not report a server error on its behalf. A `500`
+  upstream where a `480` belongs is exactly what a harness scenario is written to catch.
+
+**Considered for upstream: no** — which node owns a client's connection, how that node is addressed,
+and what a failed delivery costs a request are facts about *our* membership, *our* connection table
+and *our* configuration document. The primitives underneath — SIP parsing and lossless
+re-serialization, the transaction machines, TLS transport, RFC 5626's flow-token construction — are
+the kernel's and are consumed rather than re-implemented; even M3's `430` needs no kernel change,
+since `StatusCode` is a checked `u16` newtype.
+
 **Membership and keys are config-first.** v1 has no consensus system and no discovery protocol:
 the node set, shard map and token keys come from configuration (`deployment` epic), reloadable
 without restart. A dynamic membership service is a later, separate decision.
@@ -161,8 +245,48 @@ crate-level and are consumed rather than re-implemented.
   under 200 bytes) and the proxy spec review enforces it.
 - Clock skew and token expiry for long calls: expiry must outlive plausible dialog lifetimes or
   be refreshable on target refresh; decided in AF-1.
-- RPC transport choice (likely the workspace's own framing over TLS; no external broker) —
-  settled in AF-3.
+- RPC transport choice: **settled in AF-3** ([owner-rpc](../specs/owner-rpc.md) §3), and settled
+  *against* the guess recorded here. Not the workspace's own framing over TLS — SIP over mutually
+  authenticated TLS, because the payload is a SIP request either way and a second framing would have
+  carried one inside the other. No external broker, as expected.
+- **The largest open question this epic now has is mid-dialog reachability, and AF-3 deliberately
+  did not close it.** The owner RPC exists only for a request whose target came from a
+  location-service lookup carrying `flow_ref`
+  ([affinity-token](../specs/affinity-token.md) §13.1 D1). A **mid-dialog** request toward a
+  connection-bound client has no lookup (a mid-dialog target set is predetermined —
+  [proxy-behavior](../specs/proxy-behavior.md) §5.1 T1), so it carries no reference and cannot use
+  the hop: it arrives at the edge the route set names and must reach the client's `Contact` by
+  ordinary next-hop resolution, which for a client whose only reachable address is its own
+  connection is exactly the problem the flow reference exists to solve. Today that works only where
+  the transport layer's connection reuse (RFC 5923) happens to find the connection — that is, on the
+  owning node. RFC 5626's answer is to carry the reference in the route set (Path), and
+  [affinity-token](../specs/affinity-token.md) §11.4's caveat is why AF-3 could not simply do it:
+  a route set an endpoint has learned is never recomputed (RFC 3261 §12.2.1.2), so a reference
+  sitting in one is refreshed by nothing and `E_max` stops bounding key rotation. **M3 must
+  re-bound rotation or give the reference an expiry before it can carry one in Path**, and until it
+  does, a cross-node dialog with a connection-bound callee is set up across the hop but is not
+  guaranteed to be mid-dialog reachable from a foreign edge. This bounds what AF-7's M2 assertion
+  can honestly claim.
+- **`cluster-membership` MB5 is an over-approximation, and the precise rule is not expressible
+  where it currently lives.** MB5 requires `rpc` whenever `roles` intersects the call-path roles.
+  The property that actually needs an endpoint is "this node may own a flow", which by FM6 means
+  "this node accepts a connection-oriented transport" — a **listener** fact, so a UDP-only proxy is
+  made to declare an endpoint nothing will ever dial. The document cannot check the precise
+  property: it is cluster-scoped and carries no member's listener set (CM2, MB7), and deriving
+  identity from it is forbidden ([cluster-config](../specs/cluster-config.md) §5 P1). The same rule
+  *is* checkable one layer down, at the node that knows its own listeners — a node with a
+  connection-oriented listener and no `rpc` in its own member entry refuses to start, which is MB2's
+  cross-check shape applied to a field MB2 does not cover today.
+  [owner-rpc](../specs/owner-rpc.md) §12 records it; the amendment is that spec's, not AF-3's.
+- The owner RPC's harness scenarios are **named but not written** ([owner-rpc](../specs/owner-rpc.md)
+  §10). They need an implementation to exercise, which is AF-7's, and this repository's rule is that
+  a coverage row and the test that executes it arrive in the same commit. Naming them is what makes
+  a missing one missing by name.
+- Two platform hops now appear in a cross-node delivery: two `Max-Forwards` decrements and two Via
+  entries where a single-node delivery has one. Neither end may compensate — inflating
+  `Max-Forwards` to hide a hop forges the loop bound — so the residual question is only whether any
+  deployment runs close enough to the `Max-Forwards` floor for it to matter, which the e2e path
+  measures rather than the design assumes.
 - Key compromise blast radius and rotation cadence: **settled in AF-6**
   ([cluster-membership](../specs/cluster-membership.md) §7.1 RB7 for the cadence floor, RB9 for the
   compromise path), and whether tenant ids require encryption was settled earlier still —
