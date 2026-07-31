@@ -54,6 +54,22 @@ Ways to fail, and the last two are the ones that matter:
    what stops a design inventing rows, and its cost is silence the other way: `EX-12` found 31
    `QP-*` rows in a design record, looking exactly like vectors, read by nothing — a fabricated
    `QP-Z-999` among them passed `--check` too. Registration is not something to remember now.
+7. A deferral names a story that nobody will act on — and `CF-24` is the measurement of what that
+   costs. 239 of 428 deferred rows (56%) named a story that had already closed, because this script
+   read a deferral's `story` field in order to *print* it and never once read that story's `status`.
+   Two rules, both mechanical, applied to `[[deferred]]` and to `[[unasserted]]` alike:
+
+   - the named story exists and is not `done`. `blocked` and `backlog` are live: a story waiting on
+     something still has somebody to unblock it, where a closed one has nobody at all.
+   - the named story is **not the story that wrote the spec** the row lives in — `SPECS` carries
+     that story per prefix. This is the mechanism that produced 188 of the 239: a spec story
+     registers its own vector rows and defers them to itself, so the moment the spec is written and
+     the story closes, every row it registered is orphaned. A deferral names the story that will
+     *implement* the row; the one that tabulated it is done by construction.
+
+   `CX-6` had already put this rule on the specs — a `docs/specs/` paragraph may not defer to a
+   story, because a story can stop existing and a spec outlives it. This is the same rule in the
+   file where the ledger actually lives.
 
 Also writes `docs/reference/conformance.md`: generated, never hand-edited, and checked in so a
 reader who does not run the suite can still see what is proved. `--check` fails if the committed file
@@ -77,10 +93,18 @@ import typing
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCOPE = ROOT / "docs" / "reference" / "vector-scope.toml"
 REPORT = ROOT / "docs" / "reference" / "conformance.md"
+STORIES = ROOT / "docs" / "stories"
 
-# Every spec that carries a vector table, with the prefix its rows use and the section the table
-# lives in — the section is quoted in the generated report, so it cannot drift from this table.
-# Every spec that carries a vector table, and the section its table lives in.
+# Every spec that carries a vector table, with the prefix its rows use, the section the table
+# lives in, and the story that *wrote* those rows — the section is quoted in the generated report,
+# so it cannot drift from this table, and the story is the one a deferral may never name (`CF-24`).
+#
+# The third field is per *prefix* rather than per spec, because two specs carry two tables each and
+# the second table was written later by a different story: `FR` is affinity-token §14 (`AF-2`) beside
+# `AT`'s §10 (`AF-1`), and `QP` is hook-framework §9.1 (`EX-12`, which moved the rows in from a
+# design record) beside `HF`'s §9 (`EX-1`). A per-spec answer would name the wrong story for both.
+# `spec_authors` checks every value here against the spec's own `**Stories:**` header, so a
+# hand-written column cannot quietly disagree with the document it describes.
 #
 # A prefix is owned by exactly one spec, and `spec_rows` reads rows only from the owner — so a design
 # doc citing `PB-F-1`, or this script's own docstring, cannot invent a row somebody has to prove. The
@@ -90,31 +114,35 @@ REPORT = ROOT / "docs" / "reference" / "conformance.md"
 # Six of these were unregistered until `CF-8`, which meant ~394 normative rows were prose nothing
 # executed. Demonstrated rather than inferred: a fabricated `LS-R-999` passed the gate untouched.
 SPECS = {
-    "PB": (ROOT / "docs" / "specs" / "proxy-behavior.md", "§12"),
-    "EP": (ROOT / "docs" / "specs" / "e2e-probe.md", "§10"),
-    "RA": (ROOT / "docs" / "specs" / "registrar-auth.md", "§8"),
-    "HF": (ROOT / "docs" / "specs" / "hook-framework.md", "§9"),
-    "LS": (ROOT / "docs" / "specs" / "location-service.md", "§9"),
-    "MR": (ROOT / "docs" / "specs" / "media-relay.md", "§12"),
-    "NN": (ROOT / "docs" / "specs" / "number-normalisation.md", "§11"),
-    "AT": (ROOT / "docs" / "specs" / "affinity-token.md", "§10"),
-    "FR": (ROOT / "docs" / "specs" / "affinity-token.md", "§10"),
-    "CC": (ROOT / "docs" / "specs" / "cluster-config.md", "§12"),
-    "AI": (ROOT / "docs" / "specs" / "asserted-identity.md", "§13"),
+    "PB": (ROOT / "docs" / "specs" / "proxy-behavior.md", "§12", "PX-1"),
+    "EP": (ROOT / "docs" / "specs" / "e2e-probe.md", "§10", "ET-1"),
+    # `registrar-auth` states its authorship as `Status: accepted (RG-2)` rather than in a
+    # `**Stories:**` field, so `spec_authors` has nothing to cross-check this value against. Same for
+    # `operational-capability-baseline`, whose header says `**Tracker:** CX-8`.
+    "RA": (ROOT / "docs" / "specs" / "registrar-auth.md", "§8", "RG-2"),
+    "HF": (ROOT / "docs" / "specs" / "hook-framework.md", "§9", "EX-1"),
+    "LS": (ROOT / "docs" / "specs" / "location-service.md", "§9", "RG-1"),
+    "MR": (ROOT / "docs" / "specs" / "media-relay.md", "§12", "ME-1"),
+    "NN": (ROOT / "docs" / "specs" / "number-normalisation.md", "§11", "RT-6"),
+    "AT": (ROOT / "docs" / "specs" / "affinity-token.md", "§10", "AF-1"),
+    "FR": (ROOT / "docs" / "specs" / "affinity-token.md", "§10", "AF-2"),
+    "CC": (ROOT / "docs" / "specs" / "cluster-config.md", "§12", "DP-1"),
+    "AI": (ROOT / "docs" / "specs" / "asserted-identity.md", "§13", "RT-7"),
     # `QP` is `hook-framework`'s second table, and the second prefix that spec owns. Registered by
     # `EX-12`, which had to move the rows out of `docs/designs/extension-framework.md` first: a
     # design record is not normative, `spec_rows` reads only the owner, and a prefix aimed at
     # `docs/designs/` would have made a design normative by accident. Same demonstration as `CF-8`'s
     # — a fabricated `QP-Z-999` row passed `--check` until the rows had a spec to live in.
-    "QP": (ROOT / "docs" / "specs" / "hook-framework.md", "§9.1"),
+    "QP": (ROOT / "docs" / "specs" / "hook-framework.md", "§9.1", "EX-12"),
     # `SC` is the `SipxCluster` resource's admission and status rows, registered by `KO-1` in the same
     # commit that writes them — the lesson `EX-12` paid for is that registration is not something to
     # do afterwards.
-    "SC": (ROOT / "docs" / "specs" / "sipx-cluster-crd.md", "§10"),
+    "SC": (ROOT / "docs" / "specs" / "sipx-cluster-crd.md", "§10", "KO-1"),
     # M4 target specifications are registered when written. Their rows remain explicitly deferred
-    # in vector-scope.toml until the implementation and milestone-proof stories land.
-    "SS": (ROOT / "docs" / "specs" / "session-service.md", "§6"),
-    "OB": (ROOT / "docs" / "specs" / "operational-capability-baseline.md", "§5"),
+    # in vector-scope.toml until the implementation and milestone-proof stories land — deferred to
+    # those stories, never to the story in this column, which is what wrote the rows down.
+    "SS": (ROOT / "docs" / "specs" / "session-service.md", "§6", "BS-1"),
+    "OB": (ROOT / "docs" / "specs" / "operational-capability-baseline.md", "§5", "CX-8"),
 }
 
 PREFIXES = "|".join(SPECS)
@@ -172,6 +200,19 @@ EQUIVALENTS = {
     "bytes": (1,),
     "%": (1,),
 }
+
+# A story's YAML frontmatter, and the single-token fields this check reads out of it. `note:` and
+# `title:` hold prose and are not matched, deliberately: `id` and `status` are the only two fields
+# here that mean anything to a deferral, and they are exactly the two the board is generated from.
+FRONTMATTER = re.compile(r"\A---\n(.*?)\n---", re.S)
+FRONTMATTER_FIELD = re.compile(r"^([a-z]+):[ \t]*(\S+)[ \t]*$", re.M)
+# The `**Stories:**` field of a spec header, to the end of that header paragraph. Used only to
+# cross-check `SPECS`' third column, so reading generously is the safe direction.
+SPEC_STORIES = re.compile(r"\*\*Stories:\*\*(.*?)(?:\n\s*\n|\Z)", re.S)
+STORY_ID = re.compile(r"\b([A-Z]{2}-\d+)\b")
+# The statuses that mean nobody is going to do this. `blocked` is deliberately not one of them: a
+# blocked story has somebody who can unblock it, where a `done` story has nobody at all.
+CLOSED_STATUSES = frozenset({"done"})
 
 FN_LINE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(\w+)")
 NAMED_FOR = re.compile(rf"^({PREFIXES.lower()})_(?:([a-z])_)?(\d+)_")
@@ -286,7 +327,7 @@ def spec_rows() -> set[str]:
     citing `PB-F-1`, this script's own docstring — cannot invent a row nobody has to prove.
     """
     rows: set[str] = set()
-    for prefix, (path, _section) in SPECS.items():
+    for prefix, (path, _section, _author) in SPECS.items():
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8")
@@ -382,7 +423,7 @@ def claims() -> dict[str, list[str]]:
     tabulated, so there is no claim to read and no way to judge a proof of it.
     """
     values: dict[str, list[str]] = {}
-    for prefix, (path, _section) in SPECS.items():
+    for prefix, (path, _section, _author) in SPECS.items():
         if not path.is_file():
             continue
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -616,11 +657,110 @@ def recorded_shape_only() -> tuple[dict[str, dict], list[str]]:
     return rows, problems
 
 
+def story_statuses() -> dict[str, str]:
+    """Story id → its frontmatter `status`.
+
+    Read from `docs/stories/*.md`, not from the generated board: the board is a rendering of exactly
+    this field, and reading the rendering would make this gate depend on somebody having remembered
+    to run `/track:board`.
+
+    `glob`, never `rglob` — agent worktrees under `.claude/` are full checkouts of this repository,
+    so a walk finds a second copy of every story and a sibling's in-flight edit would decide this
+    gate. That is the lesson `check-docs.py::markdown_files` paid for, and it applies here for the
+    same reason.
+    """
+    statuses: dict[str, str] = {}
+    for path in sorted(STORIES.glob("*.md")):
+        block = FRONTMATTER.match(path.read_text(encoding="utf-8"))
+        if not block:
+            continue
+        fields = dict(FRONTMATTER_FIELD.findall(block.group(1)))
+        if "id" in fields and "status" in fields:
+            statuses[fields["id"]] = fields["status"]
+    return statuses
+
+
+def spec_authors() -> tuple[dict[str, str], list[str]]:
+    """Prefix → the story that wrote its rows, cross-checked against the spec's own header.
+
+    `SPECS`' third column is hand-written, and the rule it feeds — a deferral may not name the story
+    that wrote the spec — is only as good as that column. So every value is compared against the
+    `**Stories:**` field of the spec it belongs to: the declared author must be one of the stories
+    the document itself associates with. That is a membership test rather than an equality one on
+    purpose, because two specs carry two tables written by two stories (see `SPECS`), and the header
+    lists all of them without saying which table is whose.
+
+    A spec with no `**Stories:**` field is skipped rather than reported: `registrar-auth` and
+    `operational-capability-baseline` state authorship in other words, and inventing a header for
+    them belongs in a story about spec headers, not in this check.
+    """
+    authors: dict[str, str] = {}
+    problems: list[str] = []
+    for prefix, (path, _section, author) in SPECS.items():
+        authors[prefix] = author
+        if not path.is_file():
+            continue
+        field = SPEC_STORIES.search(path.read_text(encoding="utf-8"))
+        if not field:
+            continue
+        named = STORY_ID.findall(field.group(1))
+        if named and author not in named:
+            problems.append(
+                f"{prefix}: SPECS names `{author}` as the story that wrote these rows, and "
+                f"{path.relative_to(ROOT)} does not list it among {', '.join(named)} — one of the "
+                f"two is wrong, and a deferral rule reading the wrong story protects nothing"
+            )
+    return authors, problems
+
+
+def dead_letters(
+    entries: dict[str, dict], table: str, statuses: dict[str, str], authors: dict[str, str]
+) -> list[str]:
+    """Entries whose `story` is a reason nobody will act on.
+
+    `CF-24`: this file's `story` field was read in order to print it and never to check it, and 239
+    of 428 deferred rows — 56% — named a story that had already closed. One problem per row, in spec
+    order, and the first reason that applies wins: a row is one dead letter, not a list of ways of
+    being one.
+
+    An entry naming no story at all is not this function's business — `deferred` already refuses that
+    for `[[deferred]]`, and an `[[unasserted]]` entry is allowed to name none, because what it
+    records is what a test asserts *instead* rather than work somebody owes.
+    """
+    held = "deferred to" if table == "deferred" else "recorded as shape only against"
+    problems: list[str] = []
+    for row in sorted(entries, key=sort_key):
+        story = entries[row].get("story", "").strip()
+        if not story:
+            continue
+        if story not in statuses:
+            problems.append(
+                f"{row}: {held} `{story}`, which is no story in docs/stories/ — name a story that "
+                f"exists, or the reason is addressed to nobody"
+            )
+            continue
+        if statuses[story] in CLOSED_STATUSES:
+            problems.append(
+                f"{row}: {held} `{story}`, which is `status: {statuses[story]}` — that story will "
+                f"not do it; re-point the row at the story that will"
+            )
+            continue
+        prefix = family_of(row)[0]
+        if story == authors.get(prefix):
+            spec = SPECS[prefix][0].relative_to(ROOT) if prefix in SPECS else "its spec"
+            problems.append(
+                f"{row}: {held} `{story}`, the story that wrote {spec} — a spec story is done once "
+                f"the spec is written, so its own rows are orphaned the day it closes; name the "
+                f"story that will implement the row"
+            )
+    return problems
+
+
 def sources() -> str:
     """The vector tables this report covers, named from `SPECS` so the sentence cannot go stale."""
     parts = [
         f"[{path.stem}](../specs/{path.name}) {section}"
-        for path, section in SPECS.values()
+        for path, section, _author in SPECS.values()
         if path.is_file()
     ]
     return ", ".join(parts[:-1]) + f" and {parts[-1]}" if len(parts) > 1 else parts[0]
@@ -854,6 +994,59 @@ def self_test() -> list[str]:
         "a line that merely cites a row is not a row",
         ANY_ROW_LINE.match("| `media-anchor` | claims SDP | QP-A-1 … QP-A-4 |") is None,
     )
+
+    # `CF-24`'s half, replayed on the four stories the sweep found. The ledger is real by the time
+    # this runs, so the cases are put to `dead_letters` directly: what has to keep working is the
+    # judgement, not this file's current contents.
+    statuses = {
+        "RT-7": "done",
+        "ME-1": "done",
+        "DP-8": "done",
+        "RT-2": "backlog",
+        "FC-1": "blocked",
+        "BS-1": "ready",
+    }
+    authors = {"AI": "RT-7", "MR": "ME-1", "CC": "DP-1", "SS": "BS-1"}
+
+    def letters(entries: dict[str, dict], table: str = "deferred") -> list[str]:
+        return dead_letters(entries, table, statuses, authors)
+
+    check(
+        "a deferral naming a closed story is refused",
+        len(letters({"CC-D-1": {"story": "DP-8", "reason": "x"}})) == 1,
+    )
+    # `BS-1` is `ready`, so only the authorship rule can catch this one — which is the half that
+    # matters. 188 of `CF-24`'s 239 rows were produced by a spec story deferring its own rows to
+    # itself, and the day it did that it was still open and the ledger still looked correct.
+    spec_story = letters({"SS-1": {"story": "BS-1", "reason": "x"}})
+    check(
+        "a deferral naming the story that wrote the spec is refused while that story is still open",
+        len(spec_story) == 1 and "wrote" in spec_story[0],
+    )
+    check(
+        "a deferral naming a live implementing story passes",
+        letters({"AI-A-1": {"story": "RT-2", "reason": "x"}}) == [],
+    )
+    check(
+        "a `blocked` story is a live owner",
+        letters({"CC-D-1": {"story": "FC-1", "reason": "x"}}) == [],
+    )
+    check(
+        "a deferral naming a story that does not exist is refused",
+        len(letters({"CC-D-1": {"story": "ZZ-99", "reason": "x"}})) == 1,
+    )
+    check(
+        "a closed owner is reported once, not once per rule it breaks",
+        len(letters({"MR-E-1": {"story": "ME-1", "reason": "x"}})) == 1,
+    )
+    check(
+        "an [[unasserted]] entry naming a closed story is refused too",
+        len(letters({"CC-V-9": {"story": "DP-8", "reason": "x"}}, "unasserted")) == 1,
+    )
+    check(
+        "an [[unasserted]] entry naming no story is not a dead letter",
+        letters({"CC-V-9": {"reason": "x"}}, "unasserted") == [],
+    )
     return failures
 
 
@@ -882,6 +1075,14 @@ def main() -> int:
     verdicts = {row: verdict(row, proofs[row], claimed) for row in proofs}
     problems += unowned_rows()
     problems += unrepresented_families(rows)
+
+    # `CF-24`. Both ledgers are checked against the board's own `status` field, so "deferred with a
+    # reason" means a reason with somebody still behind it.
+    statuses = story_statuses()
+    authors, author_problems = spec_authors()
+    problems += author_problems
+    problems += dead_letters(waived, "deferred", statuses, authors)
+    problems += dead_letters(shape_only, "unasserted", statuses, authors)
 
     for row in sorted(rows, key=sort_key):
         if row not in proofs and row not in waived:
