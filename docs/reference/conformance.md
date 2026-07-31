@@ -9,9 +9,9 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**154 of 583 rows proved**; 19 covered for shape only; 410 deferred.
+**157 of 586 rows proved**; 19 covered for shape only; 410 deferred.
 
-Σ over the 61 sections below is 583, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 586, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -690,6 +690,9 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `CC-V-10` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
 | `CC-V-11` | deferred | `DP-8` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row. |
 | `CC-V-12` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `240 s` |
+| `CC-V-13` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-14` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-15` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — key reload (§9.3)
 

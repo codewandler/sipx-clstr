@@ -1019,7 +1019,7 @@ fn with_security(body: &str) -> String {
 
 /// §12 CC-V-13 — a single declared control is refused, and the refusal describes rather than echoes.
 #[test]
-fn cc_v13_a_declared_security_control_is_refused() {
+fn cc_v_13_a_declared_security_control_is_refused() {
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let document = with_security("    unknownSource: drop\n");
     let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
@@ -1045,7 +1045,7 @@ fn cc_v13_a_declared_security_control_is_refused() {
 
 /// §12 CC-V-14 — one error per declared control, each naming its own path (§8 V1).
 #[test]
-fn cc_v14_every_declared_control_is_named_not_just_the_first() {
+fn cc_v_14_every_declared_control_is_named_not_just_the_first() {
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let document = with_security(
         "    unknownSource: drop\n    sanityCheck: true\n    userAgentDenyList: [evil-phone]\n    \
@@ -1062,7 +1062,7 @@ fn cc_v14_every_declared_control_is_named_not_just_the_first() {
     ] {
         let want = format!("cluster.security.{key}");
         assert!(
-            paths.iter().any(|p| *p == want),
+            paths.contains(&want),
             "declared {key} was not named; got {paths:?}"
         );
     }
@@ -1075,18 +1075,25 @@ fn cc_v14_every_declared_control_is_named_not_just_the_first() {
 /// §12 CC-V-15 — wrong-shaped values are refused all the same. Refusing an unappliable control
 /// before typing it is admissible; accepting a value for it is not.
 #[test]
-fn cc_v15_a_wrong_shaped_control_cannot_produce_a_config() {
+fn cc_v_15_a_wrong_shaped_control_cannot_produce_a_config() {
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
-    // A sequence where a scalar was declared, and a mapping where a scalar was.
+    // Each of the four gets the wrong shape: a sequence where a scalar was declared, a mapping
+    // where a scalar was, a scalar where a sequence was, and a scalar where a mapping was.
     let document = with_security(
-        "    unknownSource: [drop, reject]\n    userAgentDenyList:\n      evil: true\n",
+        "    unknownSource: [drop, reject]\n    sanityCheck:\n      enabled: true\n    \
+         userAgentDenyList: evil-phone\n    internalZone: 42\n",
     );
     let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
     let paths: Vec<String> = errors.iter().map(|e| e.path.to_string()).collect();
-    for key in ["unknownSource", "userAgentDenyList"] {
+    for key in [
+        "unknownSource",
+        "sanityCheck",
+        "userAgentDenyList",
+        "internalZone",
+    ] {
         let want = format!("cluster.security.{key}");
         assert!(
-            paths.iter().any(|p| *p == want),
+            paths.contains(&want),
             "a wrong-shaped {key} must still be refused; got {paths:?}"
         );
     }
