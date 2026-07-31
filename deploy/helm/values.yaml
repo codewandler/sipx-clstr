@@ -318,24 +318,33 @@ cluster:
   # an anonymous From URI is RFC 5379 privacy policy, which is RT-7's and has no
   # home in this document yet.
 
-  security:
-    unknownSource: drop
-    sanityCheck: true
-    # The mechanism, with nothing in it. A shipped list of tool names is a
-    # default that goes stale and that nobody reviews.
-    userAgentDenyList: []
-    internalZone:
-      networks: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-    # `maxForwards` is not a key here. RFC 3261 §16.6 step 3 fixes it at 70 —
-    # the value a proxy inserts when a request carries none — so §8 V6 refuses
-    # to make it a knob and the loader refuses the key by name. The 10 this file
-    # used to carry was not a hop budget being tightened; it silently shortened
-    # every call path that arrived without the header.
-    #
-    # `answerOptionsKeepalive` and `anonymousCalls` are gone with it: OPTIONS
-    # handling is proxy-behavior's and not a schema surface, and anonymous-call
-    # policy is the same RFC 5379 privacy question RT-7 owns. Both were
-    # unrecognised keys, which §8 V2 makes a startup error.
+  # Registered and empty, and the emptiness is the whole of what this build can
+  # honestly say. `FC-6` made `unknownSource`, `sanityCheck`, `userAgentDenyList`
+  # and `internalZone` a refusal rather than a setting: no consumer applies any
+  # of them, so a node that started with them declared served the posture they
+  # were written to narrow. This file carried all four, which meant the chart
+  # shipped a document promising ingress controls nobody enforced — the defect
+  # in its most consequential form, because a chart is what an operator trusts
+  # without reading the loader. They are gone rather than commented out with
+  # values, so nobody uncomments a policy that does nothing.
+  #
+  # When a story specifies a consumer for one of them, that story removes its own
+  # row from `UNAPPLIED_SECURITY_CONTROLS` and reintroduces its key here — one at
+  # a time, never as a block.
+  #
+  # An empty `security:` is valid and carries the fixed Max-Forwards of §8 V6.
+  security: {}
+  #
+  # `maxForwards` was never a key here either. RFC 3261 §16.6 step 3 fixes it at 70 —
+  # the value a proxy inserts when a request carries none — so §8 V6 refuses
+  # to make it a knob and the loader refuses the key by name. The 10 this file
+  # used to carry was not a hop budget being tightened; it silently shortened
+  # every call path that arrived without the header.
+  #
+  # `answerOptionsKeepalive` and `anonymousCalls` are gone with it: OPTIONS
+  # handling is proxy-behavior's and not a schema surface, and anonymous-call
+  # policy is the same RFC 5379 privacy question RT-7 owns. Both were
+  # unrecognised keys, which §8 V2 makes a startup error.
 
   # The default set has no carrier and no internal core: it dials its own echo
   # endpoint, which is what makes `helm install` self-contained.

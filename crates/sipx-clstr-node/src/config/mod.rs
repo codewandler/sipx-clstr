@@ -300,6 +300,46 @@ pub struct AuthSpec {
     pub secret_ref: String,
 }
 
+/// The `cluster.security` controls §7 declares and this build does not apply, with the decision each
+/// one would make if it had a consumer.
+///
+/// The refusal is **per control** rather than per section, and the table is why: an operator who
+/// declared three is told about three (§8 V1), and the day a story specifies one of them, that story
+/// removes its own row here and nothing else moves. A single "the security section is unsupported"
+/// error would have to be torn out wholesale by the first control to land, which is the shape that
+/// makes a successor story rewrite a refusal instead of narrowing it.
+///
+/// The second field completes "nothing in this build decides …" in the refusal message. It describes
+/// the **decision**, never the configured value: `FC-8` owns the rule that a refusal must not echo a
+/// secret, and a message that quoted a deny-list or a zone would be a fresh instance of the defect
+/// that story is filed for.
+const UNAPPLIED_SECURITY_CONTROLS: &[(&str, &str)] = &[
+    (
+        "unknownSource",
+        "whether a request from an unconfigured source reaches a SIP decision path",
+    ),
+    (
+        "sanityCheck",
+        "which malformed messages are refused before a decision is taken on them",
+    ),
+    (
+        "userAgentDenyList",
+        "which User-Agent values are turned away",
+    ),
+    (
+        "internalZone",
+        "which addresses count as internal, and so what the other three are relative to",
+    ),
+];
+
+/// What `cluster.security` contributes to a node: the fixed Max-Forwards, and nothing else.
+///
+/// The section's other four keys — [`UNAPPLIED_SECURITY_CONTROLS`] — are **refused** rather than
+/// carried, so there is no field for one here and no reader that could quietly not use it. A struct
+/// field for an unapplied control is exactly the state `FC-6` removed: `unknownSource`, `sanityCheck`,
+/// `userAgentDenyList` and `internalZone` were on the loader's allow-list, validated against nothing,
+/// and reached no `NodeConfig` field, so a document asking for them started a node with the opposite
+/// posture (**V-06**).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecuritySpec {
     /// Always [`MAX_FORWARDS`]. Present as a field because the value is used, not because it is
@@ -1512,6 +1552,21 @@ fn read_tenant_policy(
     policy
 }
 
+/// Read `cluster.security` (`FC-6`).
+///
+/// Absent or empty is valid and means the fixed Max-Forwards of §8 V6, which is the whole of what this
+/// build applies from the section. Every other key §7 declares here is refused: see
+/// [`UNAPPLIED_SECURITY_CONTROLS`] for why the refusal is per control, and [`SecuritySpec`] for what
+/// the old shape did instead.
+///
+/// The four names stay on the closed-world allow-list rather than being dropped from it, and that is a
+/// deliberate difference from "there is no such key". They *are* §7's declared keys, so a document
+/// spelling `unknownSorce` should be told the recognised set (V2) and a document spelling
+/// `unknownSource` should be told that nothing applies it — two different problems leading an operator
+/// to two different actions, exactly as `check_transport` separates `tls` from a transport that does
+/// not exist. What the allow-list must not do any more is *end* there: the mechanism the epic's design
+/// calls the third state — accepted, on a list, consumed by nobody — is what made V2's own error
+/// message evidence that these keys were applied.
 fn read_security(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
@@ -1548,6 +1603,23 @@ fn read_security(
                  a hop budget to be tuned downward"
             ),
         ));
+    }
+    // One error per declared control, so an operator who declared three is told about three (§8 V1).
+    // The value is **described, never quoted**: `FC-8` owns writing that rule down, and a refusal that
+    // echoed what was written would be a new instance of the defect it is filed for.
+    for (key, decides) in UNAPPLIED_SECURITY_CONTROLS {
+        if map.contains_key(Value::from(*key)) {
+            errors.push(ConfigError::new(
+                at.field(key),
+                "CC-V10",
+                Some(format!("a declared {key} policy")),
+                &format!(
+                    "no {key} key until a consumer applies it: nothing in this build decides {decides}, \
+                     so a node started with this declared would serve the posture the key was written \
+                     to narrow. Remove it, or wait for the story that specifies the control"
+                ),
+            ));
+        }
     }
     SecuritySpec::default()
 }

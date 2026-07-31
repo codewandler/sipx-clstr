@@ -195,7 +195,7 @@ the chart's defaults and not of the resource. No row carries a field, a type or 
 | — | `spec.ingress` | config | RT-8/RT-9 |
 | `cluster.rateLimit` | `spec.rateLimit` | config | RT-3 |
 | `cluster.timers` | `spec.timers` | config | [proxy-behavior](proxy-behavior.md), RFC 3261 §17 |
-| `cluster.security` | `spec.security` | config | [cluster-config](cluster-config.md) §8 V6 + RT-3 |
+| `cluster.security` | `spec.security` | config | [cluster-config](cluster-config.md) §8 V6 + RT-3 — the section is registered and empty: its four ingress controls are **refused until a consumer applies one** (`FC-6`) and `maxForwards` is not a knob (V6), so the block carries no keys today |
 | — | `spec.admission` | config | [deployment](../designs/deployment.md), `DP-11` |
 | `cluster.nat` | `spec.nat` | config | **unowned** — see [deployment](../designs/deployment.md) |
 | `cluster.mediaPool` | `spec.mediaPool` | config | KO-7; NG timers by [media-relay](media-relay.md) §8 K6 |
