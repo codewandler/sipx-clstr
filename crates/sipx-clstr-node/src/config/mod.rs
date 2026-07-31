@@ -300,6 +300,38 @@ pub struct AuthSpec {
     pub secret_ref: String,
 }
 
+/// The `cluster.security` controls §7 declares and this build does not apply, with the decision each
+/// one would make if it had a consumer.
+///
+/// The refusal is **per control** rather than per section, and the table is why: an operator who
+/// declared three is told about three (§8 V1), and the day a story specifies one of them, that story
+/// removes its own row here and nothing else moves. A single "the security section is unsupported"
+/// error would have to be torn out wholesale by the first control to land, which is the shape that
+/// makes a successor story rewrite a refusal instead of narrowing it.
+///
+/// The second field completes "nothing in this build decides …" in the refusal message. It describes
+/// the **decision**, never the configured value: `FC-8` owns the rule that a refusal must not echo a
+/// secret, and a message that quoted a deny-list or a zone would be a fresh instance of the defect
+/// that story is filed for.
+const UNAPPLIED_SECURITY_CONTROLS: &[(&str, &str)] = &[
+    (
+        "unknownSource",
+        "whether a request from an unconfigured source reaches a SIP decision path",
+    ),
+    (
+        "sanityCheck",
+        "which malformed messages are refused before a decision is taken on them",
+    ),
+    (
+        "userAgentDenyList",
+        "which User-Agent values are turned away",
+    ),
+    (
+        "internalZone",
+        "which addresses count as internal, and so what the other three are relative to",
+    ),
+];
+
 /// What `cluster.security` contributes to a node: the fixed Max-Forwards, and nothing else.
 ///
 /// The section's other four keys — [`UNAPPLIED_SECURITY_CONTROLS`] — are **refused** rather than
