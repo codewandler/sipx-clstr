@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use bytes::Bytes;
 use sipx_clstr_proxy::{
     AckRoute, BranchId, CookieKey, Effect as ProxyEffect, Input as ProxyInput, ProxyConfig,
-    ResponseContext, route_ack, targets_from_lookup,
+    ResponseContext, TokenVerdict, route_ack, targets_from_lookup,
 };
 use sipx_clstr_registrar::{
     Admission, AuthOutcome, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore,
@@ -1335,6 +1335,22 @@ async fn perform(
                 let responses = handle.send(*request, destination).await?;
                 pending.push((branch, responses));
             }
+            // P2's question, and this driver can only give it P3's answer. Verifying needs the
+            // cluster key set (affinity-token §6), which arrives by configuration and which
+            // `cluster-membership` §4's `keys[]` schema does not yet have a loader for — so this
+            // node holds no keys, mints no tokens, and its own `Record-Route` carries no `aft`. An
+            // `aft` reaching it therefore came from somewhere else, and §8 S2's answer for a key id
+            // that is not in the key set is exactly this: `Invalid`, and the engine's `403`. There
+            // is no fallback and no degraded mode to reach for. Leaving the effect unanswered would
+            // be worse than wrong — the context would wait for a verdict forever, holding its
+            // transaction and its admission permit (`DP-11`).
+            ProxyEffect::VerifyToken { .. } => {
+                tracing::warn!(
+                    "a Route carried an affinity token and this node holds no key set: rejecting"
+                );
+                let more = context.on_input(ProxyInput::TokenFact(TokenVerdict::Invalid));
+                Box::pin(perform(handle, store, config, key, context, more, pending)).await?;
+            }
             ProxyEffect::Respond(response) => {
                 handle.respond(key, *response).await?;
             }
@@ -1385,7 +1401,15 @@ async fn forward_ack(
     proxy: &ProxyConfig,
     arrival: &Incoming,
 ) -> Result<(), sipx_transport::Error> {
-    match route_ack(arrival.request.clone(), proxy) {
+    // K3 takes §5 like any other request, so a carried token is verified before this ACK moves.
+    // The verdict is the same one `perform` gives above and for the same reason — this node holds
+    // no key set, so nothing it did not mint can verify — and the refusal is the only one this
+    // method has: a record, never a response.
+    let verdict = match route_ack(arrival.request.clone(), proxy, None) {
+        AckRoute::Verify { .. } => Some(TokenVerdict::Invalid),
+        _ => None,
+    };
+    match route_ack(arrival.request.clone(), proxy, verdict.as_ref()) {
         AckRoute::Forward { request, next_hop } => {
             let Some(destination) = destination_of(&next_hop) else {
                 tracing::warn!(
@@ -1405,6 +1429,17 @@ async fn forward_ack(
                 because = refusal.describe(),
                 source = %arrival.source,
                 "dropped an ACK: it cannot be forwarded, and an ACK has no response"
+            );
+            Ok(())
+        }
+        // Unreachable: the second call supplies the verdict the first one asked for, so `Verify`
+        // cannot come back twice. Recorded rather than `unreachable!()`, because a panic here would
+        // be a panic on network input (non-negotiable #3) for the sake of an invariant this
+        // function can simply state instead.
+        AckRoute::Verify { .. } => {
+            tracing::error!(
+                source = %arrival.source,
+                "dropped an ACK: the token verdict was not consumed, which is a bug in this driver"
             );
             Ok(())
         }

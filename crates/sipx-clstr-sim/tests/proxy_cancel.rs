@@ -134,6 +134,11 @@ impl ProxyNode {
                     let more = self.context.on_input(ProxyInput::TargetsResolved(targets));
                     out.extend(self.perform(more));
                 }
+                // No token is minted in this scenario, so P2 never asks. Noted rather than absorbed:
+                // an unanswered verification request is a context that waits forever.
+                ProxyEffect::VerifyToken { .. } => {
+                    out.push(Effect::Note("unexpected token verification".to_owned()));
+                }
                 ProxyEffect::SetTimer { branch, after, .. } => {
                     if let Some(branch) = branch {
                         let timer = self.timer_id(&branch);

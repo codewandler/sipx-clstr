@@ -47,8 +47,9 @@ pub struct TargetQuery {
 
 /// The verdict of verifying an affinity token found in a `Route` (P2, P3).
 ///
-/// `AF-4` supplies the real library; until then a driver constructs these directly, which is what
-/// lets the token-bearing paths be specified and tested before the crypto exists.
+/// The verdict is an **input**, never something this crate computes: verification needs the key
+/// set, a clock and a constant-time comparison, and all three are the driver's (AGENTS.md rule 2).
+/// `sipx-clstr-affinity` is the library that produces it; the engine only consumes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenVerdict {
     /// The token verified. Its facts are the driver's to act on.
@@ -56,11 +57,47 @@ pub enum TokenVerdict {
         /// The tenant the token names.
         tenant: String,
     },
-    /// The token did not verify — tampered, or expired.
+    /// The token did not verify — tampered, expired, minted under a retired key, or out of scope.
     ///
     /// P3: a hard reject, with no fallback routing. Falling back would mean a forged token buys an
-    /// attacker exactly the routing they would have got without one.
+    /// attacker exactly the routing they would have got without one. Every failure collapses to
+    /// this one verdict on purpose (affinity-token §8): the *reason* is telemetry, and putting it
+    /// on the wire would hand an attacker a debugging oracle.
     Invalid,
+}
+
+/// What the platform `Route`s popped by P2 carried.
+///
+/// Produced by route preprocessing, which is the only thing that knows which `Route`s are ours.
+///
+/// **One case is deliberately absent.** affinity-token §8 also makes a *tokenless* platform `Route`
+/// on a mid-dialog request a verification failure, on §5's premise that "there is no tokenless
+/// platform Route on a mid-dialog request". That premise holds only once every edge mints — and a
+/// deployment with no key set configured mints nothing, so its own `Record-Route` is tokenless and
+/// its own mid-dialog requests present exactly the shape the rule rejects. Enforcing it before key
+/// configuration is mandatory would answer `403` to every in-call message on such a node. So an
+/// absent `aft` is reported as "nothing to verify" (`None` from preprocessing) rather than as a
+/// failure, and closing that gap belongs to the story that makes a key set required.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TokenCarriage {
+    /// The governing token: the **first-popped** one, whose direction names the presenting side.
+    pub token: Bytes,
+    /// The pair's other entry, when a second consecutive platform `Route` was popped carrying one
+    /// — affinity-token §8 S9's pair check.
+    pub partner: Option<Bytes>,
+}
+
+/// The `Record-Route` pair a dialog-forming request is stamped with — affinity-token §7 M1/M2.
+///
+/// One entry per side, one fresh token per entry, claims identical apart from direction and nonce.
+/// Both are minted by the driver, because a nonce is randomness and randomness is injected (§7 M4);
+/// the engine only decides *whether* and *where* they go on the wire.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordRouteTokens {
+    /// The entry facing the originating side — the side that sent the dialog-forming request.
+    pub originating: Bytes,
+    /// The entry facing the terminating side — the side it is forwarded to.
+    pub terminating: Bytes,
 }
 
 /// A timer the proxy owns, above the transaction layer.
@@ -81,8 +118,16 @@ pub enum Input {
     BranchTransportError(BranchId),
     /// The targets the engine asked for.
     TargetsResolved(Vec<Target>),
-    /// A token found in a `Route` was verified, or rejected.
+    /// A token found in a `Route` was verified, or rejected — the answer to
+    /// [`Effect::VerifyToken`], and the input P2 turns into P3.
     TokenFact(TokenVerdict),
+    /// The `Record-Route` pair to stamp a dialog-forming request with (F4, affinity-token §7 M1).
+    ///
+    /// Fed **before** [`Input::Upstream`], because minting needs a nonce and a clock and neither is
+    /// the engine's to reach. A driver that supplies none — a node with no key set — gets the
+    /// tokenless single `Record-Route` the platform has always emitted, rather than a stalled
+    /// request: no token is a missing feature, and there is no decision waiting on it.
+    TokensMinted(Box<RecordRouteTokens>),
     /// A timer the engine set has fired.
     TimerFired(ProxyTimer, Option<BranchId>),
     /// A CANCEL matched our server transaction.
@@ -130,6 +175,23 @@ pub enum Effect {
     AnswerCancel,
     /// Ask for the targets of a URI. The answer returns as `Input::TargetsResolved`.
     ResolveTargets(TargetQuery),
+    /// Verify the affinity token a popped platform `Route` carried — P2. The answer returns as
+    /// [`Input::TokenFact`].
+    ///
+    /// **Nothing else is emitted alongside it, and nothing follows until the verdict arrives.**
+    /// That is the whole point of it being an effect rather than a courtesy the driver performs on
+    /// its own initiative. `PX-13` gave in-dialog requests their predetermined target set (T1) and
+    /// resolved it synchronously inside `Input::Upstream`, which put `Effect::Forward` ahead of any
+    /// verdict a driver could have supplied — so P3's `403` arrived after the request had already
+    /// gone, and a forged token bought exactly the routing P3 exists to deny it. Feeding the verdict
+    /// first was no repair either: with no request yet, the engine had nothing to reject. Making the
+    /// engine *ask* is what puts the two in the only order that is safe.
+    VerifyToken {
+        /// The governing token — the first-popped entry's, whose direction names the presenting side.
+        token: Bytes,
+        /// The pair's other entry when one was popped, for affinity-token §8 S9's consistency check.
+        partner: Option<Bytes>,
+    },
     /// Arm a timer.
     SetTimer {
         /// Which timer.
@@ -169,6 +231,7 @@ impl Effect {
             Self::Forward { .. } => Kind::Forward,
             Self::CancelBranch(_) => Kind::CancelBranch,
             Self::ResolveTargets(_) => Kind::ResolveTargets,
+            Self::VerifyToken { .. } => Kind::VerifyToken,
             Self::SetTimer { .. } => Kind::SetTimer,
             Self::ClearTimer { .. } => Kind::ClearTimer,
             Self::Terminate => Kind::Terminate,
@@ -226,6 +289,8 @@ pub enum Kind {
     AnswerCancel,
     /// [`Effect::ResolveTargets`].
     ResolveTargets,
+    /// [`Effect::VerifyToken`].
+    VerifyToken,
     /// [`Effect::SetTimer`].
     SetTimer,
     /// [`Effect::ClearTimer`].

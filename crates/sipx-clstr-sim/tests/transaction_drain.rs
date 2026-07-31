@@ -598,6 +598,13 @@ impl Edge {
                     self.upstream.remove(call);
                     out.push(Effect::Note("terminate".to_owned()));
                 }
+                // This scenario mints no affinity token, so no `Route` in it carries one and P2
+                // never asks. A note rather than a silent arm: if it ever does fire here, the
+                // context is waiting for a verdict nothing will send, which is exactly the held
+                // transaction this file exists to catch — and the trace should say why.
+                ProxyEffect::VerifyToken { .. } => {
+                    out.push(Effect::Note("unexpected token verification".to_owned()));
+                }
                 ProxyEffect::CancelBranch(_)
                 | ProxyEffect::AnswerCancel
                 | ProxyEffect::SetTimer { .. }

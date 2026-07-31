@@ -159,6 +159,11 @@ impl Edge {
                         });
                     }
                 }
+                // No token is minted in this scenario, so P2 never asks. Noted rather than absorbed:
+                // an unanswered verification request is a context that waits forever.
+                ProxyEffect::VerifyToken { .. } => {
+                    out.push(Effect::Note("unexpected token verification".to_owned()));
+                }
                 ProxyEffect::ClearTimer { .. }
                 | ProxyEffect::CancelBranch(_)
                 | ProxyEffect::AnswerCancel => {}

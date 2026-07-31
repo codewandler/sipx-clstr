@@ -30,6 +30,11 @@ tracing.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+# `AF-5`'s token round trip needs an edge that really mints and really verifies. A dev-dependency
+# for the same reason `sipx-ua` is one below: mint and verify are the *driver's* half of the
+# affinity contract, and a harness library that offered them would be offering a driver — the thing
+# every scenario is supposed to write for itself and be judged on.
+sipx-clstr-affinity.workspace = true
 # `RG-2`'s scenario needs a phone that can answer a digest challenge, and the phone's half is the
 # kernel's own responder rather than a fixture written here — a scenario that computed the digest
 # itself would prove the harness agrees with the harness. A dev-dependency, so the simulated
