@@ -165,6 +165,24 @@ pub(crate) struct BinaryNode {
     stderr: Arc<Mutex<String>>,
 }
 
+/// A node that never bound anything, and everything it said about why.
+///
+/// The counterpart of [`BinaryNode`]: [`BinaryNode::start`] turns this into a panic, because for most
+/// tests here a node that will not start is a broken fixture. For a test whose *subject* is the
+/// refusal it has to be a value — `FC-6` asserts that a document declaring a `cluster.security`
+/// control this build cannot apply is refused **before** a socket is bound, and a helper that panicked
+/// on that outcome could only report the story's green result as "the harness failed".
+pub(crate) struct Refusal {
+    /// Everything the node wrote to stdout. The bind announcement lives here, so its *absence* is how
+    /// "before any socket was bound" is observed from outside the process.
+    pub(crate) stdout: String,
+    /// Everything the node wrote to stderr, which is where every refusal is printed.
+    pub(crate) stderr: String,
+    /// Whether the child exited on its own. `false` means it neither bound nor stopped within
+    /// [`PATIENCE`], which is a different failure and must not be reported as a refusal.
+    pub(crate) exited: bool,
+}
+
 impl BinaryNode {
     /// Run `sipx-clstr run --config <path>` as node 1 in zone a, and wait for it to bind.
     ///
@@ -178,6 +196,27 @@ impl BinaryNode {
     /// panic carries its stderr, because that is where the reason is.
     #[must_use]
     pub(crate) fn start(config_path: &str) -> Self {
+        match Self::try_start(config_path) {
+            Ok(node) => node,
+            Err(refusal) => {
+                assert!(
+                    refusal.exited,
+                    "the node bound nothing within {PATIENCE:?}. stderr was:\n{}",
+                    refusal.stderr
+                );
+                panic!(
+                    "the node exited before it bound anything. stderr was:\n{}",
+                    refusal.stderr
+                )
+            }
+        }
+    }
+
+    /// [`Self::start`], with the refusal as a value instead of a panic.
+    ///
+    /// Same node, same identity, same streams — the only difference is who decides that a node which
+    /// did not bind is a failure. See [`Refusal`].
+    pub(crate) fn try_start(config_path: &str) -> Result<Self, Refusal> {
         let mut child = Command::new(env!("CARGO_BIN_EXE_sipx-clstr"))
             .args([
                 "run",
@@ -199,11 +238,18 @@ impl BinaryNode {
         let stdout = drain(child.stdout.take().expect("a piped stdout"));
         let stderr = drain(child.stderr.take().expect("a piped stderr"));
 
-        let listening = await_listening_line(&mut child, &stdout, &stderr);
-        Self {
-            child,
-            listening,
-            stderr,
+        match await_listening_line(&mut child, &stdout, &stderr) {
+            Ok(listening) => Ok(Self {
+                child,
+                listening,
+                stderr,
+            }),
+            Err(refusal) => {
+                // The child is gone, or is going nowhere. Either way nothing else will read it.
+                let _ = child.kill();
+                let _ = child.wait();
+                Err(refusal)
+            }
         }
     }
 
@@ -272,15 +318,13 @@ fn drain(stream: impl std::io::Read + Send + 'static) -> Arc<Mutex<String>> {
 /// refusal that can stop a node starting — so seeing it means the node is serving, and seeing the
 /// child exit without it means it is not and never will be.
 ///
-/// # Panics
-///
-/// If the node exits first, or says nothing within [`PATIENCE`]. Either panic carries the node's own
-/// stderr, because that is where the reason is.
+/// A node that never bound is returned as a [`Refusal`] rather than panicked over, because whether
+/// that is a failure is the caller's question and not this function's.
 fn await_listening_line(
     child: &mut Child,
     stdout: &Arc<Mutex<String>>,
     stderr: &Arc<Mutex<String>>,
-) -> SocketAddr {
+) -> Result<SocketAddr, Refusal> {
     let deadline = Instant::now() + PATIENCE;
     loop {
         let seen = stdout
@@ -291,7 +335,7 @@ fn await_listening_line(
             .lines()
             .find_map(|line| line.trim().strip_prefix("listening on "))
         {
-            return addr.parse().expect("the node announced a real address");
+            return Ok(addr.parse().expect("the node announced a real address"));
         }
 
         // Checked after reading, not before: a node can bind, announce and exit between two polls,
@@ -305,11 +349,11 @@ fn await_listening_line(
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .clone();
-            assert!(
+            return Err(Refusal {
+                stdout: seen,
+                stderr: why,
                 exited,
-                "the node bound nothing within {PATIENCE:?}. stderr was:\n{why}"
-            );
-            panic!("the node exited before it bound anything. stderr was:\n{why}");
+            });
         }
         std::thread::sleep(Duration::from_millis(20));
     }

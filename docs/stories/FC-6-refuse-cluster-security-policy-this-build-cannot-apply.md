@@ -2,7 +2,7 @@
 id: FC-6
 title: Refuse cluster.security policy until a specified consumer applies every declared control
 pillar: Cluster
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
