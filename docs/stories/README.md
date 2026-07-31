@@ -44,13 +44,12 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 
 ## Now (in progress)
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
-- [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4 only — PX-5 is done and T-14's typed Path landed in v0.4.0
+- [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · round trip lands; the Path variant waits on affinity-token M7's direction value, which the spec defers to M3 — not on the kernel
 - [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
-- [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 — four ingress controls load as applied, validate no values, and change no runtime decision
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 in flight — RG-25 landed and lifted the block; a half-resolved catch-up merge waits in the resume worktree
 
 ## Next (ready — take the top one unless the user named a story)
@@ -264,6 +263,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [FC-3 — Apply or refuse tenant[].auth, so a document that asks for authentication cannot yield an open registrar](FC-3-apply-or-refuse-tenant-auth.md) · Cluster · DP-10 deliberately declined to fold this in — it is the security-behaviour change that wants its own test
 - [FC-4 — Apply or refuse the per-tenant policy fields — domains, expiry and maxBindingsPerAor](FC-4-apply-or-refuse-the-per-tenant-policy-fields.md) · Cluster · domains parses into a struct field nothing reads — a REGISTER for an undeclared domain is accepted
 - [FC-5 — Repair the two-node proofs FC-4 broke, and make a mismatched domain impossible to ship](FC-5-repair-the-two-node-proofs-fc-4-broke.md) · Foundation · the repository's headline cluster proof answers 403 — the script registers in a domain its own document does not serve
+- [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 closed — the four ingress controls are refused per control, and the chart that declared all four no longer does
 - [KO-1 — Specify the SipxCluster CRD and the values.yaml contract](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) · Cluster · the CR spec *is* the config schema, and a check holds it there
 - [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 - [KO-14 — Bring the chart's values to the config schema, starting with the media block that cannot boot](KO-14-bring-the-chart-to-the-config-schema.md) · Cluster · DP-1 found the shipped default set declares a media policy G-M6 refuses to start on

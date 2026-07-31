@@ -7,6 +7,33 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A declared `cluster.security` control now stops the node instead of loading as applied**
+  (`FC-6`, validated synthesis **V-06**). `unknownSource`, `sanityCheck`, `userAgentDenyList` and
+  `internalZone` were on the loader's allow-list, validated against nothing, and reached no
+  `NodeConfig` field — so a document asking for any of them started a node serving the **opposite**
+  posture to the one the key was written to produce. They are refused at load, one error per
+  declared control naming its own path.
+
+  **The refusal is per control, not per section.** A story that specifies a consumer for one of them
+  removes its own row and leaves the rest refusing; an all-or-nothing refusal would have to be torn
+  out wholesale by the first control to land. The message describes the decision the control *would*
+  make and never echoes the configured value, which is `FC-8`'s rule respected ahead of `FC-8`
+  landing.
+
+  **The chart shipped the defect in its most consequential form.** `deploy/helm/values.yaml`
+  declared all four, so the chart this project publishes would have rendered a document promising
+  ingress controls nobody enforced — and a chart is what an operator trusts without reading the
+  loader. Nothing caught it, because `deploy/helm/check-values.sh` needs helm and a built binary and
+  is deliberately not a gate step. The chart now declares `security: {}`; empty is valid and carries
+  §8 V6's fixed Max-Forwards, and the section staying present is what holds `cluster-config` §7's
+  registry, the `SipxCluster` mapping table and the chart 1:1.
+
+  `cluster-config` §12 gains `CC-V-13`, `CC-V-14` and `CC-V-15`, each with a test that executes it —
+  they were registered by the interrupted first pass with nothing running them, which is exactly the
+  `CF-12` defect. The report moves to **157 of 586 rows proved**.
+
 ### Added
 
 - **The affinity token can be minted and verified** (`AF-4`). `crates/sipx-clstr-affinity` implements
