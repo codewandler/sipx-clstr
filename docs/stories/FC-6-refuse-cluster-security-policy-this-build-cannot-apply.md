@@ -2,7 +2,7 @@
 id: FC-6
 title: Refuse cluster.security policy until a specified consumer applies every declared control
 pillar: Cluster
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
@@ -44,7 +44,30 @@ document asking for any of them must stop the node rather than start with the op
 
 ## Progress
 
-- (not started)
+- **2026-07-31 — started, killed mid-story by an org monthly spend limit, work rescued.** The
+  implementor's uncommitted tree was committed by the coordinator as **`impl/FC-6-v06` at `8a78dda`**,
+  worktree preserved at `/home/timo/projects/sipx-clstr-FC-6`. It carries partial work in
+  `crates/sipx-clstr-node/src/config/mod.rs`, a new
+  `crates/sipx-clstr-node/tests/security_refused.rs`, a touched
+  `crates/sipx-clstr-node/tests/support/mod.rs`, and edits to `docs/specs/cluster-config.md`. **Not
+  gated, not reviewed, and the loader half was still being written** — a starting point, not a merge
+  candidate. Its last report was "now the loader".
+- **The branch is deliberately not named `impl/FC-6`.** A branch by that name already exists and is
+  merged into `main`, carrying `82b613a` "Apply the declared roles at dispatch, or refuse to start" —
+  **different work**, which the review-backlog renumbering moved to `DP-13`. Do not be misled by
+  `git log --grep=FC-6`; the story file is the source of truth and this story is the `V-06`
+  `cluster.security` refusal.
+- **Unverified on resume:** the `SecuritySpec` (`config/mod.rs:232-245`) and `read_security`
+  (`:1444-1482`) line references in the Notes below were not re-checked against the current tree, and
+  the file has moved under other stories. Confirm them before quoting them.
+- **Two constraints from the dispatch worth keeping.** Build the refusal so it can be narrowed **one
+  control at a time** — the story's own note anticipates a later feature story removing only its own
+  control — rather than as an all-or-nothing gate a successor must tear out. And `FC-8` ("a refused
+  value must not echo a secret") is `ready` and unlanded, so refusal messages must not create fresh
+  instances of the defect it was filed for.
+- **Blast radius unchecked.** A new refusal invalidates any in-tree document declaring one of the four
+  controls; `deploy/`, `scripts/*.sh`, `website/docs/reference/configuration.md` and the devspace
+  manifests were not swept. A refusal that turns the project's own proof scripts red is not done.
 
 ## Notes
 

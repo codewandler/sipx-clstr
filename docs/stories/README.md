@@ -45,21 +45,29 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 ## Now (in progress)
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
 - [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · blocked by AF-4 only — PX-5 is done and T-14's typed Path landed in v0.4.0
+- [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
 - [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
+- [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 — four ingress controls load as applied, validate no values, and change no runtime decision
+- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 in flight — RG-25 landed and lifted the block; a half-resolved catch-up merge waits in the resume worktree
 
 ## Next (ready — take the top one unless the user named a story)
 - [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
 
+### Cluster affinity & connection ownership
+_What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
+- [AF-8 — A tokenless mid-dialog platform Route must not be a silent downgrade](AF-8-a-tokenless-mid-dialog-route-must-not-be-a-silent-downgrade.md) · Cluster · AF-5 reports an absent aft as "nothing to verify" because no keys[] loader exists — harmless until a token claim becomes a routing input
+
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
+- [CF-25 — A new spec can carry normative rules no gate ever enumerates](CF-25-a-new-spec-can-carry-normative-rules-no-gate-enumerates.md) · Foundation · AF-3 added a 296-line normative spec and check-vectors.py stayed green at 154/583 without seeing one rule of it
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
 - [CF-23 — A blank line silently truncates a normative table, and the gate reads it as clean](CF-23-a-blank-line-silently-truncates-a-normative-table.md) · Foundation · RG-25 orphaned a hook-phase row into literal pipe text; check-docs.py passed it, and the spec's own sentence still claimed both rows
+- [CF-26 — The harness cannot injure a connection, so three owner-RPC scenarios are unwritable](CF-26-the-harness-cannot-injure-a-connection.md) · Foundation · fault.rs offers five faults, none of them reconnect, restart-with-fresh-incarnation or backpressure — which owner-rpc §10 requires
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
@@ -74,7 +82,6 @@ _The site a stranger lands on should say what this does and how to run it, not w
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
 - [DP-16 — Load the membership, key and shard-map sections the config loader still refuses](DP-16-load-the-membership-key-and-shard-map-sections.md) · Cluster · AF-6 specified them and DP-8 is closed, so nothing owns loading them — a document written to cluster-membership.md will not start a node
-- [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 — four ingress controls load as applied, validate no values, and change no runtime decision
 - [FC-7 — Expose the contact-operation bound beside the quota it must not contradict](FC-7-expose-the-contact-operation-bound-beside-the-quota-it-must-not-contradict.md) · Cluster · RG-25 made max_contact_ops a per-tenant policy field with no document key — raise maxBindingsPerAor past it and whole-set refreshes start answering 403
 - [FC-8 — Write down the redaction rule the loader already follows](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · the loader already redacts an inline DSN and an inline nonce secret against no written rule — KY3 made it three call sites governed by nothing
 
@@ -106,7 +113,6 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ## Blocked
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
-- [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · blocked by RG-25 — the quota cannot be measured on the outcome alone until the contact count is bounded
 
 ## Backlog
 - [CX-9 — Pin the qualifying released kernel and clear the M4 upstream ledger](CX-9-pin-the-qualifying-kernel-release.md) · Platform · blocked by every M4 kernel story and a tagged release carrying them
