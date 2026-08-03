@@ -36,8 +36,8 @@ than on a pin. The
 gate is green, and
 M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
 duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
-The last cut is **`0.12.0`** — the release that turned the gate on itself and found a third of its
-own checks could not see what they were believed to check.
+The last cut is **`0.13.0`** — affinity tokens now round-trip across edges with zero cross-node
+dialog lookups, while key loading and connection-owner delivery remain explicit deployment blockers.
 Check the board before assuming any of that is current.
 
 ## Non-negotiables

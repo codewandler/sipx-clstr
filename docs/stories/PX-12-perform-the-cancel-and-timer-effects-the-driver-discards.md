@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
 areas: [proxy, node]
-note: release blocker · blocked by CX-7's released CANCEL API; local timer/effect wiring must not construct CANCEL by shadowing the kernel
+note: release blocker · blocked until a released sipx carries T-28; local timer/effect wiring must not construct CANCEL by shadowing the kernel
 ---
 
 # Perform the CANCEL and timer effects the driver discards
@@ -20,7 +20,8 @@ construction below the kernel boundary.
 
 ## Acceptance
 
-- [ ] **Dependency:** sipx releases the CANCEL construction/dispatch API filed by `CX-7`, and this
+- [ ] **Dependency:** sipx releases the CANCEL construction/dispatch API filed as
+      [`T-28`](https://github.com/codewandler/sipx/blob/09d5518dc587dd77db61abd220ad309e00eda688/docs/stories/T-28-cancel-an-outgoing-invite-transaction.md), and this
       workspace pins that release before `CancelBranch` is implemented. No local request-cloning
       helper shadows the kernel's RFC 3261 §9.1 rules.
 - [ ] The driver associates an upstream CANCEL with the existing INVITE server transaction and feeds

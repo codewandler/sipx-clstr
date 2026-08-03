@@ -5,7 +5,7 @@ description: "Where sipx-clstr stands, release by release, and what is still mis
 
 # What's new
 
-The current release is **0.12.0**.
+The current release is **0.13.0**.
 
 ## Where this actually is
 
@@ -14,8 +14,11 @@ calls that cross from one node to the other — and let media flow directly betw
 much is real, tested against independent client software, and you can have it working in about ten
 minutes, ending with a call you can hear: see [Getting started](getting-started.md).
 
-Everything past that is specification. There is no affinity token on the wire, no registrar shard, no
-trunk, no media relay, no operator.
+The next cluster layer now exists below the deployment seam: the affinity-token library passes every
+byte vector, and a deterministic call round-trips its `Record-Route`/`Route` token through two edges
+with zero cross-node dialog lookups. It is not deployable yet: configuration cannot load the keys,
+there is no connection-owner delivery hop, and there is still no registrar shard, trunk, media relay
+or operator.
 
 Two things will bite you:
 
@@ -37,7 +40,7 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 
 | | State |
 |---|---|
-| One address in front of the cluster (needs affinity tokens) | specified, not shipped |
+| One address in front of the cluster | Route-token round trip proved; key loading and owner delivery not shipped |
 | Flow ownership and the connection-owner RPC | specified, not shipped |
 | Registrar sharding | specified, not shipped |
 | Carrier trunks, number normalisation, asserted identity | specified, not shipped |
@@ -49,7 +52,7 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 **The measuring instrument now measures everything, and it now shows what it measures.** Six
 specifications used to carry vector tables the checker had no registration for — roughly 340
 normative rows that nothing executed, and a fabricated row in one of those families passed the gate
-untouched. Fifteen prefixes are now registered: **154 of 583 rows proved, 19 covered for shape only,
+untouched. Fifteen prefixes are now registered: **157 of 586 rows proved, 19 covered for shape only,
 410 deferred**, each deferral naming what is specifically missing and the story that closes it.
 
 Two of those numbers went the "wrong" way on purpose. *Shape only* is a category `CF-12` created for
@@ -64,6 +67,31 @@ count. A falling percentage here is the report becoming honest rather than the p
 Each entry leads with what changed for someone using this. The full detail — findings, rejected
 alternatives, the reasoning behind each decision — is in
 [CHANGELOG.md](https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md).
+
+### 0.13.0 — affinity on the route, fail-closed at the edge
+
+**M2's central rule is executable now, but not yet deployable.** Edge A mints the affinity pair into
+`Record-Route`; a mid-dialog request reaches edge B, which has never seen the dialog, verifies the
+pair and forwards with the cross-node dialog-lookup counter at zero. The token library proves every
+byte vector, including rotation and tamper rejection. Membership, key distribution, shard mapping
+and the connection-owner RPC are specified beside it; loading those keys and performing that owner
+hop remain open.
+
+The running node also became stricter in places an operator can observe:
+
+- `ACK` and other in-dialog requests follow their dialog route instead of being looked up as
+  registrations.
+- Declared roles reach runtime dispatch, so a proxy-only node no longer accepts `REGISTER`.
+- Unsupported `cluster.security` controls stop startup instead of appearing applied, and the default
+  chart no longer declares controls this build cannot enforce.
+- One REGISTER cannot submit an unbounded contact-operation set before reconciliation.
+- The gate proves a completed call releases all transactions at the RFC-derived `128·T1` ceiling;
+  the old, shorter threshold had labelled a legal lifetime a leak and caused a correct routing fix
+  to be reverted once.
+
+Two required kernel capabilities are filed, not released: proxy-usable outgoing CANCEL and exact
+TCP-only listener selection. This release does not copy either into the platform; it keeps the real
+driver fail-closed until a tagged sipx version carries them.
 
 ### 0.12.0 — the gate, pointed at itself
 

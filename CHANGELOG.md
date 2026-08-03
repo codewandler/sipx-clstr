@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-04
+
+This release puts M2's defining invariant into executable form: an edge mints the affinity token
+pair into `Record-Route`, a mid-dialog request reaches a different edge, and that edge verifies and
+routes it with **zero cross-node dialog lookups**. The pure token library proves every byte vector,
+while the membership, key-distribution, shard-map and connection-owner contracts state what still
+has to reach configuration and the driver before one public address is deployable.
+
+It also closes three ways the running node contradicted its own decisions. `ACK` and other
+mid-dialog requests now follow the dialog rather than the registrar; a terminal branch result stops
+the remaining target set; and declared roles reach dispatch, so a proxy-only node no longer accepts
+registrations. Unsupported security controls fail at load instead of appearing applied. A single
+REGISTER is bounded before reconciliation, and the gate now proves completed calls release their
+transactions at the full RFC-derived `128·T1` bound rather than mistaking a legal lifetime for a
+leak.
+
 ### Fixed
 
 - **A declared `cluster.security` control now stops the node instead of loading as applied**
@@ -35,6 +51,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CF-12` defect. The report moves to **157 of 586 rows proved**.
 
 ### Added
+
+- **The two review-confirmed kernel gaps now have upstream owners** (`CX-7`). sipx `T-28` owns a
+  proxy-usable outgoing-CANCEL operation that preserves the INVITE transaction, target and RFC 3261
+  §9.1 fields; `T-29` owns exact UDP-only, TCP-only and shared UDP+TCP listener selection. Both
+  stories carry the minimal failure against the pinned `v0.10.0` surface and remain **filed, not in
+  the pinned release**: `PX-12` and TCP-only service in `FC-1` stay blocked until a tagged kernel
+  release carries them.
+
+  The third suspected kernel gap was not filed. `v0.10.0` already exposes fallible typed `Expires`
+  parsing, so validated finding V-13 is `RG-20`'s local consumer defect: reject malformed-present
+  registration fields atomically instead of shadow-parsing them. The upstream ledger now records
+  that negative decision explicitly.
 
 - **The affinity token can be minted and verified** (`AF-4`). `crates/sipx-clstr-affinity` implements
   `affinity-token`'s mint/verify contract, and all **eighteen** of its §10 vectors now pass — the

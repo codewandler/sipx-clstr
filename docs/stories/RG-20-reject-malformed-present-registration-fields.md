@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar, parsing, upstream]
-note: V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
+note: V-13 · CX-7 confirmed no kernel gap: v0.10.0 has fallible Expires; consume it and reject malformed Contact/Path atomically
 ---
 
 # Reject malformed present registration fields instead of treating them as absent

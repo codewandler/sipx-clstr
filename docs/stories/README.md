@@ -49,11 +49,10 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
-- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only still exposes UDP and must refuse pending CX-7
+- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only must refuse until a released sipx carries T-29
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 in flight — RG-25 landed and lifted the block; a half-resolved catch-up merge waits in the resume worktree
 
 ## Next (ready — take the top one unless the user named a story)
-- [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
 
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
@@ -98,7 +97,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 - [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
-- [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · sipx v0.10.0 already has typed fallible Expires; consume it and reject malformed Contact/Path presence without a shadow parser
+- [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · CX-7 confirmed no kernel gap: v0.10.0 has fallible Expires; consume it and reject malformed Contact/Path atomically
 - [RG-24 — Reap expired bindings even when the REGISTER changes nothing else](RG-24-reap-expired-bindings-even-when-nothing-else-changes.md) · Registrar · drop_expired runs on a clone that a Noop outcome discards, so an AoR that only ever queries grows without bound
 
 ### Outbound routing & trunks
@@ -175,7 +174,7 @@ _The SIP process controls media over a network protocol; it never touches a medi
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
-- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker · blocked by CX-7's released CANCEL API; local timer/effect wiring must not construct CANCEL by shadowing the kernel
+- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker · blocked until a released sipx carries T-28; local timer/effect wiring must not construct CANCEL by shadowing the kernel
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
@@ -228,6 +227,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
+- [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
