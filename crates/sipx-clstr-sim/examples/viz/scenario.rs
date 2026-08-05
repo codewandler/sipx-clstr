@@ -360,7 +360,13 @@ impl SimNode for Edge {
                 }
                 self.perform(&call, effects)
             }
-            Input::Started | Input::TransportError { .. } => Vec::new(),
+            Input::Started | Input::TransportError { .. }
+            // `CF-26`'s connection faults: this node keeps no connection table and no
+            // write accounting, so a reconnect, a restart and a stall are nothing to it.
+            | Input::Connected { .. }
+            | Input::Restarted { .. }
+            | Input::WriteStalled { .. }
+            | Input::WriteFlushed { .. } => Vec::new(),
         }
     }
 }

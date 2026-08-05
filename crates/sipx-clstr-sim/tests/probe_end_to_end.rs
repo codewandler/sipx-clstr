@@ -258,7 +258,13 @@ impl SimNode for Echo {
             Input::Timer(_) => (self.endpoint.on_input(&EchoInput::RefreshDue), self.edge),
             // The `200` to its own REGISTER needs nothing done about it, and a transport error on a
             // registration is handled by the refresh timer coming round again.
-            Input::Message { .. } | Input::TransportError { .. } => return Vec::new(),
+            Input::Message { .. } | Input::TransportError { .. }
+            // `CF-26`'s connection faults: this node keeps no connection table and no
+            // write accounting, so a reconnect, a restart and a stall are nothing to it.
+            | Input::Connected { .. }
+            | Input::Restarted { .. }
+            | Input::WriteStalled { .. }
+            | Input::WriteFlushed { .. } => return Vec::new(),
         };
 
         let mut out = Vec::new();

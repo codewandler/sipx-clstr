@@ -46,6 +46,51 @@ pub enum Input<'a> {
         /// The unreachable peer.
         peer: NodeId,
     },
+
+    /// A connection to a peer has been established, replacing whatever this node had toward it.
+    ///
+    /// The signal a partition cannot give and [`crate::Fault::Reconnect`] can: *this is a
+    /// different connection*. A node that keeps a connection table takes a fresh slot and bumps
+    /// its generation here ([affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
+    /// §12.2 CT3), which is what makes every reference to the connection it replaced dead rather
+    /// than stale-but-plausible.
+    Connected {
+        /// The peer on the other end of the new connection.
+        peer: NodeId,
+    },
+
+    /// This node has restarted: it is a new process, and this is its incarnation.
+    ///
+    /// Whatever the node held is gone — clearing it is the node's own business, because only the
+    /// node knows what surviving a restart would mean. The incarnation is **an input**, never a
+    /// clock the node reads (AGENTS.md rule 2, and [affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
+    /// §12.2 CT2 says the same of the real one); the harness guarantees only that it is strictly
+    /// greater than the one the previous run carried, which is the whole of what CT2 needs.
+    Restarted {
+        /// Strictly greater than the incarnation of the run this one replaced. Nodes are born at 1.
+        incarnation: u32,
+    },
+
+    /// A write toward a peer has not left this node: the peer is accepted but is not reading.
+    ///
+    /// One per write held. Backpressure rather than an error — the connection is up — which is
+    /// what a bound on pending writes and a write deadline are both about
+    /// ([owner-rpc](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/owner-rpc.md)
+    /// §8 BQ2 and `T_write`). What a held write *costs* is the node's to decide: the harness knows
+    /// about connections and the node knows about flows.
+    WriteStalled {
+        /// Whose socket is not being drained.
+        peer: NodeId,
+    },
+
+    /// A write toward a peer that had stalled has now left.
+    ///
+    /// One per write released, in the order they were written, so a node can undo its own
+    /// accounting entry by entry rather than guessing how much drained.
+    WriteFlushed {
+        /// The peer that started reading again.
+        peer: NodeId,
+    },
 }
 
 /// Something a node wants done.

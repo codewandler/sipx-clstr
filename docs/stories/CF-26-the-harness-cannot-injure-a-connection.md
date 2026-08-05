@@ -2,7 +2,7 @@
 id: CF-26
 title: The harness cannot injure a connection, so three owner-RPC scenarios are unwritable
 pillar: Foundation
-status: ready
+status: in-progress
 priority: 2
 epic: conformance-harness
 areas: [harness, sim, affinity]
@@ -18,22 +18,54 @@ specified against, so `AF-7` can execute §10's scenarios rather than restate th
 
 ## Acceptance
 
-- [ ] The simulation can drop and re-establish a client connection, so a flow reference outlives the
+- [x] The simulation can drop and re-establish a client connection, so a flow reference outlives the
       connection it named and `owner-rpc` §10's reconnect scenario is executable.
-- [ ] The simulation can restart a node with a **fresh incarnation**, so a reference minted against
+- [x] The simulation can restart a node with a **fresh incarnation**, so a reference minted against
       the previous incarnation resolves as specified rather than as a stale-but-plausible hit.
-- [ ] The simulation can model a **non-reading peer** — a connection accepted but not drained — so
+- [x] The simulation can model a **non-reading peer** — a connection accepted but not drained — so
       `owner-rpc` §8's `max_pending_per_flow` bound and the `FlowRejected` answer are reachable, and
       `T_write` can actually expire.
-- [ ] Each new fault is deterministic under the harness's own PRNG: same seed, same schedule, same
+- [x] Each new fault is deterministic under the harness's own PRNG: same seed, same schedule, same
       outcome, with a pinned vector. The sim owns its randomness; a fault must not read the clock or
       the OS entropy pool.
-- [ ] **Failing-first:** one of the three `owner-rpc` §10 scenarios is written and shown unwritable
+- [x] **Failing-first:** one of the three `owner-rpc` §10 scenarios is written and shown unwritable
       (or vacuous) before the fault exists, then passing after.
 - [ ] `scripts/gate.sh` is green.
 
 ## Progress
-- (not started)
+
+**Done (`impl/CF-26`).** Four new `Fault` variants — `Reconnect`, `RestartNode`, `StopReading`,
+`ResumeReading` — with four new `Input` variants for what a node learns from them (`Connected`,
+`Restarted { incarnation }`, `WriteStalled`, `WriteFlushed`), and the scheduler machinery behind
+them in `sim.rs`: a per-directed-pair connection counter stamped on every message, so a write to a
+connection that has been replaced is lost rather than delivered to its successor; a per-node restart
+counter that is the incarnation; and a per-node held-write buffer for a peer that is accepted and
+not draining. Two accessors for scenarios: `Sim::incarnation` and `Sim::held_writes`. No new trace
+vocabulary — the faults render through the existing `** FAULT` line, a restart additionally as
+`started`, a lost connection as `Broken` — so `viz.rs`, its wire vocabulary and the cluster-viz
+frame table are untouched.
+
+`crates/sipx-clstr-sim/tests/connection_faults.rs` executes four of `owner-rpc` §10's rows against a
+small stand-in for the owner's connection table, plus a byte-for-byte replay test and a pinned
+rendered trace covering all four variants. The §10 rows themselves stay `AF-7`'s to name: the tests
+here are deliberately named differently, so a report cannot read them as `AF-7` having landed.
+
+**Two things for the integrator.**
+
+1. **`scripts/gate.sh` is red at the merge base (`43594b1`), not from this diff.**
+   `cargo fmt --all --check` and `cargo clippy` both fail on
+   `crates/sipx-clstr-node/tests/devspace_dialable.rs` — unformatted at `:34` and `:118`, missing
+   doc backticks at `:79`, `manual_pattern_char_comparison` at `:94` — the file the `KO-18`/`DX-13`
+   WIP rescue (`8c61cf4`) brought in. Proved by stashing this branch's work and running both
+   commands at the base. Every other gate step is green with this diff applied: workspace tests,
+   `check-features`, `check-msrv`, `check-provenance`, `check-vectors`, `check-crd-drift`,
+   `check-docs`, `check-proof-domains`, `check-site`. Left unfixed deliberately — it is another
+   story's file, and another story may be inside it right now.
+2. **`owner-rpc` is an `EXCLUDED` entry in `CF-25`'s spec registry and this story does not change
+   that.** It should stay excluded until `AF-7` lands: §10 registers no vector prefix on purpose,
+   and what changed here is that its scenarios are now *writable*, not that they are executed
+   against an implementation. The registration belongs in the commit that adds `AF-7`'s rows and
+   the tests that prove them, which is this repository's own rule.
 
 ## Notes
 
