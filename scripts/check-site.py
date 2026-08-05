@@ -918,11 +918,23 @@ WORKING_ROW = re.compile(r"^\s*\|\s*\*{0,2}Working\*{0,2}\s*\|")
 # neighbouring cell would excuse an overstatement three cells away.
 SEGMENT = re.compile(r"[.;|]")
 # A clause that **denies** the capability is the clause this check wants pages to write, so a
-# pattern below is not allowed to fire on one — in either direction. Said plainly rather than
-# implied: this is where the prose half of the rule is approximate. The structural `today`-cell
-# rule carries the weight and cannot be talked out of a verdict; a prose pattern that could not
-# tell "roles gate dispatch" from "roles do not gate dispatch" would push honest wording off the
-# site, and one that ignores the difference is worse than not having it.
+# pattern below is not allowed to fire on one — in either direction.
+#
+# **Negation scopes forward**, and that is the whole rule: a refusal word denies what comes after
+# it, so only one standing at or before the end of a match can deny that match. Everything after it
+# is the next proposition and denies nothing behind it. The patterns below run subject → verb →
+# object, so a negation that really applies lands *inside* the match ("roles do **not** gate
+# dispatch", "a Timer C … and **never** fires"), which is how the site's honest sentences are
+# actually written; a refusal in the tail belongs to a different claim ("roles gate runtime
+# dispatch, so **no** method reaches another role's handler" is the overstatement, not a denial of
+# it). Reading the whole clause instead — the first version of this — let any trailing "rather
+# than …" excuse the claim in front of it, which is precisely the shape `86e6b10` shipped, so the
+# check was inert against the one sentence it was written for.
+#
+# Said plainly rather than implied: this is where the prose half of the rule is approximate. It
+# errs towards silence on a comma-joined sentence whose *first* clause refuses ("the driver does
+# not perform this, and a Timer C fires on schedule" is read as denied). The structural `today`-cell
+# rule carries the weight for table rows and cannot be talked out of a verdict either way.
 REFUSAL = re.compile(
     r"\b(?:not|never|no|cannot|nothing|until|yet)\b|\brather than\b|\binstead of\b", re.I
 )
@@ -1182,19 +1194,26 @@ def story_statuses() -> dict[str, str]:
     return statuses
 
 
-def segment_of(line: str, start: int, end: int) -> str:
-    """The clause a match sits in — one table cell, or one sentence."""
+def segment_of(line: str, start: int, end: int) -> tuple[int, int]:
+    """The bounds of the clause a match sits in — one table cell, or one sentence."""
     left = max((found.end() for found in SEGMENT.finditer(line[:start])), default=0)
     right = min(
         (end + found.start() for found in SEGMENT.finditer(line[end:])), default=len(line)
     )
-    return line[left:right]
+    return left, right
 
 
 def stated(line: str, pattern: re.Pattern[str]) -> re.Match[str] | None:
-    """A match of `pattern` that its own clause does not deny."""
+    """A match of `pattern` that its own clause does not deny.
+
+    The clause is the unit — a "not" three cells away excuses nothing — and within it only the run
+    from the clause's start to the **end of the match** can carry the denial, because that is how
+    far a refusal word reaches (see `REFUSAL`). Searched over the line with bounds rather than over
+    a slice, so `\\b` still sees the neighbouring characters.
+    """
     for match in pattern.finditer(line):
-        if not REFUSAL.search(segment_of(line, match.start(), match.end())):
+        left, _ = segment_of(line, match.start(), match.end())
+        if not REFUSAL.search(line, left, match.end()):
             return match
     return None
 
@@ -1592,26 +1611,74 @@ def self_test() -> list[str]:
         "and the same sentence is refused outside a table too",
         capability_problems("declared roles gate runtime dispatch on this build.", open_board),
     )
+    # The tails are the point of the next two. A claim that carries on into a second, negative
+    # clause is a *stronger* claim than the bare one, and the first version of this check threw
+    # both away because it read the refusal word in the tail as a denial of what preceded it.
     check(
-        "a denial that outlived its story is refused",
+        "a promotion is still a promotion when its sentence carries on into a \"not\"",
         capability_problems(
-            "| **In-dialog routing** | `ACK` is resolved by address-of-record lookup | engine only |",
+            "declared roles gate runtime dispatch, and a method the role does not wire is "
+            "not accepted.",
             open_board,
         ),
     )
     check(
+        "and when it carries on into a \"no\"",
+        capability_problems(
+            "declared roles gate runtime dispatch, so no method reaches another role's handler.",
+            open_board,
+        ),
+    )
+    check(
+        "while a negation inside the claim itself is the honest sentence and passes",
+        not capability_problems("declared roles do not gate runtime dispatch.", open_board),
+    )
+    # Pinned verbatim from the tree this story corrected (`43594b1`, website/docs/intro.md:49):
+    # a trimmed version of this row passes the guard that the real one defeats, so the trimmed
+    # version is worth nothing as a test.
+    stale = (
+        "| **In-dialog routing** | `ACK` and in-dialog requests are resolved by address-of-record "
+        "lookup rather than by the `Route` set and the dialog's remote target | engine only |"
+    )
+    check("a denial that outlived its story is refused", capability_problems(stale, open_board))
+    check(
         "and is allowed again while that story is open",
+        not capability_problems(stale, dict(open_board, **{"PX-13": "ready"})),
+    )
+    check(
+        "the same denial written with \"not\" is refused too",
+        capability_problems(
+            "| **In-dialog routing** | `ACK` and in-dialog requests are resolved by "
+            "address-of-record lookup, not by the `Route` set | engine only |",
+            open_board,
+        ),
+    )
+    check(
+        "and written with \"never\"",
+        capability_problems(
+            "| **In-dialog routing** | `ACK` is resolved by address-of-record lookup and never by "
+            "the dialog's remote target | engine only |",
+            open_board,
+        ),
+    )
+    check(
+        "a page describing the shape as superseded is not making the claim",
         not capability_problems(
-            "| **In-dialog routing** | `ACK` is resolved by address-of-record lookup | engine only |",
-            dict(open_board, **{"PX-13": "ready"}),
+            "`ACK` is no longer resolved by address-of-record lookup.", open_board
         ),
     )
     check("an owner that is not on the board fails the run", unknown_owners({}))
     check("and a board carrying all of them does not", not unknown_owners(open_board))
     check(
+        # website/docs/intro.md:46, whole cell: the negation sits between the subject and the verb,
+        # which is where a real denial sits, and is the reason the guard reaches that far and no
+        # further.
         "a clause that denies the capability is what this wants pages to write",
         not capability_problems(
-            "a Timer C is armed with the right value and never fires", open_board
+            "| **Proxy — `CANCEL`, Timer C** | Modelled in the decision core and **not performed "
+            "by the driver**: the effects are produced and discarded, so a Timer C is armed with "
+            "the right value and never fires (`PX-12`) | engine only |",
+            open_board,
         ),
     )
     check(

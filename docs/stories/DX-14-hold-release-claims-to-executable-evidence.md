@@ -49,7 +49,7 @@ of release claim drifts again.
       promote a wire-level claim.
 - [x] Demonstrated red first for both classes: restore one stale conformance number and one prohibited
       “today” claim, and show the gate name each mismatch before the corrected docs pass.
-- [ ] `scripts/gate.sh` and the site build are green with no orphaned page or broken public link.
+- [x] `scripts/gate.sh` and the site build are green with no orphaned page or broken public link.
 
 ## Progress
 
@@ -58,7 +58,12 @@ of release claim drifts again.
   them retyped: `docs/reference/conformance.md` for the counts, `check-vectors.py`'s own `SPECS` /
   `EXCLUDED` for the specification inventory — imported, not copied — and the board's `status` field
   for capability language. `main` prints what the scan read and what it skipped on every run.
-- **Red first, at `43594b1`, on the base's own pages.** 25 problems, including
+- **Red first, at `43594b1`, on the base's own pages.** 25 problems with the checker as it now
+  stands. (The first round of this story reported 25 too, but that output came from a
+  mid-development revision and the *shipped* one produced 23 — the stale `ACK` denial had stopped
+  being caught and the proof was never re-run against the code that landed. A measurement quoted
+  from a revision that no longer exists is the defect this story is about; it is recorded here
+  rather than quietly corrected.) The 25 include
   `README.md:15: claims 586 total for the whole ledger; the generated report says 598 (expected 598,
   actual 586)`. Then re-demonstrated against the *corrected* pages: one fabricated `EP-C-4` row moved
   the denominator to 599 and failed every remaining copy (`README.md:15`, `README.md:179`,
@@ -73,16 +78,34 @@ of release claim drifts again.
   capability set from its roles (`driver.rs` `Dispatch::of`) and answers `405`, while the refusal
   shape, the counted ACK and the `echo` runtime stay `DP-13`'s. `CANCEL`/Timer C (`PX-12`) and
   outbound resolution (`RT-12`) are still engine-only and are stated as such everywhere.
-- **The gate is red at the merge base, not on this diff.** `cargo fmt --all --check` fails on
-  `crates/sipx-clstr-node/tests/devspace_dialable.rs` (`KO-18`'s WIP-rescue commit), which this diff
-  does not touch — it touches no Rust at all. Proved by running `rustfmt --check` on
-  `git show 43594b1:…/devspace_dialable.rs`: byte-identical failure. Left for whoever owns that file.
-  Every other gate step, and `npm run build` for the site, are green.
+- **The whole gate is green.** The `cargo fmt`/`clippy` failure on
+  `crates/sipx-clstr-node/tests/devspace_dialable.rs` (`KO-18`'s WIP-rescue commit) was a merge-base
+  failure this diff never touched — it touches no Rust at all — and it was fixed on `main`, merged
+  into this branch at `81a710e`. Nothing about it is outstanding.
+- **Rework, round 1: the denial half was inert for the sentences that actually occur.** `stated()`
+  applied the refusal guard to the whole clause, so a sentence that *denies* a capability — which
+  contains a refusal word by construction — was discarded before it could be reported, and a
+  promotion whose sentence carried on into a negative tail was discarded with it. The fix is one
+  rule, in the direction negation actually scopes: **a refusal word denies what follows it**, so only
+  one at or before the *end of the match* can deny that match. A tail belongs to the next
+  proposition. The four denial shapes and the three promotion shapes the review named are all caught
+  now; the honest wording the site already uses ("a Timer C … and **never** fires", "roles do **not**
+  gate dispatch") stays silent, because a real denial sits *between* the subject and the verb, which
+  is inside the match. Proved by replaying `43594b1`'s pages: 25 problems where the broken guard
+  found 23, the two new ones being `intro.md:49`'s stale `ACK` denial — the sentence this rule exists
+  for. `self_test` now pins the real cells verbatim, tails included; the trimmed variants it used to
+  pin were exactly the shapes the guard could still see.
+- **The counts were re-derived, not hand-edited, after merging `main`.** `RG-17` and `CF-26` moved
+  the ledger to 173/602 and this check named the four stale lines itself (`README.md:15` twice,
+  `README.md:179`, `whats-new.md:59`), which is the point of it.
 - **For the integrator:** the ledger entries (`CHANGELOG.md`, the board) are fenced and untouched.
   When this closes, the CHANGELOG entry is the two checks above plus the corrected claims.
 - **Next drift this will not catch, stated plainly:** a promotion written in prose that uses none of
-  the site's status vocabulary and none of the listed phrasings. The structural rule is the `today`
-  cell; the prose rules are an explicit, short list with a refusal guard, and `self_test` pins both.
+  the site's status vocabulary and none of the listed phrasings; and, from the guard above, a
+  comma-joined sentence whose *first* clause refuses and whose second claims ("the driver does not
+  perform this, and a Timer C fires on schedule" is read as denied). It errs towards silence there.
+  The structural rule is the `today` cell, which no wording can talk out of a verdict, and `self_test`
+  pins both halves in both directions.
 
 ## Notes
 
