@@ -43,7 +43,8 @@ and there is no consensus system, no discovery protocol and no key exchange anyw
 
 **Out of scope.** The token and flow-reference formats, their cryptography and their verification
 order ([affinity-token](affinity-token.md)); the connection-owner RPC's protocol, authentication,
-queueing and failure answer (`AF-3`) — this spec fixes only the endpoint a peer dials; the hash
+queueing and failure answer ([owner-rpc](owner-rpc.md)) — this spec fixes only the endpoint a peer
+dials; the hash
 function, the weights and the rebalancing policy behind a shard assignment (`RG-5`); how a secret
 is *stored* and how a reference is resolved into it (driver work, [cluster-config](cluster-config.md)
 §8 V9); the operator's staging of a change across nodes and zones

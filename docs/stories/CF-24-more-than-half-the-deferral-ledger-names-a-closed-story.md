@@ -2,7 +2,7 @@
 id: CF-24
 title: More than half the deferral ledger names a story that has already closed
 pillar: Foundation
-status: ready
+status: in-progress
 priority: 1
 epic: conformance-harness
 areas: [gate, conformance]
@@ -30,7 +30,30 @@ so "deferred with a reason" means a reason someone will act on.
       between prefixes; that file keeps its counts exact.
 
 ## Progress
-- (not started)
+
+- **2026-07-31 — the check is written and reportedly red on exactly the 239 rows; the ledger sweep
+  never started.** An implementor was killed mid-story by an org monthly spend limit. Its work was
+  rescued by the coordinator and committed as **`impl/CF-24` at `e74b535`** — `scripts/check-vectors.py`
+  only, +223/-22 — with the worktree preserved at `/home/timo/projects/sipx-clstr-CF-24`. That commit
+  is **WIP: not gated, not reviewed, and red against the tree by design**, because the 239 rows it
+  names are still pointing at closed stories. Resume there rather than from scratch.
+- **The agent's last report was "the check is red on exactly the 239 rows", which is the shape
+  Acceptance item 3 asks for — unverified by me.** Re-run it at the merge base before trusting it.
+- **What remains:** the whole ledger sweep. `docs/reference/vector-scope.toml` is untouched, so no row
+  has been re-pointed, `[[unasserted]]` coverage is unconfirmed, `docs/reference/conformance.md`'s
+  wording is unreconsidered, and the header tally is uncorrected.
+- **`DP-8`'s 51 rows have a confirmed destination.** `DP-16`'s Acceptance explicitly claims
+  `CC-K-1`…`CC-K-6`, `CC-S-1`…`CC-S-9`, `CC-V-4`/`CC-V-10`, `CC-R-7`/`CC-R-8` and `CC-I-1`/`CC-I-4`
+  and says their deferrals are "re-pointed here from `DP-8`" — so that side of the split is settled and
+  needs no judgement call. `RT-7`'s 97 and `ME-1`'s 90 still need an implementing story per subsystem.
+- **A sibling gate hole found while this was in flight**, same family and worth landing near it:
+  nothing enumerates `docs/specs/*.md` against this script's `SPECS`, so a whole normative spec can
+  carry rules no gate ever sees. Filed as
+  [`CF-25`](CF-25-a-new-spec-can-carry-normative-rules-no-gate-enumerates.md) — do not absorb it here,
+  but the two touch the same file.
+- **Fence note for whoever resumes:** `docs/reference/vector-scope.toml` is normally coordinator-owned,
+  and I lifted that for this story only, because the file is its subject matter. The rest of the fence
+  holds.
 
 ## Notes
 - **Measured on `4b0bc65`:** 428 deferred rows, of which **239 (56%) name a `done` story**.

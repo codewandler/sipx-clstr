@@ -18,7 +18,9 @@ use sipx_sip::{HeaderName, Method, Request, Response, ResponseBuilder, StatusCod
 use crate::config::ProxyConfig;
 use crate::forward::{ForwardPlan, forward};
 use crate::route;
-use crate::types::{BranchId, Effect, Input, ProxyTimer, Target, TokenVerdict};
+use crate::types::{
+    BranchId, Effect, Input, ProxyTimer, RecordRouteTokens, Target, TokenCarriage, TokenVerdict,
+};
 use crate::validate::{Refusal, Validated, validate};
 
 /// How one branch is doing.
@@ -58,6 +60,13 @@ pub struct ResponseContext {
     answered: bool,
     /// Whether the context is over.
     finished: bool,
+    /// The `Record-Route` pair F4 stamps on, when a driver minted one (§7 M1).
+    tokens: Option<RecordRouteTokens>,
+    /// Set while the engine is waiting for the verdict on a token a popped `Route` carried.
+    ///
+    /// Nothing routes while this is true — that is P2 before P3, made a property of the state
+    /// machine rather than of the driver's habits.
+    awaiting_verdict: bool,
 }
 
 impl ResponseContext {
@@ -73,6 +82,8 @@ impl ResponseContext {
             finals: Vec::new(),
             answered: false,
             finished: false,
+            tokens: None,
+            awaiting_verdict: false,
         }
     }
 
@@ -87,6 +98,10 @@ impl ResponseContext {
             Input::BranchResponse(response, branch) => self.on_branch_response(*response, &branch),
             Input::BranchTransportError(branch) => self.on_branch_failure(&branch),
             Input::TokenFact(verdict) => self.on_token(&verdict),
+            Input::TokensMinted(tokens) => {
+                self.tokens = Some(*tokens);
+                Vec::new()
+            }
             Input::TimerFired(ProxyTimer::C, branch) => self.on_timer_c(branch.as_ref()),
             Input::UpstreamCancelled => self.on_upstream_cancelled(),
         }
@@ -107,43 +122,80 @@ impl ResponseContext {
             Err(refusal) => return self.refuse(&request, &refusal),
         };
 
-        // §5 — route preprocessing, before target determination. P3's rejection arrives separately,
-        // as `Input::TokenFact(Invalid)`, because verification needs the keys and the keys are the
-        // driver's.
+        // §5 — route preprocessing, before target determination. It pops our `Route`s and reports
+        // what they carried; verifying that is the driver's, because verification needs the key set
+        // and a clock and neither is the engine's to reach.
         let mut request = request;
-        route::preprocess(&mut request, &self.config);
+        let carriage = route::preprocess(&mut request, &self.config);
+
+        self.request = Some(request);
+        self.validated = Some(validated);
+
+        // P2 before P3, and therefore before **any** routing. A carried token is a question that
+        // has to be answered before the request can go anywhere, so the engine asks and stops. The
+        // T1 branch below resolves its target set synchronously and would otherwise emit
+        // `Effect::Forward` on this very call, leaving P3's `403` to arrive after the request it
+        // was supposed to prevent.
+        if let Some(TokenCarriage { token, partner }) = carriage {
+            self.awaiting_verdict = true;
+            return vec![Effect::VerifyToken { token, partner }];
+        }
+
+        self.route_it()
+    }
+
+    /// §5.1 — target determination, once nothing is outstanding that could forbid it.
+    fn route_it(&mut self) -> Vec<Effect> {
+        let Some(request) = self.request.clone() else {
+            return self.terminate();
+        };
 
         // §5.1 T1 — a request within a dialog has its target set already: the Request-URI *is* the
         // dialog's remote target (§12.2.1.1), so there is nothing to ask anybody. Asking anyway is
         // `V-03`: a remote contact is not an address of record, so the location service answers the
         // empty set for every ordinary call and §7 concludes it `480`.
-        let in_dialog = route::is_in_dialog(&request);
-        let target = route::predetermined_target(&request);
-        let query = route::aor_query(&request);
-        self.request = Some(request);
-        self.validated = Some(validated);
-        if in_dialog {
+        //
+        // **This is also where M2's exit criterion is met, and by omission:** a mid-dialog request
+        // reaches this line with everything it needs already in the message, so no edge ever asks
+        // anything about a dialog it did not start. The cross-node dialog-lookup counter reads zero
+        // because there is no code that could move it, which is AGENTS.md rule 5 made structural.
+        if route::is_in_dialog(&request) {
+            let target = route::predetermined_target(&request);
             return self.on_targets(vec![target]);
         }
 
         // §5.1 T2 — the Request-URI is an address this platform is responsible for. The proxy asks;
         // the driver answers.
-        vec![Effect::ResolveTargets(query)]
+        vec![Effect::ResolveTargets(route::aor_query(&request))]
     }
 
     /// P3 — token verification failed: `403`, no forward, no fallback.
     fn on_token(&mut self, verdict: &TokenVerdict) -> Vec<Effect> {
-        match verdict {
-            TokenVerdict::Valid { .. } => Vec::new(),
-            TokenVerdict::Invalid => {
-                let Some(request) = self.request.clone() else {
-                    return self.terminate();
-                };
-                // A hard reject. Falling back to ordinary routing would mean a forged token buys
-                // exactly the routing it would have got with no token at all.
-                self.respond_and_finish(&request, 403, "Forbidden")
-            }
+        // A verdict nobody asked for is not an event. Acting on a `Valid` here would resume routing
+        // a request that was never held, and acting on an `Invalid` would let an unsolicited input
+        // answer `403` to a request whose `Route` carried no token at all.
+        if !self.awaiting_verdict {
+            return Vec::new();
         }
+        self.awaiting_verdict = false;
+        match verdict {
+            // Possession grants routing continuation and nothing else (affinity-token §9): the
+            // request now takes §5.1 exactly as an untokened one would. The claims are the driver's
+            // to act on — they name logical ids meaningful only inside the cluster's own
+            // configuration, and none of them is a routing decision this engine makes.
+            TokenVerdict::Valid { .. } => self.route_it(),
+            TokenVerdict::Invalid => self.reject_token(),
+        }
+    }
+
+    /// P3's answer, wherever the failure came from.
+    fn reject_token(&mut self) -> Vec<Effect> {
+        let Some(request) = self.request.clone() else {
+            return self.terminate();
+        };
+        // A hard reject. Falling back to ordinary routing would mean a forged token buys exactly
+        // the routing it would have got with no token at all.
+        self.respond_and_finish(&request, 403, "Forbidden")
     }
 
     // ---------------------------------------------------------------- §7 ----------------------
@@ -217,7 +269,7 @@ impl ResponseContext {
                 index: already + offset,
                 parallel_branches: parallel,
                 record_route,
-                token: None, // AF-4 mints the real one; F4's shape and budget are already here.
+                tokens: self.tokens.as_ref(),
             };
             // A target we cannot build a request for is a target that failed, not a request that
             // dies: the remaining branches still deserve their chance.

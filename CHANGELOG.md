@@ -7,7 +7,62 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-08-04
+
+This release puts M2's defining invariant into executable form: an edge mints the affinity token
+pair into `Record-Route`, a mid-dialog request reaches a different edge, and that edge verifies and
+routes it with **zero cross-node dialog lookups**. The pure token library proves every byte vector,
+while the membership, key-distribution, shard-map and connection-owner contracts state what still
+has to reach configuration and the driver before one public address is deployable.
+
+It also closes three ways the running node contradicted its own decisions. `ACK` and other
+mid-dialog requests now follow the dialog rather than the registrar; a terminal branch result stops
+the remaining target set; and declared roles reach dispatch, so a proxy-only node no longer accepts
+registrations. Unsupported security controls fail at load instead of appearing applied. A single
+REGISTER is bounded before reconciliation, and the gate now proves completed calls release their
+transactions at the full RFC-derived `128·T1` bound rather than mistaking a legal lifetime for a
+leak.
+
+### Fixed
+
+- **A declared `cluster.security` control now stops the node instead of loading as applied**
+  (`FC-6`, validated synthesis **V-06**). `unknownSource`, `sanityCheck`, `userAgentDenyList` and
+  `internalZone` were on the loader's allow-list, validated against nothing, and reached no
+  `NodeConfig` field — so a document asking for any of them started a node serving the **opposite**
+  posture to the one the key was written to produce. They are refused at load, one error per
+  declared control naming its own path.
+
+  **The refusal is per control, not per section.** A story that specifies a consumer for one of them
+  removes its own row and leaves the rest refusing; an all-or-nothing refusal would have to be torn
+  out wholesale by the first control to land. The message describes the decision the control *would*
+  make and never echoes the configured value, which is `FC-8`'s rule respected ahead of `FC-8`
+  landing.
+
+  **The chart shipped the defect in its most consequential form.** `deploy/helm/values.yaml`
+  declared all four, so the chart this project publishes would have rendered a document promising
+  ingress controls nobody enforced — and a chart is what an operator trusts without reading the
+  loader. Nothing caught it, because `deploy/helm/check-values.sh` needs helm and a built binary and
+  is deliberately not a gate step. The chart now declares `security: {}`; empty is valid and carries
+  §8 V6's fixed Max-Forwards, and the section staying present is what holds `cluster-config` §7's
+  registry, the `SipxCluster` mapping table and the chart 1:1.
+
+  `cluster-config` §12 gains `CC-V-13`, `CC-V-14` and `CC-V-15`, each with a test that executes it —
+  they were registered by the interrupted first pass with nothing running them, which is exactly the
+  `CF-12` defect. The report moves to **157 of 586 rows proved**.
+
 ### Added
+
+- **The two review-confirmed kernel gaps now have upstream owners** (`CX-7`). sipx `T-28` owns a
+  proxy-usable outgoing-CANCEL operation that preserves the INVITE transaction, target and RFC 3261
+  §9.1 fields; `T-29` owns exact UDP-only, TCP-only and shared UDP+TCP listener selection. Both
+  stories carry the minimal failure against the pinned `v0.10.0` surface and remain **filed, not in
+  the pinned release**: `PX-12` and TCP-only service in `FC-1` stay blocked until a tagged kernel
+  release carries them.
+
+  The third suspected kernel gap was not filed. `v0.10.0` already exposes fallible typed `Expires`
+  parsing, so validated finding V-13 is `RG-20`'s local consumer defect: reject malformed-present
+  registration fields atomically instead of shadow-parsing them. The upstream ledger now records
+  that negative decision explicitly.
 
 - **The affinity token can be minted and verified** (`AF-4`). `crates/sipx-clstr-affinity` implements
   `affinity-token`'s mint/verify contract, and all **eighteen** of its §10 vectors now pass — the

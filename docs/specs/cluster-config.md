@@ -182,13 +182,25 @@ owns its content, and its reload class (§9). No row restates the owner's fields
 | `destinationSet[]`, `routeRule[]`, `ingress[]` | proxies | RT-8/RT-9 | reloadable |
 | `rateLimit[]` | `edge`, proxies | RT-3 | reloadable |
 | `timers` (`t1`, `timerB`, `timerC`, `timerF`, `maxCallDuration`) | proxies, `edge` | [proxy-behavior](proxy-behavior.md), RFC 3261 §17 | reloadable |
-| `security` (`unknownSource`, `maxForwards`, `sanityCheck`, `userAgentDenyList`, `internalZone`) | `edge` | this spec (§8 V6) + RT-3 | reloadable |
+| `security` (`unknownSource`, `maxForwards`, `sanityCheck`, `userAgentDenyList`, `internalZone`) — four of the five are **refused until a consumer applies them**, below | `edge` | this spec (§8 V6) + RT-3 | reloadable |
 | `admission` (`maxInFlightTransactions`) | `edge`, proxies | [deployment](../designs/deployment.md), `DP-11` | reloadable |
 | `nat` | `edge` | **unowned — see [deployment](../designs/deployment.md)** | reloadable |
 | `mediaPool[]` (`mode`, `nodes`, `portRange`, `interfaces`, `ngTimers`) | proxies | KO-7; timers by [media-relay](media-relay.md) §8 K6 | rollout (`mode`) / reloadable (`nodes`) |
 | `observability` (`metrics`, `logFormat`, `hep`, `cdr`) | all | DP-3, DP-6, DP-7 | reloadable |
 | `probe` (`targets`, `schedule`, `tenant`) | `e2e-tester` | [e2e-probe](e2e-probe.md) §5 | reloadable |
 | `echo` | `echo` | [e2e-probe](e2e-probe.md) §9 | reloadable |
+
+**`security`'s four ingress controls, and why a document declaring one does not start.**
+`unknownSource`, `sanityCheck`, `userAgentDenyList` and `internalZone` all answer "who may reach a
+public SIP decision path", and no consumer in this build applies any of them. A document declaring one
+is therefore **refused at load, naming every declared path** — §8 V10's rule reached from the direction
+§5 P6 and [media-relay](media-relay.md) §13.2 MP12 already reach it: refuse a policy the
+implementation cannot honour, rather than honour a different one. Starting without them is not a
+useful degraded mode, because the posture they were declared to *narrow* is the one a node without them
+serves. An absent or empty `security` block stays valid and carries only the fixed Max-Forwards of
+§8 V6, which is not a knob and is refused as a key. The refusal is **per control, not per section**: a
+story that specifies a consumer for one of the four removes that control from this paragraph and leaves
+the rest refusing. Vectors: §12 CC-V-13 … CC-V-15.
 
 | # | Rule |
 |---|---|
@@ -388,6 +400,9 @@ table rather than waiting on it. `number-normalisation` stands in the same place
 | CC-V-10 | `keys[0].secret: "<32 bytes inline>"` | `E(cluster.keys[0].secret, CC-V9)` — key material is named by reference, never written |
 | CC-V-11 | `tenant[0].expiry` omitted entirely | Loads with 3600 / 60 / 86400 s ([location-service](location-service.md) §5.2, V3) |
 | CC-V-12 | A `timers` section naming `t1` and omitting `timerC` | Loads with 240 s (V7) — the default satisfies the rule declared beside it, so omission is a legal way to accept it |
+| CC-V-13 | `security.unknownSource: drop` | `E(cluster.security.unknownSource, CC-V10)` — no consumer in this build applies it, and the refusal describes what was declared rather than echoing it (V9) |
+| CC-V-14 | A `security` block declaring `unknownSource`, `sanityCheck`, `userAgentDenyList` and `internalZone` | One error per declared control, each naming its own path, ordered by path (V1); no `Config` is produced (§7) |
+| CC-V-15 | The same four controls carrying wrong-shaped values — a sequence where a scalar was declared, a scalar where a mapping was | Refused all the same: refusing an unappliable control before typing it is admissible, accepting a value for it is not |
 
 **Key reload (CC-K).**
 

@@ -351,6 +351,236 @@ fn pb_p_4_a_tampered_token_is_403_with_no_forward_and_no_fallback() {
     );
 }
 
+#[test]
+fn a_carried_token_is_verified_before_the_in_dialog_request_is_forwarded() {
+    // P2 then P3, in the order §5 states them: the verdict is an input **to** the routing decision,
+    // so nothing may leave this node until it has arrived.
+    //
+    // `PX-13` gave the in-dialog branch its predetermined target set (T1) and resolved it
+    // *synchronously* inside `Input::Upstream`, which is right for the target and wrong for the
+    // token: `Effect::Forward` was emitted before any driver could have supplied a verdict, so
+    // `TokenFact(Invalid)` produced its `403` one input too late and a forged token bought exactly
+    // the routing P3 exists to deny it. Feeding the verdict *first* was no answer either — with no
+    // request yet, `on_token` took its `request is None` path and terminated the context with no
+    // response at all. The rule has to hold inside the engine, and this is the assertion of it.
+    let mut context = ResponseContext::new(config());
+    let mid_dialog = request(
+        &Method::Bye,
+        "sip:bob@10.0.0.1:5062",
+        vec![
+            (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
+            (HeaderName::Route, "<sip:edge-1.example;lr;aft=AQGgoaKj>"),
+        ],
+    );
+    let effects = context.on_input(Input::Upstream(Box::new(mid_dialog)));
+
+    assert!(
+        !effects.iter().any(|effect| effect.kind() == Kind::Forward),
+        "a token was carried and no verdict has arrived: nothing may be forwarded yet"
+    );
+}
+
+/// The tokens an `Effect::VerifyToken` carries, if that is what came back.
+fn verification_request(effects: &[Effect]) -> Option<(String, Option<String>)> {
+    effects.iter().find_map(|effect| match effect {
+        Effect::VerifyToken { token, partner } => Some((
+            String::from_utf8_lossy(token).into_owned(),
+            partner
+                .as_ref()
+                .map(|value| String::from_utf8_lossy(value).into_owned()),
+        )),
+        _ => None,
+    })
+}
+
+#[test]
+fn two_consecutive_platform_routes_are_popped_as_a_pair_for_s9() {
+    // affinity-token §7 M2 mints one entry per side, so the ordinary mid-dialog shape presents
+    // **two** consecutive platform `Route`s — and §8 S9 is defined over exactly that: the partner
+    // must be checked for equal claims, a complementary direction and a distinct nonce. Popping
+    // only the first would leave the second on the wire *and* silently skip S9, which is the check
+    // that makes a stripped or swapped entry detectable at all.
+    let mut context = ResponseContext::new(config());
+    let mid_dialog = request(
+        &Method::Bye,
+        "sip:bob@10.0.0.1:5062",
+        vec![
+            (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
+            (HeaderName::Route, "<sip:edge-1.example;lr;aft=ORIG>"),
+            (HeaderName::Route, "<sip:edge-1.example;lr;aft=TERM>"),
+        ],
+    );
+    let effects = context.on_input(Input::Upstream(Box::new(mid_dialog)));
+
+    assert_eq!(
+        verification_request(&effects),
+        // S9: "The **first-popped** token governs (its direction names the presenting side)."
+        Some(("ORIG".to_owned(), Some("TERM".to_owned()))),
+        "both entries reach verification, first-popped first"
+    );
+
+    // Both are gone from the request the engine goes on to forward.
+    let forwarded = context.on_input(Input::TokenFact(TokenVerdict::Valid {
+        tenant: "t1".to_owned(),
+    }));
+    let request = forwarded
+        .iter()
+        .find_map(Effect::forwarded)
+        .expect("a verified token routes the request");
+    assert_eq!(
+        header_text(request, &HeaderName::Route),
+        None,
+        "P2 popped the pair, not just its first entry"
+    );
+}
+
+#[test]
+fn a_single_platform_route_is_processed_on_its_own_token_alone() {
+    // §8: "A single platform Route with a valid token is processed on that token alone" —
+    // heterogeneous route sets and Path (M7) both present single entries by nature, so a mandatory
+    // pair rule would be wrong. The partner is `None`, and S9 does not run.
+    let mut context = ResponseContext::new(config());
+    let mid_dialog = request(
+        &Method::Bye,
+        "sip:bob@10.0.0.1:5062",
+        vec![
+            (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
+            (HeaderName::Route, "<sip:edge-1.example;lr;aft=ONLY>"),
+            (HeaderName::Route, "<sip:p2.example;lr>"),
+        ],
+    );
+    let effects = context.on_input(Input::Upstream(Box::new(mid_dialog)));
+
+    assert_eq!(
+        verification_request(&effects),
+        Some(("ONLY".to_owned(), None)),
+        "a foreign proxy's Route below ours is not half of our pair"
+    );
+}
+
+#[test]
+fn a_verified_token_routes_the_request_exactly_as_an_untokened_one() {
+    // affinity-token §9: possession grants *routing continuation* and nothing else. So a `Valid`
+    // verdict resumes §5.1 and changes none of it — the same T1 predetermined target, the same F7
+    // next hop. Anything else would make the token a routing input rather than a permission.
+    let mut context = ResponseContext::new(config());
+    let mid_dialog = request(
+        &Method::Bye,
+        "sip:bob@10.0.0.1:5062",
+        vec![
+            (HeaderName::To, "<sip:bob@b.example>;tag=bt"),
+            (HeaderName::Route, "<sip:edge-1.example;lr;aft=ONLY>"),
+        ],
+    );
+    context.on_input(Input::Upstream(Box::new(mid_dialog)));
+    let effects = context.on_input(Input::TokenFact(TokenVerdict::Valid {
+        tenant: "t1".to_owned(),
+    }));
+
+    assert!(
+        !effects.iter().any(|e| e.kind() == Kind::ResolveTargets),
+        "T1 — a mid-dialog request asks nobody anything, which is the zero-lookup property itself"
+    );
+    assert_eq!(
+        effects
+            .iter()
+            .find_map(Effect::next_hop)
+            .map(|hop| String::from_utf8_lossy(hop).into_owned()),
+        Some("sip:bob@10.0.0.1:5062".to_owned()),
+        "the dialog's remote target, reached with no lookup anywhere"
+    );
+}
+
+#[test]
+fn an_unsolicited_verdict_is_not_an_event() {
+    // The other half of making the ordering structural. A `TokenFact` nobody asked for must not
+    // answer `403` to a request whose `Route` carried no token — and it used to be worse than that:
+    // fed before `Input::Upstream`, it found no request and terminated the context outright, so a
+    // driver that verified first got no response at all.
+    let mut context = ResponseContext::new(config());
+    let early = context.on_input(Input::TokenFact(TokenVerdict::Invalid));
+    assert!(
+        early.is_empty(),
+        "no request has arrived; there is nothing to reject"
+    );
+
+    let effects = context.on_input(Input::Upstream(Box::new(invite(
+        "sip:bob@b.example",
+        vec![],
+    ))));
+    assert!(
+        effects.iter().any(|e| e.kind() == Kind::ResolveTargets),
+        "the context is alive and takes §5.1 normally"
+    );
+    assert!(
+        context
+            .on_input(Input::TokenFact(TokenVerdict::Invalid))
+            .is_empty(),
+        "and a late unsolicited verdict is still not an event"
+    );
+}
+
+#[test]
+fn f4_stamps_the_record_route_pair_with_the_terminating_entry_on_top() {
+    // §7 M1/M2: one entry per side, ORIG pushed first so TERM ends up topmost — which is what makes
+    // route-set learning hand each endpoint its own side's entry first (§12.1.1 in order for the
+    // UAS, §12.1.2 reversed for the UAC). Reverse the two and both ends present the wrong direction
+    // on every mid-dialog request thereafter, while every test that only counts entries stays green.
+    let mut context = ResponseContext::new(config());
+    context.on_input(Input::TokensMinted(Box::new(
+        sipx_clstr_proxy::RecordRouteTokens {
+            originating: Bytes::from_static(b"ORIG"),
+            terminating: Bytes::from_static(b"TERM"),
+        },
+    )));
+    context.on_input(Input::Upstream(Box::new(invite(
+        "sip:bob@b.example",
+        vec![],
+    ))));
+    let effects = context.on_input(Input::TargetsResolved(vec![target(
+        "sip:bob@10.0.0.1",
+        1_000,
+    )]));
+
+    let forwarded = effects
+        .iter()
+        .find_map(Effect::forwarded)
+        .expect("a forward");
+    let pair: Vec<String> = forwarded
+        .headers
+        .get_all(&HeaderName::RecordRoute)
+        .map(|header| String::from_utf8_lossy(&header.value()).trim().to_owned())
+        .collect();
+    assert_eq!(
+        pair,
+        vec![
+            "<sip:edge-1.example;lr;aft=TERM>".to_owned(),
+            "<sip:edge-1.example;lr;aft=ORIG>".to_owned(),
+        ],
+        "the TERM entry is topmost"
+    );
+}
+
+#[test]
+fn a_platform_that_mints_no_token_still_record_routes_exactly_once() {
+    // The pair is a property of the *token*, not of Record-Routing: without tokens there are no
+    // directions to distinguish, and a second entry would be MTU spent on nothing (§5's budget
+    // arithmetic is per dialog-forming request, and every byte of it is real on UDP). A node with
+    // no key set therefore emits what the platform has always emitted.
+    let (_, effects) = run(
+        invite("sip:bob@b.example", vec![]),
+        vec![target("sip:bob@10.0.0.1", 1_000)],
+    );
+    let forwarded = effects
+        .iter()
+        .find_map(Effect::forwarded)
+        .expect("a forward");
+    assert_eq!(
+        forwarded.headers.get_all(&HeaderName::RecordRoute).count(),
+        1
+    );
+}
+
 // ------------------------------------------------------------------- PB-F ----------------------
 
 #[test]
@@ -591,7 +821,7 @@ fn pb_f_7_an_ack_for_a_2xx_is_routed_by_its_route_set_and_never_answered() {
             (HeaderName::MaxForwards, "70"),
         ],
     );
-    let outcome = route_ack(ack, &config());
+    let outcome = route_ack(ack, &config(), None);
     let AckRoute::Forward { request, next_hop } = outcome else {
         panic!("an ACK for a 2xx is a separately routed request: {outcome:?}");
     };
@@ -634,7 +864,7 @@ fn pb_f_8_an_ack_that_cannot_be_forwarded_is_an_explicit_outcome_with_no_respons
             (HeaderName::MaxForwards, "0"),
         ],
     );
-    let outcome = route_ack(ack, &config());
+    let outcome = route_ack(ack, &config(), None);
     assert!(
         matches!(
             outcome,
@@ -652,12 +882,17 @@ fn pb_f_5_an_empty_target_set_is_480() {
 
 #[test]
 fn f4_a_token_over_the_parameter_budget_is_refused_rather_than_truncated() {
-    use sipx_clstr_proxy::{ForwardError, ForwardPlan, TOKEN_PARAM_BUDGET, forward, validate};
+    use sipx_clstr_proxy::{
+        ForwardError, ForwardPlan, RecordRouteTokens, TOKEN_PARAM_BUDGET, forward, validate,
+    };
 
     let request = invite("sip:bob@b.example", vec![]);
     let config = config();
     let validated = validate(&request, &config).expect("valid");
-    let oversized = Bytes::from("t".repeat(TOKEN_PARAM_BUDGET + 1));
+    let oversized = RecordRouteTokens {
+        originating: Bytes::from("t".repeat(TOKEN_PARAM_BUDGET + 1)),
+        terminating: Bytes::from("t".repeat(TOKEN_PARAM_BUDGET + 1)),
+    };
     let target = target("sip:bob@10.0.0.1", 1_000);
 
     let plan = ForwardPlan {
@@ -667,7 +902,7 @@ fn f4_a_token_over_the_parameter_budget_is_refused_rather_than_truncated() {
         index: 0,
         parallel_branches: 1,
         record_route: true,
-        token: Some(oversized),
+        tokens: Some(&oversized),
     };
     // Truncating a token would produce one that fails verification at the next hop — a call that
     // fails later and more confusingly than one refused here.

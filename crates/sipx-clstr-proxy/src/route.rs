@@ -11,11 +11,12 @@
 //! the driver's (RFC 3263, and `RT-1`'s route plan); which URI it **is** is decided here.
 
 use bytes::Bytes;
+use sipx_clstr_affinity::TOKEN_PARAM;
 use sipx_sip::headers::Address;
-use sipx_sip::{HeaderName, Request};
+use sipx_sip::{HeaderName, Request, Uri};
 
 use crate::config::ProxyConfig;
-use crate::types::{Target, TargetQuery};
+use crate::types::{Target, TargetQuery, TokenCarriage};
 
 /// The `q` a predetermined target carries: the only one there is, so the most preferred.
 ///
@@ -24,12 +25,15 @@ use crate::types::{Target, TargetQuery};
 /// behind it.
 const SOLE_TARGET_Q: u16 = 1_000;
 
-/// §5's P1 and P2, in order. Mutates the request the way §16.4 says to.
+/// §5's P1 and P2, in order. Mutates the request the way §16.4 says to, and **returns what the
+/// popped platform `Route`s carried** — the tokens P2 hands to verification.
 ///
-/// P3's rejection arrives as [`crate::Input::TokenFact`] instead, because verification needs the
-/// keys and the keys are the driver's — so there is nothing for this function to do about a token
-/// beyond leaving the popped `Route` where the caller can see it.
-pub(crate) fn preprocess(request: &mut Request, config: &ProxyConfig) {
+/// P3's rejection arrives as [`crate::Input::TokenFact`], because verification needs the keys and
+/// the keys are the driver's. What this function owns is everything up to that: which `Route`s are
+/// ours, how many of them there are, and which `aft` values they carried. It is deliberately the
+/// only place that answers those questions — both entry points call it, and a private second copy of
+/// the rules is what `V-03` was.
+pub(crate) fn preprocess(request: &mut Request, config: &ProxyConfig) -> Option<TokenCarriage> {
     // P1 — a strict-routing predecessor put our Record-Route value in the Request-URI. The real
     // Request-URI is the last Route; recover it and drop that Route.
     if is_our_record_route_value(request, config) {
@@ -45,15 +49,62 @@ pub(crate) fn preprocess(request: &mut Request, config: &ProxyConfig) {
         }
     }
 
-    // P2 — the first Route resolves to this platform: pop it. Any edge pops any edge's Route,
-    // which is the point of the token.
+    // P2 — the leading `Route`s that resolve to this platform are popped. Any edge pops any edge's
+    // Route, which is the point of the token.
+    //
+    // Up to **two**, because affinity-token §7 M2 mints a pair — one entry per side — and §8 S9's
+    // consistency check is defined over exactly that shape: "when the proxy popped two consecutive
+    // platform Routes". A third would not be ours to pop; a single one is the heterogeneous case §8
+    // allows and Path (M7) produces by nature, and it is processed on its own token alone.
     let routes = routes_of(request);
-    if let Some(first) = routes.first()
-        && let Ok(address) = Address::parse(first, "Route")
-        && config.is_ours(&address.uri)
-    {
-        set_routes(request, routes.iter().skip(1).cloned());
+    let mut popped: Vec<Option<Bytes>> = Vec::new();
+    for value in routes.iter().take(2) {
+        // A `Route` we cannot parse is one we cannot recognize as ours, so P2 does not fire for it
+        // and it survives to the next hop untouched — the same answer the base gave, and the one
+        // non-negotiable #3 requires: a malformed `Route` arrives from the wire and must not take
+        // the node down or be guessed at.
+        let Ok(address) = Address::parse(value, "Route") else {
+            break;
+        };
+        if !config.is_ours(&address.uri) {
+            break;
+        }
+        popped.push(token_of(&address.uri));
     }
+    // Nothing of ours at the front: P2 does not fire, and the `Route` set is left byte-for-byte
+    // alone rather than removed and rebuilt.
+    let first = popped.first().cloned()?;
+    set_routes(request, routes.iter().skip(popped.len()).cloned());
+
+    // §8 S9: "The **first-popped** token governs (its direction names the presenting side)."
+    let token = first?;
+    Some(TokenCarriage {
+        token,
+        // A partner is only a partner when it is one. A second platform `Route` that carried no
+        // token is not half of a pair, and offering it as one would let an entry stripped in flight
+        // weaken S9's check into silence rather than fail it.
+        partner: popped.get(1).cloned().flatten(),
+    })
+}
+
+/// The `aft` parameter's value on a platform URI (§5).
+///
+/// §5 requires **exactly one** `aft` per platform URI, and this reads one because there can only be
+/// one: RFC 3261 §19.1.1 forbids a repeated `uri-parameter` name outright, and the kernel enforces
+/// it at parse time — including spelling variants, since §19.1.4 makes `%61ft` the name `aft`. A
+/// URI carrying two of them never becomes an `Address` at all, so it is refused a layer below this
+/// one rather than tolerated here.
+fn token_of(uri: &Uri) -> Option<Bytes> {
+    // §19.1.4 for the name: case-insensitive, with escapes of unreserved characters folded.
+    // `Params::value` compares through `has_name`, which is the kernel's implementation of exactly
+    // that rule — a hand-rolled `== "aft"` would miss `Aft` and `%61ft`.
+    //
+    // The *value* is case-**sensitive** (§5, base64url) and is never compared as a string anywhere:
+    // every decision downstream runs on the authenticated bytes it decodes to. Non-canonical
+    // base64url is accepted by design — §5 names exactly two rejections, padding and
+    // out-of-alphabet bytes — so two distinct parameter strings can carry one token, and comparing
+    // the strings for equality anywhere is what would turn that from harmless into a hazard.
+    uri.params()?.value(TOKEN_PARAM).map(Bytes::copy_from_slice)
 }
 
 /// Whether the Request-URI is a value **this platform placed in a `Record-Route`** — P1's condition,

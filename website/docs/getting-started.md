@@ -23,7 +23,7 @@ cargo build --bin sipx-clstr --features postgres
 ```
 
 ```text
-sipx-clstr 0.12.0 (sipx kernel 0.10.0)
+sipx-clstr 0.13.0 (sipx kernel 1.0.0-beta.4)
 ```
 
 The `postgres` feature is what lets a node share its registrations with another one. Leave it out and
@@ -145,7 +145,7 @@ step 1 — so the phone and the node speak the same protocol build:
 
 ```bash
 mkdir -p ~/sipx-phone && cd ~/sipx-phone
-git clone --depth 1 --branch v0.10.0 https://github.com/codewandler/sipx kernel
+git clone --depth 1 --branch v1.0.0-beta.4 https://github.com/codewandler/sipx kernel
 cargo build --release --bin sipx --manifest-path kernel/Cargo.toml
 cp kernel/target/release/sipx .
 ```

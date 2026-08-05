@@ -2,12 +2,12 @@
 id: ME-3
 title: Implement media-node selection and reselection
 pillar: Media
-status: backlog
-priority: 
+status: ready
+priority: 3
 design: docs/designs/media-control.md
 epic: media-control
 areas: [media, affinity]
-note: blocked by ME-1, AF-1, AF-4 — the node id rides in the token
+note: unblocked — ME-1, AF-1 and AF-4 are all done, so the node id has a token to ride in; M2 #14
 ---
 
 # Implement media-node selection and reselection

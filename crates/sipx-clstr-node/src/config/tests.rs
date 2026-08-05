@@ -1008,3 +1008,105 @@ fn dp13_capabilities_are_the_union_of_what_the_roles_wire() {
     );
     assert_eq!(wiring(&[Role::E2eTester]), wiring(&[Role::Echo]));
 }
+
+/// A `security` block declaring one of the four unapplied controls, with everything else valid.
+fn with_security(body: &str) -> String {
+    good().replace(
+        "  locationStore:",
+        &format!("  security:\n{body}  locationStore:"),
+    )
+}
+
+/// §12 CC-V-13 — a single declared control is refused, and the refusal describes rather than echoes.
+#[test]
+fn cc_v_13_a_declared_security_control_is_refused() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let document = with_security("    unknownSource: drop\n");
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+
+    let found = rules(&errors);
+    assert!(
+        found.iter().any(|r| r == "CC-V10"),
+        "expected CC-V10 for an unapplied control, got {found:?}"
+    );
+    let about: Vec<String> = errors.iter().map(|e| e.path.to_string()).collect();
+    assert!(
+        about.iter().any(|p| p == "cluster.security.unknownSource"),
+        "the refusal must name the declared path, got {about:?}"
+    );
+    // V9 / `FC-8`: the message says what the control would decide, never what was written. `drop`
+    // is not a secret, but the rule is about the shape of the message rather than this value.
+    let rendered = format!("{errors:#?}");
+    assert!(
+        !rendered.contains("drop"),
+        "a refusal must not echo the configured value: {rendered}"
+    );
+}
+
+/// §12 CC-V-14 — one error per declared control, each naming its own path (§8 V1).
+#[test]
+fn cc_v_14_every_declared_control_is_named_not_just_the_first() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let document = with_security(
+        "    unknownSource: drop\n    sanityCheck: true\n    userAgentDenyList: [evil-phone]\n    \
+         internalZone: 10.0.0.0/8\n",
+    );
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+
+    let paths: Vec<String> = errors.iter().map(|e| e.path.to_string()).collect();
+    for key in [
+        "unknownSource",
+        "sanityCheck",
+        "userAgentDenyList",
+        "internalZone",
+    ] {
+        let want = format!("cluster.security.{key}");
+        assert!(
+            paths.contains(&want),
+            "declared {key} was not named; got {paths:?}"
+        );
+    }
+    // Ordered by path, so the operator who declared four reads the same four every run.
+    let mut sorted = paths.clone();
+    sorted.sort();
+    assert_eq!(paths, sorted, "errors must come back ordered by path");
+}
+
+/// §12 CC-V-15 — wrong-shaped values are refused all the same. Refusing an unappliable control
+/// before typing it is admissible; accepting a value for it is not.
+#[test]
+fn cc_v_15_a_wrong_shaped_control_cannot_produce_a_config() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    // Each of the four gets the wrong shape: a sequence where a scalar was declared, a mapping
+    // where a scalar was, a scalar where a sequence was, and a scalar where a mapping was.
+    let document = with_security(
+        "    unknownSource: [drop, reject]\n    sanityCheck:\n      enabled: true\n    \
+         userAgentDenyList: evil-phone\n    internalZone: 42\n",
+    );
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+    let paths: Vec<String> = errors.iter().map(|e| e.path.to_string()).collect();
+    for key in [
+        "unknownSource",
+        "sanityCheck",
+        "userAgentDenyList",
+        "internalZone",
+    ] {
+        let want = format!("cluster.security.{key}");
+        assert!(
+            paths.contains(&want),
+            "a wrong-shaped {key} must still be refused; got {paths:?}"
+        );
+    }
+}
+
+/// An absent or empty `security` block stays valid and carries the fixed Max-Forwards (§8 V6).
+#[test]
+fn fc6_an_empty_security_block_still_loads_with_the_fixed_max_forwards() {
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(good().as_bytes(), &who, &env()).expect("absent security loads");
+    assert_eq!(config.security.max_forwards, MAX_FORWARDS);
+
+    let empty = with_security("    {}\n");
+    let config = load(empty.as_bytes(), &who, &env()).expect("empty security loads");
+    assert_eq!(config.security.max_forwards, MAX_FORWARDS);
+}

@@ -2,12 +2,12 @@
 id: RT-2
 title: Implement the trunk model with breakers and CPS limits
 pillar: Signalling
-status: backlog
-priority: 
+status: ready
+priority: 3
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing]
-note: blocked by RT-1, AF-1
+note: unblocked — RT-1 and AF-1 are done, and RT-10 closed the totality holes filed against its inputs; M2 #9
 ---
 
 # Implement the trunk model with breakers and CPS limits

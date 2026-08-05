@@ -11,7 +11,58 @@
 
 use thiserror::Error;
 
+use crate::token::MAX_TOKEN_LEN;
+
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/// The affinity-token URI parameter name (§5).
+///
+/// Registered lowercase and matched case-insensitively per RFC 3261 §19.1.4. Exactly one per
+/// platform URI: a `Route` resolving here with zero or several fails verification, because "which
+/// token did you mean" has no safe answer.
+///
+/// It lives beside the encoding rather than in the forwarding core because §5 owns both — the
+/// parameter name, the alphabet and the budget below are one rule, and the crate that can *measure*
+/// a token is the only one that can prove the budget holds.
+pub const TOKEN_PARAM: &str = "aft";
+
+/// The normative size budget for the token **parameter** — not the header line (§5, proxy-behavior
+/// §7 F4).
+///
+/// The distinction is this spec's own correction to `PB-F-1`'s shorthand: at the module-facts
+/// ceiling the whole `Record-Route` line exceeds 200 B for any realistic host, while the parameter
+/// stays inside it (157 B, `AT-6`). Asserting on the line would fail a compliant token.
+pub const TOKEN_PARAM_BUDGET: usize = 200;
+
+/// How many characters unpadded base64url needs for `len` bytes (§5's arithmetic: `4·⌊n/3⌋` plus
+/// 0/2/3 for `n mod 3` = 0/1/2).
+///
+/// `const` so [`WORST_CASE_PARAM_LEN`] can be computed at compile time, which is what turns the
+/// budget from a number two crates repeat into one the build proves.
+#[must_use]
+pub const fn encoded_len(len: usize) -> usize {
+    match len % 3 {
+        0 => len / 3 * 4,
+        1 => len / 3 * 4 + 2,
+        _ => len / 3 * 4 + 3,
+    }
+}
+
+/// The largest `;aft=<value>` this layout can produce: `MAX_TOKEN_LEN` bytes encoded, plus `;aft=`.
+///
+/// §5 tabulates it as **157 B** — encrypted mode at the 64-byte module-facts ceiling.
+pub const WORST_CASE_PARAM_LEN: usize = ";=".len() + TOKEN_PARAM.len() + encoded_len(MAX_TOKEN_LEN);
+
+// `TOKEN_PARAM_BUDGET` and `MAX_TOKEN_LEN` used to be two unrelated numbers in two crates, and
+// nothing compared them: the budget was a literal in the forwarding core, the ceiling a literal
+// here, and `AT-6` asserted `≤ 200` against a third literal of its own. Widening the layout — a
+// bigger module-fact sub-budget, a longer tag — would have silently spent the headroom §5 measured
+// and been found on the wire. This is the comparison, made by the compiler: the budget is satisfied
+// by construction, or the workspace does not build.
+const _: () = assert!(
+    WORST_CASE_PARAM_LEN <= TOKEN_PARAM_BUDGET,
+    "affinity-token §5: the worst-case `aft` parameter must fit proxy-behavior §7 F4's budget"
+);
 
 /// Why a parameter value is not a token at all.
 ///
@@ -140,6 +191,30 @@ mod tests {
         assert_eq!(encode_param_value(b"foob"), "Zm9vYg");
         assert_eq!(encode_param_value(b"fooba"), "Zm9vYmE");
         assert_eq!(encode_param_value(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn the_encoded_length_matches_what_the_encoder_produces() {
+        // `encoded_len` is `const`, so nothing can call the encoder to check it; this is that check,
+        // across every tail residue and at the ceiling §5 tabulates.
+        for len in 0..=MAX_TOKEN_LEN {
+            let bytes = vec![0x5a_u8; len];
+            assert_eq!(
+                encoded_len(len),
+                encode_param_value(&bytes).len(),
+                "encoded_len disagrees with the encoder at {len} bytes"
+            );
+        }
+    }
+
+    #[test]
+    fn the_worst_case_parameter_is_the_157_bytes_the_spec_tabulates() {
+        // affinity-token §5's budget table, bottom row of the encrypted mode: 114 raw bytes → 152
+        // characters → a 157-byte parameter, 43 B inside F4's 200.
+        assert_eq!(MAX_TOKEN_LEN, 114);
+        assert_eq!(encoded_len(MAX_TOKEN_LEN), 152);
+        assert_eq!(WORST_CASE_PARAM_LEN, 157);
+        assert_eq!(TOKEN_PARAM_BUDGET, 200);
     }
 
     #[test]

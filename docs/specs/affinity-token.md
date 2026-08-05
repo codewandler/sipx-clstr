@@ -49,8 +49,9 @@ mistaken for one another.
   carries it verbatim) and §5.3 B4 (the idempotency interaction §13.3 BI5 records).
 
 **Out of scope:** how the proxy consumes the verdict (proxy-behavior.md), the owner RPC's
-transport, node-to-node authentication and queueing (AF-3 — §13.2 fixes only the outcomes it must
-distinguish), the key configuration schema and reload mechanics (DP-1 — this spec fixes the
+transport, node-to-node authentication and queueing ([owner-rpc](owner-rpc.md) — §13.2 here fixes
+only the outcomes it must distinguish, and that document carries them unchanged), the key
+configuration schema and reload mechanics (DP-1 — this spec fixes the
 *required attributes* only), Path minting semantics (M3, see §7 M7), RFC 5626 outbound semantics,
 `430 Flow Failed` and UDP flows (M3, see §11.4 FM6), routing-policy content behind
 `policy version`, and the **inner framing of module facts** — the token carries the module-facts
@@ -593,9 +594,14 @@ authenticated-only mode and ciphertext in encrypted mode.
 **Totals.** header 14 + body 19 + tag ⇒ **49 B** (`chacha20-poly1305`) or **45 B**
 (`hmac-sha256-96`), fixed. There is no variable region, so length is an *equality* check rather
 than a range (FV3), and the canonical text form (base64url, unpadded, per §5's encoding rules) is
-66 or 60 characters. Text form is for telemetry, configuration dumps and vectors; a reference
-travels between nodes as raw bytes over the owner RPC, and its M3 carriage in a Path URI is M3's
-decision, not this section's.
+66 or 60 characters. Text form is for telemetry, configuration dumps and vectors — **and for
+carriage between nodes**: `AF-3` settled the owner RPC as SIP over TLS, so a reference crosses it
+in the *user part of a Route URI* in exactly this form ([owner-rpc](owner-rpc.md) §5 CR1), which is
+RFC 5626 §5.2's own construction and needs no escaping (CR2 there). This sentence read "a reference
+travels between nodes as raw bytes over the owner RPC" while that transport was still an open
+question and the guess was a private binary framing; the format is unchanged and only the guess
+was wrong. Its M3 carriage in a Path URI is M3's decision, not this section's, and would use the
+same form.
 
 **Flow identity.** Bytes 18–31 — `node ‖ incarnation ‖ connection ‖ generation`, 14 bytes — are
 the **flow identity**: the tuple that names one connection, once, for all time. Two references
@@ -767,7 +773,7 @@ with the timer.
 | D2 | **Verify, and the owner falls out.** `verify_flow` (§11.5) is a pure function of the bytes and the key set the node already holds; `claims.flow.node` *is* the owner. There is no directory to consult, no membership query, no cluster-wide lookup — which is the whole point (AGENTS.md rule 5). The chain is one store read and two pure functions |
 | D3 | An `Invalid` verdict makes the target **unusable**: it is removed from the target set *before* a branch exists — before proxy-behavior §7 F8 pushes a Via, before F10 forwards. No transaction is started, nothing is sent, and telemetry records the reason the wire never learns |
 | D4 | `claims.flow.node == self.node && claims.flow.incarnation == self.incarnation` → **local delivery**: resolve against this node's own table (§13.2) and write. No RPC, and this is the common case — a client's registration and the requests toward it usually meet at the same edge |
-| D5 | Otherwise → **the owner RPC** (AF-3) to `claims.flow.node`, carrying the reference and the request. This is the platform's only cross-node signalling hop |
+| D5 | Otherwise → **the owner RPC** ([owner-rpc](owner-rpc.md)) to `claims.flow.node`, carrying the reference and the request. This is the platform's only cross-node signalling hop |
 | D6 | **Same-flow comparison is by identity, never by bytes** (§11.2). A consumer asking whether a reference names a connection it already knows compares the 14 identity bytes of the decoded claims; comparing encodings would report a re-mint (FM3) as a different flow |
 | D7 | A `sips` target MUST NOT be delivered over a `Tcp` or `Ws` flow (RFC 3261 §26.2.2). The check runs on `claims.transport` at the caller, before D5 — a reference is enough to refuse without asking the owner |
 

@@ -2,12 +2,12 @@
 id: RG-16
 title: Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
 pillar: Registrar
-status: blocked
+status: in-progress
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar]
-note: blocked by RG-25 — the quota cannot be measured on the outcome alone until the contact count is bounded
+note: round 4 in flight — RG-25 landed and lifted the block; a half-resolved catch-up merge waits in the resume worktree
 ---
 
 # Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
@@ -35,6 +35,24 @@ carries more than one contact.
       green.
 
 ## Progress
+- **2026-07-31 — round 4 was dispatched, unblocked, and died on infrastructure in the middle of the
+  catch-up merge.** `RG-25` has landed, so the block recorded below is **lifted**; status moved from
+  `blocked` to `in-progress`. The resume worktree is
+  **`/home/timo/projects/sipx-clstr-RG-16`** on `impl/RG-16-r3` (`7b68929`) — created outside
+  `.claude/worktrees/` deliberately, because that namespace is harness-owned and auto-cleaned.
+  **A merge is in progress in that worktree and it is half resolved:** `MERGE_HEAD` is `a2456b0`
+  (`main`), `crates/sipx-clstr-registrar/src/process.rs` has been resolved (0 conflict markers) but not
+  staged, and `crates/sipx-clstr-registrar/tests/vectors_register.rs` still carries **12 conflict
+  markers**; `docs/reference/conformance.md` and `docs/specs/location-service.md` are also unmerged.
+  The agent's last words were "resolve the second `process.rs` conflict — drop `net_grant`, keep
+  `op_meter`", which is a statement of intent for one hunk, not a completed resolution. A snapshot of
+  the whole state (resolved `process.rs`, conflicted `vectors_register.rs`, staged and unstaged
+  patches) is in the coordinator's scratchpad under `RG-16-merge-state/`, but the worktree itself is
+  the live copy. **Round 4's code was never written** — no implementation work is lost, only merge
+  resolution.
+- **Nothing about the round-4 instruction below has changed.** Delete `RG-14`'s quota pre-check without
+  replacement citing §5.5.1, re-site `op_meter::record()` out of `granted_expiries`, and close the
+  still-open B8 `net_grant` finding. Resume by finishing the merge, then doing that.
 - **`RG-25` landed (2026-07-30) and it changes round 4's instruction.** The triangle is broken from
   the third side, and round 3's approach turns out to have been **correct and complete** — it was the
   missing input bound, not the removed pre-check, that made it look wrong.

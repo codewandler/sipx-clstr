@@ -70,7 +70,10 @@ mod codec;
 mod keys;
 mod token;
 
-pub use codec::{DecodeError, decode_param_value, encode_param_value};
+pub use codec::{
+    DecodeError, TOKEN_PARAM, TOKEN_PARAM_BUDGET, WORST_CASE_PARAM_LEN, decode_param_value,
+    encode_param_value, encoded_len,
+};
 pub use keys::{Algorithm, KeyEntry, KeySet, KeySetError, MintKey, retirement_deadline};
 pub use token::{
     Claims, DEFAULT_LIFETIME, DEFAULT_SKEW, Direction, Expect, LIFETIME_FLOOR, MAX_FACTS,

@@ -24,6 +24,11 @@ default = []
 registrar-targets = ["dep:sipx-clstr-registrar"]
 
 [dependencies]
+# `AF-5`. The forwarding core carries the token; it never mints or verifies one — that needs keys, a
+# clock and randomness, all of which are the driver's. What it takes from here is the carriage
+# contract of `affinity-token` §5: the `aft` parameter name and the byte budget, which used to be a
+# second copy of two numbers this crate could not compare with the layout that has to fit them.
+sipx-clstr-affinity.workspace = true
 sipx-clstr-registrar = { workspace = true, optional = true }
 sipx-sip.workspace = true
 bytes.workspace = true

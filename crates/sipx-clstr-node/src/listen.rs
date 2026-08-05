@@ -304,7 +304,11 @@ impl Listener {
     /// over TLS", and the kernel's RFC 3263 resolution honours it.
     fn transport_param(&self) -> &'static str {
         match self.transport {
-            TransportKind::Udp | TransportKind::Ws | TransportKind::Wss => "",
+            // `Ws`, `Wss` and `Quic` cannot occur: `Listener::new` refuses them as
+            // `UnsupportedTransport`, so no `Listener` ever holds one. They share UDP's arm
+            // because the only honest alternative on an infallible signature is a panic, which
+            // rule 3 forbids on any path a message could ever reach.
+            TransportKind::Udp | TransportKind::Ws | TransportKind::Wss | TransportKind::Quic => "",
             TransportKind::Tcp => ";transport=tcp",
             TransportKind::Tls => ";transport=tls",
         }

@@ -23,21 +23,23 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
 criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the
-[upstream ledger](docs/upstream.md) as it then stood — but it has not stayed clear. The kernel pin is
-now **`v0.10.0`** (`CX-4`), which closed `CF-9`'s MSRV row — the `TimerQueue` `Default` bound, fixed
-upstream and never filed — and brought the declared Rust floor **down** to 1.91, where local code
-rather than the kernel now holds it. Three rows are open and unfiled: `CX-5`'s nonce-uniqueness
-defect and `RG-15`'s `O(n)` replay window, both in `sipx-ua/src/challenge.rs`, which is **one blob at
-`v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and kernel `main`** — so no bump short of a new release fixes
-either — and `DP-11`'s per-message overload logging on the loop that must keep timers running. The
-kernel pin is **already current**: `v0.10.0` is both the newest released tag and the commit kernel
-`main` points at, so there is nothing to bump to and those three rows wait on a kernel release rather
-than on a pin. The
-gate is green, and
-M1's one known defect is **closed**: `RG-8` settled location-service §5.3 B4 on the granted
-duration, so an ordinary retransmitted REGISTER is a `200` rather than a `500`.
-The last cut is **`0.12.0`** — the release that turned the gate on itself and found a third of its
-own checks could not see what they were believed to check.
+[upstream ledger](docs/upstream.md) as it then stood — but it has not stayed clear. The kernel pin
+is now **`v1.0.0-beta.4`** (`CX-12`, from `v0.10.0` — twelve kernel releases in one step), with a
+**temporary `[patch]` to the sibling `../sipx` checkout** riding along until the current kernel
+work is pushed; the patch must not outlive `CX-12`. The bump cost two source changes (a `Quic`
+match arm the listener set already refuses, and a `Via` the echo endpoint had always owed its own
+REGISTER — RFC 3261 §8.1.1.7, surfaced by the kernel's stricter response builder) and settled most
+of the M4 dependency table: only kernel `C-6` and `A-10` remain open there. Three defect rows
+survived all twelve releases and stay open: `CX-5`'s nonce-uniqueness defect and `RG-15`'s `O(n)`
+replay window — `challenge.rs` is **one blob from `v0.7.0` through `v1.0.0-beta.4`** — and
+`DP-11`'s per-message overload logging. The `CX-7` filings turned out **never to have merged**
+(orphaned on `filing/clstr-CX-7-public`, IDs recycled upstream), so `CX-13` re-files the
+outgoing-CANCEL and exact-listener-selection asks. The declared Rust floor stays **1.91**, still
+held by local code (the kernel's own floor is 1.88). The gate is green, and M1's one known defect
+is **closed**: `RG-8` settled location-service §5.3 B4 on the granted duration, so an ordinary
+retransmitted REGISTER is a `200` rather than a `500`. The last cut is **`0.13.0`** — affinity
+tokens now round-trip across edges with zero cross-node dialog lookups, while key loading and
+connection-owner delivery remain explicit deployment blockers.
 Check the board before assuming any of that is current.
 
 ## Non-negotiables
