@@ -21,13 +21,22 @@
 //!
 //! This loader implements the sections a node needs in order to boot and to find its peers:
 //! `apiVersion`, `version`, and under `cluster` — `name`, `environment`, `zones`, `listener[]`,
-//! `membership`, `locationStore`, `tenant[]`, `security` and `timers`.
+//! `membership`, `keys[]`, `shardMap`, `locationStore`, `tenant[]`, `security` and `timers`.
 //!
 //! The remaining sections of §7's registry are **recognised but not descended into**: naming one is
 //! not an error, and a typo in its name still is. That boundary is deliberate and is reported by
 //! [`Config::unapplied`] rather than left for a reader to infer — a section this loader silently
 //! ignored would be configuration nobody is applying and nothing anywhere saying so, which is the
 //! exact failure V2 exists to prevent, one level up.
+//!
+//! **Validated is not the same as applied, and `DP-16` is where the two come apart.**
+//! [cluster-membership](../../../../docs/specs/cluster-membership.md) §3–§5 fix `membership[].rpc`,
+//! the incarnation source, `keys[]` and `shardMap`, and this module enforces every rule of them that
+//! a pure function of the document can enforce. No consumer in this build *acts* on any of it — the
+//! owner RPC is `AF-3`/`AF-7`'s, the mint/verify key set reaches no driver field yet, and the shard
+//! handoff is `RG-5`'s — so every one of those paths is reported by [`Config::unapplied`] for
+//! exactly the reason `FC-2` added that list: a document that declared them and got nothing must be
+//! told so, and the warning must not lie in either direction.
 
 pub mod error;
 
@@ -37,6 +46,8 @@ use error::ordered;
 pub use error::{ConfigError, Path, RuleId};
 
 use serde_yaml_ng::Value;
+
+use crate::listen::Advertised;
 
 /// The schema version this loader speaks (§3).
 pub const API_VERSION: &str = "sipx.dev/v1alpha1";
@@ -58,6 +69,32 @@ pub const DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS: usize = 1024;
 /// A ceiling in the spirit of §8 V8: past this the value stops describing a limit and starts
 /// describing the absence of one, and an operator who wants that has misread what the knob is for.
 pub const MAX_IN_FLIGHT_CEILING: usize = 65_536;
+
+/// §8 V8's ceiling on `keys[]`, adopted by
+/// [cluster-membership](../../../../docs/specs/cluster-membership.md) KY6 unchanged.
+///
+/// Generous on purpose: §7's rotation keeps at most two entries verify-valid at once, which is also
+/// what `affinity-token` §3's one-byte key id is sized around. A document approaching it is a
+/// document whose rotations are not being retired.
+pub const MAX_KEYS: usize = 16;
+
+/// §9.4 DS4's declared default drain timeout: 30 s.
+pub const DEFAULT_DRAIN_TIMEOUT_MS: u64 = 30_000;
+
+/// DS4's permitted range, in the unit that spec states it in.
+///
+/// The floor is not a round number chosen for looks: below the location store's CAS retry budget
+/// ([location-service](../../../../docs/specs/location-service.md) §5.1 S10) a drain would expire
+/// while an ordinary contended write was still legitimately retrying.
+pub const MIN_DRAIN_TIMEOUT_MS: u64 = 5_000;
+/// DS4's ceiling.
+pub const MAX_DRAIN_TIMEOUT_MS: u64 = 300_000;
+
+// The same rule `DP-12` made unrepresentable for Timer C, applied to the range this schema declares
+// beside its own default: a default outside the bounds stated next to it is a build failure rather
+// than a refusal at every operator's startup.
+const _: () = assert!(DEFAULT_DRAIN_TIMEOUT_MS >= MIN_DRAIN_TIMEOUT_MS);
+const _: () = assert!(DEFAULT_DRAIN_TIMEOUT_MS <= MAX_DRAIN_TIMEOUT_MS);
 
 /// RFC 3261 §16.6 step 11's floor for Timer C, which the timer must be **strictly** above.
 ///
@@ -230,13 +267,138 @@ pub struct ListenerSpec {
     pub advertise: Option<String>,
 }
 
-/// One node's entry in the cluster's membership (§5 P3).
+/// Where a node's incarnation counter comes from
+/// ([cluster-membership](../../../../docs/specs/cluster-membership.md) MB8).
+///
+/// A member's field rather than a cluster-wide switch: `affinity-token` §12.2 CT2 makes
+/// `boot-second` correct only where the clock cannot step backwards across a restart, and that is a
+/// property of a machine rather than of a fleet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IncarnationSource {
+    /// CT2's own mechanism, and MB8's declared default: the boot second, made strictly increasing.
+    #[default]
+    BootSecond,
+    /// For a deployment that cannot rule out a backwards clock step on some of its nodes. Needs an
+    /// `incarnationRef`, because the counter lives outside the document.
+    PersistedCounter,
+}
+
+impl IncarnationSource {
+    /// The document's spelling, `kebab-case` per §2 D4.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::BootSecond => "boot-second",
+            Self::PersistedCounter => "persisted-counter",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        [Self::BootSecond, Self::PersistedCounter]
+            .into_iter()
+            .find(|source| source.as_str() == text)
+    }
+}
+
+/// One node's entry in the cluster's membership (§5 P3,
+/// [cluster-membership](../../../../docs/specs/cluster-membership.md) §3).
+///
+/// The seven fields MB1 closes the world on. `node`, `name`, `zone` and `roles` are what §5 P3
+/// cross-checks and what `shardMap` resolves against; the last three are the ones `AF-6` added and
+/// nothing in this build consumes yet (MB7 keeps the *bind* side out of here entirely).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemberSpec {
     pub node: u16,
     pub name: String,
     pub zone: String,
     pub roles: BTreeSet<Role>,
+    /// The **advertised** endpoint a peer dials for the connection-owner RPC (MB5, MB6).
+    ///
+    /// Required exactly when `roles` puts this member on the call path, and refused otherwise — a
+    /// missing endpoint on a flow-owning node makes every request toward a client it owns
+    /// undeliverable, and an endpoint on a node that owns nothing is a target nobody should reach.
+    pub rpc: Option<String>,
+    /// MB8. Absent selects `boot-second`, which is a documented mechanism rather than a silence.
+    pub incarnation_source: IncarnationSource,
+    /// The driver-resolved handle a `persisted-counter` is read from and written to, by reference
+    /// for the same reason a secret is (§8 V9).
+    pub incarnation_ref: Option<String>,
+}
+
+/// The construction a key selects — `affinity-token` §4, adopted here and declared there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KeyAlgorithm {
+    /// RFC 8439 AEAD, and the deployment default: the whole token body is ciphertext.
+    #[default]
+    ChaCha20Poly1305,
+    /// The explicit opt-out — HMAC-SHA-256 truncated to 96 bits, with a cleartext body.
+    HmacSha256_96,
+}
+
+impl KeyAlgorithm {
+    /// The document's spelling, `kebab-case` per §2 D4.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ChaCha20Poly1305 => "chacha20-poly1305",
+            Self::HmacSha256_96 => "hmac-sha256-96",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        [Self::ChaCha20Poly1305, Self::HmacSha256_96]
+            .into_iter()
+            .find(|algorithm| algorithm.as_str() == text)
+    }
+}
+
+/// One `keys[]` entry —
+/// [cluster-membership](../../../../docs/specs/cluster-membership.md) §4.
+///
+/// The six attributes of KY1, and no seventh: they are what `affinity-token` §6 requires and what
+/// `AF-4`'s mint/verify library consumes, so changing a name, a type or a meaning here is a new
+/// `apiVersion` (§3 D7) rather than an in-place edit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeySpec {
+    /// The wire key id `affinity-token` §3 carries in byte 1. **`0` is valid here** — unlike every
+    /// other id in this schema (§6 I2), because a token's key-id byte has no "none" value.
+    pub id: u8,
+    pub algorithm: KeyAlgorithm,
+    /// The name the driver resolves into §6's exactly-32-bytes. The only way material enters a node
+    /// (KY2, §8 V9); an inline `secret` is refused by KY3 and never reaches this struct.
+    pub secret_ref: String,
+    /// The verify window's open and close, as UNIX seconds — the form `affinity-token` §8 S2
+    /// compares `now` against.
+    ///
+    /// Absolute instants, never durations (KY4): the loader has no clock (§2 D1), so a relative
+    /// spelling would be resolved against whatever moment each node happened to reload, and one
+    /// document would mean as many windows as there are nodes.
+    pub verify_from: i64,
+    pub verify_until: i64,
+    /// Whether new records are minted under this key. Exactly one entry per document version
+    /// carries `true` (KY5, `affinity-token` §6).
+    pub mint: bool,
+}
+
+/// One shard of [location-service](../../../../docs/specs/location-service.md) §8's key space, and
+/// the member that accepts writes for it (SM2, SM3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShardSpec {
+    pub id: u16,
+    /// A member `name`, never an id: a shard map is a table a human reviews in a diff, and sixty-four
+    /// rows of `owner: 7` are unreviewable (SM2).
+    pub owner: String,
+}
+
+/// The shard map —
+/// [cluster-membership](../../../../docs/specs/cluster-membership.md) §5.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShardMapSpec {
+    /// How long a `Draining` shard waits for its last in-flight write before the switch is forced
+    /// (§9.4 DS4/DS5). Declared there, adopted here unchanged (§8 V3).
+    pub drain_timeout_ms: u64,
+    /// The shard space, and it is total: ids `1..=N` with no gap and no repeat (SM1).
+    pub shards: Vec<ShardSpec>,
 }
 
 /// Where registrations live. The DSN is a *reference* — §8 V9 forbids the value.
@@ -413,6 +575,10 @@ pub struct Config {
     pub zones: Vec<String>,
     pub listeners: Vec<ListenerSpec>,
     pub membership: Vec<MemberSpec>,
+    /// The cluster's key set (`cluster-membership` §4). Validated here, applied by nobody yet.
+    pub keys: Vec<KeySpec>,
+    /// The shard map (`cluster-membership` §5), when the document declares one.
+    pub shard_map: Option<ShardMapSpec>,
     pub location_store: Option<LocationStoreSpec>,
     pub tenants: Vec<TenantSpec>,
     pub security: SecuritySpec,
@@ -429,6 +595,17 @@ pub struct Config {
     /// do not consume is normal (§4 R5), while authentication and transport want a **refusal** — but
     /// whichever it is, it must not be nobody.
     pub unapplied: Vec<Path>,
+    /// Every `cluster` section as the document spelled it, canonically rendered.
+    ///
+    /// §9's reload rules are judged **between two documents** and RL1 makes the class a property of
+    /// the *field*, so [`reload`] has to be able to say "`cluster.profile` changed" about a section
+    /// this loader never descends into. Holding the rendering rather than the value tree keeps the
+    /// parser's types out of a public struct, and canonicalising it (mappings sorted, numbers
+    /// normalised) means a document that only reordered its keys is correctly not a change.
+    ///
+    /// Private because it is machinery for one function rather than a fact about the cluster: a
+    /// consumer that wanted to know what a section said should read the section.
+    sections: BTreeMap<String, String>,
 }
 
 /// One node's view of the cluster (§5 P2).
@@ -449,11 +626,13 @@ pub struct ProjectedConfig {
 }
 
 /// The §7 sections this loader recognises but does not descend into.
+///
+/// `keys` and `shardMap` left this list in `DP-16`: `AF-6` specified their fields and nothing
+/// implemented them, so a document written to the published spec was refused by V2 — the closed
+/// world working exactly as designed, and a schema one story ahead of its loader.
 const DEFERRED_SECTIONS: &[&str] = &[
     "profile",
     "management",
-    "keys",
-    "shardMap",
     "registrar",
     "normalisation",
     "trunk",
@@ -475,12 +654,77 @@ const CLUSTER_KEYS: &[&str] = &[
     "zones",
     "listener",
     "membership",
+    "keys",
+    "shardMap",
     "locationStore",
     "tenant",
     "security",
     "admission",
     "timers",
 ];
+
+/// Which of §9's two classes a change to a section falls in (§9.1 RL1).
+///
+/// RL1 is the whole reason this is a table and not a diff verdict: "the node and the operator must
+/// classify a change identically, or the operator will push a change no node applies".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReloadClass {
+    /// Applying it is a restart, staged by the operator (`KO-8`). A document changing one is
+    /// **rejected as a reload** (RL2) and the node keeps running the active version.
+    Rollout,
+    /// Applied in place, without restarting anything (RL4, and `cluster-membership` §6 RD1).
+    Reloadable,
+}
+
+/// §7's reload class, per section, in §7's own order.
+///
+/// `mediaPool` is the one over-approximation and says so: §7 splits it — `mode` is `rollout` and
+/// `nodes` is `reloadable` — and this loader does not descend into the section, so it cannot tell
+/// the two apart. Classifying the whole section as `rollout` refuses a reload that would in fact
+/// have been safe; classifying it the other way would apply a `mode` change nothing performs.
+/// `KO-7` owns the section and is where the split lands.
+const RELOAD_CLASSES: &[(&str, ReloadClass)] = &[
+    ("name", ReloadClass::Rollout),
+    ("environment", ReloadClass::Rollout),
+    ("zones", ReloadClass::Rollout),
+    ("profile", ReloadClass::Rollout),
+    ("listener", ReloadClass::Rollout),
+    ("management", ReloadClass::Rollout),
+    ("membership", ReloadClass::Reloadable),
+    ("keys", ReloadClass::Reloadable),
+    ("shardMap", ReloadClass::Reloadable),
+    ("locationStore", ReloadClass::Rollout),
+    ("registrar", ReloadClass::Rollout),
+    ("tenant", ReloadClass::Reloadable),
+    ("normalisation", ReloadClass::Reloadable),
+    ("trunk", ReloadClass::Reloadable),
+    ("domain", ReloadClass::Reloadable),
+    ("destinationSet", ReloadClass::Reloadable),
+    ("routeRule", ReloadClass::Reloadable),
+    ("ingress", ReloadClass::Reloadable),
+    ("rateLimit", ReloadClass::Reloadable),
+    ("timers", ReloadClass::Reloadable),
+    ("security", ReloadClass::Reloadable),
+    ("admission", ReloadClass::Reloadable),
+    ("nat", ReloadClass::Reloadable),
+    ("mediaPool", ReloadClass::Rollout),
+    ("observability", ReloadClass::Reloadable),
+    ("probe", ReloadClass::Reloadable),
+    ("echo", ReloadClass::Reloadable),
+];
+
+/// The class §7 gives a section.
+///
+/// A section this table does not name is treated as `rollout`, which is the fail-closed answer: an
+/// unclassified section applied in place would be a change nothing performed. The unit test beside
+/// this module proves the table covers every recognised section, so the fallback is unreachable
+/// from a document rather than merely unlikely.
+fn reload_class(section: &str) -> ReloadClass {
+    RELOAD_CLASSES
+        .iter()
+        .find(|(name, _)| *name == section)
+        .map_or(ReloadClass::Rollout, |(_, class)| *class)
+}
 
 /// Read a cluster document.
 ///
@@ -512,11 +756,12 @@ pub fn load(
 
     // Substitution happens before typing, so a substituted value is validated exactly like a
     // written one (§8 V4).
-    let substituted = substitute(text, env, &root, &mut errors);
+    let (substituted, unresolved) = substitute(text, env);
 
     let document = match parse_document(&substituted) {
         Ok(value) => value,
         Err(why) => {
+            report_unresolved(&Value::Null, &root, &unresolved, &mut errors);
             errors.push(ConfigError::new(
                 root,
                 "CC-D3",
@@ -526,6 +771,7 @@ pub fn load(
             return Err(ordered(errors));
         }
     };
+    report_unresolved(&document, &root, &unresolved, &mut errors);
 
     let config = read_document(&document, identity, &root, &mut errors);
 
@@ -578,6 +824,267 @@ pub fn project(config: &Config, identity: &NodeIdentity) -> ProjectedConfig {
         security: config.security.clone(),
         admission: config.admission,
         timers: config.timers.clone(),
+    }
+}
+
+/// What a reload would do, when §9 admits it.
+///
+/// There is no "restart" variant, and that is RL2: a document changing any `rollout`-class field is
+/// **rejected as a reload**, so the alternative to a plan is an error rather than a plan with a flag
+/// on it. A `ReloadPlan` in hand means every clause of
+/// [cluster-membership](../../../../docs/specs/cluster-membership.md) §6 RD1 holds — no listener
+/// rebound, no connection closed, no registration expired, no token or flow reference invalidated,
+/// no established dialog or in-flight transaction disturbed — because the sections that could have
+/// disturbed any of them are exactly the ones whose change is refused here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReloadPlan {
+    /// The `reloadable` sections whose content differs from the active document, in path order.
+    pub changed: Vec<Path>,
+}
+
+/// Judge a new document against the active one (§9).
+///
+/// Two steps, in the order §9.1 states them: the whole new document is validated by [`load`]
+/// (RL2 — "validated and then either applied or not"), and only then are the transition rules of
+/// §9.2–§9.4 applied, which are judged against the active document and cannot be judged from the new
+/// one alone (RL3). At first load there is no predecessor and every transition rule is vacuous,
+/// which is why this is a separate entry point rather than an argument to `load`.
+///
+/// Two rules of §9 are already enforced one layer down and are not repeated here:
+/// `cluster-membership` §6 RD3 — a reload that changes *this* node's own `zone` or `roles` — is §5
+/// P3's cross-check against the identity, which [`load`] performs on the new document; and RD2's
+/// "adding or removing a member is a reload" is the absence of a rule rather than one.
+///
+/// # Errors
+///
+/// Every reason the new document cannot replace the active one, ordered by path (§8 V1) — the
+/// loader's own refusals, and §9's transition refusals on top of them.
+pub fn reload(
+    active: &Config,
+    bytes: &[u8],
+    identity: &NodeIdentity,
+    env: &BTreeMap<String, String>,
+) -> Result<(Config, ReloadPlan), Vec<ConfigError>> {
+    let next = load(bytes, identity, env)?;
+    let root = Path::root();
+    let cluster = root.field("cluster");
+    let mut errors = Vec::new();
+    let mut changed = Vec::new();
+
+    // D10. Rolling back is publishing a *new*, higher version whose content is the old one, so that
+    // "which configuration is this node running" has one answer.
+    if next.version <= active.version {
+        errors.push(ConfigError::new(
+            root.field("version"),
+            "CC-D10",
+            Some(next.version.to_string()),
+            &format!(
+                "a configuration version above the active {}; a rollback is a new, higher version \
+                 carrying the old content",
+                active.version
+            ),
+        ));
+    }
+
+    // RL1/RL2. The class is read from §7's table, never reached by diffing — the node and the
+    // operator must classify a change identically, or the operator pushes a change no node applies.
+    let mut sections: BTreeSet<&str> = active.sections.keys().map(String::as_str).collect();
+    sections.extend(next.sections.keys().map(String::as_str));
+    for section in sections {
+        if active.sections.get(section) == next.sections.get(section) {
+            continue;
+        }
+        let at = cluster.field(section);
+        match reload_class(section) {
+            ReloadClass::Reloadable => changed.push(at),
+            ReloadClass::Rollout => {
+                for at in rollout_paths(section, active, &next, &at) {
+                    errors.push(ConfigError::new(
+                        at,
+                        "CC-RL2",
+                        Some("a rollout-class change".into()),
+                        "no change to a rollout-class field; applying one is a restart, staged by \
+                         the operator (KO-8), and the node keeps running the active version",
+                    ));
+                }
+            }
+        }
+    }
+
+    check_id_reassignment(active, &next, &cluster, &mut errors);
+    check_key_transition(active, &next, &cluster, &mut errors);
+
+    if errors.is_empty() {
+        Ok((next, ReloadPlan { changed }))
+    } else {
+        Err(ordered(errors))
+    }
+}
+
+/// Which paths a changed `rollout` section is named by.
+///
+/// As deep as this loader's own reading goes, and no deeper. `listener[]` and `locationStore` are
+/// parsed into typed fields, so a change in one can be named at the field that changed — which is
+/// what §12 `CC-D-8` asks for. `profile`, `management`, `registrar` and `mediaPool` are recognised
+/// and not descended into, so the section is the most precise true thing that can be said about
+/// them; inventing a deeper path would mean a second reading of a schema this module does not own.
+fn rollout_paths(section: &str, active: &Config, next: &Config, at: &Path) -> Vec<Path> {
+    match section {
+        "listener" if active.listeners.len() == next.listeners.len() => {
+            let mut paths = Vec::new();
+            for (index, (before, after)) in active
+                .listeners
+                .iter()
+                .zip(next.listeners.iter())
+                .enumerate()
+            {
+                let at = at.index(index);
+                if before.roles != after.roles {
+                    paths.push(at.field("roles"));
+                }
+                if before.transport != after.transport {
+                    paths.push(at.field("transport"));
+                }
+                if before.bind != after.bind {
+                    paths.push(at.field("bind"));
+                }
+                if before.advertise != after.advertise {
+                    paths.push(at.field("advertise"));
+                }
+            }
+            if paths.is_empty() {
+                vec![at.clone()]
+            } else {
+                paths
+            }
+        }
+        "locationStore" => match (&active.location_store, &next.location_store) {
+            (Some(before), Some(after)) => {
+                let mut paths = Vec::new();
+                if before.backend != after.backend {
+                    paths.push(at.field("backend"));
+                }
+                if before.dsn_ref != after.dsn_ref {
+                    paths.push(at.field("dsnRef"));
+                }
+                if paths.is_empty() {
+                    vec![at.clone()]
+                } else {
+                    paths
+                }
+            }
+            _ => vec![at.clone()],
+        },
+        _ => vec![at.clone()],
+    }
+}
+
+/// §6 I3, and `cluster-membership` RD4: a `node` id is not re-pointed to a different `name`.
+///
+/// The loader owns the version-to-version half of I3; §7.2 RB11's `W` wait is the calendar half and
+/// is the operator's, because it needs a wall clock the loader does not have (§2 D1). Reusing an id
+/// early is indistinguishable, on the wire, from the record it collides with.
+fn check_id_reassignment(
+    active: &Config,
+    next: &Config,
+    cluster: &Path,
+    errors: &mut Vec<ConfigError>,
+) {
+    let at = cluster.field("membership");
+    for (index, member) in next.membership.iter().enumerate() {
+        let Some(previous) = active
+            .membership
+            .iter()
+            .find(|held| held.node == member.node)
+        else {
+            continue;
+        };
+        if previous.name != member.name {
+            errors.push(ConfigError::new(
+                at.index(index).field("node"),
+                "CC-I3",
+                Some(format!(
+                    "id {} re-pointed from \"{}\" to \"{}\"",
+                    member.node, previous.name, member.name
+                )),
+                "an id that still names what it named at the active version; a retired id waits \
+                 max(L, E_max) + S before it names something else (cluster-membership §7.2 RB11)",
+            ));
+        }
+    }
+}
+
+/// §9.3 RL10 and RL11 — the two rules that make "no call is disturbed by a key reload" (RL12) true
+/// rather than hoped for.
+///
+/// Both are judged from the *declared* windows, because D1 forbids the loader a clock: RL11's
+/// wall-clock half — has `max(L, E_max) + S` actually elapsed — is `cluster-membership` §7.1 RB5's,
+/// addressed to an operator.
+///
+/// RL10 is read literally, including the case where the active document declared no `keys` at all:
+/// introducing the section with a minting key is a mint under a key no other node has been given,
+/// which is exactly what the rule refuses. So a fleet acquires its first key set by starting on a
+/// document that already carries it — the same restart-class posture RB9 takes for emergency
+/// retirement, and for the same reason: `load` has no predecessor, so RL3 makes the rule vacuous
+/// there.
+fn check_key_transition(
+    active: &Config,
+    next: &Config,
+    cluster: &Path,
+    errors: &mut Vec<ConfigError>,
+) {
+    let at = cluster.field("keys");
+
+    // RL10. The error names the key id and both versions, as the rule requires.
+    if let Some((index, minting)) = next.keys.iter().enumerate().find(|(_, key)| key.mint)
+        && !active.keys.iter().any(|held| held.id == minting.id)
+    {
+        errors.push(ConfigError::new(
+            at.index(index).field("mint"),
+            "CC-RL10",
+            Some(format!(
+                "key id {} minting at version {}, absent from version {}",
+                minting.id, next.version, active.version
+            )),
+            "a mint key already distributed at the active version; flipping mint to a key no peer \
+             holds produces records a healthy node cannot verify (affinity-token §6 K1, K3)",
+        ));
+    }
+
+    // RL11, in both of its halves: the outgoing mint key is neither removed nor has its window
+    // brought forward while records minted under it can still be presented.
+    let Some(outgoing) = active.keys.iter().find(|key| key.mint) else {
+        return;
+    };
+    match next
+        .keys
+        .iter()
+        .enumerate()
+        .find(|(_, key)| key.id == outgoing.id)
+    {
+        None => errors.push(ConfigError::new(
+            at,
+            "CC-RL11",
+            Some(format!(
+                "key id {} removed while it was minting",
+                outgoing.id
+            )),
+            "a document that keeps the outgoing mint key verify-valid for max(L, E_max) + S after \
+             the flip; retiring it sooner is a rolling restart (cluster-membership §7.1 RB9)",
+        )),
+        Some((index, incoming)) if incoming.verify_until < outgoing.verify_until => {
+            errors.push(ConfigError::new(
+                at.index(index).field("verifyUntil"),
+                "CC-RL11",
+                Some(format!(
+                    "the verify window of key id {} brought forward",
+                    outgoing.id
+                )),
+                "a verifyUntil no earlier than the active version's; a key that stops verifying \
+                 early strands every record minted under it inside max(L, E_max) + S",
+            ));
+        }
+        Some(_) => {}
     }
 }
 
@@ -645,19 +1152,21 @@ fn toml_to_value(value: toml::Value) -> Value {
 
 // ----------------------------------------------------------------------------- substitution ----
 
-/// Replace every `${NAME}` from `env` (§8 V4).
+/// Replace every `${NAME}` from `env` (§8 V4), and report back the ones that did not resolve.
 ///
 /// The only substitution there is: no nesting, no defaulting, no arithmetic, no command
-/// substitution. An undefined name is an error naming the variable and the path — deliberately not
-/// the empty string, which would turn `advertise: "${NODE_IP}:5060"` into an unparsable address and
-/// report the wrong problem one layer down.
-fn substitute(
-    text: &str,
-    env: &BTreeMap<String, String>,
-    path: &Path,
-    errors: &mut Vec<ConfigError>,
-) -> String {
+/// substitution. An undefined name is **left standing in the text**, deliberately, rather than
+/// replaced with the empty string — which would turn `advertise: "${NODE_IP}:5060"` into an
+/// unparsable address and report the wrong problem one layer down.
+///
+/// It is left standing rather than reported here because a textual pass has no path to report *at*,
+/// and §12 `CC-D-4` asks for the declaring path rather than the document root: the reference survives
+/// into the parsed tree, and [`report_unresolved`] names the field it is sitting in. The two
+/// spellings the rule refuses — an undefined name and a name outside `[A-Z_][A-Z0-9_]*` — travel the
+/// same way, because both are "this is not a value" and both are read at the same place.
+fn substitute(text: &str, env: &BTreeMap<String, String>) -> (String, BTreeSet<String>) {
     let mut out = String::with_capacity(text.len());
+    let mut unresolved = BTreeSet::new();
     let mut rest = text;
 
     while let Some(start) = rest.find("${") {
@@ -667,31 +1176,102 @@ fn substitute(
             // An unterminated `${` is not a variable; leave it and let the parser complain about
             // the document it actually is.
             out.push_str(&rest[start..]);
-            return out;
+            return (out, unresolved);
         };
         let name = &after[..end];
-        if is_var_name(name) {
-            match env.get(name) {
-                Some(value) => out.push_str(value),
-                None => errors.push(ConfigError::new(
-                    path.clone(),
-                    "CC-V4",
-                    Some(format!("${{{name}}}")),
-                    "a variable defined in the environment passed to load",
-                )),
+        match env.get(name) {
+            Some(value) if is_var_name(name) => out.push_str(value),
+            _ => {
+                unresolved.insert(name.to_owned());
+                out.push_str("${");
+                out.push_str(name);
+                out.push('}');
             }
-        } else {
-            errors.push(ConfigError::new(
-                path.clone(),
-                "CC-V4",
-                Some(format!("${{{name}}}")),
-                "a name matching [A-Z_][A-Z0-9_]*",
-            ));
         }
         rest = &after[end + 1..];
     }
     out.push_str(rest);
-    out
+    (out, unresolved)
+}
+
+/// Report every `${NAME}` that did not resolve, at the path it was written at (§8 V4).
+///
+/// Walking the parsed tree is what buys the path: `advertise: "${NODE_IP}:5060"` with no `NODE_IP`
+/// in the environment is reported at `cluster.listener[0].advertise`, so an operator is told which
+/// field to look at rather than that something, somewhere, named a variable. A name that survives
+/// into no scalar — one written as a mapping *key*, or one in a document that did not parse — is
+/// still reported, at the document root, because a rule that only fires where a walk can reach is a
+/// rule with a hole in it.
+fn report_unresolved(
+    document: &Value,
+    root: &Path,
+    unresolved: &BTreeSet<String>,
+    errors: &mut Vec<ConfigError>,
+) {
+    if unresolved.is_empty() {
+        return;
+    }
+    let mut located: BTreeSet<&str> = BTreeSet::new();
+    locate_references(document, root, unresolved, &mut located, errors);
+    for name in unresolved {
+        if !located.contains(name.as_str()) {
+            errors.push(ConfigError::new(
+                root.clone(),
+                "CC-V4",
+                Some(format!("${{{name}}}")),
+                &expected_variable(name),
+            ));
+        }
+    }
+}
+
+fn expected_variable(name: &str) -> String {
+    if is_var_name(name) {
+        "a variable defined in the environment passed to load".to_owned()
+    } else {
+        "a name matching [A-Z_][A-Z0-9_]*".to_owned()
+    }
+}
+
+fn locate_references<'a>(
+    value: &Value,
+    path: &Path,
+    unresolved: &'a BTreeSet<String>,
+    located: &mut BTreeSet<&'a str>,
+    errors: &mut Vec<ConfigError>,
+) {
+    match value {
+        Value::String(text) => {
+            for name in unresolved {
+                if text.contains(&format!("${{{name}}}")) {
+                    located.insert(name.as_str());
+                    errors.push(ConfigError::new(
+                        path.clone(),
+                        "CC-V4",
+                        Some(format!("${{{name}}}")),
+                        &expected_variable(name),
+                    ));
+                }
+            }
+        }
+        Value::Sequence(items) => {
+            for (index, item) in items.iter().enumerate() {
+                locate_references(item, &path.index(index), unresolved, located, errors);
+            }
+        }
+        Value::Mapping(map) => {
+            for (key, item) in map {
+                let at = key
+                    .as_str()
+                    .map_or_else(|| path.clone(), |key| path.field(key));
+                locate_references(item, &at, unresolved, located, errors);
+            }
+        }
+        Value::Tagged(tagged) => {
+            locate_references(&tagged.value, path, unresolved, located, errors);
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
 }
 
 fn is_var_name(name: &str) -> bool {
@@ -920,20 +1500,33 @@ fn read_document(
     errors: &mut Vec<ConfigError>,
 ) -> Option<Config> {
     let top = as_mapping(document, root, errors)?;
-    closed_world(top, &["apiVersion", "version", "cluster"], root, errors);
 
-    let api_version = required_str(top, "apiVersion", root, "CC-3", errors);
+    // §3 D6, and it runs **before** anything else is looked at: "a node MUST refuse a document
+    // naming any other [schema version], naming the versions it does implement. It MUST NOT parse a
+    // document it does not fully implement — not on a best-effort basis, not by ignoring what it
+    // does not recognise."
+    //
+    // So a foreign `apiVersion` is not one error among several: everything already accumulated is
+    // dropped and this is the only thing reported. What would otherwise come back is a list of
+    // closed-world complaints about a schema this build has no opinion on, which reads as "these
+    // keys are wrong" when the true statement is "this whole document is somebody else's". A
+    // half-understood security posture is worse than a node that will not start.
+    let api_version = required_str(top, "apiVersion", root, "CC-D6", errors);
     if let Some(found) = &api_version
         && found != API_VERSION
     {
+        errors.clear();
         errors.push(ConfigError::new(
             root.field("apiVersion"),
-            "CC-3",
+            "CC-D6",
             Some(found.clone()),
             API_VERSION,
         ));
+        return None;
     }
-    let version = required_uint(top, "version", root, "CC-3", u64::from(u32::MAX), errors);
+
+    closed_world(top, &["apiVersion", "version", "cluster"], root, errors);
+    let version = required_uint(top, "version", root, "CC-D9", u64::from(u32::MAX), errors);
 
     let cluster_path = root.field("cluster");
     let cluster_value = top.get(Value::from("cluster"));
@@ -963,7 +1556,9 @@ fn read_document(
     let environment = required_str(cluster, "environment", &cluster_path, "CC-7", errors);
     let zones = read_zones(cluster, &cluster_path, errors);
     let listeners = read_listeners(cluster, &cluster_path, errors, &mut unapplied);
-    let membership = read_membership(cluster, &cluster_path, errors);
+    let membership = read_membership(cluster, &cluster_path, errors, &mut unapplied);
+    let keys = read_keys(cluster, &cluster_path, errors, &mut unapplied);
+    let shard_map = read_shard_map(cluster, &cluster_path, errors, &mut unapplied);
     let location_store = read_location_store(cluster, &cluster_path, errors, &mut unapplied);
     let tenants = read_tenants(cluster, &cluster_path, errors);
     let security = read_security(cluster, &cluster_path, errors);
@@ -977,6 +1572,13 @@ fn read_document(
     );
     check_membership_agrees(&membership, identity, &cluster_path, errors);
     check_projection_has_a_listener(&listeners, identity, &cluster_path, errors);
+    check_shard_owners(shard_map.as_ref(), &membership, &cluster_path, errors);
+
+    // §8 V1's ordering is over paths, and `unapplied` is read by an operator beside those errors.
+    // Sorting it here rather than at each push keeps the two lists in one order without asking every
+    // reader to remember to.
+    unapplied.sort();
+    unapplied.dedup();
 
     Some(Config {
         api_version: api_version?,
@@ -986,13 +1588,57 @@ fn read_document(
         zones,
         listeners,
         membership,
+        keys,
+        shard_map,
         location_store,
         tenants,
         security,
         admission,
         timers,
         unapplied,
+        sections: canonical_sections(cluster),
     })
+}
+
+/// Every `cluster` section, canonically rendered, for [`reload`] to diff (§9.1 RL1).
+fn canonical_sections(cluster: &serde_yaml_ng::Mapping) -> BTreeMap<String, String> {
+    cluster
+        .iter()
+        .filter_map(|(key, value)| Some((key.as_str()?.to_owned(), canonical(value))))
+        .collect()
+}
+
+/// One value, rendered so that two documents meaning the same thing render the same bytes.
+///
+/// Mappings are emitted in key order and numbers are normalised, so a reload that only reordered a
+/// section's keys — or spelled `42` in TOML rather than in YAML — is correctly **not** a change.
+/// Sequence order is preserved, because in this schema a sequence is a list and `listener[0]` is not
+/// `listener[1]`.
+fn canonical(value: &Value) -> String {
+    match value {
+        Value::Null => "~".to_owned(),
+        Value::Bool(flag) => flag.to_string(),
+        Value::Number(number) => number
+            .as_u64()
+            .map(|n| n.to_string())
+            .or_else(|| number.as_i64().map(|n| n.to_string()))
+            .or_else(|| number.as_f64().map(|n| n.to_string()))
+            .unwrap_or_else(|| number.to_string()),
+        Value::String(text) => format!("{text:?}"),
+        Value::Sequence(items) => {
+            let rendered: Vec<String> = items.iter().map(canonical).collect();
+            format!("[{}]", rendered.join(","))
+        }
+        Value::Mapping(map) => {
+            let mut rendered: Vec<String> = map
+                .iter()
+                .map(|(key, item)| format!("{}:{}", canonical(key), canonical(item)))
+                .collect();
+            rendered.sort();
+            format!("{{{}}}", rendered.join(","))
+        }
+        Value::Tagged(tagged) => format!("!{} {}", tagged.tag, canonical(&tagged.value)),
+    }
 }
 
 fn read_zones(
@@ -1153,10 +1799,18 @@ fn check_transport(declared: &str, path: &Path, errors: &mut Vec<ConfigError>) -
     }
 }
 
+/// Read `membership[]` — [cluster-membership](../../../../docs/specs/cluster-membership.md) §3.
+///
+/// MB1 closes the world on exactly seven fields. Three of them — `rpc`, `incarnationSource` and
+/// `incarnationRef` — reach no consumer in this build, so each one a document declares is reported
+/// through `unapplied`: `AF-3`/`AF-7` own the endpoint a peer dials and `affinity-token` §12.2 CT2's
+/// incarnation is produced by machinery that does not exist here yet. Validating a field is not
+/// applying it, and `FC-2` exists because the difference was once invisible.
 fn read_membership(
     cluster: &serde_yaml_ng::Mapping,
     path: &Path,
     errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
 ) -> Vec<MemberSpec> {
     let at = path.field("membership");
     let Some(value) = cluster.get(Value::from("membership")) else {
@@ -1178,12 +1832,32 @@ fn read_membership(
         let Some(map) = as_mapping(item, &at, errors) else {
             continue;
         };
-        closed_world(map, &["node", "name", "zone", "roles"], &at, errors);
+        closed_world(
+            map,
+            &[
+                "node",
+                "name",
+                "zone",
+                "roles",
+                "rpc",
+                "incarnationSource",
+                "incarnationRef",
+            ],
+            &at,
+            errors,
+        );
+        for declared in ["rpc", "incarnationSource", "incarnationRef"] {
+            if map.contains_key(Value::from(declared)) {
+                unapplied.push(at.field(declared));
+            }
+        }
         let node = required_uint(map, "node", &at, "CC-I1", u64::from(u16::MAX), errors);
         let name = required_str(map, "name", &at, "CC-I1", errors);
         let zone = required_str(map, "zone", &at, "CC-I1", errors);
         let roles = read_roles(map.get(Value::from("roles")), &at.field("roles"), errors);
         check_role_combination(&roles, &at.field("roles"), errors);
+        let rpc = read_rpc(map, &roles, &at, errors);
+        let (incarnation_source, incarnation_ref) = read_incarnation(map, &at, errors);
 
         let Some(node) = node else { continue };
         // I2: `0` is reserved — affinity-token §3 spells it "none".
@@ -1211,16 +1885,189 @@ fn read_membership(
                 &format!("an id not already held by \"{}\"", existing.name),
             ));
         }
+        check_member_is_unique(&members, name.as_deref(), rpc.as_deref(), &at, errors);
         if let (Some(name), Some(zone)) = (name, zone) {
             members.push(MemberSpec {
                 node,
                 name,
                 zone,
                 roles,
+                rpc,
+                incarnation_source,
+                incarnation_ref,
             });
         }
     }
     members
+}
+
+/// MB4 and MB6 — the two uniqueness rules a member carries beyond its id.
+///
+/// Both are refused naming the other holder, because "this name is taken" without saying by what is
+/// a message that sends an operator back to the file to search for it.
+fn check_member_is_unique(
+    members: &[MemberSpec],
+    name: Option<&str>,
+    rpc: Option<&str>,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) {
+    // MB4: `name` is unique in the document, byte-compared (§6 I4). `shardMap[].owner` resolves by
+    // name (SM2), so two members answering to one name would make an ownership assignment ambiguous
+    // — which is DS2's "a shard accepting at two nodes" reached through the front door.
+    if let Some(declared) = name
+        && let Some(existing) = members.iter().find(|member| member.name == declared)
+    {
+        errors.push(ConfigError::new(
+            path.field("name"),
+            "CC-MB4",
+            Some(declared.to_owned()),
+            &format!("a name not already held by node {}", existing.node),
+        ));
+    }
+    // MB6: two members advertising one endpoint is a load error naming both, because affinity-token
+    // §13.1 D5 dials the owner a reference names and nothing re-checks that the answer came from it.
+    if let Some(declared) = rpc
+        && let Some(existing) = members
+            .iter()
+            .find(|member| member.rpc.as_deref() == Some(declared))
+    {
+        errors.push(ConfigError::new(
+            path.field("rpc"),
+            "CC-MB6",
+            Some(declared.to_owned()),
+            &format!(
+                "an endpoint not already advertised by \"{}\"",
+                existing.name
+            ),
+        ));
+    }
+}
+
+/// Read a member's `rpc` endpoint (MB5, MB6, MB7).
+///
+/// The form is §5 P7's, **inherited rather than restated**: this calls the same
+/// [`Advertised::parse`] the listener's advertised address goes through, so "empty, unspecified or
+/// port `0`" has one implementation and cannot drift into two. What MB6 adds on top is that the port
+/// is *required* here — an omitted listener port means "the one I bound", and an RPC endpoint has no
+/// bound port to fall back on, so a defaulted one would be a port the far side has to guess.
+fn read_rpc(
+    map: &serde_yaml_ng::Mapping,
+    roles: &BTreeSet<Role>,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> Option<String> {
+    let at = path.field("rpc");
+    // MB5's over-approximation, and it is deliberate: the precise property is "this node may accept
+    // a connection-oriented transport", which is a listener fact rather than a role fact. Erring
+    // safe is priced by affinity-token §11.4 FM6 — a UDP-only edge owns no flows, so the endpoint it
+    // is made to declare is one nobody dials.
+    let owns_flows = roles.iter().copied().any(Role::is_call_path);
+    let Some(value) = map.get(Value::from("rpc")) else {
+        if owns_flows {
+            errors.push(ConfigError::new(
+                at,
+                "CC-MB5",
+                None,
+                "an advertised host:port; a member on the call path owns flows, and a peer with no \
+                 endpoint to dial cannot deliver a request toward a client this node owns",
+            ));
+        }
+        return None;
+    };
+    // Fail-closed in both directions (MB5): an endpoint on a node that owns nothing is a target
+    // nobody should reach. `echo` and `e2e-tester` are off the call path (§4 R6).
+    if !owns_flows {
+        errors.push(ConfigError::new(
+            at.clone(),
+            "CC-MB5",
+            Some("an advertised endpoint".into()),
+            "no rpc key: this member's roles are off the call path, so it owns no flow and no peer \
+             dials it",
+        ));
+        return None;
+    }
+    let Some(text) = value.as_str() else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-MB6",
+            Some(type_of(value).to_owned()),
+            "a host:port string",
+        ));
+        return None;
+    };
+    match Advertised::parse(text) {
+        Ok(endpoint) if endpoint.port().is_some() => Some(text.to_owned()),
+        Ok(_) => {
+            errors.push(ConfigError::new(
+                at,
+                "CC-MB6",
+                Some(text.to_owned()),
+                "a host:port; the RPC port is a deployment fact with no default, and a defaulted \
+                 one is a port the far side has to guess",
+            ));
+            None
+        }
+        Err(why) => {
+            errors.push(ConfigError::new(
+                at,
+                "CC-MB6",
+                Some(text.to_owned()),
+                &why.to_string(),
+            ));
+            None
+        }
+    }
+}
+
+/// Read `incarnationSource` and `incarnationRef` (MB8).
+///
+/// Absent selects `boot-second`, which is `affinity-token` §12.2 CT2's own mechanism and needs no
+/// storage. That is not a silent default: omitting the field selects a documented mechanism whose
+/// stated limit — a clock that steps backwards across a restart — is written down beside it, and the
+/// deployment that cannot rule that out sets `persisted-counter` on the nodes where it matters.
+fn read_incarnation(
+    map: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> (IncarnationSource, Option<String>) {
+    let at = path.field("incarnationSource");
+    let mut source = IncarnationSource::default();
+    if let Some(value) = map.get(Value::from("incarnationSource")) {
+        let Some(declared) = value.as_str().and_then(IncarnationSource::parse) else {
+            errors.push(ConfigError::new(
+                at,
+                "CC-MB8",
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| Some(type_of(value).to_owned())),
+                &format!(
+                    "one of: {}, {}",
+                    IncarnationSource::BootSecond.as_str(),
+                    IncarnationSource::PersistedCounter.as_str()
+                ),
+            ));
+            return (IncarnationSource::default(), None);
+        };
+        source = declared;
+    }
+
+    let at = path.field("incarnationRef");
+    let reference = map
+        .get(Value::from("incarnationRef"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    if source == IncarnationSource::PersistedCounter && reference.is_none() {
+        errors.push(ConfigError::new(
+            at,
+            "CC-MB8",
+            None,
+            "a reference the driver resolves the counter from; a persisted counter with nowhere to \
+             persist is a boot-second with extra words",
+        ));
+    }
+    (source, reference)
 }
 
 /// §5 P3: the document's membership entry for this node is cross-checked, not obeyed.
@@ -1291,6 +2138,513 @@ fn check_projection_has_a_listener(
             Some("0 listeners for this node's roles".into()),
             "at least one listener whose roles intersect this node's",
         ));
+    }
+}
+
+// ------------------------------------------------ keys and the shard map (cluster-membership) ----
+
+/// Read `keys[]` — [cluster-membership](../../../../docs/specs/cluster-membership.md) §4.
+///
+/// Absent is valid: a cluster that mints no affinity records is a cluster with no `keys` section,
+/// and KY5's "a document in which no entry carries `mint: true` is refused" is a statement about a
+/// section that *is* declared. Refusing an absent section would make every document in the tree
+/// invalid for a subsystem none of them uses yet.
+///
+/// Nothing here resolves a `secretRef`: KY2 puts that in the driver because resolution is IO, and
+/// the two rules that need the resolved bytes — KY2's partial-key-set refusal and KY8's refusal of
+/// the §10 test keys — are start-up rules with no consumer in this build to enforce them for.
+fn read_keys(
+    cluster: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
+) -> Vec<KeySpec> {
+    let at = path.field("keys");
+    let Some(value) = cluster.get(Value::from("keys")) else {
+        return Vec::new();
+    };
+    // Loaded, validated, and applied by nobody: `AF-4`'s mint/verify library reaches no field of the
+    // driver's configuration yet, so a document declaring keys gets no minted token. Reported for
+    // the reason `FC-2` exists — the alternative is a deployment that believes it rotated a key.
+    unapplied.push(at.clone());
+
+    let Some(items) = value.as_sequence() else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-7",
+            Some(type_of(value).to_owned()),
+            "a sequence of key entries",
+        ));
+        return Vec::new();
+    };
+    // KY6, which is §8 V8's ceiling adopted unchanged.
+    if items.len() > MAX_KEYS {
+        errors.push(ConfigError::new(
+            at.clone(),
+            "CC-V8",
+            Some(items.len().to_string()),
+            &format!(
+                "at most {MAX_KEYS} key entries; a document approaching the ceiling is a document \
+                 whose rotations are not being retired"
+            ),
+        ));
+    }
+
+    let mut keys: Vec<KeySpec> = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        let at = at.index(index);
+        let Some(entry) = read_key_entry(item, &at, errors) else {
+            continue;
+        };
+        // affinity-token §6: no two entries share an `id` while both verify windows are open. Ids
+        // may wrap over the years; two open windows on one id make key selection ambiguous for
+        // exactly the tokens rotation exists to keep verifying.
+        if let Some(existing) = keys.iter().find(|key| {
+            key.id == entry.id
+                && key.verify_from <= entry.verify_until
+                && entry.verify_from <= key.verify_until
+        }) {
+            errors.push(ConfigError::new(
+                at.field("id"),
+                "CC-KY1",
+                Some(entry.id.to_string()),
+                &format!(
+                    "an id whose verify window does not overlap the one already declared for id {} \
+                     (affinity-token §6)",
+                    existing.id
+                ),
+            ));
+        }
+        keys.push(entry);
+    }
+
+    // KY5. `affinity-token` §6 fixes "exactly one at any configuration version"; this spec supplies
+    // the default and the fail-closed half, because a cluster that mints nothing Record-Routes
+    // nothing and would fail on its first dialog-forming request rather than at load.
+    let minting: Vec<u8> = keys
+        .iter()
+        .filter(|key| key.mint)
+        .map(|key| key.id)
+        .collect();
+    if minting.len() != 1 && !keys.is_empty() {
+        let found = if minting.is_empty() {
+            "no key marked mint: true".to_owned()
+        } else {
+            format!("{} keys marked mint: true", minting.len())
+        };
+        errors.push(ConfigError::new(
+            at,
+            "CC-KY5",
+            Some(found),
+            "exactly one minting key at any configuration version (affinity-token §6)",
+        ));
+    }
+    keys
+}
+
+/// One `keys[]` entry, or `None` when it is too broken to carry forward (§8 V10's totality applies
+/// to the document, not to a single entry: the walk keeps going so V1 can report every fault).
+fn read_key_entry(item: &Value, at: &Path, errors: &mut Vec<ConfigError>) -> Option<KeySpec> {
+    let map = as_mapping(item, at, errors)?;
+    // `secret` sits on the allow-list beside KY1's six, and that is KY3 rather than an oversight: it
+    // is *recognised* so that the refusal below is the one an author reads, and not V2's
+    // "unrecognised key" arriving first and telling them the opposite. The same shape
+    // `read_security` uses for the four controls §7 declares and this build refuses.
+    closed_world(
+        map,
+        &[
+            "id",
+            "algorithm",
+            "secretRef",
+            "verifyFrom",
+            "verifyUntil",
+            "mint",
+            "secret",
+        ],
+        at,
+        errors,
+    );
+    // KY3. `secret` is recognised so that writing it is refused for the *right* reason: V9's "key
+    // material is named by reference, never written", not V2's "unrecognised key", which would read
+    // as "this schema has no notion of a secret" — the opposite of true.
+    //
+    // The refusal describes and never echoes. This rule fires exactly when a real secret is sitting
+    // in the field, so a message that printed it would be the defect enforcing itself.
+    if map.contains_key(Value::from("secret")) {
+        errors.push(ConfigError::new(
+            at.field("secret"),
+            "CC-V9",
+            Some("an inline key secret".into()),
+            "secretRef naming a secret the driver resolves; no secret value appears in the document",
+        ));
+        return None;
+    }
+
+    // KY1's first attribute, and the one id in this schema for which `0` is legal: a token's key-id
+    // byte has no "none" value, so §6 I2's reserved zero does not reach here.
+    let id = required_uint(map, "id", at, "CC-KY1", u64::from(u8::MAX), errors);
+    let secret_ref = required_str(map, "secretRef", at, "CC-V9", errors);
+    let algorithm = read_algorithm(map, at, errors);
+    let verify_from = read_instant(map, "verifyFrom", at, errors);
+    let verify_until = read_instant(map, "verifyUntil", at, errors);
+    let mint = read_bool(map, "mint", at, errors).unwrap_or(false);
+
+    // KY4: both are required, and the window must be non-empty. A window that never opens is an
+    // entry that can never verify anything, and naming it at load beats finding it at 03:00.
+    if let (Some(from), Some(until)) = (verify_from, verify_until)
+        && from >= until
+    {
+        errors.push(ConfigError::new(
+            at.field("verifyUntil"),
+            "CC-KY4",
+            Some("a window that never opens".into()),
+            "a verifyUntil strictly after verifyFrom",
+        ));
+    }
+
+    let id = u8::try_from(id?).ok()?;
+    Some(KeySpec {
+        id,
+        algorithm,
+        secret_ref: secret_ref?,
+        verify_from: verify_from?,
+        verify_until: verify_until?,
+        mint,
+    })
+}
+
+fn read_algorithm(
+    map: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> KeyAlgorithm {
+    let at = path.field("algorithm");
+    let Some(value) = map.get(Value::from("algorithm")) else {
+        // §8 V3: the default is `affinity-token` §4's, adopted here and declared there.
+        return KeyAlgorithm::default();
+    };
+    if let Some(algorithm) = value.as_str().and_then(KeyAlgorithm::parse) {
+        return algorithm;
+    }
+    errors.push(ConfigError::new(
+        at,
+        "CC-KY1",
+        value
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| Some(type_of(value).to_owned())),
+        &format!(
+            "one of: {}, {}",
+            KeyAlgorithm::ChaCha20Poly1305.as_str(),
+            KeyAlgorithm::HmacSha256_96.as_str()
+        ),
+    ));
+    KeyAlgorithm::default()
+}
+
+fn read_bool(
+    map: &serde_yaml_ng::Mapping,
+    key: &str,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> Option<bool> {
+    let value = map.get(Value::from(key))?;
+    if let Some(flag) = value.as_bool() {
+        return Some(flag);
+    }
+    errors.push(ConfigError::new(
+        path.field(key),
+        "CC-KY1",
+        Some(type_of(value).to_owned()),
+        "a boolean",
+    ));
+    None
+}
+
+/// Read one of KY4's absolute instants into UNIX seconds.
+///
+/// **Only the `Z` form** of RFC 3339 §5.6 is accepted. An offset spelling names the same instant and
+/// is a second way to write it, and §2 D5's whole argument is that a document is reviewed as a diff:
+/// two spellings of one moment make a rotation window harder to read at exactly the moment it
+/// matters. Narrower is also fail-closed — a document this refuses is one an operator rewrites, not
+/// one a node misreads.
+fn read_instant(
+    map: &serde_yaml_ng::Mapping,
+    key: &str,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> Option<i64> {
+    let at = path.field(key);
+    let Some(value) = map.get(Value::from(key)) else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-KY4",
+            None,
+            "an RFC 3339 UTC instant such as 2026-07-28T12:00:00Z; it is required, and a relative \
+             window is unrepresentable because the loader has no clock",
+        ));
+        return None;
+    };
+    let Some(text) = value.as_str() else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-KY4",
+            Some(type_of(value).to_owned()),
+            "an RFC 3339 UTC instant such as 2026-07-28T12:00:00Z",
+        ));
+        return None;
+    };
+    let Some(seconds) = parse_rfc3339_utc(text) else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-KY4",
+            Some(text.to_owned()),
+            "an RFC 3339 UTC instant such as 2026-07-28T12:00:00Z; UTC is spelled `Z`, because one \
+             instant with two spellings is a window nobody can review in a diff",
+        ));
+        return None;
+    };
+    Some(seconds)
+}
+
+/// `YYYY-MM-DDTHH:MM:SS[.frac]Z` → UNIX seconds, or `None` for anything else.
+///
+/// Written out rather than taken from a date library because the whole of what this schema needs
+/// from one is this function, and a dependency is a thing a release has to carry. The civil-days
+/// arithmetic is the standard proleptic-Gregorian one; the fractional part is parsed and discarded,
+/// since `affinity-token` §8 S2 compares whole seconds.
+fn parse_rfc3339_utc(text: &str) -> Option<i64> {
+    let body = text.strip_suffix('Z').or_else(|| text.strip_suffix('z'))?;
+    let (date, time) = body.split_once('T').or_else(|| body.split_once('t'))?;
+
+    let mut date_parts = date.split('-');
+    let year: i64 = date_parts.next()?.parse().ok()?;
+    let month: i64 = date_parts.next()?.parse().ok()?;
+    let day: i64 = date_parts.next()?.parse().ok()?;
+    if date_parts.next().is_some() || !(1..=12).contains(&month) {
+        return None;
+    }
+    if day < 1 || day > days_in_month(year, month) {
+        return None;
+    }
+
+    let (time, _fraction) = time.split_once('.').unwrap_or((time, ""));
+    let mut time_parts = time.split(':');
+    let hour: i64 = time_parts.next()?.parse().ok()?;
+    let minute: i64 = time_parts.next()?.parse().ok()?;
+    let second: i64 = time_parts.next()?.parse().ok()?;
+    if time_parts.next().is_some() || hour > 23 || minute > 59 || second > 60 {
+        return None;
+    }
+
+    Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second)
+}
+
+fn is_leap_year(year: i64) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+fn days_in_month(year: i64, month: i64) -> i64 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        _ => 0,
+    }
+}
+
+/// Days from 1970-01-01 to `year-month-day` in the proleptic Gregorian calendar.
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let year_of_era = year - era * 400;
+    let day_of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+/// Read `shardMap` — [cluster-membership](../../../../docs/specs/cluster-membership.md) §5.
+fn read_shard_map(
+    cluster: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+    unapplied: &mut Vec<Path>,
+) -> Option<ShardMapSpec> {
+    let at = path.field("shardMap");
+    let value = cluster.get(Value::from("shardMap"))?;
+    // Validated here; the handoff that would *use* it — the two maps held at once, the drain, the
+    // switch — is `RG-5`'s (§9.4 DS7), so no node acts on an assignment yet.
+    unapplied.push(at.clone());
+
+    let map = as_mapping(value, &at, errors)?;
+    closed_world(map, &["drainTimeout", "shards"], &at, errors);
+
+    let drain_timeout_ms = read_drain_timeout(map, &at, errors);
+    let shards = read_shards(map, &at, errors);
+    Some(ShardMapSpec {
+        drain_timeout_ms,
+        shards,
+    })
+}
+
+/// `drainTimeout`, in DS4's own range and DS4's own default.
+///
+/// A duration with its unit, not a bare number: every other duration in this schema is milliseconds
+/// (§8 V7's timers) and this one is stated in seconds, so an unsuffixed `30` would be two plausible
+/// values a thousand-fold apart. Refusing it names the form instead of guessing.
+fn read_drain_timeout(
+    map: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> u64 {
+    let at = path.field("drainTimeout");
+    let Some(value) = map.get(Value::from("drainTimeout")) else {
+        return DEFAULT_DRAIN_TIMEOUT_MS;
+    };
+    let declared = value
+        .as_str()
+        .and_then(|text| text.strip_suffix('s'))
+        .and_then(|seconds| seconds.parse::<u64>().ok())
+        .and_then(|seconds| seconds.checked_mul(1_000));
+    let Some(declared) = declared else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-DS4",
+            value
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| Some(type_of(value).to_owned())),
+            "a duration in whole seconds, spelled with its unit — `30s`",
+        ));
+        return DEFAULT_DRAIN_TIMEOUT_MS;
+    };
+    if !(MIN_DRAIN_TIMEOUT_MS..=MAX_DRAIN_TIMEOUT_MS).contains(&declared) {
+        errors.push(ConfigError::new(
+            at,
+            "CC-DS4",
+            Some(format!("{}s", declared / 1_000)),
+            &format!(
+                "a drain timeout between {}s and {}s; below the floor a drain would expire while an \
+                 ordinary contended write was still legitimately retrying (location-service §5.1 \
+                 S10)",
+                MIN_DRAIN_TIMEOUT_MS / 1_000,
+                MAX_DRAIN_TIMEOUT_MS / 1_000
+            ),
+        ));
+        return DEFAULT_DRAIN_TIMEOUT_MS;
+    }
+    declared
+}
+
+/// The shard list, and SM1's totality.
+fn read_shards(
+    map: &serde_yaml_ng::Mapping,
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) -> Vec<ShardSpec> {
+    let at = path.field("shards");
+    let Some(value) = map.get(Value::from("shards")) else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-SM1",
+            None,
+            "a shard list; the list is the shard space, and a shardMap without one assigns nothing",
+        ));
+        return Vec::new();
+    };
+    let Some(items) = value.as_sequence() else {
+        errors.push(ConfigError::new(
+            at,
+            "CC-SM1",
+            Some(type_of(value).to_owned()),
+            "a sequence of shards",
+        ));
+        return Vec::new();
+    };
+
+    let mut shards: Vec<ShardSpec> = Vec::new();
+    for (index, item) in items.iter().enumerate() {
+        let at = at.index(index);
+        let Some(entry) = as_mapping(item, &at, errors) else {
+            continue;
+        };
+        closed_world(entry, &["id", "owner"], &at, errors);
+        let id = required_uint(entry, "id", &at, "CC-I1", u64::from(u16::MAX), errors);
+        let owner = required_str(entry, "owner", &at, "CC-SM2", errors);
+        let (Some(id), Some(owner)) = (id, owner) else {
+            continue;
+        };
+        // §6 I2: `0` is reserved — affinity-token §3 spells a shard's zero "none".
+        if id == 0 {
+            errors.push(ConfigError::new(
+                at.field("id"),
+                "CC-I2",
+                Some("0".into()),
+                "a shard id of 1 or greater; 0 is reserved for \"none\"",
+            ));
+            continue;
+        }
+        let Ok(id) = u16::try_from(id) else { continue };
+        shards.push(ShardSpec { id, owner });
+    }
+
+    // SM1: the ids are `1..=N` with no gap and no repeat, and `N` is the length of the list — there
+    // is no separate count, because a count and a list are two spellings that can disagree. A
+    // missing id is a slice of the registration key space no REGISTER can be accepted for, and it
+    // would surface as a tenant's phones going quiet rather than as a configuration error.
+    if !shards.is_empty() {
+        let declared: BTreeSet<u16> = shards.iter().map(|shard| shard.id).collect();
+        let total = u16::try_from(shards.len()).unwrap_or(u16::MAX);
+        let missing: Vec<String> = (1..=total)
+            .filter(|id| !declared.contains(id))
+            .map(|id| id.to_string())
+            .collect();
+        if !missing.is_empty() {
+            errors.push(ConfigError::new(
+                at,
+                "CC-SM1",
+                Some(format!("no owner for shard {}", missing.join(", "))),
+                "a total map: ids 1..=N with no gap and no repeat, where N is the length of the list",
+            ));
+        }
+    }
+    shards
+}
+
+/// SM2 and SM3, which are §8 V5 cross-section rules: they need `membership` and `shardMap` at once.
+fn check_shard_owners(
+    shard_map: Option<&ShardMapSpec>,
+    membership: &[MemberSpec],
+    path: &Path,
+    errors: &mut Vec<ConfigError>,
+) {
+    let Some(shard_map) = shard_map else { return };
+    let at = path.field("shardMap").field("shards");
+    for (index, shard) in shard_map.shards.iter().enumerate() {
+        let at = at.index(index).field("owner");
+        let Some(owner) = membership.iter().find(|member| member.name == shard.owner) else {
+            // SM2. §8 V5's own example, and the rule id is this schema's because the cross-section
+            // check is this schema's.
+            errors.push(ConfigError::new(
+                at,
+                "CC-V5",
+                Some(shard.owner.clone()),
+                "a name declared in cluster.membership; a shard owned by nobody is a slice of the \
+                 registration key space with nowhere to write",
+            ));
+            continue;
+        };
+        // SM3: a shard owns registration state, so assigning one to a node that runs no registrar
+        // leaves its writes with nowhere to land.
+        if !owner.roles.contains(&Role::Registrar) {
+            errors.push(ConfigError::new(
+                at,
+                "CC-SM3",
+                Some(shard.owner.clone()),
+                "a member whose roles include registrar",
+            ));
+        }
     }
 }
 

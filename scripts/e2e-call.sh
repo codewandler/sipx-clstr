@@ -150,6 +150,10 @@ cluster:
       name: node-a
       zone: a
       roles: [edge, registrar]
+      # cluster-membership MB5: a member on the call path owns flows, so it declares where a peer
+      # dials it for the connection-owner RPC. Nothing in this build dials one — AF-3/AF-7 own that
+      # — but the field is required of every such member and the node reports it as unapplied.
+      rpc: 127.0.0.1:7223
   locationStore:
     backend: memory
   tenant:

@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**169 of 598 rows proved**; 19 covered for shape only; 410 deferred.
+**202 of 606 rows proved**; 19 covered for shape only; 385 deferred.
 
-Σ over the 61 sections below is 598, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 606, so every row counted above is shown in exactly one table.
 
 Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
 
@@ -673,15 +673,15 @@ by a registered prefix's own rows.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `CC-D-1` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-2` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-3` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-4` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-5` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-6` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-7` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-8` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-D-9` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
+| `CC-D-1` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-D-2` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-D-3` | deferred | `RG-22` — The `registrar` section. `cluster.registrar` (`usePath`, `methodFiltering`) is recognised and not descended into, so a typo inside it is accepted today; `DP-16` opened `keys` and `shardMap` and deliberately did not open a third section whose content location-service and registrar-auth own. `RG-22` is the story that gives `usePath` a consumer, and the closed world one level down arrives with it. |
+| `CC-D-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `0` |
+| `CC-D-5` | proved | `crates/sipx-clstr-node/src/startup.rs` — asserts `0` |
+| `CC-D-6` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-D-7` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-D-8` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `1` |
+| `CC-D-9` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — roles and projection (§4, §5)
 
@@ -693,19 +693,20 @@ by a registered prefix's own rows.
 | `CC-R-4` | deferred | `DP-13` — Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it. |
 | `CC-R-5` | deferred | `DP-13` — Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it. |
 | `CC-R-6` | deferred | `DP-13` — Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it. |
-| `CC-R-7` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-R-8` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
+| `CC-R-7` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-R-8` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-R-9` | deferred | `FC-1` — Listener projection. Exact transport exposure is `FC-1`'s: §5 P6's duplicate-transport refusal and P5's advertised identity are the behaviour its V-07 item proves, so these rows wait on `FC-1`. |
 | `CC-R-10` | deferred | `FC-1` — Listener projection. Exact transport exposure is `FC-1`'s: §5 P6's duplicate-transport refusal and P5's advertised identity are the behaviour its V-07 item proves, so these rows wait on `FC-1`. |
+| `CC-R-11` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — logical ids (§6)
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `CC-I-1` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-I-2` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-I-3` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
-| `CC-I-4` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
+| `CC-I-1` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `1` |
+| `CC-I-2` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `0` |
+| `CC-I-3` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-I-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — validation across sections (§8)
 
@@ -714,29 +715,36 @@ by a registered prefix's own rows.
 | `CC-V-1` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-2` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-3` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
-| `CC-V-4` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-V-5` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
+| `CC-V-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-5` | deferred | `ET-6` — The `probe` section. `cluster.probe` (`targets`, `schedule`, `tenant`) is e2e-probe §5's, and this build refuses the `e2e-tester` role at start-up precisely because nothing reads it. The cross-section check that `probe.tenant` names a declared tenant needs the section to be descended into first, which `ET-6` does when it runs the role in the reference topology. |
 | `CC-V-6` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-7` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
-| `CC-V-8` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
+| `CC-V-8` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `70` |
 | `CC-V-9` | shape only | `crates/sipx-clstr-node/src/config/tests.rs` — states `3 minutes`; not compared |
-| `CC-V-10` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-V-11` | deferred | `DP-16` — Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one. |
+| `CC-V-10` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `0` |
+| `CC-V-11` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `3600`, `60`, `86400 s` |
 | `CC-V-12` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `240 s` |
 | `CC-V-13` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-V-14` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-V-15` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-16` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-17` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-18` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-19` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-20` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-21` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-22` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — key reload (§9.3)
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `CC-K-1` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-K-2` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-K-3` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-K-4` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-K-5` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-K-6` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
+| `CC-K-1` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-K-2` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-K-3` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-K-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-K-5` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `1` |
+| `CC-K-6` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — trunk reload (§9.2)
 
@@ -751,15 +759,15 @@ by a registered prefix's own rows.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `CC-S-1` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-2` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-3` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-4` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-5` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-6` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-7` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-8` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
-| `CC-S-9` | deferred | `DP-16` — Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it. |
+| `CC-S-1` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-2` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-3` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-4` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-5` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-6` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-7` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-S-8` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
+| `CC-S-9` | deferred | `RG-5` — The shard-map **handoff**, not its configuration. `DP-16` implemented and proved the configuration half — the map loads, SM1's totality, SM2's owner resolution, SM3's registrar rule and DS4's `drainTimeout` range are enforced, and `CC-S-7` is proved. These rows are the runtime: `Draining`/`Pending`/`Owner`, the `drained` publication, the forced-switch counter, the fenced late write and the version a token carries mid-handoff. §9.4 DS7 assigns exactly that to `RG-5`, and no pure function of a document can execute it. |
 
 ## Asserted identity — the `PaiRequest` derivation (§4)
 

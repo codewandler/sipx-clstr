@@ -323,30 +323,40 @@ than an omission.** Its rules are configuration-validation rules, so they execut
 [cluster-config](cluster-config.md) §12's `load`/`reload` rows — bytes and a `NodeIdentity` in, a
 `Config` or an ordered `Vec<ConfigError>` out — and that prefix is already registered in
 `scripts/check-vectors.py` and already carries the families these rules fall into. The rows below
-are the ones that execute a rule of this spec today; every one of them is deferred with a reason in
-[vector-scope.toml](../reference/vector-scope.toml), because the reload half of the loader has no
-test yet.
+are the ones that execute a rule of this spec. `DP-16` implemented the loader half and proved them;
+what is still deferred, in [vector-scope.toml](../reference/vector-scope.toml) and pointed at
+`RG-5`, is the shard-handoff **runtime** — the two maps held at once, the drain and the switch —
+which §9.4 DS7 assigns to that story and which no configuration function can execute.
 
 | Rule | Executed by, in [cluster-config](cluster-config.md) §12 |
 |---|---|
 | MB2 | `CC-R-7` (a zone mismatch names both), `CC-R-8` (no entry still starts) |
 | MB3 | `CC-I-1` (two members with one id, naming both holders) |
+| MB5 | `CC-V-16` (a call-path member with no `rpc`), `CC-V-17` (an `rpc` on a member off it) |
+| MB6 | `CC-V-18` (two members advertising one endpoint) |
+| MB8 | `CC-V-19` (a `persisted-counter` with no `incarnationRef`), `CC-R-11` (the fields load, and the default is `boot-second`) |
 | RD4, RB11 | `CC-I-4` (an id in circulation is not re-pointed) |
 | KY1 (`id`, adopted from [affinity-token](affinity-token.md) §6) | `CC-K-5` (two entries sharing an id with overlapping windows) |
 | KY3 | `CC-V-10` (an inline `secret` is refused citing V9, not V2) |
-| KY5 (the "exactly one" half; the default and the none-case have no row yet) | `CC-K-6` (two keys with `mint: true`) |
+| KY5 | `CC-K-6` (two keys with `mint: true`), `CC-V-20` (a declared section with none) |
 | RD1, RD6 | `CC-K-1`, `CC-K-2` (accepted, no restart, no call disturbed), `CC-K-3`, `CC-K-4` (the two transition refusals) |
-| RD1, RD7 | `CC-S-1` … `CC-S-9`, of which `CC-S-8` is the "no call is disturbed" half |
+| RD7 | `CC-S-1` … `CC-S-9`, of which `CC-S-7` is the configuration half and the rest are `RG-5`'s handoff |
+| SM1 | `CC-V-21` (a partial map, naming the missing ids) |
 | SM2 | `CC-V-4` (an owner absent from `membership`) |
+| SM3 | `CC-V-22` (an owner that runs no registrar) |
 | §5's `drainTimeout` (DS4, adopted) | `CC-S-7` (below the permitted range) |
 
-The fields this spec introduces — `rpc` (MB5, MB6), `incarnationSource` and `incarnationRef` (MB8),
-KY5's refusal of a document with no mint key, SM1's totality and SM3's registrar-owner rule — have
-no rows yet. They get them in
-the same commit as the loader code that implements them, under the `CC` prefix and its existing
-families, so that a row and the test that executes it arrive together. Writing the rows first would
-put them in the deferral ledger with a story attached, which is the shape `CF-8` and `EX-12` both
-paid for: a row nothing executes is prose with a table around it.
+The rows for the fields this spec introduces arrived with the loader code that implements them
+(`DP-16`), under the `CC` prefix and its existing families, so that a row and the test that executes
+it arrived together. Writing them first would have put them in the deferral ledger with a story
+attached, which is the shape `CF-8` and `EX-12` both paid for: a row nothing executes is prose with
+a table around it.
+
+**What no row of this spec claims yet, and why.** KY2's refusal to start on a partially resolved key
+set and KY8's refusal of the [affinity-token](affinity-token.md) §10 test keys are both start-up
+rules over a *resolved* secret, and this build resolves none: no consumer applies a key set, so
+`cluster.keys` loads, validates, and is reported by `Config::unapplied`. They get their rows from
+the story that gives the key set a consumer.
 
 ## 12. Consequences for documents this spec does not own
 
@@ -358,5 +368,5 @@ Named so they are tracked rather than discovered. None is performed by this stor
 | [cluster-config](cluster-config.md) §8, beside V9 | KY3's redaction requirement is stated here because this spec owns this refusal, but it is not a property of keys — it is a property of `ConfigError`, which §8 declares, and it binds `dsnRef`, `keyRef` and `tenant[].auth.secret` identically. The general form belongs beside V9 as one sentence: **a `ConfigError` on a V9 path carries a description of what was written, never the value.** The loader already does exactly this, twice and unwritten — `crates/sipx-clstr-node/src/config/mod.rs:1278` reports `"an inline DSN"` and `:1431` reports `"an inline nonce secret"` — so the rule would be writing down a convention DP-8 already follows rather than asking for a change |
 | [affinity-token](affinity-token.md) §1 "Out of scope" | It defers "the key configuration schema and reload mechanics" to `DP-1`. The reload mechanics are [cluster-config](cluster-config.md) §9.3 and the schema is §4 here; the pointer moves, no rule does |
 | [sipx-cluster-crd](sipx-cluster-crd.md) §5 | Its three `spec.membership` / `spec.keys` / `spec.shardMap` rows name **AF-6** for the same reason and can name this document. `KeysDistributed` (§7 S6) is unchanged and is §7.1 RB3's observable, which is the one place the two documents have to agree |
-| `crates/sipx-clstr-node/src/config/mod.rs` | `MemberSpec` and `read_membership`'s closed world are `{node, name, zone, roles}`, and `keys` and `shardMap` sit in `DEFERRED_SECTIONS`. A document written to this spec is refused by today's loader — by §8 V2, naming `rpc` — until the implementing story adds the fields. That is the closed world working, not a defect, but it means the schema and the loader are one story apart |
+| `crates/sipx-clstr-node/src/config/mod.rs` | **Done by `DP-16`.** `MemberSpec`'s closed world was `{node, name, zone, roles}` and `keys` and `shardMap` sat in `DEFERRED_SECTIONS`, so a document written to this spec was refused by §8 V2 naming `rpc` — the closed world working, not a defect, but the schema and the loader one story apart. It now carries all seven fields of §3, both sections leave `DEFERRED_SECTIONS`, and §9's reload rules are judged between two documents. What no consumer *applies* is reported by `Config::unapplied` rather than left to be inferred |
 | `deploy/helm/values.yaml` | Its comment block already explains that these are AF-6's sections and holds no keys for them. A chart that cannot express `keys` cannot perform a rotation, so `KO-2`'s successor has §4 and §7.1 to render |

@@ -54,6 +54,7 @@ cluster:
       name: node-a
       zone: a
       roles: [edge, registrar]
+      rpc: 127.0.0.1:7223
   locationStore:
     backend: memory
   tenant:

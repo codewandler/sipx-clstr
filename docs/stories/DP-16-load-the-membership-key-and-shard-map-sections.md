@@ -2,7 +2,7 @@
 id: DP-16
 title: Load the membership, key and shard-map sections the config loader still refuses
 pillar: Cluster
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/deployment.md
 epic: fail-closed-config
@@ -17,26 +17,72 @@ Make the cluster document's `membership[]`, `keys[]` and `shardMap` sections loa
 document written to `cluster-membership.md` starts a node instead of being refused.
 
 ## Acceptance
-- [ ] `membership[]` accepts the fields `cluster-membership` §3 defines — the loader's closed world is
+- [x] `membership[]` accepts the fields `cluster-membership` §3 defines — the loader's closed world is
       `["node", "name", "zone", "roles"]` today (`crates/sipx-clstr-node/src/config/mod.rs:1141`), so
       `rpc` and `incarnationSource` are `V2` errors.
-- [ ] `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` (`config/mod.rs:412`) and are validated per
+      → all seven fields of §3, with `MB4`–`MB6` and `MB8` enforced (`config/mod.rs:read_membership`,
+      `read_rpc`, `read_incarnation`, `check_member_is_unique`).
+- [x] `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` (`config/mod.rs:412`) and are validated per
       §4 `KY1`–`KY9` and §5 `SM1`–`SM5`, including `KY3`'s reserved-and-always-refused `secret`.
-- [ ] Reload without restart holds as §6 `RD1` states it: no listener rebound, no connection closed,
+      → `read_keys`/`read_key_entry`/`read_shard_map`/`check_shard_owners`. `KY2` and `KY8` are
+      start-up rules over a *resolved* secret and are handed on — see Progress.
+- [x] Reload without restart holds as §6 `RD1` states it: no listener rebound, no connection closed,
       no registration expired, no token or reference invalidated, no dialog or in-flight transaction
       disturbed.
-- [ ] The `cluster-config` §12 rows that execute these rules are **proved, and their deferrals
+      → `config::reload` returns a `ReloadPlan` only when every `rollout`-class section is unchanged
+      (`RL1`/`RL2`), the version advances (`D10`), no id is re-pointed (`I3`) and `RL10`/`RL11` hold.
+- [x] The `cluster-config` §12 rows that execute these rules are **proved, and their deferrals
       re-pointed here from `DP-8`** — `CC-K-1`…`CC-K-6` (key reload), `CC-S-1`…`CC-S-9` (shard-map
       handoff), `CC-V-4`/`CC-V-10`, `CC-R-7`/`CC-R-8`, `CC-I-1`/`CC-I-4`.
-- [ ] **Failing-first:** a document containing a `cluster-membership` §3 `rpc` entry is refused today
+      → all proved except `CC-S-1`…`CC-S-6`, `CC-S-8`, `CC-S-9`, which are the handoff **runtime**
+      §9.4 `DS7` assigns to `RG-5` and are re-pointed there with a reason. See Progress.
+- [x] **Failing-first:** a document containing a `cluster-membership` §3 `rpc` entry is refused today
       and accepted after. Demonstrate the refusal at the merge base.
-- [ ] `deploy/devspace/manifests/node.yaml`, `website/docs/reference/configuration.md`,
+      → `cc_r_11_a_member_declares_the_rpc_endpoint_and_incarnation_source_of_section_3`, red at
+      `43594b1` with two `CC-V2` errors naming `rpc` and `incarnationSource`.
+- [x] `deploy/devspace/manifests/node.yaml`, `website/docs/reference/configuration.md`,
       `scripts/two-node-call.sh` and `scripts/e2e-call.sh` all declare `edge`+`registrar` members with
       no `rpc`; `MB5` will invalidate every one once enforced. Update them, or state why `MB5` should
       not apply to them.
+      → all four updated, plus two the story did not name (`README.md`,
+      `website/docs/getting-started.md`) and five node test fixtures.
 
 ## Progress
-- (not started)
+
+**Done.** The loader reads all three sections; `scripts/gate.sh` is green.
+
+- **`membership[]` carries §3's seven fields.** `MB5` (`rpc` required on the call path, refused off
+  it), `MB6` (unique, and the form is §5 `P7`'s — `Advertised::parse`, inherited rather than
+  restated, plus the required port), `MB4` (unique `name`) and `MB8` (`incarnationSource` /
+  `incarnationRef`).
+- **`keys[]` and `shardMap` are validated in full.** `KY1` (the six attributes, closed), `KY3` (an
+  inline `secret` refused citing `V9` and never echoed), `KY4` (RFC 3339 UTC instants, `Z` only,
+  parsed to UNIX seconds without a date dependency), `KY5`, `KY6`; `SM1` totality, `SM2` owner
+  resolution, `SM3` registrar-owner, `DS4`'s `drainTimeout` range.
+- **`config::reload(active, bytes, identity, env)`** judges §9 between two documents: `D10`, `RL1`
+  /`RL2` from a §7 class table, `I3`/`RD4`, `RL10`, `RL11`. `RD3` needs no rule of its own — §5 `P3`'s
+  cross-check already refuses a reload that changes this node's own zone or roles.
+
+**Handed to the next story — the driver side.** The write-set for this story excluded `driver.rs`
+(`RG-17`'s this wave), and everything in these three sections that would *act* needs a `NodeConfig`
+field:
+
+- `keys[]` reaching `AF-4`'s mint/verify library, and with it `KY2` (refuse to start on a partially
+  resolved key set) and `KY8` (refuse the `affinity-token` §10 test keys) — both are start-up rules
+  over a **resolved** secret, so they cannot be written before a consumer exists to resolve for.
+- `membership[].rpc` reaching the connection-owner RPC (`AF-3`/`AF-7`).
+- `shardMap` reaching the handoff (`RG-5`).
+
+Until then every one of those paths is reported by `Config::unapplied`, and `MB5` makes `rpc`
+mandatory, so **every** document now carries at least one unapplied path. That is `FC-2` working:
+the alternative is a warning that is quiet about the one key every document was just made to carry.
+
+**Ledger — for the integrator.** `docs/reference/vector-scope.toml` and the regenerated
+`docs/reference/conformance.md` are in this branch. Of the 35 `CC` rows `CF-24` pointed at `DP-16`,
+25 are proved and 10 are re-pointed: `CC-S-1`…`CC-S-6`, `CC-S-8`, `CC-S-9` → `RG-5` (the handoff
+runtime, §9.4 `DS7`), `CC-D-3` → `RG-22` (the `registrar` section's closed world), `CC-V-5` → `ET-6`
+(the `probe` section). No row names `DP-16` any more, so closing it leaves no dead letter.
+`CHANGELOG.md`, the board and `docs/roadmap.md` are untouched and are the integrator's.
 
 ## Notes
 - **Filed because nothing owned this.** `AF-6` wrote `cluster-membership.md` §3–§5 and its §12 says the

@@ -28,10 +28,12 @@ cluster:
       name: node-a
       zone: a
       roles: [edge, registrar]
+      rpc: 10.0.0.1:7223
     - node: 2
       name: node-b
       zone: a
       roles: [edge, registrar]
+      rpc: 10.0.0.2:7223
   locationStore:
     backend: postgres
     dsnRef: location-dsn
@@ -54,14 +56,32 @@ Every node reads the same bytes. Two things make that work:
 
 **`${VAR}` substitution.** The only substitution there is: `${NAME}` where `NAME` matches
 `[A-Z_][A-Z0-9_]*`, resolved from the environment. No nesting, no defaults, no arithmetic. An
-undefined name is an error naming the variable — never the empty string, which would turn
-`advertise: "${POD_IP}:5060"` into an unparsable address and report the wrong problem.
+undefined name is an error naming the variable **and the field it was written in** — never the empty
+string, which would turn `advertise: "${POD_IP}:5060"` into an unparsable address and report the
+wrong problem.
 
 **Identity from outside.** The node id, zone and role set are given on the command line or in the
 environment, never in the document. If the document *does* carry a `membership` entry for this node,
 it is **cross-checked** against what the node was started with and a mismatch is refused; a node with
 no entry still starts, because a node whose pod the operator has not yet published should not
 crash-loop.
+
+### A member's fields
+
+| Field | Required | Meaning |
+|---|---|---|
+| `node` | yes | The logical node id, `1`–`65535`, unique in the document. `0` is reserved |
+| `name` | yes | The human spelling, unique in the document and compared byte for byte |
+| `zone` | yes | Cross-checked against the identity this node was started with |
+| `roles` | yes | Cross-checked the same way |
+| `rpc` | for a member on the call path | The advertised `host:port` a peer dials for the connection-owner RPC, unique in the document. The port has no default |
+| `incarnationSource` | no | `boot-second` (the default) or `persisted-counter` |
+| `incarnationRef` | with `persisted-counter` | The reference the counter is read from and written to |
+
+`rpc` is **required** of a member whose roles include `edge`, `registrar`, `inbound-proxy` or
+`outbound-proxy`, and **refused** on any other — those are the roles that own connection flows, and
+a node with no endpoint to dial makes every request toward a client it owns undeliverable. It is a
+deliberate over-approximation: a UDP-only proxy owns no flows and is still made to declare one.
 
 ## What it refuses, and why it only refuses
 
@@ -177,12 +197,24 @@ not validated and **nothing applies them**.
 
 | Section | State |
 |---|---|
-| `name`, `environment`, `zones`, `listener`, `membership`, `locationStore`, `tenant` (including `auth`), `security`, `admission`, `timers` | validated and applied |
-| `profile`, `management`, `keys`, `shardMap`, `registrar`, `normalisation`, `trunk`, `domain`, `destinationSet`, `routeRule`, `ingress`, `rateLimit`, `nat`, `mediaPool`, `observability`, `probe`, `echo` | recognised, not validated, not applied |
+| `name`, `environment`, `zones`, `listener`, `locationStore`, `tenant` (including `auth`), `security`, `admission`, `timers` | validated and applied |
+| `membership` — its `node`, `name`, `zone` and `roles` | validated and applied |
+| `keys`, `shardMap`, and a member's `rpc`, `incarnationSource` and `incarnationRef` | **validated, not applied** — every rule is enforced and a bad document is refused, but no part of this build acts on the value |
+| `profile`, `management`, `registrar`, `normalisation`, `trunk`, `domain`, `destinationSet`, `routeRule`, `ingress`, `rateLimit`, `nat`, `mediaPool`, `observability`, `probe`, `echo` | recognised, not validated, not applied |
 | a listener's `tls`, `maxConnections`, `connectionLifetime` | recognised, not applied — the same state, one level down |
 
+**"Validated, not applied" is the state worth understanding**, because it is the one that looks most
+like working. A `keys` section is read in full: the six attributes, the validity windows, the
+ceiling, the rule that exactly one key mints. A document that gets any of it wrong does not start.
+And no token is minted under any of it, because nothing in this build mints tokens yet. The same is
+true of `shardMap` — the map must be total, its owners must be declared members, and those members
+must run a registrar — while no shard changes hands, and of a member's `rpc` endpoint, which is
+required of every member on the call path and dialled by nobody.
+
 A node logs a warning naming the **paths** it recognised but did not apply, and gives the
-security-relevant ones a line of their own, so this is visible at startup rather than inferred.
+security-relevant ones a line of their own, so this is visible at startup rather than inferred. Every
+document that declares a member on the call path now carries at least one such path, which is the
+honest reading of a mandatory field with no consumer.
 
 **Treat any of those as documentation of intent, not as configuration.**
 

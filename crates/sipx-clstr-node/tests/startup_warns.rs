@@ -38,6 +38,9 @@ cluster:
       name: node-a
       zone: a
       roles: [edge, registrar]
+      # cluster-membership MB5: required of a member on the call path, dialled by nobody in this
+      # build, and therefore reported as unapplied configuration.
+      rpc: 127.0.0.1:7223
   registrar:
     usePath: true
   locationStore:
