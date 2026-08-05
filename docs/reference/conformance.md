@@ -16,6 +16,8 @@ somebody" while 56% of its reasons were addressed to nobody.
 
 Σ over the 61 sections below is 586, so every row counted above is shown in exactly one table.
 
+Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
+
 ## What these words mean
 
 **Proved** means: a test named for the row exists and runs, and — where the row's `Expect`
@@ -36,6 +38,22 @@ elsewhere counts. That the test agrees with the row — `PB-R-5` states `486` an
 asserts `404`; the check can see a number missing, not which of the two is wrong. That a
 row stating no number is checked at all beyond its name: for those, *proved* is worth
 exactly what the test is worth. And nothing here says the spec itself is right.
+
+## Outside the vector ledger
+
+Documents whose normative claims deliberately register no vector prefix — named
+scenarios that arrive with their implementation, or rules that execute through
+another spec's rows. Each is a named entry in `scripts/check-vectors.py`, because the
+alternative was measured: `owner-rpc.md` carried 296 normative lines and a
+thirteen-row scenario table through a green gate that had never read it. An entry's
+story is held live the way a deferral's is; `—` means the claims are already carried
+by a registered prefix's own rows.
+
+| Document | Executed by | Why it registers no prefix |
+|---|---|---|
+| [extension-framework](../designs/extension-framework.md) | `EX-3` | carries the eleven `external_route_*` scenarios at design grain; nothing executes them until the hook runtime exists |
+| [cluster-membership](../specs/cluster-membership.md) | — | registers no prefix by design (§11): its rules execute through cluster-config's `CC` rows, and the fields without rows yet get them beside their loader code |
+| [owner-rpc](../specs/owner-rpc.md) | `AF-7` | registers no prefix by design (§10): its rules are the thirteen named harness scenarios that arrive with the implementation |
 
 ## Proxy — request validation (§4)
 
