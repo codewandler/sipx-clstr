@@ -681,13 +681,7 @@ advertise = "203.0.113.10:5060"
 #[test]
 fn cc_d3_something_that_is_neither_encoding_is_refused() {
     let who = identity(1, "a", &[Role::Edge]);
-    let errors = load(
-        b"[unterminated
-  = = =",
-        &who,
-        &env(),
-    )
-    .expect_err("must refuse");
+    let errors = load(b"[unterminated\n\x00\x01 = = =", &who, &env()).expect_err("must refuse");
     assert!(
         errors.iter().any(|e| e.rule.to_string() == "CC-D3"),
         "{errors:#?}"
@@ -1216,11 +1210,17 @@ fn with_keys(entries: &str) -> String {
 
 /// One well-formed key entry, spelled exactly as `cluster-membership` §4's example spells it.
 fn key(id: u8, mint: bool, until: &str) -> String {
+    key_over(id, mint, "2026-07-28T12:00:00Z", until)
+}
+
+/// The same, with both ends of the verify window stated — for the rules that are about the window
+/// rather than about the key.
+fn key_over(id: u8, mint: bool, from: &str, until: &str) -> String {
     [
         format!("    - id: {id}"),
         "      algorithm: chacha20-poly1305".to_owned(),
         format!("      secretRef: affinity-key-{id}"),
-        "      verifyFrom: \"2026-07-28T12:00:00Z\"".to_owned(),
+        format!("      verifyFrom: \"{from}\""),
         format!("      verifyUntil: \"{until}\""),
         format!("      mint: {mint}"),
         String::new(),
@@ -1694,6 +1694,172 @@ fn fc2_keys_and_the_shard_map_are_validated_and_reported_as_unapplied() {
     // And they are genuinely read, which is what makes the report a report rather than a shrug.
     assert_eq!(config.keys.len(), 1);
     assert!(config.shard_map.is_some());
+}
+
+/// **`CC-V-23`.** A year RFC 3339 §5.6 cannot express is refused, not reduced to an instant.
+///
+/// `load` documents itself pure and total in its inputs, §8 V10 makes refusing the document the only
+/// failure mode there is, and `AGENTS.md` rule 3 forbids panicking on input. This spelling reached
+/// `days_from_civil(year, …) * 86_400` with `year` parsed unbounded, so it panicked under
+/// `debug-assertions` and — the worse half — **wrapped** under `-O`, accepting a verify window
+/// nobody wrote. A rotation rule judged against a wrapped instant is a safety rule switched off
+/// silently, and silence is the property `cluster-membership` §7.1 RB9 exists to deny the document.
+#[test]
+fn cc_v_23_a_year_outside_rfc_3339_is_refused_rather_than_wrapped() {
+    for year in ["300000000000", "9223372036854775807", "99999", "10000"] {
+        let document = with_keys(&key_over(
+            3,
+            true,
+            &format!("{year}-01-01T00:00:00Z"),
+            "2026-09-01T12:00:00Z",
+        ));
+        // Reported rather than asserted away, because the two builds fail differently and the
+        // release one is the dangerous half: debug panicked, `-O` accepted a wrapped instant.
+        let errors = match load(document.as_bytes(), &who(), &env()) {
+            Ok(config) => panic!(
+                "year `{year}` is not `4DIGIT` and must be refused; loaded verifyFrom = {:?}",
+                config.keys.first().map(|entry| entry.verify_from)
+            ),
+            Err(errors) => errors,
+        };
+        let error = error_at(&errors, "cluster.keys[0].verifyFrom");
+        assert_eq!(error.rule.to_string(), "CC-KY4", "year `{year}`");
+    }
+}
+
+/// **`CC-V-24`.** RFC 3339 §5.6's grammar is the whole grammar: `4DIGIT`, `2DIGIT`, `"." 1*DIGIT`.
+///
+/// `str::parse::<i64>` accepts a leading sign and any number of digits, which is how every spelling
+/// below became an instant this loader accepted. The first one is why the rule is not cosmetic: it
+/// parses to an instant **twenty-six hours away** from the one written, so a document could state a
+/// verify window and get a different one without a single error.
+#[test]
+fn cc_v_24_rfc_3339_section_5_6_is_the_whole_grammar() {
+    for spelling in [
+        "2026-07-28T-1:-5:-9Z",
+        "+2026-07-28T12:00:00Z",
+        "2026-7-8T1:2:3Z",
+        "2026-07-28T+1:00:00Z",
+        "2026-07-28T12:00:00.abcZ",
+        "2026-07-28T12:00:00.Z",
+        "2026-07-28T12:00:00.1.2Z",
+    ] {
+        let document = with_keys(&key(3, true, spelling));
+        let errors = load(document.as_bytes(), &who(), &env())
+            .err()
+            .unwrap_or_else(|| panic!("`{spelling}` is not RFC 3339 §5.6 and must be refused"));
+        let error = error_at(&errors, "cluster.keys[0].verifyUntil");
+        assert_eq!(error.rule.to_string(), "CC-KY4", "`{spelling}`");
+        // The *reason* matters as much as the refusal, and this assertion is why. Every spelling
+        // above parsed to some instant before `verifyFrom` under the old grammar, so all seven were
+        // already refused — as "a window that never opens", a KY4 error at this very path. A test
+        // that stopped at the rule id would have passed against the defect it was written for
+        // (`CF-12`). KY4's parse failure echoes the text it could not read; the window error names
+        // the window.
+        assert_eq!(
+            error.found.as_deref(),
+            Some(spelling),
+            "refused as a window rather than as a spelling: {error}"
+        );
+    }
+}
+
+/// Every spelling §5.6 *does* admit still loads, so the rule above narrowed the grammar to the
+/// grammar and not to a habit — lower-case `t`/`z` are RFC 3339's own alternates, and a fraction is
+/// parsed and discarded because `affinity-token` §8 S2 compares whole seconds.
+#[test]
+fn ky4_the_spellings_rfc_3339_admits_are_still_accepted() {
+    for spelling in [
+        "2026-09-01T12:00:00Z",
+        "2026-09-01t12:00:00z",
+        "2026-09-01T12:00:00.5Z",
+        "2026-09-01T23:59:60Z",
+        "2028-02-29T00:00:00Z",
+        "9999-12-31T23:59:59Z",
+    ] {
+        let document = with_keys(&key(3, true, spelling));
+        load(document.as_bytes(), &who(), &env())
+            .unwrap_or_else(|e| panic!("`{spelling}` is RFC 3339 §5.6 and must load: {e:?}"));
+    }
+}
+
+/// **`CC-K-7`.** RL11's second half — the *incoming* mint key's window must cover the same bound.
+///
+/// Without it the first half is satisfiable by a document that retires nothing and still strands
+/// every record: a key whose window is a minute wide mints tokens that stop verifying long inside
+/// `W`, and the next rotation inherits the problem rather than causing it. Judged as a width because
+/// §2 D1 forbids the loader a clock — RB2's `verifyUntil ≥ t_activate + W` is a wall-clock statement
+/// whose clock-free consequence is that the window is at least `W` wide.
+#[test]
+fn cc_k_7_an_incoming_mint_key_must_cover_the_overlap_window() {
+    let narrow = |mints: bool| {
+        with_keys(&format!(
+            "{}{}",
+            key(3, !mints, "2026-09-01T12:00:00Z"),
+            key_over(4, mints, "2026-07-28T12:00:00Z", "2026-07-28T12:01:00Z")
+        ))
+    };
+    // The narrow window is accepted at `load`: §9.1 RL3 makes every transition rule vacuous where
+    // there is no predecessor, and this rule is a transition rule.
+    let active = load(narrow(false).as_bytes(), &who(), &env()).expect("the active document loads");
+
+    let errors = reload(
+        &active,
+        at_version(&narrow(true), 43).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys[1].verifyUntil");
+    assert_eq!(error.rule.to_string(), "CC-RL11");
+    assert!(
+        error.expected.contains("86430"),
+        "the refusal names the bound it computed: {error}"
+    );
+}
+
+/// `W` is `max(L, E_max) + S` computed from the document, not a constant — `cluster-membership` §7.1
+/// RB1: one tenant raising its registration ceiling lengthens the rotation for the whole cluster.
+#[test]
+fn rl11_the_overlap_window_follows_the_documents_largest_tenant_expiry() {
+    // A window of two days covers the default `W` of 86 430 s and not a `W` raised past it.
+    let two_days = |mints: bool| {
+        with_keys(&format!(
+            "{}{}",
+            key(3, !mints, "2026-09-01T12:00:00Z"),
+            key_over(4, mints, "2026-07-28T12:00:00Z", "2026-07-30T12:00:00Z")
+        ))
+    };
+    let active = load(two_days(false).as_bytes(), &who(), &env()).expect("loads");
+    reload(
+        &active,
+        at_version(&two_days(true), 43).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("two days covers the default overlap window");
+
+    // `E_max` is the tenant's `expiry.max`, and RB1 makes it the document's largest.
+    let raised = |document: &str| {
+        document.replace(
+            "      id: 1\n",
+            "      id: 1\n      expiry:\n        max: 604800\n",
+        )
+    };
+    let active = load(raised(&two_days(false)).as_bytes(), &who(), &env()).expect("loads");
+    let errors = reload(
+        &active,
+        raised(&at_version(&two_days(true), 43)).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect_err("a week-long E_max moves the bound past a two-day window");
+    assert_eq!(
+        error_at(&errors, "cluster.keys[1].verifyUntil")
+            .rule
+            .to_string(),
+        "CC-RL11"
+    );
 }
 
 // ---------------------------------------------------------------------- reload (§9, §6 RD1) ---

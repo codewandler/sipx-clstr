@@ -31,6 +31,10 @@ document written to `cluster-membership.md` starts a node instead of being refus
       disturbed.
       → `config::reload` returns a `ReloadPlan` only when every `rollout`-class section is unchanged
       (`RL1`/`RL2`), the version advances (`D10`), no id is re-pointed (`I3`) and `RL10`/`RL11` hold.
+      `RL11` is **both** of its clauses: the retiring key's `verifyUntil` is not brought forward, and
+      the incoming mint key's window covers `max(L, E_max) + S` computed from the incoming document
+      (`overlap_window`, `CC-K-7`). The first round shipped only the first clause and ticked this box
+      anyway — see Progress.
 - [x] The `cluster-config` §12 rows that execute these rules are **proved, and their deferrals
       re-pointed here from `DP-8`** — `CC-K-1`…`CC-K-6` (key reload), `CC-S-1`…`CC-S-9` (shard-map
       handoff), `CC-V-4`/`CC-V-10`, `CC-R-7`/`CC-R-8`, `CC-I-1`/`CC-I-4`.
@@ -83,6 +87,38 @@ the alternative is a warning that is quiet about the one key every document was 
 runtime, §9.4 `DS7`), `CC-D-3` → `RG-22` (the `registrar` section's closed world), `CC-V-5` → `ET-6`
 (the `probe` section). No row names `DP-16` any more, so closing it leaves no dead letter.
 `CHANGELOG.md`, the board and `docs/roadmap.md` are untouched and are the integrator's.
+
+### Round 2 — the two blocking findings from review
+
+**1. The instant reader failed open.** `parse_rfc3339_utc` parsed the year with `str::parse::<i64>`
+— unbounded — and then multiplied. Through `config::load`, `verifyFrom:
+"300000000000-01-01T00:00:00Z"` panicked under `debug-assertions` and, under `-O`, **wrapped** to
+`Some(-8979658535876770816)` and loaded. A wrapped instant is the worse half: it is a verify window
+nobody wrote, and every rotation rule downstream is then judged against it silently. Fixed by
+reading RFC 3339 §5.6's grammar as it is written — `4DIGIT`, `2DIGIT`, `"." 1*DIGIT`, via
+`fixed_digits` — which bounds the arithmetic, *and* by making the arithmetic `checked_*` anyway,
+because a totality that rests on an argument about the grammar is one a later widening removes
+without anyone noticing. The same pass closed the lenient spellings: `2026-07-28T-1:-5:-9Z` loaded
+and named an instant **twenty-six hours** from the one written; `+2026-…`, `2026-7-8T1:2:3Z`,
+`…T+1:00:00Z`, `…00.abcZ`, `…00.Z` and `…00.1.2Z` all loaded. `CC-V-23` and `CC-V-24` execute this.
+
+**2. `RL11`'s second clause was not implemented, and the box was ticked.** §9.3 RL11 requires the
+retiring key's `verifyUntil` not be brought forward **and** that the incoming mint key's window cover
+the same bound; `check_key_transition` did only the first, so a reload flipping `mint` to a key with
+a 60 s window was accepted against a `W` of 86 430 s. Nothing computed `E_max` — it appeared only
+inside message strings. Now `overlap_window(next)` computes `max(L, E_max) + S` from the incoming
+document (`RB1`'s "largest tenant expiry", `RB5`'s "at the moment of retirement"), and the clause is
+enforced as a **width**, which is the strongest clock-free form of `RB2` a loader denied a clock by
+§2 `D1` can state. `CC-K-7` executes it; a second test proves the bound follows the document's
+largest `tenant[].expiry.max` rather than a constant.
+
+**Also in this pass.** The two re-points review called out are corrected: `CC-D-3` → `KO-3`, which
+already owns [sipx-cluster-crd](../specs/sipx-cluster-crd.md) `SC-A-1` — whose Expect is *verbatim*
+this row's error — and `CC-V-5` → `ET-4`, which `DP-13`'s own Acceptance names as the story that
+supplies the `e2e-tester` driver, and whose `GET /probes` cannot answer without the section being
+read. And `config/tests.rs` held a raw `NUL` byte inside a byte-string literal, which compiled fine
+and made the whole file **invisible to `grep`** — every search over it returned nothing, silently.
+Written as `\x00` now.
 
 ## Notes
 - **Filed because nothing owned this.** `AF-6` wrote `cluster-membership.md` §3–§5 and its §12 says the

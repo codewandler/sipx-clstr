@@ -78,6 +78,18 @@ pub const MAX_IN_FLIGHT_CEILING: usize = 65_536;
 /// document whose rotations are not being retired.
 pub const MAX_KEYS: usize = 16;
 
+/// `L`, the token lifetime — [affinity-token](../../../../docs/specs/affinity-token.md) §7 M5's
+/// default of 86 400 s, and one term of the rotation overlap window `W = max(L, E_max) + S`.
+///
+/// M5 declares `L` configurable with a floor of 600 s, and this schema has no field for it, so the
+/// default is the only value a document can mean today. Named rather than inlined so that the field,
+/// when it arrives, has one place to be read into.
+pub const TOKEN_LIFETIME_SECONDS: i64 = 86_400;
+
+/// `S`, the skew allowance — [affinity-token](../../../../docs/specs/affinity-token.md) §8 S6's 30 s,
+/// and the other fixed term of `W`.
+pub const SKEW_ALLOWANCE_SECONDS: i64 = 30;
+
 /// §9.4 DS4's declared default drain timeout: 30 s.
 pub const DEFAULT_DRAIN_TIMEOUT_MS: u64 = 30_000;
 
@@ -1014,6 +1026,28 @@ fn check_id_reassignment(
     }
 }
 
+/// `W`, the overlap window `max(L, E_max) + S` — `cluster-membership` §7.1's table, computed from the
+/// document exactly as RB1 says an operator computes it.
+///
+/// `E_max` is RB1's **largest** `tenant[].expiry` maximum, not one tenant's: a flow reference carries
+/// no expiry of its own and leaves circulation only when the binding holding it refreshes, so one
+/// tenant raising its ceiling lengthens every rotation for the whole cluster. Taken from the
+/// *incoming* document, which is RB5's rule — "the term is the document's largest at the moment of
+/// retirement, not at the moment of activation".
+///
+/// `L` is `affinity-token` §7 M5's 86 400 s. This schema has no field for the token lifetime, so the
+/// default is the only value a document can mean; when one is added, this is where it is read, and
+/// the `max` is already here waiting for it. `S` is §8 S6's 30 s.
+fn overlap_window(next: &Config) -> i64 {
+    let e_max = next
+        .tenants
+        .iter()
+        .map(|tenant| i64::from(tenant.policy.max_expires))
+        .max()
+        .unwrap_or_else(|| i64::from(TenantPolicySpec::default().max_expires));
+    TOKEN_LIFETIME_SECONDS.max(e_max) + SKEW_ALLOWANCE_SECONDS
+}
+
 /// §9.3 RL10 and RL11 — the two rules that make "no call is disturbed by a key reload" (RL12) true
 /// rather than hoped for.
 ///
@@ -1051,8 +1085,40 @@ fn check_key_transition(
         ));
     }
 
-    // RL11, in both of its halves: the outgoing mint key is neither removed nor has its window
-    // brought forward while records minted under it can still be presented.
+    // RL11's second half, and the one this loader shipped without: the *incoming* mint key's window
+    // must cover the same bound. The first half on its own is satisfiable by a document that retires
+    // nothing and still strands every record — a mint key whose window is a minute wide produces
+    // tokens that stop verifying long inside `W`, and the next rotation inherits the problem rather
+    // than causing it, at which point no reload can be refused for it because the damage is already
+    // in circulation.
+    //
+    // Judged as a *width*, because D1 forbids the loader a clock. `cluster-membership` §7.1 RB2
+    // states the rule against the wall — `verifyUntil ≥ t_activate + W` — and the clock-free
+    // consequence of it is that the declared window is at least `W` wide, since activation cannot
+    // precede publication. That is necessary rather than sufficient, and deliberately so: the
+    // sufficient form needs the clock RB5 gives an operator and this function is denied.
+    if let Some((index, minting)) = next.keys.iter().enumerate().find(|(_, key)| key.mint) {
+        let window = overlap_window(next);
+        if minting.verify_until - minting.verify_from < window {
+            errors.push(ConfigError::new(
+                at.index(index).field("verifyUntil"),
+                "CC-RL11",
+                Some(format!(
+                    "a verify window of {} s for minting key id {}",
+                    minting.verify_until - minting.verify_from,
+                    minting.id
+                )),
+                &format!(
+                    "a window at least max(L, E_max) + S = {window} s wide; a key mints for as long \
+                     as it is the mint key, and every record it mints must still verify that long \
+                     afterwards (cluster-membership §7.1 RB2, affinity-token §6 K4)"
+                ),
+            ));
+        }
+    }
+
+    // RL11's first half: the outgoing mint key is neither removed nor has its window brought forward
+    // while records minted under it can still be presented.
     let Some(outgoing) = active.keys.iter().find(|key| key.mint) else {
         return;
     };
@@ -2407,20 +2473,42 @@ fn read_instant(
     Some(seconds)
 }
 
+/// Exactly `width` ASCII digits — RFC 3339 §5.6's `4DIGIT` and `2DIGIT`, read as it writes them.
+///
+/// `str::parse::<i64>` is deliberately not used for a field of this grammar. It accepts a leading
+/// `+` or `-` and any number of digits, which is how `+2026-07-28T12:00:00Z`, `2026-7-8T1:2:3Z` and
+/// `2026-07-28T-1:-5:-9Z` all became instants this loader accepted — the last of them a **different**
+/// instant from the one written, which is a verify window an operator cannot review in a diff
+/// because the document does not say what the node read.
+fn fixed_digits(text: &str, width: usize) -> Option<i64> {
+    if text.len() != width || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
+}
+
 /// `YYYY-MM-DDTHH:MM:SS[.frac]Z` → UNIX seconds, or `None` for anything else.
 ///
 /// Written out rather than taken from a date library because the whole of what this schema needs
 /// from one is this function, and a dependency is a thing a release has to carry. The civil-days
-/// arithmetic is the standard proleptic-Gregorian one; the fractional part is parsed and discarded,
+/// arithmetic is the standard proleptic-Gregorian one; the fractional part is checked and discarded,
 /// since `affinity-token` §8 S2 compares whole seconds.
+///
+/// **Total, and checked twice over.** `load` documents itself pure and total in its inputs, §8 V10
+/// makes refusing the document the only failure mode there is, and this function reads a field an
+/// operator writes. The grammar is what bounds the arithmetic — a `4DIGIT` year cannot reach
+/// `i64`'s range — and the arithmetic is checked anyway, because a totality resting on an argument
+/// about the grammar is one that a later widening of the grammar removes without anyone noticing.
+/// Under `-O` the alternative to a checked multiply is not a panic but a **wrapped** instant, and a
+/// rotation rule judged against one is a safety rule that has been switched off silently.
 fn parse_rfc3339_utc(text: &str) -> Option<i64> {
     let body = text.strip_suffix('Z').or_else(|| text.strip_suffix('z'))?;
     let (date, time) = body.split_once('T').or_else(|| body.split_once('t'))?;
 
     let mut date_parts = date.split('-');
-    let year: i64 = date_parts.next()?.parse().ok()?;
-    let month: i64 = date_parts.next()?.parse().ok()?;
-    let day: i64 = date_parts.next()?.parse().ok()?;
+    let year = fixed_digits(date_parts.next()?, 4)?;
+    let month = fixed_digits(date_parts.next()?, 2)?;
+    let day = fixed_digits(date_parts.next()?, 2)?;
     if date_parts.next().is_some() || !(1..=12).contains(&month) {
         return None;
     }
@@ -2428,16 +2516,26 @@ fn parse_rfc3339_utc(text: &str) -> Option<i64> {
         return None;
     }
 
-    let (time, _fraction) = time.split_once('.').unwrap_or((time, ""));
+    // `time-secfrac` is `"." 1*DIGIT`. Present means at least one digit and nothing else: a fraction
+    // that is not a fraction makes the whole instant unreadable, not a readable instant with noise
+    // after it. `.abc`, `.` and `.1.2` were all discarded silently before.
+    let (time, fraction) = time.split_once('.').unwrap_or((time, "0"));
+    if fraction.is_empty() || !fraction.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
     let mut time_parts = time.split(':');
-    let hour: i64 = time_parts.next()?.parse().ok()?;
-    let minute: i64 = time_parts.next()?.parse().ok()?;
-    let second: i64 = time_parts.next()?.parse().ok()?;
+    let hour = fixed_digits(time_parts.next()?, 2)?;
+    let minute = fixed_digits(time_parts.next()?, 2)?;
+    let second = fixed_digits(time_parts.next()?, 2)?;
+    // The leap second is `60`, which RFC 3339 §5.6 admits and this arithmetic maps onto the next
+    // second — a whole-second comparison is all §8 S2 asks for.
     if time_parts.next().is_some() || hour > 23 || minute > 59 || second > 60 {
         return None;
     }
 
-    Some(days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second)
+    days_from_civil(year, month, day)
+        .checked_mul(86_400)?
+        .checked_add(hour * 3_600 + minute * 60 + second)
 }
 
 fn is_leap_year(year: i64) -> bool {

@@ -338,8 +338,10 @@ which §9.4 DS7 assigns to that story and which no configuration function can ex
 | RD4, RB11 | `CC-I-4` (an id in circulation is not re-pointed) |
 | KY1 (`id`, adopted from [affinity-token](affinity-token.md) §6) | `CC-K-5` (two entries sharing an id with overlapping windows) |
 | KY3 | `CC-V-10` (an inline `secret` is refused citing V9, not V2) |
+| KY4 | `CC-V-23` (a year RFC 3339 §5.6 cannot express), `CC-V-24` (the spellings it forbids) |
 | KY5 | `CC-K-6` (two keys with `mint: true`), `CC-V-20` (a declared section with none) |
-| RD1, RD6 | `CC-K-1`, `CC-K-2` (accepted, no restart, no call disturbed), `CC-K-3`, `CC-K-4` (the two transition refusals) |
+| RD1, RD6 | `CC-K-1`, `CC-K-2` (accepted, no restart, no call disturbed), `CC-K-3`, `CC-K-4`, `CC-K-7` (the three transition refusals) |
+| RB2's `verifyUntil ≥ t_activate + W`, in the clock-free half a loader can judge | `CC-K-7` (an incoming mint key whose window is narrower than `W`) |
 | RD7 | `CC-S-1` … `CC-S-9`, of which `CC-S-7` is the configuration half and the rest are `RG-5`'s handoff |
 | SM1 | `CC-V-21` (a partial map, naming the missing ids) |
 | SM2 | `CC-V-4` (an owner absent from `membership`) |
@@ -357,6 +359,13 @@ set and KY8's refusal of the [affinity-token](affinity-token.md) §10 test keys 
 rules over a *resolved* secret, and this build resolves none: no consumer applies a key set, so
 `cluster.keys` loads, validates, and is reported by `Config::unapplied`. They get their rows from
 the story that gives the key set a consumer.
+
+**And what `W` is worth here.** §9.3 RL11's second clause is enforced as a *width* — the incoming
+mint key's declared window is at least `W` wide — because §2 D1 denies the loader a clock. That is
+necessary and not sufficient: RB2 states the rule against the wall (`verifyUntil ≥ t_activate + W`),
+and the wall-clock half stays RB5's, addressed to an operator. `L` is [affinity-token](affinity-token.md)
+§7 M5's default throughout, since this schema has no field for the token lifetime; a document that
+raises `E_max` moves the bound and is proved to, which is RB1.
 
 ## 12. Consequences for documents this spec does not own
 

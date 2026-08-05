@@ -411,6 +411,8 @@ table rather than waiting on it. `number-normalisation` stands in the same place
 | CC-V-20 | A `keys` section in which no entry carries `mint: true` | `E(cluster.keys, CC-KY5)` — a cluster that mints nothing Record-Routes nothing, and would fail on its first dialog-forming request rather than at load |
 | CC-V-21 | `shardMap.shards` carrying ids `1` and `3` | `E(cluster.shardMap.shards, CC-SM1)` naming the missing id — the list is the shard space and it is total |
 | CC-V-22 | `shardMap` assigning a shard to a member whose `roles` omit `registrar` | `E(cluster.shardMap.shards[…].owner, CC-SM3)` — a shard owns registration state, so its writes would have nowhere to land |
+| CC-V-23 | `verifyFrom: "300000000000-01-01T00:00:00Z"` | `E(cluster.keys[…].verifyFrom, CC-KY4)` — RFC 3339 §5.6 fixes the year at four digits, and a year outside it is refused rather than reduced to an instant by wrapping. `load` is total in its inputs (§2 D1), so neither a panic nor a wrap is an admissible reading |
+| CC-V-24 | A `verifyUntil` spelled as §5.6 forbids: a signed year, one-digit fields, a signed hour, an empty or non-numeric `time-secfrac` | Each refused `E(cluster.keys[…].verifyUntil, CC-KY4)`, echoing the text it could not read. The negative-component spelling is why the rule is not cosmetic — read leniently it names a **different** instant from the one written, and a window nobody can review in a diff is what §2 D5 refuses |
 
 **Key reload (CC-K).**
 
@@ -422,6 +424,7 @@ table rather than waiting on it. `number-normalisation` stands in the same place
 | CC-K-4 | New document brings `A`'s `verifyUntil` forward while `A` was the mint key | Rejected, `E(cluster.keys[…].verifyUntil, CC-RL11)` citing `max(L, E_max) + S` |
 | CC-K-5 | Two `keys` entries share `id: 3` with overlapping windows | `E(cluster.keys[1].id, affinity-token §6)` |
 | CC-K-6 | New document declares two keys with `mint: true` | `E(cluster.keys, affinity-token §6)` — exactly one at any configuration version |
+| CC-K-7 | A reload flipping `mint` to a distributed key whose declared verify window is narrower than `W` | `E(cluster.keys[…].verifyUntil, CC-RL11)` — RL11’s second half: the incoming mint key’s window covers `max(L, E_max) + S`, computed from the incoming document ([cluster-membership](cluster-membership.md) §7.1 RB1, RB2) |
 
 **Trunk reload (CC-T).**
 

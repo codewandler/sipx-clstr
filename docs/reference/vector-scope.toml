@@ -885,7 +885,7 @@ Asserted identity and privacy. Per-trunk identity policy has no trunk to attach 
 # is proved. A prefix leaving this file entirely is the outcome the ledger exists to reach.
 
 # CC — 26 rows left, split by consumer: RT-2 the trunk table, RG-5 the shard-map handoff,
-# DP-13 roles at startup, FC-1 listener exposure, RG-22 the `registrar` section, ET-6 `probe`.
+# DP-13 roles at startup, FC-1 listener exposure, KO-3 the `registrar` section, ET-4 `probe`.
 #
 # `DP-16` took 25 rows off this list. `CF-24` had pointed 35 of them at that story — 21 its own
 # Acceptance claimed and 14 more because it was "the loader's one live story" — and the split it
@@ -895,9 +895,9 @@ Asserted identity and privacy. Per-trunk identity policy has no trunk to attach 
 
 [[deferred]]
 id = "CC-D-3"
-story = "RG-22"
+story = "KO-3"
 reason = """
-The `registrar` section. `cluster.registrar` (`usePath`, `methodFiltering`) is recognised and not descended into, so a typo inside it is accepted today; `DP-16` opened `keys` and `shardMap` and deliberately did not open a third section whose content location-service and registrar-auth own. `RG-22` is the story that gives `usePath` a consumer, and the closed world one level down arrives with it.
+The `registrar` section's closed world, one level down. `cluster.registrar` (`usePath`, `methodFiltering`) is recognised and not descended into, so a typo inside it is accepted today. `KO-3` is the owner rather than a registrar story because `KO-3` already owns [sipx-cluster-crd](../specs/sipx-cluster-crd.md) §12's `SC-A-1`, whose Expect is verbatim this row's — `E(cluster.registrar.usePathh, CC-V2)` — and whose Acceptance requires an invalid resource to be "rejected with a message naming the offending field". Admission validates through §8's own rules, so `KO-3` cannot prove `SC-A-1` without producing this error.
 """
 
 [[deferred]]
@@ -1056,9 +1056,9 @@ The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bi
 
 [[deferred]]
 id = "CC-V-5"
-story = "ET-6"
+story = "ET-4"
 reason = """
-The `probe` section. `cluster.probe` (`targets`, `schedule`, `tenant`) is e2e-probe §5's, and this build refuses the `e2e-tester` role at start-up precisely because nothing reads it. The cross-section check that `probe.tenant` names a declared tenant needs the section to be descended into first, which `ET-6` does when it runs the role in the reference topology.
+The `probe` section, descended into. `cluster.probe` (`targets`, `schedule`, `tenant`) is [e2e-probe](../specs/e2e-probe.md) §5's, and this build refuses the `e2e-tester` role at start-up precisely because nothing reads it. `DP-13`'s Acceptance names the successor in as many words — "`e2e-tester` has no runtime driver today, so an identity containing it refuses startup until `ET-4`/`ET-6` supply that driver" — and `ET-4` is the earlier of the two and the one whose `GET /probes` cannot answer without the section being read. The cross-section half is then unavoidable rather than optional: a probe registers in the tenant it names, and a run against an undeclared one has nowhere to register.
 """
 
 [[deferred]]
