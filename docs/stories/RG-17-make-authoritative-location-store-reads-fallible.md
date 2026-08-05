@@ -34,7 +34,7 @@ and proxy lookup never turn unknown durable state into a successful empty answer
       absence on `86e6b10`.
 - [x] The identical location-store conformance suite runs against in-memory and PostgreSQL backends;
       live PostgreSQL fault coverage runs when `SIPX_CLSTR_TEST_DATABASE_URL` is set.
-- [ ] `scripts/gate.sh` is green.
+- [x] `scripts/gate.sh` is green.
 
 ## Progress
 
@@ -59,19 +59,19 @@ still proves them.
 `ProxyInput::TargetsUnavailable` on `Err`. A Request-URI that will not canonicalize still resolves to
 the empty set and `480`: that is an answer, not a failure.
 
+`scripts/gate.sh` is green with `SIPX_CLSTR_TEST_DATABASE_URL` set, so its opt-in PostgreSQL step
+ran too — `postgres_read_faults` 3/3 and `postgres_store` 9/9, the latter including
+`run_read_failure_suite` against a live corrupted row and the `LS-L-9` lookup fault.
+
+The merge base carried a gate failure of its own —
+`crates/sipx-clstr-node/tests/devspace_dialable.rs` was unformatted and tripped three clippy lints,
+from the `8c61cf4` rescue commit. It was left untouched here (out of fence) and fixed on `main` in
+`151f2e2`, which this branch merged before its final gate run.
+
 ### For the integrator
 
 - Ledgers are untouched by design (`CHANGELOG.md`, the board, `docs/roadmap.md`): this story is
   `in-progress` and needs `/track:done RG-17` on merge.
-- **The gate is red at the merge base, not from this diff.** `cargo fmt --all --check` and
-  `cargo clippy … -D warnings` both fail on `crates/sipx-clstr-node/tests/devspace_dialable.rs`
-  (unformatted; `doc_markdown` on `ConfigMap` ×2; `manual_pattern_char_comparison`), which arrived on
-  `74b5fc0`/`c3e8301` — "WIP rescue: a dialable devspace address, committed by the coordinator". The
-  file is byte-identical to `main` here; `cargo fmt --all` reformatted it as a side effect and the
-  change was reverted rather than adopted, because it is outside this story's fence.
-- `scripts/check-msrv.sh` could not run: the host filesystem is at 100% and the reclaimable space is
-  other tenants' (Docker images and volumes, and three sibling worktrees' target directories).
-  Nothing here is MSRV-relevant — the new code uses `Result`, `Option` and `matches!` only.
 
 ## Notes
 
