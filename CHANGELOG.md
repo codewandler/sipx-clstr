@@ -20,6 +20,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+### Added
+
+- **The deterministic harness can now injure a connection, not just a link** (`CF-26`). Three of
+  `owner-rpc` §10's failure scenarios were unwritable because `fault.rs` offered five faults and
+  none of them could drop and re-establish a connection, restart a node under a fresh
+  incarnation, or stop a peer reading. All three now exist — plus `ResumeReading`, because a
+  stall with no resume is indistinguishable from a client that never came back and the accounting
+  bugs live in the flush — and the two backpressure rejection causes stay the two distinct rows
+  §10 insists on: the per-flow bound and `T_write` expiry are reached by different paths. Nothing
+  draws from the harness PRNG, so no existing seed changes meaning: verified by compiling one
+  probe at two revisions and comparing rendered traces byte-for-byte, which is a stronger check
+  than the suite's own run-to-run replays could make. `AF-7` can now write those scenarios
+  against a real owner instead of restating them.
+
+### Fixed
+
 - **A location store this node cannot read is no longer treated as an empty store** (`RG-17`,
   validated synthesis **V-08**). A failed or undecodable PostgreSQL read became empty revision
   zero, so a REGISTER query answered `200` — telling a UA it is registered nowhere while the

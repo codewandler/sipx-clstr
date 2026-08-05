@@ -2,7 +2,7 @@
 id: CF-26
 title: The harness cannot injure a connection, so three owner-RPC scenarios are unwritable
 pillar: Foundation
-status: in-progress
+status: done
 priority: 2
 epic: conformance-harness
 areas: [harness, sim, affinity]
@@ -81,3 +81,19 @@ tests that prove them, which is this repository's own rule.
 - Considered for upstream: **no.** The fault injector is this repository's harness. If a fault needs a
   kernel-side seam to be injectable at all, that seam is a sipx story — record it in
   [upstream.md](../upstream.md) rather than shadow-implementing it here.
+
+- **Integrated 2026-08-05, gate green on `main`.** The independent review did not take the
+  determinism claim on trust: it compiled the same probe at the merge base and at this branch and
+  compared rendered traces across the two revisions (identical, MD5 `89fd3652…`, 9 scenarios ×
+  3 seeds over every pre-existing fault). That check matters because the suite's own
+  "byte-for-byte" tests compare run-to-run **inside one binary** and structurally cannot see a
+  cross-version shift. It also re-derived the vacuity proof independently rather than reading the
+  report: written against `partition_during`, §10's reconnect scenario fails at *runtime* with
+  the owner writing its delivery straight into the "reconnected" client — the passes-for-the-
+  wrong-reason this story names.
+- **Four fidelity gaps found at review and filed as [`CF-28`](CF-28-a-stalled-peer-outlives-the-node-that-stalled.md)**
+  rather than fixed here: a killed or restarted node never clears `not_reading`, a restart
+  re-accumulates held writes instead of draining, a restart heals partitions the kill did not
+  cut, and the documented stall-beats-link precedence has no test. None is reachable by an
+  `owner-rpc` §10 row, so `AF-7` is unblocked as this story claims.
+
