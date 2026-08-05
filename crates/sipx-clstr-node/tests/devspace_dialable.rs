@@ -3,7 +3,7 @@
 //! Three constraints meet on one string (`KO-18`). `sipx dial` takes a literal destination and
 //! resolves no names, so the address-of-record's host must be something a socket can send to.
 //! `FC-4` refuses a `REGISTER` whose address-of-record is outside the tenant's `domains`
-//! (location-service §5.1 S1, compared byte-exactly), so that host must be a literal in the
+//! (location-service §5.1 S5), so that host must be a literal in the
 //! cluster document. And `FC-5` put that document in a `ConfigMap` written before any pod exists,
 //! so the host cannot be a runtime-assigned address. The one string that satisfies all three is
 //! an address that is *declared* rather than assigned: the per-node Service's static `clusterIP`,
@@ -172,12 +172,12 @@ fn the_walkthrough_agrees_on_one_address_and_a_phone_can_dial_it() {
         .expect("k8s-two-node-call.sh should assign DOMAIN as a literal")
         .to_owned();
 
-    // One string, everywhere the reader meets it. The location lookup keys on the whole address
-    // of record and the registrar compares domains byte-exactly, so "equivalent" is not enough.
+    // One string, everywhere the reader meets it. The registrar compares domains as typed SIP
+    // hosts, but the later location lookup still keys on the whole canonical address of record.
     assert_eq!(
         served,
         &vec![greeting.clone()],
-        "the greeting registers in a domain the tenant does not serve — that REGISTER is a 403"
+        "the greeting registers in a domain the tenant does not serve — that REGISTER is a 404"
     );
     assert_eq!(
         greeting, dialled,

@@ -30,6 +30,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use sipx_clstr_sim::fault::{Fault, Schedule};
 use sipx_clstr_sim::node::{Effect, Input, SimNode, TimerId, send};
+use sipx_clstr_sim::trace;
 use sipx_clstr_sim::{LinkKind, LinkPolicy, NodeId, Sim, SimTime};
 use sipx_sip::{HeaderName, Message, Method, RequestBuilder, Uri};
 
@@ -770,6 +771,266 @@ fn a_non_reading_client_makes_t_write_expire() {
         answers(&control),
         ["delivered"],
         "a reading client flushes the write and T_write never fires"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// CF-28: connection faults compose without surviving or over-reaching each other
+// ---------------------------------------------------------------------------------------------
+
+/// Two deliberately unopinionated stream peers for fault-composition tests.
+///
+/// `Watcher` records every connection notice and otherwise leaves the harness's state visible in
+/// the trace, so these tests cannot accidentally pass because the owner stand-in closed a row or
+/// stopped issuing writes after the first transport error.
+fn watcher_pair(seed: u64) -> Sim {
+    let mut sim = Sim::new(seed);
+    sim.link_default(LinkKind::Stream, LinkPolicy::CLEAN);
+    assert_eq!(
+        sim.add_node(Box::new(Watcher {
+            name: "a".to_owned(),
+            peer: Some(CLIENT),
+        })),
+        OWNER
+    );
+    assert_eq!(
+        sim.add_node(Box::new(Watcher {
+            name: "b".to_owned(),
+            peer: None,
+        })),
+        CLIENT
+    );
+    sim
+}
+
+/// A kill ends a stall as well as discarding its buffer.
+///
+/// The write at one second is first proved held, then the kill discards it. The killed receiver
+/// must thereafter be reached through the cut stream link, where each later write tells the sender
+/// about a transport error. Leaving `StopReading` active would intercept those writes before the
+/// link and silently rebuild a buffer for a process that no longer exists.
+#[test]
+fn a_killed_node_stops_absorbing_writes_after_a_stall() {
+    let mut sim = watcher_pair(0xCF28_0001);
+    sim.schedule(
+        &Schedule::new()
+            .at(SimTime::from_millis(400), Fault::StopReading(CLIENT))
+            .at(SimTime::from_millis(1600), Fault::KillNode(CLIENT)),
+    );
+
+    sim.run_until(SimTime::from_millis(1250)).expect("holds");
+    assert_eq!(
+        sim.held_writes(CLIENT),
+        1,
+        "the pre-kill write must really be held before this test can prove the kill discards it"
+    );
+    assert!(sim.trace().received_by(CLIENT).is_empty());
+
+    sim.run_until(SimTime::from_secs(9)).expect("settles");
+
+    let broken = sim.trace().count(|entry| {
+        entry.node == OWNER && matches!(entry.event, trace::Event::Broken { to } if to == CLIENT)
+    });
+    let stalled = sim
+        .trace()
+        .notes()
+        .into_iter()
+        .filter(|note| note.starts_with("stalled "))
+        .count();
+    assert_eq!(broken, 8, "every post-kill write reaches the cut link");
+    assert_eq!(
+        stalled, 1,
+        "only the write proved held before the kill may report a stall"
+    );
+    assert_eq!(
+        sim.held_writes(CLIENT),
+        0,
+        "the kill discarded the proved pre-kill buffer, and a dead process accumulated no more:\n{}",
+        sim.trace().render()
+    );
+    assert!(
+        sim.trace().received_by(CLIENT).is_empty(),
+        "the held write belonged to the dead process and must never reach it"
+    );
+}
+
+/// A later stall cannot revive a process an earlier kill stopped.
+///
+/// This is the inverse event order from the preceding test. `StopReading` is still recorded as a
+/// scheduled fault, but it cannot intercept writes before the killed endpoint's link cut.
+#[test]
+fn a_stall_scheduled_after_a_kill_cannot_make_the_dead_node_absorb_writes() {
+    let mut sim = watcher_pair(0xCF28_0005);
+    sim.schedule(
+        &Schedule::new()
+            .at(SimTime::from_millis(400), Fault::KillNode(CLIENT))
+            .at(SimTime::from_millis(600), Fault::StopReading(CLIENT)),
+    );
+    sim.run_until(SimTime::from_secs(3)).expect("settles");
+
+    let broken = sim.trace().count(|entry| {
+        entry.node == OWNER && matches!(entry.event, trace::Event::Broken { to } if to == CLIENT)
+    });
+    assert_eq!(
+        broken,
+        3,
+        "all writes reach the killed endpoint's cut link even though StopReading fired later:\n{}",
+        sim.trace().render()
+    );
+    assert_eq!(sim.held_writes(CLIENT), 0);
+    assert!(
+        sim.trace()
+            .notes()
+            .iter()
+            .all(|note| !note.starts_with("stalled ")),
+        "a dead process cannot become a stalled reader"
+    );
+}
+
+/// A restart replaces the stalled process rather than inheriting its unread state.
+///
+/// The write at one second belongs to the old process and is discarded. The six later writes are
+/// attempts against the restarted process and must cross the link instead of accumulating in a
+/// newly-created held buffer.
+#[test]
+fn a_restart_discards_old_held_writes_without_reaccumulating_them() {
+    let mut sim = watcher_pair(0xCF28_0002);
+    sim.schedule(
+        &Schedule::new()
+            .at(SimTime::from_millis(400), Fault::StopReading(CLIENT))
+            .at(SimTime::from_millis(1600), Fault::RestartNode(CLIENT)),
+    );
+    sim.run_until(SimTime::from_secs(7)).expect("settles");
+
+    assert_eq!(
+        sim.trace().received_by(CLIENT).len(),
+        6,
+        "the old write is gone and every post-restart write drains normally:\n{}",
+        sim.trace().render()
+    );
+    assert_eq!(
+        sim.held_writes(CLIENT),
+        0,
+        "the replacement process did not inherit StopReading"
+    );
+}
+
+/// Restart restores a link only when the preceding kill changed that link from live to cut.
+///
+/// The partition is older than the kill, so the kill did not cut this pair. The write at one
+/// second must still find the stream link partitioned after the restart.
+#[test]
+fn a_restart_does_not_heal_a_partition_the_kill_did_not_cut() {
+    let mut sim = watcher_pair(0xCF28_0003);
+    sim.link(OWNER, CLIENT, LinkKind::Stream, LinkPolicy::CLEAN);
+    sim.schedule(
+        &Schedule::new()
+            .at(
+                SimTime::from_millis(400),
+                Fault::Partition {
+                    a: vec![OWNER],
+                    b: vec![CLIENT],
+                },
+            )
+            .at(SimTime::from_millis(600), Fault::KillNode(CLIENT))
+            .at(SimTime::from_millis(800), Fault::RestartNode(CLIENT)),
+    );
+    sim.run_until(SimTime::from_millis(1200)).expect("settles");
+
+    let broken_after_restart = sim.trace().count(|entry| {
+        entry.at == SimTime::from_secs(1)
+            && entry.node == OWNER
+            && matches!(entry.event, trace::Event::Broken { to } if to == CLIENT)
+    });
+    assert_eq!(
+        broken_after_restart,
+        1,
+        "the pre-kill partition survives the restart:\n{}",
+        sim.trace().render()
+    );
+    assert!(
+        sim.trace().received_by(CLIENT).is_empty(),
+        "the restarted node remains unreachable through that partition"
+    );
+}
+
+/// `StopReading` precedes link policy: a held write has not reached the partition yet.
+///
+/// One write is held while the link is live and three more while it is cut. Healing before the
+/// same-instant resume lets all four cross the link in issue order, with no transport error.
+#[test]
+fn a_stall_takes_precedence_over_a_partitioned_link_until_resume() {
+    let mut sim = watcher_pair(0xCF28_0004);
+    sim.schedule(
+        &Schedule::new()
+            .at(SimTime::from_millis(400), Fault::StopReading(CLIENT))
+            .at(
+                SimTime::from_millis(1500),
+                Fault::Partition {
+                    a: vec![OWNER],
+                    b: vec![CLIENT],
+                },
+            )
+            .at(
+                SimTime::from_millis(4500),
+                Fault::Heal {
+                    a: vec![OWNER],
+                    b: vec![CLIENT],
+                },
+            )
+            .at(SimTime::from_millis(4500), Fault::ResumeReading(CLIENT)),
+    );
+    sim.run_until(SimTime::from_millis(4250)).expect("settles");
+
+    assert_eq!(sim.held_writes(CLIENT), 4);
+    assert!(sim.trace().received_by(CLIENT).is_empty());
+    let written_at: Vec<SimTime> = sim
+        .trace()
+        .entries()
+        .iter()
+        .filter_map(|entry| match &entry.event {
+            trace::Event::Sent { to, .. } if entry.node == OWNER && *to == CLIENT => Some(entry.at),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        written_at,
+        [
+            SimTime::from_secs(1),
+            SimTime::from_secs(2),
+            SimTime::from_secs(3),
+            SimTime::from_secs(4),
+        ],
+        "one write before the cut and three during it are all held"
+    );
+    assert_eq!(
+        sim.trace()
+            .count(|entry| matches!(entry.event, trace::Event::Broken { .. })),
+        0,
+        "the cut link is not consulted while the writes are held"
+    );
+
+    sim.run_until(SimTime::from_millis(4750)).expect("settles");
+    assert_eq!(sim.held_writes(CLIENT), 0);
+    let received_at: Vec<SimTime> = sim
+        .trace()
+        .entries()
+        .iter()
+        .filter_map(|entry| match &entry.event {
+            trace::Event::Received { .. } if entry.node == CLIENT => Some(entry.at),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        received_at,
+        [
+            SimTime::from_millis(4500),
+            SimTime::from_millis(4500).saturating_add(Duration::from_nanos(1)),
+            SimTime::from_millis(4500).saturating_add(Duration::from_nanos(2)),
+            SimTime::from_millis(4500).saturating_add(Duration::from_nanos(3)),
+        ],
+        "all held writes leave in order after heal then resume:\n{}",
+        sim.trace().render()
     );
 }
 

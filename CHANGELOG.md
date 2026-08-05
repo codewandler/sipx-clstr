@@ -9,6 +9,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Connection faults in the deterministic harness now compose in either event order** (`CF-28`).
+  A killed node can no longer become a stalled reader when `StopReading` fires later, and a kill
+  now demonstrably discards bytes held by the old process. Restart clears that process's
+  backpressure state without healing a partition or replacing any other independently scheduled
+  link policy. Five fault-composition tests pin both kill/stall orders, the new-process buffer,
+  pre-existing partitions and stall-before-link precedence without changing existing replay traces.
+
+- **REGISTER admission now distinguishes the Request-URI authority from the address of record and
+  authorizes the authenticated principal before any store access** (`RG-18`, validated synthesis
+  **V-09**). An unserved Request-URI previously reached authentication and a served `To` could mask
+  it; domain checks then split the canonical AoR string after admission and answered `403` instead
+  of S1/S5's `404`. Worse, any valid credential could write or wildcard-remove any AoR in the
+  tenant. Admission now injects one pure tenant policy for typed served authorities and exact
+  `(principal, canonical AoR)` grants. Failing-first real-UDP tests show Alice's valid credentials
+  could replace and erase Bob's binding; both attacks now return `403`, while Bob's binding and
+  revision remain unchanged. Six LS-A vectors also pin open-tenant decisions, aliases, ports, host
+  case, IPv6 and malformed schemes, taking the generated conformance report to 215/619 proved rows.
+
+- **Story lifecycle typos now fail closed in the vector coverage gate** (`CF-27`). The gate accepts
+  exactly `backlog | ready | in-progress | blocked | done`, refuses a complete story carrying
+  `status: don` by filename, and no longer ingests `_TEMPLATE.md`'s `{{ID}}` as a live owner.
+  Its executable-claim guard now sees parenthesized scenario names, and the
+  registered-and-excluded contradiction covers design records as well as normative specs. The
+  self-test reports all 53 pinned cases it replays instead of describing only its original
+  PB-F-1 fixture.
+
 - **A multi-contact REGISTER now reconciles every operation against the indices as they are, not
   against a snapshot taken once** (`RG-16`, validated synthesis **V-05**, four rounds). A removal
   used to leave later operations in the same request matching against positions that no longer
@@ -19,6 +45,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   location-service §5.5.1 with `RG-25`'s `max_contact_ops` bound doing the cost-limiting before
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
+
+- **The published two-node k3d walkthrough now runs through the final audible call** (`DX-13`).
+  With all four Deployments ready, the pinned `sipx 1.0.0-beta.4` phone registered the greeting
+  through node-b and dialled it through node-a's static Service address. The call answered with
+  24000 recorded samples, zero packet loss and `heard_audio: true`. Executing the command also
+  exposed four fields its example output omitted — the advertised and bound media addresses,
+  packet count and recording path — so the published block now reflects the current CLI output.
 
 ### Added
 

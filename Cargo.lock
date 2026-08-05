@@ -1927,6 +1927,7 @@ dependencies = [
  "sipx-clstr-registrar",
  "sipx-sip",
  "sipx-transport",
+ "sipx-ua",
  "thiserror",
  "tokio",
  "toml",

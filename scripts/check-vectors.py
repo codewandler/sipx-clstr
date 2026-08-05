@@ -82,13 +82,29 @@ Ways to fail, and the last two are the ones that matter:
    test-function name is a set of named executable claims, admitted only in a document `EXCLUDED`
    names.
 
+9. A story file whose frontmatter `status` is not one of the five lifecycle values, or whose `id`
+   is not a story id. Rules 7 and 8 both turn on a story's status, and `CLOSED_STATUSES` was an
+   exact-match denylist read over free text: `don` is not `done`, so a **mistyped** status counted
+   as a live owner — the failure direction was "accept", in the two rules whose whole purpose is
+   refusing dead letters. `CF-27` closes that by validating at ingestion instead: the five values
+   are a closed set, a file outside it is refused by name, and `CLOSED_STATUSES` is then a
+   partition of something known rather than a denylist over anything. The same ingestion is where
+   `docs/stories/_TEMPLATE.md` stopped registering `{{ID}}` — an unfilled id beside a perfectly
+   valid `status: backlog`, which made the template a live story any deferral could name, and
+   makes every unfilled copy of it one too.
+
 Also writes `docs/reference/conformance.md`: generated, never hand-edited, and checked in so a
 reader who does not run the suite can still see what is proved. `--check` fails if the committed file
 is out of date, the way the story board is checked.
 
-`--self-test` replays the `PB-F-1` case as it stood at `7d21a22`, from the spec row and the test
-body of the day, and asserts this script refuses it. It runs on every invocation: the check that a
-detector still detects is worth more than the detector.
+`--self-test` puts this script's own judgement to pinned cases, and `main` runs it on every
+invocation before reading anything: the check that a detector still detects is worth more than the
+detector. It replays the `PB-F-1` case as it stood at `7d21a22` — the spec row and the test body of
+the day, verbatim — with the ways of faking a proof that must not buy one; the vector-row and
+named-scenario shapes, in both directions, since a guard that matches everything is no guard;
+deferral and shape-only liveness against a fixed status table; every way an `EXCLUDED` entry can
+rot; a rowless registration; and story-status ingestion, `{{ID}}` included. The success line counts
+the cases, so one deleted reads as a smaller number rather than as silence.
 
 Exit 0 when everything agrees, 1 otherwise.
 """
@@ -221,7 +237,14 @@ ANY_ROW_LINE = re.compile(r"^\|\s*`?([A-Z]{2})-(?:[A-Z]-)?\d+`?\s*\|")
 # exists (`max_pending_per_flow` in `owner-rpc` §8); anywhere else it is an error whose message
 # carries both fixes, because the cheap fix for a false positive is keying the table differently
 # and the cheap fix for a real scenario table is a registry line — both deliberate, both visible.
-SCENARIO_LINE = re.compile(r"^\|\s*`([a-z][a-z0-9]*(?:_[a-z0-9]+){2,})`\s*\|")
+#
+# Supporting optional call parentheses is `CF-27`, found reviewing `CF-25`, which documented the
+# two-word evasion and left this one. A test-function name is as naturally written `` `delivers()` ``
+# as `` `delivers` ``, and requiring the closing backtick to follow the name meant one keystroke of
+# house style put a whole scenario table back out of view. The captured group stays the bare name,
+# so the error message names the scenario rather than a call. The argument matcher refuses both a
+# closing parenthesis and a backtick, so it cannot run past its own cell.
+SCENARIO_LINE = re.compile(r"^\|\s*`([a-z][a-z0-9]*(?:_[a-z0-9]+){2,})(?:\([^)`]*\))?`\s*\|")
 # Where a vector table may legitimately live. Designs are scanned too, and that is the point.
 TABLE_TREES = ("docs/specs", "docs/designs")
 
@@ -262,15 +285,45 @@ EQUIVALENTS = {
     "%": (1,),
 }
 
-# A story's YAML frontmatter, and the single-token fields this check reads out of it. `note:` and
-# `title:` hold prose and are not matched, deliberately: `id` and `status` are the only two fields
-# here that mean anything to a deferral, and they are exactly the two the board is generated from.
+# A story's YAML frontmatter, and the fields this check reads out of it. `note:` and `title:` hold
+# prose but are harmlessly captured too: `id` and `status` are the only two fields inspected below.
+# Capture the whole value, including an empty one and an inline comment. Requiring `\S+` here made
+# malformed YAML-shaped values disappear from `fields`, so ingestion silently treated the file as
+# having no status at all — exactly the fail-open direction this boundary exists to prevent.
 FRONTMATTER = re.compile(r"\A---\n(.*?)\n---", re.S)
-FRONTMATTER_FIELD = re.compile(r"^([a-z]+):[ \t]*(\S+)[ \t]*$", re.M)
+FRONTMATTER_FIELD = re.compile(r"^([a-z]+):[ \t]*(.*)$", re.M)
+# The closed schema needs only scalar ids and lifecycle names. Accept the ordinary YAML spellings
+# authors use for those — plain, single quoted, or double quoted, with an optional inline comment —
+# and reject every structured or empty form. Supporting arbitrary YAML here would add a dependency
+# to a gate for no semantic gain: no mapping, sequence, tag, anchor, or escape can be a lifecycle
+# value.
+PLAIN_FRONTMATTER_SCALAR = re.compile(
+    r"\A([A-Za-z0-9][A-Za-z0-9-]*)(?:[ \t]+#.*)?\Z"
+)
+SINGLE_QUOTED_FRONTMATTER_SCALAR = re.compile(r"\A'([^'\r\n]*)'(?:[ \t]+#.*)?\Z")
+DOUBLE_QUOTED_FRONTMATTER_SCALAR = re.compile(r'\A"([^"\\\r\n]*)"(?:[ \t]+#.*)?\Z')
 # The `**Stories:**` field of a spec header, to the end of that header paragraph. Used only to
 # cross-check `SPECS`' third column, so reading generously is the safe direction.
 SPEC_STORIES = re.compile(r"\*\*Stories:\*\*(.*?)(?:\n\s*\n|\Z)", re.S)
 STORY_ID = re.compile(r"\b([A-Z]{2}-\d+)\b")
+# `STORY_ID` finds a story id inside prose; this one is the whole `id:` field and nothing else.
+# `docs/stories/_TEMPLATE.md` is why it is anchored: `id: {{ID}}` beside a valid `status: backlog`
+# registered the template as a live `backlog` story that any deferral could name, and a copy of it
+# with the id still unfilled — which is how the board says to start one — is the same phantom under
+# a name this script has no list of.
+STORY_FILE_ID = re.compile(r"\A[A-Z]{2}-\d+\Z")
+# The files in `docs/stories/` that are not stories: the generated board, and the template every
+# story is copied from. `check-docs.py::check_stories` draws the boundary in the same two names, so
+# the two gates agree on what a story file is.
+NOT_A_STORY = ("README.md", "_TEMPLATE.md")
+# The story lifecycle, closed — the five values the board is generated from and the story frontmatter
+# schema names. Validating against this at ingestion is `CF-27`, and what it buys is the direction of
+# the failure: `CLOSED_STATUSES` below is an exact-match set, so before this existed a story whose
+# status read `don` was not `done`, and therefore counted as a **live** owner in both ledger rules.
+# A denylist over free text can only fail open. Held to a closed vocabulary, it is a partition of
+# something known, and the self-test pins that relationship rather than trusting the two lists to
+# stay aligned. Kept in lifecycle order so the error teaches the same progression the board does.
+LIFECYCLE_STATUSES = ("backlog", "ready", "in-progress", "blocked", "done")
 # The statuses that mean nobody is going to do this. `blocked` is deliberately not one of them: a
 # blocked story has somebody who can unblock it, where a `done` story has nobody at all.
 CLOSED_STATUSES = frozenset({"done"})
@@ -322,6 +375,7 @@ FAMILIES = {
     ("QP", "C"): "Carrier quirks — composition (§9.1)",
     ("QP", "G"): "Carrier quirks — startup validation, G9–G14 (§9.1)",
     ("LS", "C"): "Location service — AoR canonicalization (§3)",
+    ("LS", "A"): "Location service — REGISTER admission (§5.1)",
     ("LS", "R"): "Location service — REGISTER processing and the CAS contract (§5)",
     ("LS", "K"): "Location service — the consistency contract (§6)",
     ("LS", "L"): "Location service — the lookup contract (§7)",
@@ -491,15 +545,29 @@ def unenumerated_specs(
     ledger here has — an entry whose document is gone, whose spec is also registered, whose reason
     is empty, or whose story is closed is refused, because a trace that can rot silently is an
     absence with better manners (`CF-24`).
+
+    The two rules have different reach, and `CF-27` is the correction. *Enumerate or exclude* is a
+    duty `docs/specs/` alone carries: a design record is not normative, so one registering nothing
+    is the normal case rather than an omission. *Registered and excluded* is a contradiction
+    wherever it occurs — the registries name two trees (`TABLE_TREES`), and `EXCLUDED` already
+    names a design among them, so an excluded design that later gained a registration would have
+    left the gate believing both readings and saying neither.
     """
     problems: list[str] = []
-    for path in sorted(path for path in existing if path.startswith("docs/specs/")):
-        if path in registered and path in excluded:
-            problems.append(
-                f"{path}: registered in SPECS and named in EXCLUDED — the two claims contradict, "
-                f"and a reader cannot tell which one the gate believed; remove one"
-            )
-        elif path not in registered and path not in excluded:
+    # Registry disagreement is a property of the registries, not of the normative-spec tree. Keep
+    # it separate from the enumeration below so a design is covered too, and so a stale path named
+    # in both places reports the contradiction as well as having gone stale.
+    for path in sorted(registered & set(excluded)):
+        problems.append(
+            f"{path}: registered in SPECS and named in EXCLUDED — the two claims contradict, "
+            f"and a reader cannot tell which one the gate believed; remove one"
+        )
+    for path in sorted(existing):
+        if (
+            path.startswith("docs/specs/")
+            and path not in registered
+            and path not in excluded
+        ):
             problems.append(
                 f"{path}: a spec registered nowhere — its rules exist outside the coverage "
                 f"picture that claims to describe them; register a prefix in SPECS, or name it "
@@ -815,8 +883,69 @@ def recorded_shape_only() -> tuple[dict[str, dict], list[str]]:
     return rows, problems
 
 
-def story_statuses() -> dict[str, str]:
-    """Story id → its frontmatter `status`.
+def frontmatter_scalar(raw: str) -> str | None:
+    """A scalar spelling admitted by the story id/status schema, or `None` when structured."""
+    value = raw.strip()
+    for pattern in (
+        PLAIN_FRONTMATTER_SCALAR,
+        SINGLE_QUOTED_FRONTMATTER_SCALAR,
+        DOUBLE_QUOTED_FRONTMATTER_SCALAR,
+    ):
+        matched = pattern.match(value)
+        if matched:
+            return matched.group(1)
+    return None
+
+
+def ingest_story(name: str, text: str) -> tuple[tuple[str, str] | None, list[str]]:
+    """One story file's `(id, status)`, and the reasons it is not a story to hold anyone to.
+
+    `CF-27`. Both ledger rules ask "is the story that owns this row still live", and the answer is
+    only as good as what got ingested — so the judgement is here, at the one place a status enters
+    this script, rather than at the two places it is read.
+
+    Three outcomes. The board and the template are not stories and register nothing, silently.
+    A file whose `id` is not a story id registers nothing and *is* a problem: `{{ID}}` is what an
+    unfilled copy of `docs/stories/_TEMPLATE.md` carries, and letting it in makes a live `backlog`
+    story out of a placeholder that every deferral can then name. Anything else registers — and if
+    its status is outside `LIFECYCLE_STATUSES`, registers **and** reports.
+
+    Registering a bad status rather than dropping it is deliberate. The run is red either way, and
+    the reader's next move differs: dropped, a deferral naming the story reads "no story in
+    docs/stories/", which is false and sends them looking for a missing file instead of at the
+    typo one line above.
+    """
+    if name in NOT_A_STORY:
+        return None, []
+    block = FRONTMATTER.match(text)
+    if not block:
+        return None, []
+    fields = dict(FRONTMATTER_FIELD.findall(block.group(1)))
+    if "id" not in fields or "status" not in fields:
+        return None, []
+    raw_story, raw_status = fields["id"], fields["status"]
+    story = frontmatter_scalar(raw_story)
+    status = frontmatter_scalar(raw_status)
+    if story is None or not STORY_FILE_ID.match(story):
+        shown_story = story if story is not None else raw_story.strip() or "<empty>"
+        return None, [
+            f"{name}: frontmatter `id: {shown_story}` is not a story id — an unfilled template copy "
+            f"registers as a live story that a deferral can name and nobody owns; fill the id in, "
+            f"or the file is not a story"
+        ]
+    if status is None or status not in LIFECYCLE_STATUSES:
+        shown_status = status if status is not None else raw_status.strip() or "<empty>"
+        return (story, shown_status), [
+            f"{name}: `status: {shown_status}` is not one of "
+            f"{' | '.join(LIFECYCLE_STATUSES)} — the deferral and exclusion ledgers ask "
+            f"whether this story is still live, and a status outside the lifecycle answers that "
+            f"question by accident; correct the value"
+        ]
+    return (story, status), []
+
+
+def story_statuses() -> tuple[dict[str, str], list[str]]:
+    """Story id → its frontmatter `status`, and every invalid id or status ingestion found.
 
     Read from `docs/stories/*.md`, not from the generated board: the board is a rendering of exactly
     this field, and reading the rendering would make this gate depend on somebody having remembered
@@ -828,14 +957,13 @@ def story_statuses() -> dict[str, str]:
     same reason.
     """
     statuses: dict[str, str] = {}
+    problems: list[str] = []
     for path in sorted(STORIES.glob("*.md")):
-        block = FRONTMATTER.match(path.read_text(encoding="utf-8"))
-        if not block:
-            continue
-        fields = dict(FRONTMATTER_FIELD.findall(block.group(1)))
-        if "id" in fields and "status" in fields:
-            statuses[fields["id"]] = fields["status"]
-    return statuses
+        found, reasons = ingest_story(path.name, path.read_text(encoding="utf-8"))
+        problems += reasons
+        if found:
+            statuses[found[0]] = found[1]
+    return statuses, problems
 
 
 def spec_authors() -> tuple[dict[str, str], list[str]]:
@@ -1125,12 +1253,63 @@ WORKED_EXAMPLE_PROOF = '''fn pb_f_1_a_dialog_forming_invite_is_record_routed_wit
     );
 }'''
 
+# `docs/stories/_TEMPLATE.md`, quoted whole (`CF-27`). Whole, because the phantom is
+# made of two fields that only look wrong together: `id: {{ID}}` is obviously a placeholder, and
+# `status: backlog` is a perfectly ordinary live status — a case trimmed down to the id would pass
+# for the wrong reason, since a block with no `status` line registers nothing anyway and would
+# prove the detector nothing. Every field the file carries is kept for the same reason: this is the
+# text a new story is copied from, and the case is worth exactly as much as it is faithful.
+STORY_TEMPLATE = """---
+id: {{ID}}
+title: {{TITLE}}
+pillar: {{PILLAR}}
+status: backlog
+priority:
+design:
+epic:
+areas:
+note:
+---
 
-def self_test() -> list[str]:
-    """Replay the case this check exists for, and the ways of faking it that must not work."""
+# {{TITLE}}
+
+## Goal
+One or two sentences: the outcome this delivers and which value/pillar it serves.
+
+## Acceptance
+- [ ] A testable criterion. A behavioral change names the failing-first test that proves it.
+- [ ] …
+
+## Progress
+- (running log / checklist — a resuming agent reads this to know exactly where things stand)
+
+## Notes
+- Links, blockers, design pointers, relevant files.
+"""
+
+
+def story_fixture(status: str) -> str:
+    """A filled copy of the real story template, with only `status` varied."""
+    return (
+        STORY_TEMPLATE.replace("{{ID}}", "CF-999")
+        .replace("{{TITLE}}", "Story-ingestion self-test")
+        .replace("{{PILLAR}}", "Core")
+        .replace("status: backlog", f"status: {status}")
+    )
+
+
+def self_test() -> tuple[list[str], int]:
+    """Replay the case this check exists for, and the ways of faking it that must not work.
+
+    Returns the failed claims and how many were put — the count is printed on success, so deleting
+    a case is a number that moved rather than a silence nobody can see.
+    """
     failures: list[str] = []
+    cases = 0
 
     def check(claim: str, held: bool) -> None:
+        nonlocal cases
+        cases += 1
         if not held:
             failures.append(claim)
 
@@ -1339,6 +1518,37 @@ def self_test() -> list[str]:
         == [],
     )
 
+    # `CF-27`: the two rules have different reach. *Enumerate or exclude* is `docs/specs/`'s duty
+    # alone — a design that registers nothing is the normal case, not an omission — but *registered
+    # and excluded* is a contradiction in either tree, and `EXCLUDED` names a design today, so the
+    # filter that scoped the whole function to `docs/specs/` made that pair unsayable.
+    design = "docs/designs/extension-framework.md"
+    both_excluded = {
+        "docs/specs/owner-rpc.md": {"story": "AF-7", "reason": "x"},
+        design: {"story": "AF-7", "reason": "x"},
+    }
+    check(
+        "a design that is only excluded passes — enumeration is docs/specs/'s duty",
+        unenumerated_specs(tree, on_record, both_excluded, spec_statuses) == [],
+    )
+    check(
+        "a design in neither registry is not an omission",
+        unenumerated_specs(
+            tree,
+            on_record,
+            {"docs/specs/owner-rpc.md": {"story": "AF-7", "reason": "x"}},
+            spec_statuses,
+        )
+        == [],
+    )
+    contradicted = unenumerated_specs(
+        tree, on_record | {design}, both_excluded, spec_statuses
+    )
+    check(
+        "an excluded design that gains a registration is the same contradiction, and refused",
+        len(contradicted) == 1 and design in contradicted[0],
+    )
+
     # Registration must not be nominal: a prefix with no rows behind it silences the enumeration
     # while adding nothing to the denominator, which reads as covered in exactly the direction
     # nobody checks.
@@ -1378,19 +1588,121 @@ def self_test() -> list[str]:
         "an unbackticked name is prose, not a claim",
         SCENARIO_LINE.match("| owner rpc delivers cross node | none | claim |") is None,
     )
-    return failures
+    check(
+        "a parenthesized rule-table scenario is recognised and named without its call syntax",
+        (
+            scenario := SCENARIO_LINE.match(
+                "| `owner_rpc_delivers()` | remote owner | request reaches the connection |"
+            )
+        )
+        is not None
+        and scenario.group(1) == "owner_rpc_delivers",
+    )
+
+    # `CF-27`'s ingestion boundary, using complete story documents rather than a pair of fields.
+    # Every valid status must register unchanged: testing only `done` would turn the old denylist
+    # into a different denylist, and this story is specifically about making the vocabulary closed.
+    for status in LIFECYCLE_STATUSES:
+        found, status_problems = ingest_story(
+            f"CF-999-{status}-fixture.md", story_fixture(status)
+        )
+        check(
+            f"the lifecycle status `{status}` is accepted from a complete story",
+            found == ("CF-999", status) and status_problems == [],
+        )
+
+    bad_name = "CF-999-invalid-status-fixture.md"
+    found, status_problems = ingest_story(bad_name, story_fixture("don"))
+    check(
+        "a complete story with `status: don` makes the gate red and names its file",
+        found == ("CF-999", "don")
+        and len(status_problems) == 1
+        and bad_name in status_problems[0]
+        and "`status: don`" in status_problems[0],
+    )
+
+    commented_name = "CF-999-commented-invalid-status-fixture.md"
+    found, status_problems = ingest_story(commented_name, story_fixture("don # typo"))
+    check(
+        "an invalid status with a YAML comment is parsed, refused, and named",
+        found == ("CF-999", "don")
+        and len(status_problems) == 1
+        and commented_name in status_problems[0]
+        and "`status: don`" in status_problems[0],
+    )
+
+    mapping_name = "CF-999-mapping-status-fixture.md"
+    found, status_problems = ingest_story(mapping_name, story_fixture("{bad: value}"))
+    check(
+        "a structured status fails closed instead of disappearing from ingestion",
+        found == ("CF-999", "{bad: value}")
+        and len(status_problems) == 1
+        and mapping_name in status_problems[0],
+    )
+
+    empty_name = "CF-999-empty-status-fixture.md"
+    found, status_problems = ingest_story(empty_name, story_fixture(""))
+    check(
+        "an empty status fails closed instead of disappearing from ingestion",
+        found == ("CF-999", "<empty>")
+        and len(status_problems) == 1
+        and empty_name in status_problems[0],
+    )
+
+    quoted_name = "CF-999-quoted-valid-status-fixture.md"
+    found, status_problems = ingest_story(quoted_name, story_fixture('"done"'))
+    check(
+        "a quoted valid YAML status is normalized and accepted",
+        found == ("CF-999", "done") and status_problems == [],
+    )
+
+    # The template itself is infrastructure, not a backlog story. An unfilled *copy* is different:
+    # it has a story filename but still no conforming id, and must be refused rather than silently
+    # becoming the live owner of rows addressed to `{{ID}}`.
+    check(
+        "the pinned story-ingestion shape is the complete repository template",
+        STORY_TEMPLATE == (STORIES / "_TEMPLATE.md").read_text(encoding="utf-8"),
+    )
+    template, template_problems = ingest_story("_TEMPLATE.md", STORY_TEMPLATE)
+    check(
+        "the complete story template is excluded from story ingestion",
+        template is None and template_problems == [],
+    )
+    phantom_letters = dead_letters(
+        {"CC-D-1": {"story": "{{ID}}", "reason": "x"}}, "deferred", {}, {}
+    )
+    check(
+        "a deferral naming the template placeholder is refused as no story",
+        len(phantom_letters) == 1 and "no story in docs/stories/" in phantom_letters[0],
+    )
+    copy_name = "CF-999-unfilled-template-copy.md"
+    copied, copy_problems = ingest_story(copy_name, STORY_TEMPLATE)
+    check(
+        "a complete but unfilled template copy is refused by file name",
+        copied is None
+        and len(copy_problems) == 1
+        and copy_name in copy_problems[0]
+        and "`id: {{ID}}`" in copy_problems[0],
+    )
+
+    return failures, cases
 
 
 def main() -> int:
     check_only = "--check" in sys.argv
 
-    if failures := self_test():
+    failures, self_test_cases = self_test()
+    if failures:
         for failure in failures:
             print(f"self-test: {failure}")
         print(f"\nvectors: FAIL — the check cannot detect what it was built to detect")
         return 1
     if "--self-test" in sys.argv:
-        print("vectors: self-test passed — the PB-F-1 case as of 7d21a22 is refused")
+        print(
+            f"vectors: self-test passed — {self_test_cases} pinned cases cover the PB-F-1 "
+            f"proof parser, vector and scenario shapes, live ledger ownership, registry "
+            f"enumeration, and story status/id ingestion"
+        )
         return 0
 
     rows = spec_rows()
@@ -1409,8 +1721,11 @@ def main() -> int:
     problems += rowless_registrations(rows, SPECS)
 
     # `CF-24`. Both ledgers are checked against the board's own `status` field, so "deferred with a
-    # reason" means a reason with somebody still behind it.
-    statuses = story_statuses()
+    # reason" means a reason with somebody still behind it. `CF-27` added the second return value:
+    # that field is only worth reading if it is one of the five values the lifecycle has, and both
+    # rules below fail *open* on anything else.
+    statuses, status_problems = story_statuses()
+    problems += status_problems
     authors, author_problems = spec_authors()
     problems += author_problems
     problems += dead_letters(waived, "deferred", statuses, authors)

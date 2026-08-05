@@ -3,8 +3,9 @@
 //! Faults are **not a third mechanism**. The topology sets per-link defaults; a schedule overrides
 //! them in time windows; that is the whole model
 //! ([conformance-harness](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/conformance-harness.md)).
-//! A partition is `partitioned` turned on for the links that cross a cut. Killing a node is that
-//! on every link it has, plus dropping the timers it was waiting for. Nothing here reaches past
+//! A partition is `partitioned` turned on for the links that cross a cut. Killing a node gives
+//! every link it has the same cut outcome, as an overlay that preserves the link's own policy for
+//! a later restart, plus dropping the timers it was waiting for. Nothing here reaches past
 //! [`crate::net`] to invent a second way for a message to go missing, because two mechanisms that
 //! can both drop a packet eventually disagree about whether one was dropped.
 //!
@@ -147,7 +148,8 @@ pub enum Fault {
     /// schedule that stalls a node and cuts its links in the same window is asking for two
     /// contradictory things and gets the stall; [`Fault::Reconnect`], [`Fault::RestartNode`] and
     /// [`Fault::KillNode`] each discard what was held, because a connection that is gone took its
-    /// buffer with it.
+    /// buffer with it. A `StopReading` scheduled *after* `KillNode` cannot recreate that buffer:
+    /// death dominates backpressure in either event order.
     StopReading(NodeId),
 
     /// Read again: everything held for this node goes out, in the order it was written.

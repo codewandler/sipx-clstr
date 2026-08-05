@@ -1,7 +1,7 @@
 # Design: Conformance & deterministic harness
 
 **Status:** accepted — CF-1 decided the harness; CF-5 realizes it · **Pillar:** Platform ·
-**Epic:** `conformance-harness` · **Stories:** CF-1 … CF-6
+**Epic:** `conformance-harness` · **Stories:** CF-1 … CF-6 · CF-28
 
 ## Why
 
@@ -66,10 +66,16 @@ the connection, surfacing as a transport-error input (§16.9, PB-R-9). The knob 
 
 Knobs are **per-link defaults set by the topology; the fault schedule overrides them in time
 windows** — no third mechanism. `Partition({e0}, {e1, loc}, 3s..9s)` is a scheduled override of
-`partitioned` on the crossing links; `KillNode(e0)` partitions every link of a node permanently
-and drops its pending timers; timer skew is a per-node rate multiplier applied when translating
-`SetTimer` durations. The dataplane's 5-tuple stickiness (DP-2) is modeled by an LB actor owning
-the flow→edge map, and a **stickiness miss is a fault like any other**: a scheduled
+`partitioned` on the crossing links. `KillNode(e0)` marks the node stopped, drops its pending
+timers and makes dispatch ask each incident link for that transport's cut outcome; it deliberately
+does **not** overwrite the link's own policy, so `RestartNode(e0)` removes the stopped-node overlay
+and exposes exactly the partition, loss and latency policy the schedule independently arranged.
+The delivery decision still belongs to the link — datagrams drop and streams break — rather than
+to a second packet-loss path in the scheduler. A live `StopReading` endpoint intercepts a write
+before link weather, but a killed endpoint has no receive buffer, so death dominates the stall no
+matter which fault was scheduled first. Timer skew is a per-node rate multiplier applied when
+translating `SetTimer` durations. The dataplane's 5-tuple stickiness (DP-2) is modeled by an LB actor
+owning the flow→edge map, and a **stickiness miss is a fault like any other**: a scheduled
 `RemapFlow(flow, edge)` action, or a probabilistic `stickiness_miss` rate on the LB. PB-A-1 is
 then literal: INVITE delivered to edge-0; `RemapFlow` fires; the retransmission lands on edge-1;
 the scenario asserts the duplicate-fork counter incremented and stays within the bound the
@@ -255,3 +261,9 @@ green in CI against the reference deployment.
 independently implemented peer. `CF-20` makes proof discovery fail closed: a vector counts only when
 an enabled test is listed and executed, while the e2e assertion requires exactly one observable UDP
 socket owned by the node and treats unavailable or ambiguous inspection as failure.
+
+`CF-28` makes connection-fault composition explicit: a kill is stopped-node state whose incident
+links produce their ordinary cut result without losing their independently scheduled policy, and a
+dead process cannot later acquire backpressure state. Considered for upstream: **no** — this is the
+local multi-node simulator and fault-schedule interpreter identified as local in the component split
+above; it changes no protocol-generic kernel or testkit primitive.

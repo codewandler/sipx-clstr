@@ -26,6 +26,9 @@ postgres = ["dep:postgres", "dep:serde_json", "sipx-clstr-registrar/serde", "sip
 
 [dev-dependencies]
 bytes.workspace = true
+# RG-18's wire test answers the registrar's real digest challenge with the kernel's client-side
+# responder. Reimplementing the hash in a fixture would only prove that two local copies agree.
+sipx-ua.workspace = true
 
 [dependencies]
 bytes.workspace = true

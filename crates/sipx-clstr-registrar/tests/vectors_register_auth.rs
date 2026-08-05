@@ -13,7 +13,10 @@ use bytes::Bytes;
 use sipx_clstr_registrar::auth::{
     Algorithm, AuthOutcome, CredentialStore, Decision, InMemoryCredentials, Reason, TenantAuth,
 };
-use sipx_clstr_registrar::{Admission, EdgeContext, Timestamp, admit_audited};
+use sipx_clstr_registrar::{
+    Admission, CanonicalAor, EdgeContext, OpenRegistrationPolicy, RegistrationAuthorizations,
+    RegistrationPolicy, RequestAuthority, Timestamp, admit_audited,
+};
 use sipx_sip::{HeaderName, Method, Request, RequestBuilder, Uri};
 use sipx_ua::auth::{Challenge, Credentials, respond};
 
@@ -35,6 +38,26 @@ fn credentials() -> InMemoryCredentials {
 
 fn tenant() -> TenantAuth {
     TenantAuth::required(TENANT, REALM, SECRET)
+}
+
+#[derive(Debug)]
+struct AlicePolicy(RegistrationAuthorizations);
+
+impl RegistrationPolicy for AlicePolicy {
+    fn serves(&self, _tenant: &str, _authority: &RequestAuthority) -> bool {
+        true
+    }
+
+    fn authorizes(&self, _tenant: &str, principal: Option<&[u8]>, aor: &CanonicalAor) -> bool {
+        self.0.authorizes(principal, aor)
+    }
+}
+
+fn alice_policy() -> AlicePolicy {
+    AlicePolicy(RegistrationAuthorizations::restricted().allow(
+        Bytes::from(format!("{TENANT}:{USER}")),
+        CanonicalAor::parse(Bytes::from_static(b"sip:alice@atlanta.example")).expect("Alice's AoR"),
+    ))
 }
 
 fn register(authorization: Option<(HeaderName, &str)>) -> Request {
@@ -639,6 +662,7 @@ fn ra_l_4_a_success_is_still_reported_when_the_message_then_fails_to_parse() {
         &request,
         &mut auth,
         &credentials(),
+        &alice_policy(),
         &EdgeContext::default(),
         Timestamp::from_secs(T0),
     );
@@ -653,11 +677,16 @@ fn ra_l_4_a_success_is_still_reported_when_the_message_then_fails_to_parse() {
     );
     assert_eq!(
         outcome,
-        AuthOutcome::Authenticated(Bytes::from(format!("{TENANT}:{USER}"))),
+        Some(AuthOutcome::Authenticated(Bytes::from(format!(
+            "{TENANT}:{USER}"
+        )))),
         "§3 decided A5, and its outcome must not depend on what happened after it"
     );
     // §9 L2 — and the words of the record carry nothing the far end sent.
-    assert_eq!(outcome.describe(), "the digest matched");
+    assert_eq!(
+        outcome.as_ref().map(AuthOutcome::describe),
+        Some("the digest matched")
+    );
 }
 
 /// The same shape one step down: an **open** tenant (§3 A1) whose message then fails to parse still
@@ -671,12 +700,13 @@ fn ra_l_4_an_open_tenant_still_reports_unauthenticated_when_the_message_fails_to
         &request,
         &mut open,
         &credentials(),
+        &OpenRegistrationPolicy,
         &EdgeContext::default(),
         Timestamp::from_secs(T0),
     );
 
     assert!(matches!(admission, Admission::Reject(_)), "{admission:?}");
-    assert_eq!(outcome, AuthOutcome::Unauthenticated);
+    assert_eq!(outcome, Some(AuthOutcome::Unauthenticated));
 }
 
 /// Every §3 outcome maps to exactly one audit record (§9 L1), and every one describes itself with a

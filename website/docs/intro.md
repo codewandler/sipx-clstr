@@ -50,7 +50,7 @@ the two**, and that is the next thing that has to exist.
 | **Transports** | UDP and TCP on one listener; outbound target resolution returns a UDP target and refuses a hostname outright, so there is no RFC 3263 and nothing selects a transport (`RT-12`) | today, partly |
 | **Media** | Flows directly between endpoints; the platform never touches RTP | today |
 | **Configuration** | One cluster-scoped document in YAML, JSON or TOML; refuses to start rather than apply half of it | today |
-| **Tenant policy** | Served domains (`403` for any other), the per-AoR binding quota, the expiry bounds, and a bound on in-flight transactions (`503` above it) | today |
+| **Tenant policy** | Served domains (`404` when the Request-URI or AoR names another), the per-AoR binding quota, the expiry bounds, and a bound on in-flight transactions (`503` above it) | today |
 | **Two nodes, one registrar** | A shared PostgreSQL location service: register through one node, be called through another | today |
 | **Digest authentication** | Implemented, vector-proved, and applied from `tenant[].auth` — but there is no user-credential store, so a document asking for it is refused or challenges nobody | today, partly |
 | **One address in front of the cluster** | Needs affinity tokens: each node record-routes its own address, so in-dialog requests must return to it | specified, not shipped |

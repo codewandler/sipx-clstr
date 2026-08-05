@@ -141,11 +141,12 @@ tenant:
       max: 86400
 ```
 
-- **`domains`** are served domains. A `REGISTER` whose address-of-record is in any other domain is
-  answered **`403`** — well-formed, understood, declined. Comparison is byte-exact, because folding
-  case here would make two domains one. A tenant that declares **no** `domains` serves any.
-- **`maxBindingsPerAor`** is a quota, enforced before the store is touched. `0` is refused: a tenant
-  that can register nothing is a disabled tenant spelled as a limit.
+- **`domains`** are served domains. A `REGISTER` whose Request-URI or address-of-record names any
+  other domain is answered **`404`**. Comparison uses parsed SIP hosts: hostname case and an explicit
+  port do not create another domain, while a hostname never becomes the IP address it resolves to.
+  A tenant that declares **no** `domains` serves any.
+- **`maxBindingsPerAor`** is a quota applied to the binding set read from the store. `0` is refused:
+  a tenant that can register nothing is a disabled tenant spelled as a limit.
 - **`expiry`** bounds the granted lease. A `min` above the `max` is refused rather than reordered.
 
 Absent keys keep the location service's own defaults rather than restating a different one here.

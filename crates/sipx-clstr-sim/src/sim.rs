@@ -52,8 +52,10 @@ pub struct Sim {
     budget: u64,
     started: bool,
     /// Nodes a `KillNode` fault has stopped. A killed node performs no effects and receives no
-    /// inputs; its links are cut as well, so this is belt and braces — but the belt is what makes
-    /// "stopped" different from "unreachable", and the two failures behave differently.
+    /// inputs; dispatch treats every link involving it as cut as well, so this is belt and braces
+    /// — but the belt is what makes "stopped" different from "unreachable", and the two failures
+    /// behave differently. Keeping that cut as an overlay rather than changing link policy is what
+    /// lets a restart reveal exactly the partition policy that was already there.
     killed: BTreeSet<NodeId>,
     /// Per-node timer rate in per-mille, for nodes a `TimerSkew` fault has touched. Absent means
     /// nominal; the map stays empty in every scenario that never skews a clock.
@@ -299,16 +301,11 @@ impl Sim {
         match fault {
             Fault::KillNode(node) => {
                 self.killed.insert(*node);
-                // Every link, both ways. A node that is down is unreachable from either side, and
-                // cutting only outbound would leave it silently absorbing traffic.
-                let peers: Vec<NodeId> = (0..self.nodes.len()).map(NodeId).collect();
-                for peer in peers {
-                    if peer == *node {
-                        continue;
-                    }
-                    self.set_partitioned(*node, peer, true);
-                    self.set_partitioned(peer, *node, true);
-                }
+                // Dispatch treats every link involving the node as cut, both ways. A node that is
+                // down is unreachable from either side, and cutting only outbound would leave it
+                // silently absorbing traffic. This is an overlay on link policy rather than a
+                // rewrite of it: a restart removes the kill and exposes exactly the partition or
+                // policy the scenario arranged independently.
                 // The timers it was waiting for never fire. This is what separates a kill from an
                 // isolation: an isolated node keeps running and keeps timing out. `forget_matching`
                 // drops the generations outright, so the entries still in the queue match nothing
@@ -317,6 +314,7 @@ impl Sim {
                 // A process that is gone took its socket buffers with it (`CF-26`). Nothing here
                 // unless a `StopReading` fault was also in play, which is why it is a discard
                 // rather than a heal.
+                self.not_reading.remove(node);
                 self.discard_held_involving(*node);
             }
             Fault::Partition { a, b } => self.cut_between(a, b, true),
@@ -338,7 +336,12 @@ impl Sim {
             Fault::Reconnect { a, b } => self.reconnect(*a, *b),
             Fault::RestartNode(node) => self.restart(*node),
             Fault::StopReading(node) => {
-                self.not_reading.insert(*node);
+                // A dead process cannot become a non-reading process after the fact. This guard is
+                // the schedule-order half of kill-beats-stall; `send` repeats the invariant at the
+                // dataplane boundary so stale bookkeeping can never intercept a killed link.
+                if !self.killed.contains(node) {
+                    self.not_reading.insert(*node);
+                }
             }
             Fault::ResumeReading(node) => self.resume_reading(*node),
         }
@@ -372,7 +375,7 @@ impl Sim {
 
     /// Stop a node and start it again as a new process, under a fresh incarnation (`CF-26`).
     fn restart(&mut self, node: NodeId) {
-        let was_killed = self.killed.remove(&node);
+        self.killed.remove(&node);
         // The timers of the run that ended never fire. Same reasoning as a kill: they belong to a
         // process that no longer exists.
         self.timers.forget_matching(|(owner, _)| owner == &node);
@@ -386,13 +389,10 @@ impl Sim {
             // one and still on its way.
             self.bump_connection(node, *peer);
             self.bump_connection(*peer, node);
-            if was_killed {
-                // Undo exactly what the kill did. A restart of a node nothing stopped is a bounce,
-                // and leaves whatever weather the scenario arranged in place.
-                self.set_partitioned(node, *peer, false);
-                self.set_partitioned(*peer, node, false);
-            }
         }
+        // A restarted process is not the process a StopReading fault stalled. Its unread socket
+        // buffers are discarded below; later writes go to the replacement process normally.
+        self.not_reading.remove(&node);
         self.discard_held_involving(node);
 
         // The peers whose connection just went away find out; a datagram peer had none to lose.
@@ -783,7 +783,11 @@ impl Sim {
         // this node's buffer, and the sender is told so rather than told nothing. Checked before
         // the link, and consuming no randomness, so a write that never left cannot shift what the
         // rest of the topology draws.
-        if self.not_reading.contains(&to) {
+        // StopReading beats ordinary link weather only while both endpoints are running. A kill
+        // beats a stall in either event order: a dead process has no receive buffer, and the link
+        // must report its cut outcome rather than silently accumulating writes for it.
+        let endpoint_killed = self.killed.contains(&from) || self.killed.contains(&to);
+        if !endpoint_killed && self.not_reading.contains(&to) {
             self.held.entry(to).or_default().push(HeldWrite {
                 from,
                 bytes,
@@ -810,7 +814,13 @@ impl Sim {
     fn dispatch(&mut self, from: NodeId, to: NodeId, bytes: Bytes, summary: String) {
         let name = self.name_of(from).to_owned();
         let now = self.now;
-        let decision = self.link_between(from, to).decide(now);
+        let killed = self.killed.contains(&from) || self.killed.contains(&to);
+        let link = self.link_between(from, to);
+        let decision = if killed {
+            link.cut_outcome()
+        } else {
+            link.decide(now)
+        };
         let connection = self.connection_of(from, to);
 
         match decision {

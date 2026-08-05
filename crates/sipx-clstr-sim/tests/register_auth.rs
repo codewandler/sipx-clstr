@@ -22,8 +22,8 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use sipx_clstr_registrar::{
-    Admission, CanonicalAor, InMemoryCredentials, InMemoryStore, LocationStore, TenantAuth,
-    TenantPolicy, Timestamp, admit, apply,
+    Admission, CanonicalAor, InMemoryCredentials, InMemoryStore, LocationStore, RegistrationPolicy,
+    RequestAuthority, TenantAuth, TenantPolicy, Timestamp, admit, apply,
 };
 use sipx_clstr_sim::node::{Effect, Input, SimNode, TimerId, send};
 use sipx_clstr_sim::{LinkKind, LinkPolicy, NodeId, Sim, SimTime};
@@ -59,6 +59,21 @@ const FRESH_CALL_ID: &str = "not-a-call-id-this-aor-has-seen";
 
 fn uri(text: &str) -> Uri {
     Uri::parse(Bytes::copy_from_slice(text.as_bytes())).expect("a valid URI")
+}
+
+#[derive(Debug)]
+struct ScenarioPolicy;
+
+impl RegistrationPolicy for ScenarioPolicy {
+    fn serves(&self, tenant: &str, _authority: &RequestAuthority) -> bool {
+        tenant == TENANT
+    }
+
+    fn authorizes(&self, tenant: &str, principal: Option<&[u8]>, aor: &CanonicalAor) -> bool {
+        tenant == TENANT
+            && aor == &Edge::aor()
+            && principal.is_none_or(|principal| principal == b"t1:alice")
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -145,7 +160,14 @@ impl Edge {
 
         // registrar-auth §2 — the decision runs *before* anything becomes a command, which is what
         // makes "nothing was stored" true of a challenged request rather than merely likely.
-        let cmd = match admit(request, &mut self.auth, &self.credentials, &context, clock) {
+        let cmd = match admit(
+            request,
+            &mut self.auth,
+            &self.credentials,
+            &ScenarioPolicy,
+            &context,
+            clock,
+        ) {
             Admission::Challenge(challenge) => {
                 self.admissions.push(Verdict::Challenged {
                     stale: challenge.stale,

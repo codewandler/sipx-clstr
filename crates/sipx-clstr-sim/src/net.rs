@@ -7,8 +7,9 @@
 //! messages; it fails by breaking, which surfaces as a transport error (RFC 3261 §16.9).
 //!
 //! Faults are not a third mechanism: a partition is a scheduled override of `partitioned` on the
-//! crossing links, and a node kill is that on every link of a node. `CF-4` adds the scheduling;
-//! this module is what a schedule acts on.
+//! crossing links, and a node kill applies the same [`Link::cut_outcome`] to every link of a node
+//! without overwriting policy that must reappear after a restart. `CF-4` adds the scheduling; this
+//! module still owns every way a link decides that bytes do not arrive.
 
 use std::fmt;
 use std::time::Duration;
@@ -199,10 +200,7 @@ impl Link {
     /// genuinely uncertain.
     pub(crate) fn decide(&mut self, now: crate::time::SimTime) -> Delivery {
         if self.policy.partitioned {
-            return match self.kind {
-                LinkKind::Datagram => Delivery::Dropped,
-                LinkKind::Stream => Delivery::Broken,
-            };
+            return self.cut_outcome();
         }
 
         if self.kind == LinkKind::Datagram && self.rng.chance(self.policy.loss) {
@@ -239,6 +237,14 @@ impl Link {
         }
 
         Delivery::Once(first)
+    }
+
+    /// The deterministic result of cutting this transport, shared by partitions and node kills.
+    pub(crate) const fn cut_outcome(&self) -> Delivery {
+        match self.kind {
+            LinkKind::Datagram => Delivery::Dropped,
+            LinkKind::Stream => Delivery::Broken,
+        }
     }
 }
 

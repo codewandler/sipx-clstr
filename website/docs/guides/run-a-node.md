@@ -45,9 +45,9 @@ it in a `Record-Route` would accept calls that could never be transferred or hun
 A `transport` this build cannot serve — `tls`, `ws`, `wss` — is **refused**, not quietly downgraded to
 cleartext.
 
-The tenant carries what the registrar enforces: its served `domains` (a `REGISTER` for any other is
-answered `403`), its `maxBindingsPerAor` quota and its `expiry` bounds. Leaving `domains` out serves
-any domain.
+The tenant carries what the registrar enforces: its served `domains` (a `REGISTER` whose
+Request-URI or address-of-record names any other domain is answered `404`), its
+`maxBindingsPerAor` quota and its `expiry` bounds. Leaving `domains` out serves any domain.
 
 :::danger Do not put this on a public address
 The listener above is the one this page is about — a public bind, advertised to a routable address —

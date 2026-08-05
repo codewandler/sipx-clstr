@@ -47,7 +47,7 @@ anyway.
 | That location table kept in a database | A PostgreSQL location store, named in the document — behind the non-default `postgres` cargo feature, without which a node asking for it refuses to start | today |
 | Registrations spread across nodes, readable by all of them | One shared location service behind two nodes. Sharding by rendezvous hash is the next step and is not shipped | today, partly |
 | A digest challenge on `REGISTER` | The registrar-auth rules, vector-proved and applied from `tenant[].auth` — with no user-credential store behind them yet | today, partly |
-| Per-domain and per-user limits on registration | The tenant's served `domains` (`403` for any other), its `maxBindingsPerAor` quota, and its `expiry` bounds | today |
+| Per-domain and per-user limits on registration | The tenant's served `domains` (`404` when the Request-URI or AoR names any other), its `maxBindingsPerAor` quota, and its `expiry` bounds | today |
 | UDP and TCP listeners | One listener carrying both | today |
 | The request-routing script | Typed modules with declared hook phases, dependencies and conflicts; a deployment profile selects a provably compatible set | specified, not shipped |
 | Per-customer branches inside that script | Nothing. Routing policy is composed from modules, and a routing configuration language is a stated non-goal | not planned |

@@ -53,9 +53,9 @@ and every binding is gone. `backend: postgres` is the shared location service: i
 and two nodes reading it are one registrar. It needs the non-default `postgres` cargo feature, and a
 node asking for it without the feature refuses to start rather than quietly using its own memory.
 
-Before the store is touched, the tenant's policy applies: a `REGISTER` for a domain the tenant does
-not serve is answered **`403`**, the per-AoR binding quota is enforced, and the granted expiry is
-clamped to the tenant's bounds.
+Before the store is touched, the tenant refuses a `REGISTER` whose Request-URI or address-of-record
+names a domain it does not serve with **`404`**. Once the current binding set is read, the per-AoR
+quota is enforced and the granted expiry is clamped to the tenant's bounds.
 
 What is *not* enforced is who you are. The digest code is implemented, proved against the RFCs' own
 vectors, and applied from `tenant[].auth` — but there is no user-credential store, so a document

@@ -238,6 +238,31 @@ Steps run in order; the first failure responds and terminates with nothing commi
 | S10 | Atomic commit via CAS; on conflict re-read and re-process, bounded retries (default 3, configurable) | `503 Service Unavailable` when the authoritative read fails (§6 K7), when the store is unreachable, or when retries exhaust — **[sipx-clstr]**; this 503 is originated by the registrar UAS, not a branch response, so proxy-behavior R8 does not apply to it |
 | S11 | `200 OK` with the complete active set (step 8, §5.6) | — |
 
+#### 5.1.1 Admission facts and policy
+
+S1 and S4 are admission decisions, not store operations. They run before the authoritative read,
+and neither may be reconstructed from a `RegisterCommand` after the fact:
+
+- **A1. Request authority is its own fact.** S1 reads the parsed Request-URI's `scheme`, `host` and
+  optional `port` through the kernel's typed URI accessors. It does not read `To`, canonicalize the
+  Request-URI as an AoR, or split serialized URI text. A non-SIP/SIPS Request-URI or one without a
+  host has no registrar authority and is S1's `404`. A user part is irrelevant to the authority;
+  an explicit port remains available to policy; hostnames compare case-insensitively; IP literals
+  compare by their parsed address value. **[sipx-clstr]** The built-in `tenant[].domains` policy is
+  host-scoped, so an explicit Request-URI port does not create a second served domain.
+- **A2. The To AoR stays distinct.** After S3, `To` is parsed and canonicalized with §3. That
+  canonical AoR is the input to S4 and the eventual store key. Whether its typed host belongs to the
+  tenant's served domains is S5, not S1: a served `To` cannot rescue an unserved Request-URI, and a
+  served Request-URI cannot rescue an out-of-domain `To`.
+- **A3. Authorization is an injected, tenant-scoped pure policy.** Its input is exactly
+  `(principal, canonical AoR)` and its output is allow or deny. It receives `None` for an open
+  tenant; permitting that absence is an explicit policy decision, never the absence of a call. A
+  denied decision is S4's `403`, before any location-store read. The principal copied into an
+  admitted command and binding is byte-for-byte the principal the policy approved.
+- **A4. Authorization is not username matching.** Aliases, shared lines and administrative
+  principals make digest username = AoR user neither necessary nor sufficient. Digest verification
+  produces the principal; this policy alone decides which AoRs it may write or wildcard-remove.
+
 ### 5.2 Expiry selection
 
 Per contact, in order (RFC 3261 §10.2.1.1, §10.3 step 7):
@@ -673,6 +698,17 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-C-20 | `tel:+15550101` | reject | not sip/sips (§3.2) |
 | LS-C-21 | `sip:alice%zz@h.example` | reject | malformed escape (N12, kernel) |
 | LS-C-22 | user part whose canonical form exceeds 512 bytes | reject | N13 |
+
+**REGISTER admission (LS-A).** The store is instrumented where a row says it must not be read.
+
+| # | State / request | Expect |
+|---|---|---|
+| LS-A-1 | Served domains `{atlanta.example}`; Request-URI `sip:biloxi.example`; `To: <sip:alice@atlanta.example>` | `404` at S1 before authentication or a store read. The served `To` is a distinct fact and cannot rescue the Request-URI |
+| LS-A-2 | Served domains `{atlanta.example}`; Request-URI `sip:atlanta.example`; `To: <sip:alice@biloxi.example>` | `404` at S5 before a store read. The served Request-URI cannot make an out-of-domain AoR writable |
+| LS-A-3 | Bob has one binding at revision 1. Valid credentials produce principal `t1:alice`; policy denies `(t1:alice, sip:bob@atlanta.example)`. Alice sends first an explicit registration and, from the same fixture, `Contact: *; Expires: 0` for Bob | both `403` at S4; the store is not read and Bob's binding and revision remain byte-identical |
+| LS-A-4 | Open tenant; authentication produces `principal: None`; policy explicitly permits `(None, sip:alice@atlanta.example)` | admitted; the command and successful binding carry `principal: None`. Removing the explicit open-policy decision makes the same request `403` |
+| LS-A-5 | A policy records the Request authority presented to it: userless `sip:EXAMPLE.test:5070`, user-bearing `sip:registrar@EXAMPLE.test:5070`, `sip:[2001:DB8::1]:5070`, and `tel:+15550101` | the first two yield the same hostname plus port 5070; the IPv6 form yields parsed `2001:db8::1` plus port 5070; the non-SIP URI is `404` and no policy call is made. No result depends on splitting URI text |
+| LS-A-6 | Authentication produces `t1:alice`; policy permits exactly `(t1:alice, sip:line-one@atlanta.example)`; the REGISTER succeeds | the binding's `principal` bytes are exactly `t1:alice`, not the AoR user, an alias derived from it, or a second policy result |
 
 **REGISTER / CAS commands (LS-R).** Fixture: tenant `t1`, AoR key K; contacts CA, CB, CC.
 

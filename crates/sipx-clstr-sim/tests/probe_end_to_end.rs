@@ -88,7 +88,12 @@ impl Edge {
             tenant: TENANT.to_owned(),
             ..EdgeContext::default()
         };
-        let Ok(cmd) = register_command(request, &context, self.now) else {
+        let Ok(cmd) = register_command(
+            request,
+            &sipx_clstr_registrar::OpenRegistrationPolicy,
+            &context,
+            self.now,
+        ) else {
             return vec![reply(from, request, 400)];
         };
         let applied = apply(&self.store, &cmd, &self.policy, 3);

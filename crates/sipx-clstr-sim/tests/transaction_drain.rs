@@ -411,7 +411,12 @@ impl Edge {
             tenant: TENANT.to_owned(),
             ..EdgeContext::default()
         };
-        let command = match register_command(request, &context, self.now) {
+        let command = match register_command(
+            request,
+            &sipx_clstr_registrar::OpenRegistrationPolicy,
+            &context,
+            self.now,
+        ) {
             Ok(command) => command,
             Err(rejection) => {
                 return (

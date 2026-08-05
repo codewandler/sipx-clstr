@@ -21,10 +21,11 @@ use sipx_clstr_proxy::{
 };
 use sipx_clstr_registrar::{
     Admission, AuthOutcome, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore,
-    LocationStore, TenantAuth, TenantPolicy, Timestamp, admit_audited, apply,
+    LocationStore, RegistrationAuthorizations, RegistrationPolicy, RequestAuthority, TenantAuth,
+    TenantPolicy, Timestamp, admit_audited, apply,
 };
 use sipx_sip::{
-    HeaderName, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
+    HeaderName, Host, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
 };
 use sipx_transport::{Handle, Incoming, Responses, Target, TransportKind};
 use tokio::task::JoinSet;
@@ -63,11 +64,16 @@ pub struct NodeConfig {
     /// Was `TenantPolicy::default()` regardless of the document until `FC-4`, so a
     /// `maxBindingsPerAor: 3` loaded clean and the effective cap stayed 10.
     pub policy: TenantPolicy,
-    /// The domains this tenant serves (location-service §5.1 S1). Empty means any.
+    /// The domains this tenant serves (location-service §5.1 S1/S5). Empty means any.
     ///
     /// Enforced since `FC-4`. It parsed into a struct field nothing read for a release, so a
     /// `REGISTER` for `alice@attacker.invalid` against `domains: [example.test]` was answered `200`.
     pub domains: Vec<String>,
+    /// Which authenticated principals may write which canonical `AoRs` (`RG-18`, S4).
+    ///
+    /// Separate from digest credentials deliberately: authentication proves an identity; aliases,
+    /// shared lines and administrators mean only this policy can decide what it may register.
+    pub registration_authorizations: RegistrationAuthorizations,
     /// Where registrations live (`RG-12`).
     ///
     /// In-process by default, which is the only thing a single node needs. Two nodes that must agree
@@ -166,6 +172,7 @@ impl NodeConfig {
             auth: None,
             policy: TenantPolicy::default(),
             domains: Vec::new(),
+            registration_authorizations: RegistrationAuthorizations::open(),
             store: StoreChoice::InMemory,
             max_in_flight_transactions: crate::config::DEFAULT_MAX_IN_FLIGHT_TRANSACTIONS,
             timer_c: sipx_clstr_proxy::DEFAULT_TIMER_C,
@@ -215,6 +222,29 @@ impl NodeConfig {
             .as_ref()
             .map(|auth| auth.credentials.clone())
             .unwrap_or_default()
+    }
+}
+
+impl RegistrationPolicy for NodeConfig {
+    fn serves(&self, tenant: &str, authority: &RequestAuthority) -> bool {
+        if tenant != self.tenant {
+            return false;
+        }
+        if self.domains.is_empty() {
+            return true;
+        }
+        self.domains.iter().any(|served| {
+            let raw = Bytes::copy_from_slice(served.as_bytes());
+            let Ok((host, _configured_port)) = Host::parse_hostport(&raw) else {
+                // A malformed configured domain can never turn into serve-any at runtime.
+                return false;
+            };
+            host.equivalent(authority.host())
+        })
+    }
+
+    fn authorizes(&self, tenant: &str, principal: Option<&[u8]>, aor: &CanonicalAor) -> bool {
+        tenant == self.tenant && self.registration_authorizations.authorizes(principal, aor)
     }
 }
 
@@ -1048,6 +1078,7 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             &arrival.request,
             &mut auth,
             edge.credentials,
+            edge.config,
             &context,
             now(),
         )
@@ -1056,9 +1087,12 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
     // registrar-auth §9 — the audit trail. Emitted here, from the driver, and not from the decision
     // that produced it: the registrar is sans-IO, and a decision function that logs does an effect
     // the harness cannot replay from a seed. The registrar's job is to produce the fact; this
-    // layer's job is to emit it. Unconditional and before the branch below, so that no path out of
-    // this function can be one that recorded nothing.
-    record_authentication(edge, arrival, &outcome);
+    // layer's job is to emit it. Every request that reached authentication has `Some`; S1 rejects
+    // before authentication and therefore has no authentication fact to record. Emission remains
+    // before the branch below so no post-authentication path can lose its record.
+    if let Some(outcome) = &outcome {
+        record_authentication(edge, arrival, outcome);
+    }
 
     let cmd = match admission {
         Admission::Command(cmd) => *cmd,
@@ -1101,28 +1135,6 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
             );
         }
     };
-
-    // location-service §5.1 S1 — the tenant's served domains (`FC-4`). Checked here, after admission
-    // and before the store, because the address-of-record is only canonical once `admit` has produced
-    // it: the domain that matters is the one the registrar will key the binding under, not whatever
-    // spelling arrived. An empty list means "any", which is the only reading of a document that
-    // declares none that does not break every existing deployment.
-    //
-    // `403`, not `404`: the request is well-formed and understood, and the registrar is declining to
-    // serve it. Byte-exact comparison, no case folding — §4's AoR rule, and folding here would make
-    // two domains one.
-    if !edge.config.domains.is_empty() {
-        let domain = cmd.aor.as_str().rsplit('@').next().unwrap_or_default();
-        if !edge.config.domains.iter().any(|served| served == domain) {
-            tracing::warn!(
-                aor = %cmd.aor.as_str(),
-                domain,
-                tenant = %edge.config.tenant,
-                "refused a REGISTER for a domain this tenant does not serve"
-            );
-            return answer(&arrival.request, 403, "Forbidden");
-        }
-    }
 
     let applied = apply(
         edge.store,

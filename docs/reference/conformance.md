@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**209 of 613 rows proved**; 19 covered for shape only; 385 deferred.
+**215 of 619 rows proved**; 19 covered for shape only; 385 deferred.
 
-Σ over the 61 sections below is 613, so every row counted above is shown in exactly one table.
+Σ over the 62 sections below is 619, so every row counted above is shown in exactly one table.
 
 Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
 
@@ -335,6 +335,17 @@ by a registered prefix's own rows.
 | `LS-C-20` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
 | `LS-C-21` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
 | `LS-C-22` | proved | `crates/sipx-clstr-registrar/src/aor.rs` |
+
+## Location service — REGISTER admission (§5.1)
+
+| Row | Status | Proved by / deferred to |
+|---|---|---|
+| `LS-A-1` | proved | `crates/sipx-clstr-node/tests/register_authorization.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_admission.rs` — asserts `404` |
+| `LS-A-2` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_admission.rs` — asserts `404` |
+| `LS-A-3` | proved | `crates/sipx-clstr-node/tests/register_authorization.rs`, `crates/sipx-clstr-registrar/tests/vectors_register_admission.rs` — asserts `403` |
+| `LS-A-4` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_admission.rs` — asserts `403` |
+| `LS-A-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_admission.rs` — asserts `5070`, `2001`, `1`, `404` |
+| `LS-A-6` | proved | `crates/sipx-clstr-registrar/tests/vectors_register_admission.rs` |
 
 ## Location service — REGISTER processing and the CAS contract (§5)
 

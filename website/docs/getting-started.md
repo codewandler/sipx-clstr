@@ -88,9 +88,10 @@ node writes into `Via` and `Record-Route`, which is what peers use to reach it b
 are the same. Anywhere else they usually are not, and getting it wrong is the most common way to make
 a node that registers phones but never rings them — see [Addressing](guides/addressing.md).
 
-`domains` is enforced: a `REGISTER` whose address-of-record is in a domain this tenant does not serve
-is answered **`403`**. The demo below registers `alice@127.0.0.1`, which is why the tenant declares
-that domain. Declare the domain your phones actually use, or leave `domains` out to serve any.
+`domains` is enforced: a `REGISTER` whose Request-URI or address-of-record names a domain this tenant
+does not serve is answered **`404`**. The demo below registers `alice@127.0.0.1`, which is why the
+tenant declares that domain. Declare the domain your phones actually use, or leave `domains` out to
+serve any.
 
 :::caution This node is open
 This tenant declares no `auth`, so anyone who can reach the port can register any address-of-record in
@@ -256,7 +257,7 @@ and there is not one yet.
 
 Dial it from inside the cluster. The greeting's address-of-record is `hello@10.43.0.60` —
 node-a's Service address, which the profile pins with a static `clusterIP` and also declares as the
-tenant's domain, because `domains` is enforced and a `REGISTER` outside it is answered `403`. One
+tenant's domain, because `domains` is enforced and a `REGISTER` outside it is answered `404`. One
 string has to wear three hats here: `sipx dial` sends to the literal address it is given and
 resolves no names, the tenant's list can only hold what is known before any pod exists, and a
 static `clusterIP` is the one address that is both — declared in the manifest, dialable on the
@@ -273,8 +274,10 @@ kubectl -n sipx-clstr-dev run caller --rm -i --restart=Never \
 ```
 
 ```text
-{"status":"answered","peer":"sip:hello@10.43.0.60","duration_ms":3566,
- "samples_recorded":24000,"heard_audio":true,"loss":0.0000,"jitter_ms":0,"mos":4.40}
+{"status":"answered","peer":"sip:hello@10.43.0.60","media_advertised":"10.42.0.13",
+ "media_bound":"10.42.0.13:58138","duration_ms":3568,"samples_recorded":24000,
+ "heard_audio":true,"loss":0.0000,"packets_lost":0,"jitter_ms":0,"mos":4.40,
+ "recording":"/tmp/heard.wav"}
 ```
 
 **`heard_audio: true`** is the line that matters: 24000 samples of 8 kHz audio arrived, so the call

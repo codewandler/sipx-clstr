@@ -56,7 +56,7 @@ specs in this repository used to carry vector tables the checker had no registra
 340 normative rows that nothing executed, and a fabricated row in one of those families passed the
 gate untouched. Fifteen prefixes across thirteen specifications are now registered, and every file
 under `docs/specs/` is either registered or named as a deliberate exclusion with the story that will
-execute it: **209 of 613 rows proved, 19 covered for shape only, 385 deferred**, each deferral
+execute it: **215 of 619 rows proved, 19 covered for shape only, 385 deferred**, each deferral
 naming what is specifically missing and the story that closes it.
 
 Read that number for what it is. A row proves what a **decision core emits**, never that a socket

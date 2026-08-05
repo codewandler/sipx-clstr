@@ -183,7 +183,12 @@ impl Edge {
         };
         let clock = Timestamp::from_nanos(now.as_nanos());
 
-        let cmd = match register_command(request, &context, clock) {
+        let cmd = match register_command(
+            request,
+            &sipx_clstr_registrar::OpenRegistrationPolicy,
+            &context,
+            clock,
+        ) {
             Ok(cmd) => cmd,
             Err(rejection) => {
                 return vec![reply(from, request, rejection.status(), "Bad Request")];

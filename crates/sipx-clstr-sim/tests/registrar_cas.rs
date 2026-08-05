@@ -79,7 +79,12 @@ impl Edge {
         };
         let clock = Timestamp::from_nanos(now.as_nanos());
 
-        let cmd = match register_command(request, &edge, clock) {
+        let cmd = match register_command(
+            request,
+            &sipx_clstr_registrar::OpenRegistrationPolicy,
+            &edge,
+            clock,
+        ) {
             Ok(cmd) => cmd,
             Err(rejection) => {
                 return vec![

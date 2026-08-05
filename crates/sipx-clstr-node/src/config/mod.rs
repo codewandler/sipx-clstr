@@ -424,9 +424,10 @@ pub struct LocationStoreSpec {
 pub struct TenantSpec {
     pub name: String,
     pub id: u32,
-    /// The domains this tenant serves (location-service §5.1 S1). **Enforced** since `FC-4`: a
-    /// `REGISTER` for an address-of-record outside this list is refused. Empty means "any", which is
-    /// the only backward-compatible reading of a document that declares none.
+    /// The domains this tenant serves (location-service §5.1 S1/S5). **Enforced** since `FC-4` for
+    /// the address of record and since `RG-18` for the distinct Request-URI: a `REGISTER` naming a
+    /// host outside this list in either place is refused. Empty means "any", which is the only
+    /// backward-compatible reading of a document that declares none.
     pub domains: Vec<String>,
     /// Per-tenant expiry policy (location-service §5.2) and the binding quota (§5.5).
     pub policy: TenantPolicySpec,

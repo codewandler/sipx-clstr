@@ -22,6 +22,7 @@ use crate::aor::CanonicalAor;
 use crate::auth::{AuthOutcome, ChallengeResponse, CredentialStore, Decision, TenantAuth};
 use crate::binding::{Push, SourceAddr, Timestamp};
 use crate::command::{ContactOp, ContactOps, RegisterCommand, Rejection};
+use crate::policy::{RegistrationPolicy, RequestAuthority};
 
 /// What the edge knows that the message does not.
 ///
@@ -79,10 +80,11 @@ pub fn admit(
     request: &Request,
     auth: &mut TenantAuth,
     credentials: &impl CredentialStore,
+    policy: &(impl RegistrationPolicy + ?Sized),
     edge: &EdgeContext,
     now: Timestamp,
 ) -> Admission {
-    admit_audited(request, auth, credentials, edge, now).0
+    admit_audited(request, auth, credentials, policy, edge, now).0
 }
 
 /// [`admit`], with the §9 audit record of what §3 decided alongside it.
@@ -96,14 +98,28 @@ pub fn admit(
 /// https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md) §9 L3 exists to
 /// forbid: "an absent record and an unauthenticated one are different facts".
 ///
+/// S1 runs before authentication, so an unserved or malformed Request-URI returns `None`: there was
+/// no authentication decision to audit. Every path that reaches §3 returns `Some` even when later
+/// parsing or authorization rejects the request.
+///
 /// Any driver that keeps an audit trail wants this one; [`admit`] is for callers that do not.
 pub fn admit_audited(
     request: &Request,
     auth: &mut TenantAuth,
     credentials: &impl CredentialStore,
+    policy: &(impl RegistrationPolicy + ?Sized),
     edge: &EdgeContext,
     now: Timestamp,
-) -> (Admission, AuthOutcome) {
+) -> (Admission, Option<AuthOutcome>) {
+    // S1 precedes authentication. The Request-URI authority is its own typed fact: it does not come
+    // from `To`, and neither a user part nor an explicit port is recovered by splitting bytes.
+    let Some(authority) = RequestAuthority::from_uri(&request.uri) else {
+        return (Admission::Reject(Rejection::NotFound), None);
+    };
+    if !policy.serves(auth.tenant(), &authority) {
+        return (Admission::Reject(Rejection::NotFound), None);
+    }
+
     let decision = auth.decide(request, credentials, now.as_secs());
     // Taken **before** the decision is consumed below. Everything after this point can discard the
     // decision freely; the record has already been made.
@@ -124,14 +140,14 @@ pub fn admit_audited(
                 tenant: auth.tenant().to_owned(),
                 ..edge.clone()
             };
-            match command(request, &edge, principal, now) {
+            match command(request, &edge, principal, policy, now) {
                 Ok(cmd) => Admission::Command(Box::new(cmd)),
                 Err(rejection) => Admission::Reject(rejection),
             }
         }
     };
 
-    (admission, outcome)
+    (admission, Some(outcome))
 }
 
 /// Build a command from a REGISTER, or say why it cannot be built.
@@ -140,16 +156,24 @@ pub fn admit_audited(
 /// authenticates calls [`admit`] instead, which is the only way a principal is ever attached.
 pub fn register_command(
     request: &Request,
+    policy: &(impl RegistrationPolicy + ?Sized),
     edge: &EdgeContext,
     now: Timestamp,
 ) -> Result<RegisterCommand, Rejection> {
-    command(request, edge, None, now)
+    // The open path still executes S1 and S4. `principal: None` is a policy input, never a reason to
+    // omit the policy call.
+    let authority = RequestAuthority::from_uri(&request.uri).ok_or(Rejection::NotFound)?;
+    if !policy.serves(&edge.tenant, &authority) {
+        return Err(Rejection::NotFound);
+    }
+    command(request, edge, None, policy, now)
 }
 
 fn command(
     request: &Request,
     edge: &EdgeContext,
     principal: Option<Bytes>,
+    policy: &(impl RegistrationPolicy + ?Sized),
     now: Timestamp,
 ) -> Result<RegisterCommand, Rejection> {
     let call_id = request
@@ -175,6 +199,22 @@ fn command(
     let to = Address::parse(&to, "To").map_err(|_| Rejection::BadRequest("a malformed To"))?;
     let aor = CanonicalAor::from_uri(&to.uri)
         .map_err(|_| Rejection::BadRequest("the To URI is not an address-of-record"))?;
+
+    // S4 — digest proved the optional principal; policy decides what it may write. Byte-exact input
+    // and byte-exact carry-through: no username/AoR shortcut, alias or second identity derivation.
+    if !policy.authorizes(&edge.tenant, principal.as_deref(), &aor) {
+        return Err(Rejection::Forbidden(
+            "the principal is not authorized for the address-of-record",
+        ));
+    }
+
+    // S5's domain decision is about `To`, not the Request-URI S1 already judged. It uses the parsed
+    // URI authority while the canonical AoR above remains the store key and S4 input.
+    let to_authority = RequestAuthority::from_uri(&to.uri)
+        .ok_or(Rejection::BadRequest("the To URI has no SIP authority"))?;
+    if !policy.serves(&edge.tenant, &to_authority) {
+        return Err(Rejection::NotFound);
+    }
 
     let expires_header = request
         .headers
@@ -345,7 +385,33 @@ fn trim(value: &[u8]) -> &[u8] {
 #[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::policy::{
+        OpenRegistrationPolicy, RegistrationAuthorizations, RegistrationPolicy, RequestAuthority,
+    };
     use sipx_sip::{Method, RequestBuilder, Uri};
+
+    #[derive(Debug)]
+    struct TestPolicy(RegistrationAuthorizations);
+
+    impl RegistrationPolicy for TestPolicy {
+        fn serves(&self, _tenant: &str, _authority: &RequestAuthority) -> bool {
+            true
+        }
+
+        fn authorizes(&self, _tenant: &str, principal: Option<&[u8]>, aor: &CanonicalAor) -> bool {
+            self.0.authorizes(principal, aor)
+        }
+    }
+
+    fn alice_policy() -> TestPolicy {
+        TestPolicy(
+            RegistrationAuthorizations::restricted().allow(
+                Bytes::from_static(b"t1:alice"),
+                CanonicalAor::parse(Bytes::from_static(b"sip:alice@atlanta.example"))
+                    .expect("Alice's AoR"),
+            ),
+        )
+    }
 
     fn register(headers: Vec<(HeaderName, &str)>) -> Request {
         let uri = Uri::parse(Bytes::from_static(b"sip:atlanta.example")).unwrap();
@@ -375,15 +441,16 @@ mod tests {
             (HeaderName::Contact, "*"),
             (HeaderName::Contact, "<sip:alice@10.0.0.1>"),
         ]);
-        let error =
-            register_command(&request, &edge(), Timestamp::ZERO).expect_err("W1 must reject this");
+        let error = register_command(&request, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO)
+            .expect_err("W1 must reject this");
         assert_eq!(error.status(), 400);
     }
 
     #[test]
     fn a_lone_wildcard_is_a_wildcard() {
         let request = register(vec![(HeaderName::Contact, "*")]);
-        let cmd = register_command(&request, &edge(), Timestamp::ZERO).unwrap();
+        let cmd =
+            register_command(&request, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO).unwrap();
         assert!(matches!(cmd.contacts, ContactOps::Wildcard));
     }
 
@@ -393,7 +460,8 @@ mod tests {
             HeaderName::Contact,
             "<sip:alice@10.0.0.1;transport=tcp>;expires=1800;q=0.7",
         )]);
-        let cmd = register_command(&request, &edge(), Timestamp::ZERO).unwrap();
+        let cmd =
+            register_command(&request, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO).unwrap();
         let ContactOps::Explicit(ops) = &cmd.contacts else {
             panic!("expected explicit contacts");
         };
@@ -411,7 +479,8 @@ mod tests {
             HeaderName::Contact,
             "<sip:a@10.0.0.1>;q=1.0, <sip:b@10.0.0.2>;q=0.5",
         )]);
-        let cmd = register_command(&request, &edge(), Timestamp::ZERO).unwrap();
+        let cmd =
+            register_command(&request, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO).unwrap();
         let ContactOps::Explicit(ops) = &cmd.contacts else {
             panic!("expected explicit contacts");
         };
@@ -440,7 +509,8 @@ mod tests {
             (HeaderName::Supported, "path, gruu"),
             (HeaderName::Require, "PATH"),
         ]);
-        let cmd = register_command(&request, &edge(), Timestamp::ZERO).unwrap();
+        let cmd =
+            register_command(&request, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO).unwrap();
         assert!(cmd.supports_path);
         assert_eq!(cmd.require, vec!["path".to_owned()]);
     }
@@ -459,7 +529,7 @@ mod tests {
             .unwrap()
             .build();
 
-        let error = register_command(&request, &edge(), Timestamp::ZERO)
+        let error = register_command(&request, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO)
             .expect_err("a password in the AoR must be refused");
         assert_eq!(error.status(), 400);
     }
@@ -487,6 +557,7 @@ mod tests {
             &register(contact()),
             &mut auth,
             &credentials,
+            &OpenRegistrationPolicy,
             &edge(),
             Timestamp::ZERO,
         ));
@@ -503,6 +574,7 @@ mod tests {
             &register(contact()),
             &mut auth,
             &credentials,
+            &alice_policy(),
             &edge(),
             Timestamp::from_secs(1_800_000_000),
         );
@@ -523,9 +595,14 @@ mod tests {
             crate::auth::InMemoryCredentials::new().with("t1", "alice", "open sesame");
         let now = Timestamp::from_secs(1_800_000_000);
 
-        let Admission::Challenge(challenge) =
-            admit(&register(contact()), &mut auth, &credentials, &edge(), now)
-        else {
+        let Admission::Challenge(challenge) = admit(
+            &register(contact()),
+            &mut auth,
+            &credentials,
+            &alice_policy(),
+            &edge(),
+            now,
+        ) else {
             panic!("expected a challenge first");
         };
 
@@ -548,6 +625,7 @@ mod tests {
             &register(headers),
             &mut auth,
             &credentials,
+            &alice_policy(),
             &edge(),
             now,
         ));
@@ -571,9 +649,14 @@ mod tests {
             ..EdgeContext::default()
         };
 
-        let Admission::Challenge(challenge) =
-            admit(&register(contact()), &mut auth, &credentials, &edge, now)
-        else {
+        let Admission::Challenge(challenge) = admit(
+            &register(contact()),
+            &mut auth,
+            &credentials,
+            &alice_policy(),
+            &edge,
+            now,
+        ) else {
             panic!("expected a challenge first");
         };
         let parsed = sipx_ua::auth::Challenge::parse(challenge.value.as_bytes(), false)
@@ -593,6 +676,7 @@ mod tests {
             &register(headers),
             &mut auth,
             &credentials,
+            &alice_policy(),
             &edge,
             now,
         ));
@@ -619,6 +703,7 @@ mod tests {
             &register(headers),
             &mut auth,
             &credentials,
+            &alice_policy(),
             &edge(),
             Timestamp::from_secs(1_800_000_000),
         );
@@ -640,7 +725,7 @@ mod tests {
         let uri = Uri::parse(Bytes::from_static(b"sip:atlanta.example")).unwrap();
         let bare = RequestBuilder::new(Method::Register, uri).build();
         assert_eq!(
-            register_command(&bare, &edge(), Timestamp::ZERO)
+            register_command(&bare, &OpenRegistrationPolicy, &edge(), Timestamp::ZERO,)
                 .expect_err("no Call-ID")
                 .status(),
             400

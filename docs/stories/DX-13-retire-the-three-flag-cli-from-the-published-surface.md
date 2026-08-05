@@ -2,12 +2,12 @@
 id: DX-13
 title: Retire the three-flag CLI from the published surface and from the M1 proof script
 pillar: Foundation
-status: ready
+status: done
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
 areas: [docs, deploy]
-note: unblocked — KO-18 gave the greeting a static clusterIP that is dialable, a valid domains entry and knowable before any pod exists; §4 needs re-running against a live k3d cluster
+note: complete — the published §4 dial answered across the two-node k3d cluster with 24000 audio samples and zero loss
 ---
 
 # Retire the three-flag CLI from the published surface and from the M1 proof script
@@ -33,51 +33,21 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       output block was unreachable. The document now declares `domains: [127.0.0.1]`, matching
       `scripts/e2e-call.sh`, and the heredoc extracted verbatim from `README.md` and run in an empty
       directory reaches `RESULT: PASS`.
-- [ ] Every command on the six affected site pages runs: `getting-started.md`,
+- [x] Every command on the six affected site pages runs: `getting-started.md`,
       `guides/run-a-node.md`, `guides/addressing.md`, `guides/docker-and-k3d.md`,
       `reference/cli.md`, `reference/configuration.md`. `reference/cli.md` needs the most care — its
       selling point is that every flag and error message was produced by running the binary, and it
       now documents a hand-rolled parser's messages against a `clap` one.
 
-      **Still five of six, and the sixth is now diagnosed rather than merely unobserved.** The k3d
-      half of `getting-started.md` §3 was executed for the first time, against a throwaway cluster
-      created for the run and deleted after. Two defects found and fixed, both invisible to reading:
-      the page never built or imported `sipx-phone:dev`, so the greeting `Deployment` sat in
-      `ImagePullBackOff` while the page's own `get deploy` block claimed it `1/1` — the image is
-      referenced in three places in this repository and built in none; and the `node listening`
-      block omitted the `auth="open"` field `FC-3` added. §3 now runs end to end, all four
-      Deployments `1/1`. **§4's call does not run, for a reason no edit to this page can fix** — see
-      `## Progress
-- **Unblocked 2026-08-05: `KO-18` landed.** The greeting's address of record is now node-a's
-  static `clusterIP` (`10.43.0.60`), pinned in the same manifest as the document that declares it —
-  simultaneously dialable by `sipx dial` (a literal, not a name), a valid `domains` entry, and
-  knowable before any pod exists. `crates/sipx-clstr-node/tests/devspace_dialable.rs` holds all four
-  artifacts to that one string. **What remains for this story is to re-run §4 against a live k3d
-  cluster** and correct whatever the run finds; the blocker itself is gone.
-- **Parked 2026-07-30, blocked by [KO-18](KO-18-give-the-devspace-nodes-a-dialable-address.md).**
-  Five of the six pages run. `getting-started.md` §3 now runs end to end — the page builds and
-  imports the phone image it had only ever assumed, and all four Deployments reach `1/1`, verified
-  against a throwaway k3d cluster rather than read.
-- **What is unresolved:** §4's caller command, and it is not prose. `sipx dial` takes a literal
-  address and port and does not resolve a name, so `sip:hello@sipx-clstr-node-a` exits on a usage
-  error; dialling the ClusterIP instead answers `480`, because the lookup keys on the whole AoR and
-  the stored one is the name. No spelling of the documented command works while the document says
-  what it says.
-- **What would settle it:** `KO-18` — one address that is simultaneously a valid `domains` entry, the
-  greeting's AoR, and a literal a phone can send to. The fix is in
-  `deploy/devspace/manifests/node.yaml` or in `sipx dial`, both outside this story's write set.
-- Found on the way: `sipx-phone:dev` existed on exactly one developer's Docker daemon and carried
-  sipx `0.11.0` while the workspace pins `v0.10.0` — the only machine able to run the k8s proof was
-  running a phone nobody could reproduce. The proof fails on both versions, so the mismatch was
-  hiding nothing but itself.
-`. `cli.md` was
-      re-verified line by line against the binary — the two help texts, `--version`, and each quoted
-      refusal (`no id`, `cannot read`, the two-problem document refusal, the unresolved `dsnRef`, the
-      role refusals) reproduce exactly. Two defects found and fixed by running rather than reading:
-      `addressing.md` quoted the `0.0.0.0` refusal without its `cluster.listener:` path prefix and
-      with a second line the binary does not print, and `cli.md`'s opening block is `-h`/no-argument
-      output rather than `--help`, which is now labelled. `configuration.md`'s documents were all
-      loaded by the binary. The blocked one is `getting-started.md` §3–4: see `## Progress`.
+      **Complete against the binaries and a live cluster, not by inspection.** The five host and
+      container pages had already been exercised line by line, including both help texts, every
+      quoted refusal and each configuration document. The remaining Kubernetes half now passes on
+      a clean k3d cluster: all four Deployments reached `1/1`; the greeting registered through
+      node-b; and the published §4 command, using `sipx 1.0.0-beta.4`, dialled node-a's static
+      `10.43.0.60` Service and returned `status="answered"`, `samples_recorded=24000`,
+      `heard_audio=true`, zero packet loss and MOS 4.40. The run found one stale presentation fact:
+      the pinned CLI's JSON also carries `media_advertised`, `media_bound`, `packets_lost` and
+      `recording`, so the output block now reproduces those fields too.
 - [x] The five pages asserting there is no configuration file stop asserting it. Done in the
       `0.11.0` pass and re-checked; the one survivor was `whats-new.md`'s 0.10.0 entry advertising
       "a configuration page that states plainly there is no configuration file yet", which a reader
@@ -153,6 +123,25 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       `args: [run, --config, /etc/sipx-clstr/cluster.yaml]` with identity from the environment.
 
 ## Progress
+
+- **Complete 2026-08-05, with the published §4 command executed verbatim.** The live throwaway
+  cluster named `sipx` had four Deployments at `1/1`; the separate `babelforce` cluster was only
+  listed and was never selected or modified. Both `/home/timo/sipx-phone/sipx --version` and the
+  `sipx-phone:dev` image reported `sipx 1.0.0-beta.4`. The exact dial result was:
+
+  ```text
+  {"status":"answered","peer":"sip:hello@10.43.0.60","media_advertised":"10.42.0.13","media_bound":"10.42.0.13:58138","duration_ms":3568,"samples_recorded":24000,"heard_audio":true,"loss":0.0000,"packets_lost":0,"jitter_ms":0,"mos":4.40,"recording":"/tmp/heard.wav"}
+  ```
+
+  The caller exited zero and `kubectl --rm` deleted its pod. The live result proved the route,
+  shared registrar and media path. The section's scripted proof then passed too: alice registered
+  through node-a, bob through node-b, the store held both bindings, the cross-node call completed,
+  and the callee recorded 24000 samples with `heard_audio=true`. Neither run required a protocol or
+  deployment change. Only the published example output was stale: the current pinned CLI reports
+  four useful fields the block omitted.
+  Considered for upstream: **no**. The CLI behaved as specified; this change records this platform's
+  own deployment walkthrough and its observed output, with no protocol-generic logic to move into
+  the kernel.
 
 - **The k3d half was run, and it does not work — the failure is in a fenced file, not on the page.**
   A throwaway `k3d` cluster (`sipx`, created for this and deleted after; the pre-existing
