@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**157 of 586 rows proved**; 19 covered for shape only; 410 deferred.
+**159 of 588 rows proved**; 19 covered for shape only; 410 deferred.
 
-Σ over the 61 sections below is 586, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 588, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -75,6 +75,8 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-F-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-9` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — response processing (§8)
 

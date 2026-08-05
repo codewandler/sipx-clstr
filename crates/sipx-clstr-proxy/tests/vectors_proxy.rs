@@ -729,16 +729,67 @@ fn pb_f_3_an_unknown_header_survives_byte_identical_in_every_branch() {
     }
 }
 
+/// A request as it arrives from an upstream proxy: parsed off the wire, so the kernel's raw
+/// start line is live and a retarget that forgets `Request::set_uri` forwards stale bytes.
+///
+/// The builder path (`invite`, `request`) never has a raw start line, which is exactly how the
+/// bytes-level half of `PX-16` stayed invisible to every vector built with it.
+fn from_wire(lines: &[&str]) -> Request {
+    let text = format!("{}\r\n\r\n", lines.join("\r\n"));
+    let message = sipx_sip::parse_datagram(
+        Bytes::copy_from_slice(text.as_bytes()),
+        &sipx_sip::Limits::default(),
+    )
+    .expect("a parseable request");
+    match message {
+        sipx_sip::Message::Request(request) => request,
+        sipx_sip::Message::Response(_) => panic!("a request, not a response"),
+    }
+}
+
+/// The forwarded copy's serialized bytes — what actually goes on the wire.
+fn wire_of(request: &Request) -> String {
+    let mut out = Vec::new();
+    request.write_to(&mut out);
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn route_values(request: &Request) -> Vec<String> {
+    request
+        .headers
+        .get_all(&HeaderName::Route)
+        .map(|header| String::from_utf8_lossy(&header.value()).trim().to_owned())
+        .collect()
+}
+
 #[test]
-fn pb_f_4_a_strict_routing_next_hop_gets_the_f6_swap() {
+fn pb_f_4_a_strict_routing_next_hop_gets_the_f6_swap_and_the_callee_moves_to_the_route_end() {
     // The next hop advertises no `;lr`, so RFC 3261 §16.6 step 12 applies: the Request-URI goes to
     // the end of the Route set and the first Route becomes the Request-URI.
+    //
+    // This row's expectation changed with `PX-16`, and the old bytes were wrong: the route set
+    // survived preprocessing, `aor_query` asked the location service about the first `Route` — a
+    // proxy, not an address of record — and F2 wrote the answer into the Request-URI, so the value
+    // this test used to find at the end of the Route set was the *resolved* strict router twice
+    // over, and `sip:bob@b.example` — the callee — had left the message entirely. T3 is the fix:
+    // a pre-existing route set predetermines the target, and nothing is resolved.
     let (_, effects) = run(
-        invite(
-            "sip:bob@b.example",
-            vec![(HeaderName::Route, "<sip:strict.example>")],
-        ),
-        vec![target("sip:strict.example", 1_000)],
+        from_wire(&[
+            "INVITE sip:bob@b.example SIP/2.0",
+            "Via: SIP/2.0/UDP upstream.example;branch=z9hG4bK-up-4",
+            "Max-Forwards: 70",
+            "Route: <sip:strict.example>",
+            "From: <sip:alice@a.example>;tag=af",
+            "To: <sip:bob@b.example>",
+            "Call-ID: px16-wire-4",
+            "CSeq: 1 INVITE",
+            "Content-Length: 0",
+        ]),
+        vec![],
+    );
+    assert!(
+        !effects.iter().any(|e| e.kind() == Kind::ResolveTargets),
+        "a Route names a proxy, not an address of record: the location service is never asked"
     );
     let forwarded = effects
         .iter()
@@ -749,25 +800,135 @@ fn pb_f_4_a_strict_routing_next_hop_gets_the_f6_swap() {
         "sip:strict.example",
         "the strict router's URI is now the Request-URI"
     );
-    let routes: Vec<String> = forwarded
-        .headers
-        .get_all(&HeaderName::Route)
-        .map(|header| String::from_utf8_lossy(&header.value()).trim().to_owned())
-        .collect();
+    let routes = route_values(forwarded);
     assert_eq!(
         routes.last().map(String::as_str),
-        Some("<sip:strict.example>"),
-        "the original Request-URI moved to the end of the Route set: {routes:?}"
+        Some("<sip:bob@b.example>"),
+        "the callee's URI — the original Request-URI — moved to the end of the Route set: {routes:?}"
     );
-    // F7 over the swap: the first `Route` no longer carries `lr`, so the next hop is the
-    // Request-URI. Following the `Route` instead would skip the very router the swap exists to
-    // traverse.
+    // F7 across F6: the copy was reformatted for a strict router, so the next hop is the
+    // Request-URI (RFC 3261 §16.6 step 7). Following the `Route` instead would skip the very
+    // router the swap exists to traverse.
     assert_eq!(
         effects
             .iter()
             .find_map(Effect::next_hop)
             .map(|uri| String::from_utf8_lossy(uri).into_owned()),
         Some("sip:strict.example".to_owned())
+    );
+    // The retarget reaches the wire. A Request-URI changed by field assignment leaves the parsed
+    // message's raw start line in place, and the kernel forwards those stale bytes verbatim —
+    // `Request::set_uri` exists to invalidate them.
+    assert!(
+        wire_of(forwarded).starts_with("INVITE sip:strict.example SIP/2.0\r\n"),
+        "the swap must survive serialization: {}",
+        wire_of(forwarded).lines().next().unwrap_or_default()
+    );
+}
+
+#[test]
+fn pb_f_9_an_out_of_dialog_request_with_a_route_set_keeps_the_callees_uri_on_the_wire() {
+    // T3, the defect `PX-13` found and left for this story: a request from an upstream proxy
+    // arrives out of dialog with a pre-existing route set. It is forwarded to the route it names;
+    // the Request-URI — the callee's own URI — is not replaced with the answer to a question
+    // about a proxy, because the question is never asked.
+    let (_, effects) = run(
+        from_wire(&[
+            "INVITE sip:bob@b.example SIP/2.0",
+            "Via: SIP/2.0/UDP upstream.example;branch=z9hG4bK-up-9",
+            "Max-Forwards: 70",
+            "Route: <sip:edge-1.example;lr>",
+            "Route: <sip:p2.example;lr>",
+            "From: <sip:alice@a.example>;tag=af",
+            "To: <sip:bob@b.example>",
+            "Call-ID: px16-wire-9",
+            "CSeq: 1 INVITE",
+            "Content-Length: 0",
+        ]),
+        vec![],
+    );
+    assert!(
+        !effects.iter().any(|e| e.kind() == Kind::ResolveTargets),
+        "the target set is predetermined by the route set: there is nothing to resolve"
+    );
+    let forwarded = effects
+        .iter()
+        .find_map(Effect::forwarded)
+        .expect("a forward");
+    assert_eq!(
+        String::from_utf8_lossy(&forwarded.uri.to_bytes()),
+        "sip:bob@b.example",
+        "the callee stays in the Request-URI"
+    );
+    assert_eq!(
+        route_values(forwarded),
+        ["<sip:p2.example;lr>"],
+        "our own Route popped (P2), the pre-existing route set survives"
+    );
+    assert_eq!(
+        effects
+            .iter()
+            .find_map(Effect::next_hop)
+            .map(|uri| String::from_utf8_lossy(uri).into_owned()),
+        Some("sip:p2.example;lr".to_owned()),
+        "forwarded to the first Route (F7)"
+    );
+    assert!(
+        wire_of(forwarded).starts_with("INVITE sip:bob@b.example SIP/2.0\r\n"),
+        "the callee's URI on the wire, not only in the parsed field: {}",
+        wire_of(forwarded).lines().next().unwrap_or_default()
+    );
+}
+
+#[test]
+fn pb_f_10_a_strict_router_in_the_middle_of_a_route_set_is_still_traversed() {
+    // The second `PX-16` finding: F7's old `lr` test read "first Route without `lr`" as "the swap
+    // already happened", but the converse does not hold. With `[ours;lr, strict, p2;lr]`, F6's
+    // swap leaves `p2;lr` as the first Route and the strict router in the Request-URI — the `lr`
+    // reading then follows `p2` and skips the router the swap exists to traverse. RFC 3261 §16.6
+    // step 7 conditions the choice on whether step 6 reformatted the copy, not on what the first
+    // Route looks like afterwards.
+    let (_, effects) = run(
+        from_wire(&[
+            "INVITE sip:bob@b.example SIP/2.0",
+            "Via: SIP/2.0/UDP upstream.example;branch=z9hG4bK-up-10",
+            "Max-Forwards: 70",
+            "Route: <sip:edge-1.example;lr>",
+            "Route: <sip:strict.example>",
+            "Route: <sip:p2.example;lr>",
+            "From: <sip:alice@a.example>;tag=af",
+            "To: <sip:bob@b.example>",
+            "Call-ID: px16-wire-10",
+            "CSeq: 1 INVITE",
+            "Content-Length: 0",
+        ]),
+        vec![],
+    );
+    assert!(
+        !effects.iter().any(|e| e.kind() == Kind::ResolveTargets),
+        "T3 again: the route set predetermines the target"
+    );
+    let forwarded = effects
+        .iter()
+        .find_map(Effect::forwarded)
+        .expect("a forward");
+    assert_eq!(
+        String::from_utf8_lossy(&forwarded.uri.to_bytes()),
+        "sip:strict.example",
+        "F6: the strict router is in the Request-URI"
+    );
+    assert_eq!(
+        route_values(forwarded),
+        ["<sip:p2.example;lr>", "<sip:bob@b.example>"],
+        "the callee's URI at the end, behind the rest of the route set"
+    );
+    assert_eq!(
+        effects
+            .iter()
+            .find_map(Effect::next_hop)
+            .map(|uri| String::from_utf8_lossy(uri).into_owned()),
+        Some("sip:strict.example".to_owned()),
+        "the next hop is the Request-URI because F6 reformatted the copy — not the first Route"
     );
 }
 
@@ -1540,20 +1701,32 @@ fn a_targets_route_set_is_applied_as_route_headers_in_stored_order() {
 #[test]
 fn a_targets_route_set_goes_ahead_of_a_route_that_survived_preprocessing() {
     // The path is the nearer part of the journey, so it is traversed first.
+    //
+    // Driven through `forward` directly since `PX-16`: the engine no longer resolves targets for a
+    // request whose route set survived (T3 predetermines, with an empty route set), so a location
+    // answer carrying a `Path` cannot meet a surviving `Route` through the context any more. The
+    // ordering is still F-step law for the function itself, and `forward` is public API.
+    use sipx_clstr_proxy::{ForwardPlan, forward, validate};
+
+    let request = invite(
+        "sip:bob@b.example",
+        vec![(HeaderName::Route, "<sip:downstream.example;lr>")],
+    );
+    let config = config();
+    let validated = validate(&request, &config).expect("valid");
     let mut target = target("sip:bob@10.0.0.1", 1_000);
     target.route_set = vec![Bytes::from_static(b"<sip:path.example;lr>")];
 
-    let (_, effects) = run(
-        invite(
-            "sip:bob@b.example",
-            vec![(HeaderName::Route, "<sip:downstream.example;lr>")],
-        ),
-        vec![target],
-    );
-    let forwarded = effects
-        .iter()
-        .find_map(Effect::forwarded)
-        .expect("a forwarded request");
+    let plan = ForwardPlan {
+        original: &request,
+        validated: &validated,
+        target: &target,
+        index: 0,
+        parallel_branches: 1,
+        record_route: false,
+        tokens: None,
+    };
+    let (_, forwarded, _) = forward(&plan, &config).expect("a forwarded copy");
     let routes: Vec<String> = forwarded
         .headers
         .get_all(&HeaderName::Route)

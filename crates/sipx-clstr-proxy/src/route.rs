@@ -41,7 +41,9 @@ pub(crate) fn preprocess(request: &mut Request, config: &ProxyConfig) -> Option<
         if let Some(last) = routes.last()
             && let Ok(address) = Address::parse(last, "Route")
         {
-            request.uri = address.uri.clone();
+            // `set_uri`, never field assignment: a parsed request keeps its raw start-line bytes
+            // for exact forwarding, and they stop being truthful the moment the target changes.
+            request.set_uri(address.uri.clone());
             set_routes(
                 request,
                 routes.iter().take(routes.len().saturating_sub(1)).cloned(),
@@ -157,42 +159,53 @@ pub(crate) fn predetermined_target(request: &Request) -> Target {
     }
 }
 
-/// §5.1 T2 — the URI whose registrations are wanted: the first `Route` if one survived
-/// preprocessing, else the Request-URI.
+/// §5.1 T3 — whether a `Route` set survived preprocessing, which predetermines the target set for
+/// an out-of-dialog request exactly as a `To` tag does for an in-dialog one.
+///
+/// A surviving `Route` means an upstream element already routed this request: this node is a hop on
+/// a pre-established path, not the element that retargets. Retargeting is done by whatever the path
+/// ends at, when the request reaches it with no `Route` left — at which point T2 applies there.
+pub(crate) fn route_set_survived(request: &Request) -> bool {
+    request.headers.value(&HeaderName::Route).is_some()
+}
+
+/// §5.1 T2 — the URI whose registrations are wanted: the Request-URI, always.
+///
+/// It used to be the first `Route` when one survived preprocessing, and that was `PX-16`'s defect:
+/// a `Route` names a proxy, an address of record names a user, and asking the location service the
+/// former as the latter produced an answer F2 then wrote over the callee's URI. T2 is only reached
+/// when nothing survived ([`route_set_survived`] gates it), so the Request-URI is the only URI
+/// there is a question about.
 pub(crate) fn aor_query(request: &Request) -> TargetQuery {
     TargetQuery {
-        uri: first_route_uri(request).unwrap_or_else(|| request.uri.to_bytes()),
+        uri: request.uri.to_bytes(),
     }
 }
 
-/// F7 — the next hop of a **forwarded copy**, read off the copy after F6.
+/// F7 — the next hop of a **forwarded copy**, read off the copy after F6 *and off F6's answer*.
 ///
-/// The first `Route` when it carries `lr`, else the Request-URI. The `lr` test is what makes one rule
-/// cover both routing styles: F6 has already moved a strict router's URI into the Request-URI and
-/// pushed the real destination to the end of the `Route` set, so a first `Route` without `lr` is the
-/// far end rather than the next hop, and following it would skip the router the swap exists to
-/// traverse.
-pub(crate) fn next_hop_of(request: &Request) -> Bytes {
+/// RFC 3261 §16.6 step 7 conditions the choice on whether step 6 reformatted the copy for a strict
+/// router, not on what the first `Route` looks like afterwards: when it did, the next hop is the
+/// Request-URI; otherwise the first `Route` if present, else the Request-URI. The `lr` test this
+/// rule used to lean on is not total across F6 — `[strict, p2;lr]` swaps to a first `Route` that
+/// carries `lr` while the strict router sits in the Request-URI, so reading `lr` there follows `p2`
+/// and skips the very router the swap exists to traverse (`PX-16`).
+pub(crate) fn next_hop_of(request: &Request, reformatted_for_strict_router: bool) -> Bytes {
+    if reformatted_for_strict_router {
+        return request.uri.to_bytes();
+    }
     match first_route(request) {
-        Some(address)
-            if address
-                .uri
-                .params()
-                .is_some_and(|params| params.get("lr").is_some()) =>
-        {
-            address.uri.to_bytes()
-        }
-        _ => request.uri.to_bytes(),
+        Some(address) => address.uri.to_bytes(),
+        // Also the fallback for a first `Route` that does not parse: a hop this node cannot name
+        // as a URI cannot be handed to a driver, and the Request-URI is the honest remainder of
+        // step 7's rule — the same answer `preprocess` gives a `Route` it cannot read.
+        None => request.uri.to_bytes(),
     }
 }
 
 fn first_route(request: &Request) -> Option<Address> {
     let value = request.headers.value(&HeaderName::Route)?;
     Address::parse(&value, "Route").ok()
-}
-
-fn first_route_uri(request: &Request) -> Option<Bytes> {
-    first_route(request).map(|address| address.uri.to_bytes())
 }
 
 fn routes_of(request: &Request) -> Vec<Bytes> {
@@ -310,36 +323,63 @@ mod tests {
     }
 
     #[test]
-    fn the_next_hop_is_a_surviving_loose_route_and_otherwise_the_request_uri() {
+    fn the_next_hop_is_a_surviving_route_and_otherwise_the_request_uri() {
         let with_route = request(
             "sip:bob@10.0.0.1:5062",
             "<sip:bob@b.example>;tag=bt",
             &["<sip:p2.example;lr>"],
         );
         assert_eq!(
-            String::from_utf8_lossy(&next_hop_of(&with_route)),
+            String::from_utf8_lossy(&next_hop_of(&with_route, false)),
             "sip:p2.example;lr"
         );
 
         let bare = request("sip:bob@10.0.0.1:5062", "<sip:bob@b.example>;tag=bt", &[]);
         assert_eq!(
-            String::from_utf8_lossy(&next_hop_of(&bare)),
+            String::from_utf8_lossy(&next_hop_of(&bare, false)),
             "sip:bob@10.0.0.1:5062"
         );
     }
 
     #[test]
-    fn a_strict_first_route_is_not_the_next_hop() {
-        // After F6 the strict router is in the Request-URI and the real destination is the last
-        // Route. Following the Route would skip the very hop the swap exists to traverse.
+    fn f6s_answer_is_what_makes_the_request_uri_the_next_hop_not_the_first_routes_shape() {
+        // The post-swap copy `[strict, p2;lr]` produces: the strict router in the Request-URI and
+        // `p2;lr` as the first Route. The old `lr` reading followed `p2` here and skipped the
+        // router the swap exists to traverse — RFC 3261 §16.6 step 7 asks whether step 6
+        // reformatted the copy, not what the first Route looks like afterwards.
         let swapped = request(
             "sip:strict.example",
             "<sip:bob@b.example>;tag=bt",
-            &["<sip:bob@10.0.0.1:5062>"],
+            &["<sip:p2.example;lr>", "<sip:bob@10.0.0.1:5062>"],
         );
         assert_eq!(
-            String::from_utf8_lossy(&next_hop_of(&swapped)),
+            String::from_utf8_lossy(&next_hop_of(&swapped, true)),
             "sip:strict.example"
+        );
+    }
+
+    #[test]
+    fn a_surviving_route_set_predetermines_the_target_and_a_consumed_one_does_not() {
+        let mut routed = request(
+            "sip:bob@b.example",
+            "<sip:bob@b.example>",
+            &["<sip:edge-1.example:5060;lr>", "<sip:p2.example;lr>"],
+        );
+        preprocess(&mut routed, &config());
+        assert!(
+            route_set_survived(&routed),
+            "P2 pops only our own entry; the rest of the path survives"
+        );
+
+        let mut consumed = request(
+            "sip:bob@b.example",
+            "<sip:bob@b.example>",
+            &["<sip:edge-1.example:5060;lr>"],
+        );
+        preprocess(&mut consumed, &config());
+        assert!(
+            !route_set_survived(&consumed),
+            "the whole route set was ours: T2 asks the location service about the Request-URI"
         );
     }
 
