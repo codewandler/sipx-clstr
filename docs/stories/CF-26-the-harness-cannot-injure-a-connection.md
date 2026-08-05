@@ -30,7 +30,7 @@ specified against, so `AF-7` can execute §10's scenarios rather than restate th
       the OS entropy pool.
 - [x] **Failing-first:** one of the three `owner-rpc` §10 scenarios is written and shown unwritable
       (or vacuous) before the fault exists, then passing after.
-- [ ] `scripts/gate.sh` is green.
+- [x] `scripts/gate.sh` is green.
 
 ## Progress
 
@@ -50,22 +50,18 @@ small stand-in for the owner's connection table, plus a byte-for-byte replay tes
 rendered trace covering all four variants. The §10 rows themselves stay `AF-7`'s to name: the tests
 here are deliberately named differently, so a report cannot read them as `AF-7` having landed.
 
-**Two things for the integrator.**
+**Gate: green**, after merging `main` in. It was red at this branch's base (`43594b1`) on
+`crates/sipx-clstr-node/tests/devspace_dialable.rs` — `cargo fmt --all --check` at `:34` and `:118`,
+and clippy's missing-backticks and `manual_pattern_char_comparison` — which is the file the
+`KO-18`/`DX-13` WIP rescue brought in and nothing in this diff touches. Proved at the base by
+stashing this branch's work and running both commands there; fixed on `main` by `151f2e2` and picked
+up here by merge.
 
-1. **`scripts/gate.sh` is red at the merge base (`43594b1`), not from this diff.**
-   `cargo fmt --all --check` and `cargo clippy` both fail on
-   `crates/sipx-clstr-node/tests/devspace_dialable.rs` — unformatted at `:34` and `:118`, missing
-   doc backticks at `:79`, `manual_pattern_char_comparison` at `:94` — the file the `KO-18`/`DX-13`
-   WIP rescue (`8c61cf4`) brought in. Proved by stashing this branch's work and running both
-   commands at the base. Every other gate step is green with this diff applied: workspace tests,
-   `check-features`, `check-msrv`, `check-provenance`, `check-vectors`, `check-crd-drift`,
-   `check-docs`, `check-proof-domains`, `check-site`. Left unfixed deliberately — it is another
-   story's file, and another story may be inside it right now.
-2. **`owner-rpc` is an `EXCLUDED` entry in `CF-25`'s spec registry and this story does not change
-   that.** It should stay excluded until `AF-7` lands: §10 registers no vector prefix on purpose,
-   and what changed here is that its scenarios are now *writable*, not that they are executed
-   against an implementation. The registration belongs in the commit that adds `AF-7`'s rows and
-   the tests that prove them, which is this repository's own rule.
+**For the integrator: `owner-rpc` stays `EXCLUDED` in `CF-25`'s spec registry, and this story does
+not change it.** It should stay excluded until `AF-7` lands. §10 registers no vector prefix on
+purpose, and what changed here is that its scenarios are now *writable*, not that they are executed
+against an implementation. The registration belongs in the commit that adds `AF-7`'s rows and the
+tests that prove them, which is this repository's own rule.
 
 ## Notes
 
