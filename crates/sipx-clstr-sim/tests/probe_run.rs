@@ -107,7 +107,13 @@ impl SimNode for Probe {
                 self.engine.on_input(clock, ProbeInput::TimerFired(step))
             }
             Input::TransportError { .. } => self.engine.on_input(clock, ProbeInput::TransportError),
-            Input::Message { .. } => return Vec::new(),
+            Input::Message { .. }
+            // `CF-26`'s connection faults: this node keeps no connection table and no
+            // write accounting, so a reconnect, a restart and a stall are nothing to it.
+            | Input::Connected { .. }
+            | Input::Restarted { .. }
+            | Input::WriteStalled { .. }
+            | Input::WriteFlushed { .. } => return Vec::new(),
         };
         self.perform(effects, now)
     }

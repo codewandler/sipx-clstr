@@ -2,7 +2,7 @@
 id: CF-26
 title: The harness cannot injure a connection, so three owner-RPC scenarios are unwritable
 pillar: Foundation
-status: ready
+status: in-progress
 priority: 2
 epic: conformance-harness
 areas: [harness, sim, affinity]
@@ -18,22 +18,50 @@ specified against, so `AF-7` can execute §10's scenarios rather than restate th
 
 ## Acceptance
 
-- [ ] The simulation can drop and re-establish a client connection, so a flow reference outlives the
+- [x] The simulation can drop and re-establish a client connection, so a flow reference outlives the
       connection it named and `owner-rpc` §10's reconnect scenario is executable.
-- [ ] The simulation can restart a node with a **fresh incarnation**, so a reference minted against
+- [x] The simulation can restart a node with a **fresh incarnation**, so a reference minted against
       the previous incarnation resolves as specified rather than as a stale-but-plausible hit.
-- [ ] The simulation can model a **non-reading peer** — a connection accepted but not drained — so
+- [x] The simulation can model a **non-reading peer** — a connection accepted but not drained — so
       `owner-rpc` §8's `max_pending_per_flow` bound and the `FlowRejected` answer are reachable, and
       `T_write` can actually expire.
-- [ ] Each new fault is deterministic under the harness's own PRNG: same seed, same schedule, same
+- [x] Each new fault is deterministic under the harness's own PRNG: same seed, same schedule, same
       outcome, with a pinned vector. The sim owns its randomness; a fault must not read the clock or
       the OS entropy pool.
-- [ ] **Failing-first:** one of the three `owner-rpc` §10 scenarios is written and shown unwritable
+- [x] **Failing-first:** one of the three `owner-rpc` §10 scenarios is written and shown unwritable
       (or vacuous) before the fault exists, then passing after.
-- [ ] `scripts/gate.sh` is green.
+- [x] `scripts/gate.sh` is green.
 
 ## Progress
-- (not started)
+
+**Done (`impl/CF-26`).** Four new `Fault` variants — `Reconnect`, `RestartNode`, `StopReading`,
+`ResumeReading` — with four new `Input` variants for what a node learns from them (`Connected`,
+`Restarted { incarnation }`, `WriteStalled`, `WriteFlushed`), and the scheduler machinery behind
+them in `sim.rs`: a per-directed-pair connection counter stamped on every message, so a write to a
+connection that has been replaced is lost rather than delivered to its successor; a per-node restart
+counter that is the incarnation; and a per-node held-write buffer for a peer that is accepted and
+not draining. Two accessors for scenarios: `Sim::incarnation` and `Sim::held_writes`. No new trace
+vocabulary — the faults render through the existing `** FAULT` line, a restart additionally as
+`started`, a lost connection as `Broken` — so `viz.rs`, its wire vocabulary and the cluster-viz
+frame table are untouched.
+
+`crates/sipx-clstr-sim/tests/connection_faults.rs` executes four of `owner-rpc` §10's rows against a
+small stand-in for the owner's connection table, plus a byte-for-byte replay test and a pinned
+rendered trace covering all four variants. The §10 rows themselves stay `AF-7`'s to name: the tests
+here are deliberately named differently, so a report cannot read them as `AF-7` having landed.
+
+**Gate: green**, after merging `main` in. It was red at this branch's base (`43594b1`) on
+`crates/sipx-clstr-node/tests/devspace_dialable.rs` — `cargo fmt --all --check` at `:34` and `:118`,
+and clippy's missing-backticks and `manual_pattern_char_comparison` — which is the file the
+`KO-18`/`DX-13` WIP rescue brought in and nothing in this diff touches. Proved at the base by
+stashing this branch's work and running both commands there; fixed on `main` by `151f2e2` and picked
+up here by merge.
+
+**For the integrator: `owner-rpc` stays `EXCLUDED` in `CF-25`'s spec registry, and this story does
+not change it.** It should stay excluded until `AF-7` lands. §10 registers no vector prefix on
+purpose, and what changed here is that its scenarios are now *writable*, not that they are executed
+against an implementation. The registration belongs in the commit that adds `AF-7`'s rows and the
+tests that prove them, which is this repository's own rule.
 
 ## Notes
 
