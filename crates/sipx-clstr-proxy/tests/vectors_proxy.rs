@@ -764,7 +764,7 @@ fn route_values(request: &Request) -> Vec<String> {
 
 #[test]
 fn pb_f_4_a_strict_routing_next_hop_gets_the_f6_swap_and_the_callee_moves_to_the_route_end() {
-    // The next hop advertises no `;lr`, so RFC 3261 §16.6 step 12 applies: the Request-URI goes to
+    // The next hop advertises no `;lr`, so RFC 3261 §16.6 step 6 applies: the Request-URI goes to
     // the end of the Route set and the first Route becomes the Request-URI.
     //
     // This row's expectation changed with `PX-16`, and the old bytes were wrong: the route set
