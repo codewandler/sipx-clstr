@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/proxy-transaction-driver.md
 epic: proxy-engine
 areas: [proxy, node]
-note: release blocker · blocked until a released sipx carries T-28; local timer/effect wiring must not construct CANCEL by shadowing the kernel
+note: release blocker · blocked until a released sipx carries a proxy-usable outgoing CANCEL — the CX-7 filing (then numbered T-28) was orphaned unmerged and its ID recycled upstream; CX-13 re-files. Local timer/effect wiring must not construct CANCEL by shadowing the kernel
 ---
 
 # Perform the CANCEL and timer effects the driver discards
@@ -20,9 +20,12 @@ construction below the kernel boundary.
 
 ## Acceptance
 
-- [ ] **Dependency:** sipx releases the CANCEL construction/dispatch API filed as
-      [`T-28`](https://github.com/codewandler/sipx/blob/09d5518dc587dd77db61abd220ad309e00eda688/docs/stories/T-28-cancel-an-outgoing-invite-transaction.md), and this
-      workspace pins that release before `CancelBranch` is implemented. No local request-cloning
+- [ ] **Dependency:** sipx releases the CANCEL construction/dispatch API
+      ([as filed](https://github.com/codewandler/sipx/blob/09d5518dc587dd77db61abd220ad309e00eda688/docs/stories/T-28-cancel-an-outgoing-invite-transaction.md)
+      under the then-free ID `T-28` — that filing was orphaned on an unmerged branch and the ID
+      recycled upstream; the [ledger](../upstream.md) row tracks it and `CX-13` re-files), and this
+      workspace pins that release before `CancelBranch` is implemented. Still absent at
+      `v1.0.0-beta.4`, re-verified by `CX-12`. No local request-cloning
       helper shadows the kernel's RFC 3261 §9.1 rules.
 - [ ] The driver associates an upstream CANCEL with the existing INVITE server transaction and feeds
       `ProxyInput::UpstreamCancelled` to that context; it does not create an independent context.

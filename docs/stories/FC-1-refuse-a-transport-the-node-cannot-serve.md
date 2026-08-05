@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/fail-closed-config.md
 epic: fail-closed-config
 areas: [deploy, security, transport]
-note: V-07 high — TLS downgrade closed; TCP-only must refuse until a released sipx carries T-29
+note: V-07 high — TLS downgrade closed; TCP-only must refuse until a released sipx can bind exactly the declared transports — the CX-7 filing (then numbered T-29) was orphaned unmerged and its ID recycled upstream; CX-13 re-files
 ---
 
 # Refuse a listener transport the node cannot serve, instead of silently serving cleartext
@@ -41,10 +41,13 @@ to get confidentiality is the one that removes it.
       genuinely TCP-only endpoint or refuses startup before binding. With the pinned kernel today it
       must refuse: constructing its cleartext endpoint from the TCP listener also opens UDP, so
       accepting the document exposes more network surface than it declares.
-- [ ] **Dependency:** exact TCP-only binding is filed upstream as
-      [`T-29`](https://github.com/codewandler/sipx/blob/09d5518dc587dd77db61abd220ad309e00eda688/docs/stories/T-29-bind-only-the-selected-cleartext-transports.md).
-      Kernel `main` is not a consumable dependency; this workspace must pin a tagged release carrying
-      it before changing the refusal into service.
+- [ ] **Dependency:** exact TCP-only binding
+      ([as filed](https://github.com/codewandler/sipx/blob/09d5518dc587dd77db61abd220ad309e00eda688/docs/stories/T-29-bind-only-the-selected-cleartext-transports.md)
+      under the then-free ID `T-29` — that filing was orphaned on an unmerged branch and the ID
+      recycled upstream; the [ledger](../upstream.md) row tracks it and `CX-13` re-files). Still
+      absent at `v1.0.0-beta.4`, re-verified by `CX-12`: `bind_matching_ports` binds UDP
+      unconditionally first. Kernel `main` is not a consumable dependency; this workspace must pin
+      a tagged release carrying it before changing the refusal into service.
 - [ ] **Failing-first current-kernel test:** load a TCP-only document and require startup refusal
       before either UDP or TCP binds. It fails on `86e6b10`, which starts and exposes both. After
       `CX-7` lands and this workspace pins exact listener selection, the same fixture instead starts,

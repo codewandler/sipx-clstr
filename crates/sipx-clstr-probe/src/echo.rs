@@ -47,6 +47,8 @@ pub struct EchoConfig {
     pub registrar: String,
     /// How long a registration lasts before it is refreshed.
     pub register_expires: u32,
+    /// The host this echo puts in its `Via`, so responses can find their way back (§8.1.1.7).
+    pub sent_by: String,
 }
 
 impl EchoConfig {
@@ -58,7 +60,15 @@ impl EchoConfig {
             contact: contact.to_owned(),
             registrar: registrar.to_owned(),
             register_expires: 3_600,
+            sent_by: "echo.invalid".to_owned(),
         }
+    }
+
+    /// The same configuration, with the host this echo is reachable at.
+    #[must_use]
+    pub fn sent_by(mut self, host: &str) -> Self {
+        host.clone_into(&mut self.sent_by);
+        self
     }
 }
 
@@ -223,10 +233,11 @@ fn answer(request: &Request, status: u16, reason: &str, marker: Option<&Marker>)
     // Nothing to answer *to*: the request is missing what a response echoes, and inventing those
     // fields would put a fabricated `Call-ID` on the wire.
     //
-    // Checked here rather than relied on from the builder: `ResponseBuilder::to_request` happily
-    // builds a response for a request with no `Via`, `Call-ID` or `CSeq` at all — an assumption
-    // this code made and a test caught. The kernel is right to be permissive (a UAS may know
-    // something the builder does not); deciding *whether* to answer is the application's.
+    // Still checked here even though the kernel's `ResponseBuilder::to_request` now refuses such
+    // a request itself (it built one happily until sipx 1.0.0-beta.4): the builder's answer is a
+    // build error, and what this endpoint owes its caller is a *decision* — `Unanswerable`, with
+    // the refusal counted — not an error from a builder it happens to use. Deciding whether to
+    // answer stays the application's job; the kernel refusing too is a second lock on the door.
     if !is_respondable(request) {
         return vec![Effect::Refused(Refusal::Unanswerable)];
     }
@@ -254,7 +265,8 @@ impl EchoEndpoint {
     fn register_request(&self) -> Option<Request> {
         let target = Uri::parse(Bytes::from(self.config.registrar.clone())).ok()?;
         RequestBuilder::new(Method::Register, target)
-            .header(HeaderName::CallId, format!("echo-{}", self.config.aor))
+            .header(HeaderName::Via, self.via())
+            .and_then(|b| b.header(HeaderName::CallId, format!("echo-{}", self.config.aor)))
             .and_then(|b| b.cseq(self.cseq, &Method::Register))
             .and_then(|b| b.header(HeaderName::From, format!("<{}>;tag=echo", self.config.aor)))
             .and_then(|b| b.header(HeaderName::To, format!("<{}>", self.config.aor)))
@@ -269,6 +281,25 @@ impl EchoEndpoint {
             })
             .map(sipx_sip::RequestBuilder::build)
             .ok()
+    }
+
+    /// The `Via` for the REGISTER about to go out.
+    ///
+    /// **Every request needs one** — RFC 3261 §8.1.1.7 makes `Via` how a response finds its way
+    /// back, and the registrar cannot even build a response to a request it has no `Via` to echo.
+    /// The probe's engine learned this from the end-to-end scenario; this is the same lesson
+    /// applied to the only request the echo originates.
+    ///
+    /// The branch is derived from the `CSeq` rather than drawn at random: unique per transaction,
+    /// which is all §8.1.1.7 asks of it, and reproducible, which is what the harness asks. The
+    /// transport token is UDP because that is the only transport anything drives this endpoint
+    /// over today; a driver that puts it on another transport widens `EchoConfig` rather than
+    /// letting this line silently lie.
+    fn via(&self) -> String {
+        format!(
+            "SIP/2.0/UDP {};branch=z9hG4bK-echo-{}",
+            self.config.sent_by, self.cseq
+        )
     }
 }
 
@@ -332,6 +363,38 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    /// RFC 3261 §8.1.1.7: every request carries a `Via`, because it is how the response finds its
+    /// way back. The probe engine learned this from the end-to-end scenario (`engine.rs`'s `via`
+    /// doc records it); the echo's REGISTER shipped without one and nothing noticed until the
+    /// kernel's response builder started refusing to answer a request it cannot echo a `Via` from.
+    #[test]
+    fn the_registration_carries_a_via_so_the_registrar_can_answer_it() {
+        let mut echo = EchoEndpoint::new(config());
+        let effects = echo.on_input(&Input::Start);
+
+        let sent = effects
+            .iter()
+            .find_map(|effect| match effect {
+                Effect::Send(request) => Some(request.as_ref()),
+                _ => None,
+            })
+            .expect("a REGISTER");
+        let via = sent
+            .headers
+            .value(&HeaderName::Via)
+            .map(|v| String::from_utf8_lossy(&v).into_owned())
+            .expect("a Via — a REGISTER without one cannot be answered");
+        assert!(
+            via.contains(";branch=z9hG4bK"),
+            "the branch must carry the RFC 3261 magic cookie: {via}"
+        );
+        assert!(
+            ResponseBuilder::to_request(sent, StatusCode::new(200).expect("200"), "OK".to_owned())
+                .is_ok(),
+            "the registrar must be able to build a response to it"
+        );
     }
 
     #[test]

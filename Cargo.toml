@@ -13,10 +13,13 @@ edition = "2024"
 # the kernel's floor" and was never checked, so it was simply false — on 1.88 the workspace does
 # not compile at all.
 #
-# 1.91 is the lowest release that works, re-derived on the `v0.10.0` pin below by bisecting
+# 1.91 is the lowest release that works, re-derived on the `v0.10.0` pin by bisecting
 # 1.88 → 1.94: 1.88 and 1.90 fail; 1.91, 1.93 and 1.94 pass. **The floor came down by three
 # releases and the reason it exists moved**, so the previous derivation is recorded here rather
 # than only in the changelog, because "why 1.91" is the question this line gets asked.
+# Re-verified on the `v1.0.0-beta.4` pin (`CX-12`): the workspace still builds on 1.91
+# (`check-msrv.sh`), the holder below is unchanged, and the kernel's own floor rose only to 1.88,
+# which stays beneath ours.
 #
 # It used to be the kernel's: sipx-transport's `impl<K, I> Default for TimerQueue<K, I>` called
 # `BinaryHeap::new()` on an unbounded type parameter, and `BinaryHeap::<T>::new` carried a
@@ -67,34 +70,35 @@ chacha20poly1305 = { version = "0.10", default-features = false }
 # makes a build reproducible, and what makes "which kernel version is this claim true of?" a
 # question with an answer. Bumping it is a deliberate act with a changelog entry.
 #
-# Pinned at 0.10.0, which contains UDP, TCP, TLS, WebSocket and WSS transports, all four
-# transaction machines, RFC 3263 resolution, **both** sides of digest, and a `TimerQueue` generic
-# over its instant type — the last of which is what lets the harness stop keeping its own
-# generation counters (`CF-7`).
+# Pinned at 1.0.0-beta.4 — the kernel's 1.0 beta line. Beyond 0.10.0's surface (all five
+# transports, all four transaction machines, RFC 3263, both sides of digest, the generic
+# `TimerQueue`), the beta line brings overload control (RFC 7339/7415) live in the transport,
+# `#[non_exhaustive]` on every public error enum, a stricter `ResponseBuilder::to_request` that
+# refuses a request missing what a response must echo, and a QUIC transport behind a now-default
+# feature — so `quinn` enters the dependency graph. Whether to trim that feature off is a
+# deliberate decision `CX-12` left open rather than making in passing.
 #
-# `CX-4` moved this from 0.7.0, and what it found is worth knowing before the next bump. Nothing in
-# this workspace needed a source change: it reaches the kernel through constructors rather than
-# struct literals, so `Target` and `ConnectionKey` gaining a `path` field (the WebSocket resource
-# now keys the connection pool) is source-compatible here, and the one breaking `sipx-ua` change in
-# the range — `Config`/`Registration` dropping `outbound`, and `registrar::interpret`'s signature —
-# is in surface this workspace does not use. It takes `challenge`, `auth` and `Algorithm`.
+# `CX-12` moved this from 0.10.0 — twelve releases in one step — and what it cost is worth knowing
+# before the next bump: exactly two source changes. `TransportKind` grew `Quic`, which
+# `listen.rs` refuses at construction like `Ws`/`Wss`; and the stricter response builder surfaced
+# a real local defect — the echo endpoint's REGISTER carried no `Via` (RFC 3261 §8.1.1.7) and
+# nothing had ever noticed, because every consumer of that request was lenient too. The
+# `#[non_exhaustive]` pass is why 313 kernel commits otherwise compiled clean here.
 #
-# Two things this bump deliberately does **not** do. It does not fix the nonce-uniqueness defect
-# (`CX-5`) or the replay window's scan (`RG-15`): `sipx-ua/src/challenge.rs` is byte-identical at
-# `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` and kernel `main`, verified by blob hash rather than by
-# reading a release note. And it does not touch media: the SRTP keying fix in `v0.9.0` is
-# wire-breaking between kernel versions, but this workspace pins no media crate and relays no
-# media, so it reaches nothing here.
-sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
-sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
-sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0" }
+# What this bump deliberately does **not** do: fix the nonce-uniqueness defect (`CX-5`) or the
+# replay window's scan (`RG-15`). `crates/sipx-ua/src/challenge.rs` is byte-identical from
+# `v0.7.0` through `v1.0.0-beta.4` — one blob, verified by hash at every ref rather than by
+# reading release notes. Both wait on a kernel release that touches that file.
+sipx-sip = { git = "https://github.com/codewandler/sipx", tag = "v1.0.0-beta.4" }
+sipx-transport = { git = "https://github.com/codewandler/sipx", tag = "v1.0.0-beta.4" }
+sipx-sdp = { git = "https://github.com/codewandler/sipx", tag = "v1.0.0-beta.4" }
 # `default-features = false` is load-bearing, not tidiness: it drops sipx-ua's `runtime` feature
 # and with it `tokio`, so the sans-IO registrar can use the kernel's digest verification without a
 # runtime in its decision core. Upstream `X-20` created that seam for exactly this dependency; the
 # gate's own rule — no `tokio` outside sipx-clstr-node — is what would otherwise force this repo to
 # write digest a second time, and two implementations of one algorithm eventually disagree about
 # who is authenticated.
-sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v0.10.0", default-features = false }
+sipx-ua = { git = "https://github.com/codewandler/sipx", tag = "v1.0.0-beta.4", default-features = false }
 
 # Core
 bytes = "1"
@@ -158,3 +162,15 @@ indexing_slicing = "warn"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# TEMPORARY (`CX-12`): consume the sibling checkout instead of the pinned tag above, at the
+# user's instruction, until the current kernel work is pushed. This knowingly overrides the
+# upstream ledger's no-patch rule — a patched build is not reproducible — so it must not outlive
+# the story: CX-12's acceptance requires this section removed (the tag alone then carries the
+# pin) or its survival re-justified in a named follow-up. The tag `v1.0.0-beta.4` is already on
+# the GitHub remote, so removal is a one-section delete, not a wait.
+[patch."https://github.com/codewandler/sipx"]
+sipx-sip = { path = "../sipx/crates/sipx-sip" }
+sipx-transport = { path = "../sipx/crates/sipx-transport" }
+sipx-sdp = { path = "../sipx/crates/sipx-sdp" }
+sipx-ua = { path = "../sipx/crates/sipx-ua" }
