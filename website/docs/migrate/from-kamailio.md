@@ -42,7 +42,7 @@ anyway.
 
 | In your deployment | Goes to | Status |
 |---|---|---|
-| Request forwarding, stateful and stateless | The proxy core: RFC 3261 §16 forwarding, forking, `CANCEL`, Timer C, loop detection (RFC 5393) | today |
+| Request forwarding, stateful and stateless | The proxy core: RFC 3261 §16 forwarding, forking, loop detection (RFC 5393), and in-dialog requests routed by the dialog's `Route` set. `CANCEL` matching and Timer C are decided by the engine and **not performed by the driver** — the effects are produced and discarded (`PX-12`) | today, partly |
 | A registrar and its location table | The registrar: `REGISTER`, address-of-record canonicalisation, bindings, a compare-and-swap location store | today |
 | That location table kept in a database | A PostgreSQL location store, named in the document — behind the non-default `postgres` cargo feature, without which a node asking for it refuses to start | today |
 | Registrations spread across nodes, readable by all of them | One shared location service behind two nodes. Sharding by rendezvous hash is the next step and is not shipped | today, partly |

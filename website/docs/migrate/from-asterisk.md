@@ -36,7 +36,7 @@ from.
 | In your deployment | Goes to | Status |
 |---|---|---|
 | Devices registering to the server | The registrar: bindings, address-of-record canonicalisation, a compare-and-swap location store | today |
-| Calls between two registered devices | Proxy forwarding under RFC 3261 §16, with forking, `CANCEL`, Timer C | today |
+| Calls between two registered devices | Proxy forwarding under RFC 3261 §16, with forking; in-dialog requests follow the dialog's `Route` set. `CANCEL` matching and Timer C are decided by the engine and **not performed by the driver** — the effects are produced and discarded (`PX-12`) | today, partly |
 | Audio between those two devices | Nothing to configure — media flows endpoint to endpoint and the platform never sees a packet | today |
 | Short extension numbers resolved to users | Declarative number normalisation, bound at fixed points in the request path | specified, not shipped |
 | A SIP trunk to a carrier | The trunk model: egress selection, asserted identity, privacy | specified, not shipped |

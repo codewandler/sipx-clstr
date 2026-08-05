@@ -247,7 +247,11 @@ that the two nodes share one registrar.
 
 The caller is the same [sipx](https://github.com/codewandler/sipx) CLI, out of the `sipx-phone:dev`
 image you built in step 3 — a separate project, deliberately not vendored here, because the point of
-an end-to-end proof is that the other end is an independent implementation.
+an end-to-end proof is that the other end is a **separate process on a real socket**. It is the same
+kernel this repository pins, so what this proves is a same-kernel, separate-process integration: the
+listener binds, a registration made by one process is found by another, and audio arrives. It does
+not prove interoperation with a stack written by somebody else — that needs an independent target,
+and there is not one yet.
 
 Dial it from inside the cluster. The greeting's address-of-record is `hello@10.43.0.60` —
 node-a's Service address, which the profile pins with a static `clusterIP` and also declares as the

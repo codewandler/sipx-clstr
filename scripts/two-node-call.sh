@@ -73,7 +73,8 @@ if [[ -z "$SIPX" || ! -x "$SIPX" ]]; then
     echo "environment not ready: no sipx CLI." >&2
     echo "  Build it from a sipx checkout (cargo build --bin sipx) and pass --sipx <path>," >&2
     echo "  or set \$SIPX. It is deliberately not vendored: the point of an end-to-end proof" >&2
-    echo "  is that the other end is an independent implementation." >&2
+    echo "  is that the other end is a separate process on a real socket. It is the same kernel" >&2
+    echo "  this repo pins, so this proves integration, not interoperation with another stack." >&2
     exit 2
 fi
 command -v docker >/dev/null || { echo "environment not ready: no docker, needed for the store." >&2; exit 2; }

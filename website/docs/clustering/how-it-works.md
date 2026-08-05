@@ -55,20 +55,31 @@ connection dies with it. See [High availability](../operate/high-availability.md
 | **Affinity token** | Tenant, shard, media node, policy version, expiry — signed, opaque | [affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md) |
 | **Flow reference** | Which edge owns a client's connection, and which generation of it | [cluster-affinity](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/cluster-affinity.md) |
 | **Location service** | AoR to bindings, compare-and-swap, sharded by rendezvous hash | [location-service](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/location-service.md) |
-| **Roles** | Which decision paths a node wires up — never what a request decides | [cluster-config](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/cluster-config.md) |
+| **Roles** | Which decision paths a node wires up — never what a request decides. See [Roles](#roles) for how far the released binary carries that | [cluster-config](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/cluster-config.md) |
 
 ## Roles
 
 One binary. What a node does is chosen by configuration, from a closed set: `edge`,
 `registrar`, `inbound-proxy`, `outbound-proxy`, `e2e-tester`, `echo`.
 
-A role selects which decision paths are wired, and never what a request decides. The same request
-reaching the same code takes the same branch regardless of which roles the node happens to run —
-that rule is what keeps a multi-role deployment from developing behaviour a single-role one does
-not have.
+**The rule, which is the schema's.** A role selects which decision paths are wired, and never what a
+request decides ([cluster-config](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/cluster-config.md)
+§4 R3). The same request reaching the same code takes the same branch regardless of which roles the
+node happens to run — that rule is what keeps a multi-role deployment from developing behaviour a
+single-role one does not have.
 
-`echo` is refused in combination with any proxy role, because a node that answers calls must not
-also be forwarding them.
+**What the released node does with it, which is a different claim.** The binary derives a capability
+set from its declared roles and dispatches through it: a node without `registrar` answers `405` with
+an `Allow` header for `REGISTER` rather than storing a binding, and a node given a role this build
+has no runtime for — `echo` or `e2e-tester` — refuses to start, by name, before it binds a socket.
+`echo` is separately refused in combination with any proxy role, because a node that answers calls
+must not also be forwarding them.
+
+That is not the whole matrix yet. The refusal *shape* (`503` with `Retry-After` for a method no role
+serves, `481` for an unmatched `CANCEL` under RFC 3261 §9.2), the counted `ACK` drop, and a runtime
+for `echo` are open work, tracked as `DP-13`, and none of them is proved by a real-binary role matrix
+today. Read the row on [What sipx-clstr is](../intro.md) for the current state rather than inferring
+it from the rule above.
 
 ## Where to go next
 
