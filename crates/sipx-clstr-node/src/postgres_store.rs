@@ -21,8 +21,8 @@ use std::sync::Mutex;
 
 use postgres::{Client, NoTls};
 use sipx_clstr_registrar::{
-    BindingSet, CanonicalAor, CasConflict, Change, LocationStore, Revision, Target, Timestamp,
-    order_targets,
+    BindingSet, CanonicalAor, CasConflict, Change, LocationStore, ReadFailure, Revision, Target,
+    Timestamp, order_targets,
 };
 
 /// A lock id for schema application, so concurrent nodes serialize instead of colliding.
@@ -60,6 +60,20 @@ pub enum StoreError {
     /// disagree about the schema — a deployment problem, not a connectivity one.
     #[error("a stored binding set could not be decoded: {0}")]
     Decode(#[from] serde_json::Error),
+}
+
+/// Which §6 K7 failure this error is.
+///
+/// The two stay apart all the way out of this module because they are different operational faults: a
+/// `Database` error is connectivity or a refused query, where a `Decode` error says this node and
+/// whatever wrote the row disagree about the schema — an operator restores the first and rolls back a
+/// deployment for the second. The *refusal* is the same either way (§5.1 S10), which is why the
+/// distinction lives in the error rather than in the response.
+fn failure_of(error: &StoreError) -> ReadFailure {
+    match error {
+        StoreError::Database(_) => ReadFailure::Unavailable(error.to_string()),
+        StoreError::Decode(_) => ReadFailure::Undecodable(error.to_string()),
+    }
 }
 
 /// A `LocationStore` backed by `PostgreSQL`.
@@ -225,19 +239,23 @@ impl PostgresStore {
 }
 
 impl LocationStore for PostgresStore {
-    fn read(&self, tenant: &str, aor: &CanonicalAor) -> (BindingSet, Revision) {
-        // A read failure is a *liveness* problem, not a correctness one (§6 K6): returning the empty
-        // set makes `process` decide as though the address-of-record were new, and the commit that
-        // follows is predicated on revision 0 — so a row that actually exists produces a
-        // `CasConflict` and a retry, never a lost update. The alternative would be widening the
-        // trait to `Result` for a case the CAS already fences.
-        match self.read_inner(tenant, aor) {
-            Ok(found) => found,
-            Err(error) => {
-                tracing::warn!(%tenant, aor = %aor, %error, "location read failed; treating as absent");
-                (BindingSet::new(), Revision::INITIAL)
-            }
-        }
+    fn read(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+    ) -> Result<(BindingSet, Revision), ReadFailure> {
+        // §6 K7 — a store this node cannot read is not an empty store. This used to answer the empty
+        // set at revision zero on the argument that §6 K6 already fenced it: `process` would decide as
+        // though the address-of-record were new, and the commit that followed, predicated on revision
+        // 0, would lose to the row that actually exists. That argument is sound and covers only the
+        // commands that *commit*. A query, an idempotent retry and the removal of a contact that is
+        // not bound all reach `Outcome::Noop`, which returns before any commit and therefore meets no
+        // predicate — so the invented absence went out as a `200 OK` enumerating no bindings (`V-08`,
+        // `RG-17`).
+        self.read_inner(tenant, aor).map_err(|error| {
+            tracing::error!(%tenant, aor = %aor, %error, "the location store could not be read");
+            failure_of(&error)
+        })
     }
 
     fn commit(
@@ -262,12 +280,19 @@ impl LocationStore for PostgresStore {
         }
     }
 
-    fn lookup(&self, tenant: &str, aor: &CanonicalAor, now: Timestamp) -> Vec<Target> {
-        let (set, _) = self.read(tenant, aor);
+    fn lookup(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+        now: Timestamp,
+    ) -> Result<Vec<Target>, ReadFailure> {
+        // §7 L8 — the same read, so the same refusal: a call whose callee this node could not look up
+        // must not be answered as though the address-of-record were authoritatively empty.
+        let (set, _) = self.read(tenant, aor)?;
         // The same ordering function the in-memory backend uses. A backend that ordered targets its
         // own way would make the fork order depend on which store a node happens to be talking to,
         // and §7 L3 exists to stop exactly that.
-        order_targets(&set, now)
+        Ok(order_targets(&set, now))
     }
 
     fn changes(&self) -> Vec<Change> {

@@ -93,11 +93,19 @@ One binary. What a node does is chosen by configuration from a closed set: `edge
 
 At small scale every role shares one process. At large scale they scale separately — and nothing
 about the code changes between those two deployments, because **a role selects which decision
-paths are wired and never what a request decides**. Direction, tenant, scope and trunk come from
-the ingress binding and from the message itself, so an `inbound-proxy` and an `outbound-proxy` in
-one process cannot disagree: there is nothing for them to disagree about.
+paths are wired and never what a request decides**. That is the schema's rule (cluster-config §4
+R3). Direction, tenant, scope and trunk come from the ingress binding and from the message itself,
+so an `inbound-proxy` and an `outbound-proxy` in one process cannot disagree: there is nothing for
+them to disagree about.
 
-One combination is refused: the probe roles beside the call-path roles. A probe that enters
+What the released binary does with the rule today: it derives a capability set from the declared
+roles and dispatches through it, so a node without `registrar` answers `405` to a `REGISTER` rather
+than storing a binding, and a role this build has no runtime for stops the node at startup by name.
+The refusal shape, the counted `ACK` and an `echo` runtime are open (`DP-13`), and the matrix is not
+proved by a real-binary test yet — so plan a deployment on the roles the document declares, not on
+an assumption about what a wrong one would answer.
+
+One combination is refused outright: the probe roles beside the call-path roles. A probe that enters
 through the node it is probing measures a path no caller takes, so the `e2e-tester` sits outside
 the border it tests.
 

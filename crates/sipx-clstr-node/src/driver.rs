@@ -1299,12 +1299,28 @@ async fn perform(
     for effect in effects {
         match effect {
             ProxyEffect::ResolveTargets(query) => {
+                // A Request-URI this platform cannot canonicalize is still an *answer*: location-service
+                // §3 says a lookup rejection is the empty target set, and §7 L5 leaves what to say about
+                // it to the proxy — `480`. Only the store failing to answer is `TargetsUnavailable`
+                // (§7 L8): the question was well-formed and this node could not resolve it.
                 let found = match CanonicalAor::parse(query.uri.clone()) {
                     Ok(aor) => store.lookup(&config.tenant, &aor, now()),
-                    Err(_) => Vec::new(),
+                    Err(_) => Ok(Vec::new()),
                 };
-                let targets = targets_from_lookup(&found);
-                let more = context.on_input(ProxyInput::TargetsResolved(targets));
+                let input = match found {
+                    Ok(found) => ProxyInput::TargetsResolved(targets_from_lookup(&found)),
+                    Err(failure) => {
+                        tracing::error!(
+                            tenant = %config.tenant,
+                            uri = %String::from_utf8_lossy(&query.uri),
+                            %failure,
+                            "the location store could not be read; the call is refused rather \
+                             than answered as an empty address-of-record"
+                        );
+                        ProxyInput::TargetsUnavailable
+                    }
+                };
+                let more = context.on_input(input);
                 Box::pin(perform(handle, store, config, key, context, more, pending)).await?;
             }
             ProxyEffect::Forward {

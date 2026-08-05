@@ -118,6 +118,14 @@ pub enum Input {
     BranchTransportError(BranchId),
     /// The targets the engine asked for.
     TargetsResolved(Vec<Target>),
+    /// The targets could **not** be determined: the location service reported failure rather than an
+    /// answer (location-service §6 K7, §7 L8).
+    ///
+    /// Separate from `TargetsResolved(vec![])` because they are different facts, and §7 gives them
+    /// different responses: an empty answer is what this platform knows about the callee (`480`),
+    /// while this is what it does not know about itself (`503`). One input for both would put the
+    /// distinction back in the driver, where each caller would have to rediscover it.
+    TargetsUnavailable,
     /// A token found in a `Route` was verified, or rejected — the answer to
     /// [`Effect::VerifyToken`], and the input P2 turns into P3.
     TokenFact(TokenVerdict),

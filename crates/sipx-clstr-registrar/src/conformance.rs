@@ -17,8 +17,9 @@ use bytes::Bytes;
 use sipx_sip::Uri;
 
 use crate::aor::CanonicalAor;
-use crate::binding::{Revision, Timestamp};
+use crate::binding::{BindingSet, Revision, Timestamp};
 use crate::command::{ContactOp, ContactOps, Outcome, RegisterCommand, TenantPolicy};
+use crate::lookup::Target;
 use crate::store::{LocationStore, apply};
 
 const RETRIES: usize = 3;
@@ -64,6 +65,39 @@ impl Suite<'_> {
                 row: row.to_owned(),
                 detail: detail(),
             });
+        }
+    }
+
+    /// The suite's own authoritative read, with §6 K7's failure reported rather than absorbed.
+    ///
+    /// Every row below runs against a store that works, so a `ReadFailure` here is the suite losing
+    /// its footing rather than a vector's verdict — and it has to be *reported*, because the fallback
+    /// is an empty set and half these rows assert emptiness. A read that failed silently would make
+    /// them pass for precisely the reason `RG-17` exists. The failure path itself is
+    /// [`run_read_failure_suite`]'s subject.
+    fn read(&mut self, row: &str, who: &str) -> (BindingSet, Revision) {
+        match self.store.read(&self.tenant, &aor(who)) {
+            Ok(found) => found,
+            Err(failure) => {
+                self.check(row, false, || {
+                    format!("the store could not be read: {failure}")
+                });
+                (BindingSet::new(), Revision::INITIAL)
+            }
+        }
+    }
+
+    /// The suite's own lookup, on [`Suite::read`]'s terms (§7 L8): an empty target set is an answer,
+    /// and a failure is reported as the row failing rather than mistaken for one.
+    fn lookup(&mut self, row: &str, who: &str, now: Timestamp) -> Vec<Target> {
+        match self.store.lookup(&self.tenant, &aor(who), now) {
+            Ok(found) => found,
+            Err(failure) => {
+                self.check(row, false, || {
+                    format!("the store could not be read: {failure}")
+                });
+                Vec::new()
+            }
         }
     }
 }
@@ -112,6 +146,34 @@ pub fn run_location_store_suite(
     ls_k_revision_survives_empty(&mut suite);
     ls_k_changes(&mut suite);
     ls_l_lookup_order(&mut suite);
+    suite.failures
+}
+
+/// The §6 K7 rows — `LS-K-7`, `LS-K-8` and `LS-L-9` — against a store whose authoritative read
+/// **fails**.
+///
+/// A second entry point because the fault cannot be injected through the trait: `store` is one the
+/// caller has already broken — a double on one side, a database holding a row this node cannot decode
+/// on the other — and the rows executed are identical either way, which is the whole of §6.3's
+/// "identical suite" applied to the failure path rather than only to the happy one.
+///
+/// Nothing here commits, so the store need not be empty; `tenant` need only be one nothing else is
+/// using. The three rows are the shapes that **never** reach a compare-and-swap, which is why they are
+/// the ones an invented absence escapes through (`RG-17`, `V-08`).
+pub fn run_read_failure_suite(
+    store: &dyn LocationStore,
+    backend: &str,
+    tenant: &str,
+) -> Vec<Failure> {
+    let mut suite = Suite {
+        store,
+        backend: backend.to_owned(),
+        tenant: tenant.to_owned(),
+        failures: Vec::new(),
+    };
+    ls_k_read_failure_under_a_query(&mut suite);
+    ls_k_read_failure_under_a_no_op_removal(&mut suite);
+    ls_l_read_failure_is_not_the_empty_target_set(&mut suite);
     suite.failures
 }
 
@@ -197,7 +259,7 @@ fn ls_r_first_registration(suite: &mut Suite<'_>) {
     let applied = apply(suite.store, &cmd, &policy(), RETRIES);
     suite.check(
         "LS-R-1",
-        applied.outcome.commits() && applied.revision == Revision(1),
+        applied.outcome.commits() && applied.revision == Some(Revision(1)),
         || {
             format!(
                 "expected a commit at revision 1, got {:?}",
@@ -227,8 +289,7 @@ fn ls_r_refresh_and_retry(suite: &mut Suite<'_>) {
     });
 
     let deadline = suite
-        .store
-        .read(&suite.tenant, &aor(who))
+        .read("LS-R-3", who)
         .0
         .all()
         .first()
@@ -255,8 +316,7 @@ fn ls_r_refresh_and_retry(suite: &mut Suite<'_>) {
     // B4.2 — no mutation means the deadline does not move either; a retry that extended the
     // binding would let one ordering token buy a second lifetime.
     let after = suite
-        .store
-        .read(&suite.tenant, &aor(who))
+        .read("LS-R-3", who)
         .0
         .all()
         .first()
@@ -266,7 +326,7 @@ fn ls_r_refresh_and_retry(suite: &mut Suite<'_>) {
     });
 
     // LS-R-22 — the same token asking for a different granted duration is not a retry.
-    let before = suite.store.read(&suite.tenant, &aor(who)).1;
+    let before = suite.read("LS-R-22", who).1;
     let mut longer = command(
         &suite.tenant,
         who,
@@ -285,7 +345,7 @@ fn ls_r_refresh_and_retry(suite: &mut Suite<'_>) {
     });
     // The status alone would let a backend abort *and* commit. LS-R-4 checks the store did not
     // move for the same reason; a B5 row that does not is half a row.
-    let settled = suite.store.read(&suite.tenant, &aor(who)).1;
+    let settled = suite.read("LS-R-22", who).1;
     suite.check("LS-R-22", settled == before, || {
         format!("the store moved under an aborted request: {before:?} → {settled:?}")
     });
@@ -301,7 +361,7 @@ fn ls_r_refresh_and_retry(suite: &mut Suite<'_>) {
             both.outcome.status()
         )
     });
-    let set = suite.store.read(&suite.tenant, &aor(who)).0;
+    let set = suite.read("LS-R-23", who).0;
     let ca_deadline = set
         .all()
         .iter()
@@ -329,7 +389,7 @@ fn ls_r_stale_cseq(suite: &mut Suite<'_>) {
         &policy(),
         RETRIES,
     );
-    let before = suite.store.read(&suite.tenant, &aor(who));
+    let before = suite.read("LS-R-4", who);
 
     let applied = apply(
         suite.store,
@@ -340,7 +400,7 @@ fn ls_r_stale_cseq(suite: &mut Suite<'_>) {
     suite.check("LS-R-4", applied.outcome.status() == 500, || {
         format!("expected 500, got {}", applied.outcome.status())
     });
-    let after = suite.store.read(&suite.tenant, &aor(who));
+    let after = suite.read("LS-R-4", who);
     suite.check("LS-R-4", before.1 == after.1, || {
         format!("the store moved: {:?} → {:?}", before.1, after.1)
     });
@@ -423,16 +483,10 @@ fn ls_r_wildcard(suite: &mut Suite<'_>) {
                 .is_some_and(|a| a.contacts.is_empty()),
         || "a valid wildcard removes everything and answers with no contacts".to_owned(),
     );
-    suite.check(
-        "LS-R-7",
-        suite
-            .store
-            .read(&suite.tenant, &aor(who))
-            .0
-            .all()
-            .is_empty(),
-        || "the stored set must be empty".to_owned(),
-    );
+    let remaining = suite.read("LS-R-7", who).0;
+    suite.check("LS-R-7", remaining.all().is_empty(), || {
+        "the stored set must be empty".to_owned()
+    });
 
     // W2 — a wildcard without an explicit `Expires: 0`.
     let mut bad = command(&suite.tenant, who, "i8", 2, 20, vec![]);
@@ -463,9 +517,11 @@ fn ls_r_min_and_max_expires(suite: &mut Suite<'_>) {
     suite.check("LS-R-11", applied.outcome.status() == 423, || {
         format!("expected 423, got {}", applied.outcome.status())
     });
-    suite.check("LS-R-11", applied.revision == Revision::INITIAL, || {
-        "nothing may commit".to_owned()
-    });
+    suite.check(
+        "LS-R-11",
+        applied.revision == Some(Revision::INITIAL),
+        || "nothing may commit".to_owned(),
+    );
 
     let long = command(
         &suite.tenant,
@@ -541,12 +597,16 @@ fn ls_r_contact_operation_bound(suite: &mut Suite<'_>) {
     suite.check("LS-R-24", refused.outcome.status() == 403, || {
         format!("expected 403, got {}", refused.outcome.status())
     });
-    suite.check("LS-R-24", refused.revision == Revision::INITIAL, || {
-        format!(
-            "nothing may commit, revision moved to {:?}",
-            refused.revision
-        )
-    });
+    suite.check(
+        "LS-R-24",
+        refused.revision == Some(Revision::INITIAL),
+        || {
+            format!(
+                "nothing may commit, revision moved to {:?}",
+                refused.revision
+            )
+        },
+    );
     suite.check("LS-R-24", examined == 0, || {
         format!(
             "Q2: the refusal precedes reconciliation, so no contact operation is examined; got {examined}"
@@ -609,16 +669,10 @@ fn ls_r_atomicity(suite: &mut Suite<'_>) {
     suite.check("LS-R-16", applied.outcome.status() == 423, || {
         format!("expected 423, got {}", applied.outcome.status())
     });
-    suite.check(
-        "LS-R-16",
-        suite
-            .store
-            .read(&suite.tenant, &aor(who))
-            .0
-            .all()
-            .is_empty(),
-        || "neither contact may commit — atomicity".to_owned(),
-    );
+    let remaining = suite.read("LS-R-16", who).0;
+    suite.check("LS-R-16", remaining.all().is_empty(), || {
+        "neither contact may commit — atomicity".to_owned()
+    });
 }
 
 fn ls_r_path(suite: &mut Suite<'_>) {
@@ -723,7 +777,7 @@ fn ls_r_two_removals_and_an_addition(suite: &mut Suite<'_>) {
     suite.check("LS-R-26", applied.outcome.status() == 200, || {
         format!("expected 200, got {}", applied.outcome.status())
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-26");
     suite.check("LS-R-26", stored == ["sip:c@10.0.0.3".to_owned()], || {
         format!("expected exactly CC committed, got {stored:?}")
     });
@@ -758,7 +812,7 @@ fn ls_r_a_removal_ahead_of_a_refresh(suite: &mut Suite<'_>) {
     suite.check("LS-R-27", applied.outcome.status() == 200, || {
         format!("expected 200, got {}", applied.outcome.status())
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-27");
     suite.check(
         "LS-R-27",
         stored == ["sip:b@10.0.0.2".to_owned(), "sip:c@10.0.0.3".to_owned()],
@@ -797,7 +851,7 @@ fn ls_r_two_removals_commit_the_empty_set(suite: &mut Suite<'_>) {
     suite.check("LS-R-28", applied.outcome.status() == 200, || {
         format!("expected 200, got {}", applied.outcome.status())
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-28");
     suite.check("LS-R-28", stored.is_empty(), || {
         format!("expected the empty set committed, got {stored:?}")
     });
@@ -832,7 +886,7 @@ fn ls_r_a_refresh_ahead_of_a_removal(suite: &mut Suite<'_>) {
     suite.check("LS-R-29", applied.outcome.status() == 200, || {
         format!("expected 200, got {}", applied.outcome.status())
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-29");
     suite.check(
         "LS-R-29",
         stored == ["sip:b@10.0.0.2".to_owned(), "sip:c@10.0.0.3".to_owned()],
@@ -863,7 +917,7 @@ fn ls_r_a_removal_of_what_this_request_added(suite: &mut Suite<'_>) {
             applied.outcome.status()
         )
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-30");
     suite.check("LS-R-30", stored.is_empty(), || {
         format!("the later operation was the removal, so nothing is bound; got {stored:?}")
     });
@@ -889,13 +943,12 @@ fn ls_r_a_second_operation_on_what_this_request_added(suite: &mut Suite<'_>) {
     suite.check("LS-R-31", applied.outcome.status() == 200, || {
         format!("expected 200, got {}", applied.outcome.status())
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-31");
     suite.check("LS-R-31", stored == ["sip:c@10.0.0.3".to_owned()], || {
         format!("expected one binding, not two: got {stored:?}")
     });
     let granted = suite
-        .store
-        .read(&suite.tenant, &aor(who))
+        .read("LS-R-31", who)
         .0
         .all()
         .first()
@@ -972,7 +1025,7 @@ fn ls_r_quota_measures_the_committed_outcome(suite: &mut Suite<'_>) {
             applied.outcome.status()
         )
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-32");
     suite.check("LS-R-32", stored.len() == 10, || {
         format!(
             "three operations collapse onto one binding, got {}",
@@ -1007,7 +1060,7 @@ fn ls_r_quota_measures_the_committed_outcome(suite: &mut Suite<'_>) {
             refused.outcome.status()
         )
     });
-    let untouched = stored_contacts(suite, other);
+    let untouched = stored_contacts(suite, other, "LS-R-32");
     suite.check("LS-R-32", untouched.len() == 9, || {
         format!("a refusal commits nothing, got {}", untouched.len())
     });
@@ -1055,8 +1108,7 @@ fn ls_r_a_retransmission_of_a_contact_named_twice(suite: &mut Suite<'_>) {
         },
     );
     let granted = suite
-        .store
-        .read(&suite.tenant, &aor(who))
+        .read("LS-R-33", who)
         .0
         .all()
         .first()
@@ -1082,7 +1134,7 @@ fn ls_r_operations_that_cancel_out_commit_nothing(suite: &mut Suite<'_>) {
     );
     let mut retransmission = delivery.clone();
     retransmission.now = Timestamp::from_nanos(delivery.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
-    let before = suite.store.read(&suite.tenant, &aor(who)).1;
+    let before = Some(suite.read("LS-R-34", who).1);
 
     let first = apply(suite.store, &delivery, &policy(), RETRIES);
     suite.check(
@@ -1110,7 +1162,7 @@ fn ls_r_operations_that_cancel_out_commit_nothing(suite: &mut Suite<'_>) {
             )
         },
     );
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-34");
     suite.check("LS-R-34", stored.is_empty(), || {
         format!("nothing is bound either way, got {stored:?}")
     });
@@ -1150,7 +1202,7 @@ fn ls_r_a_deferred_decision_follows_the_binding(suite: &mut Suite<'_>) {
         &policy(),
         RETRIES,
     );
-    let before = suite.store.read(&suite.tenant, &aor(who)).1;
+    let before = Some(suite.read("LS-R-35", who).1);
 
     let aborted = apply(
         suite.store,
@@ -1181,7 +1233,7 @@ fn ls_r_a_deferred_decision_follows_the_binding(suite: &mut Suite<'_>) {
             before, aborted.revision
         )
     });
-    let stored = stored_contacts(suite, who);
+    let stored = stored_contacts(suite, who, "LS-R-35");
     suite.check(
         "LS-R-35",
         stored
@@ -1194,10 +1246,9 @@ fn ls_r_a_deferred_decision_follows_the_binding(suite: &mut Suite<'_>) {
 }
 
 /// Every contact this address-of-record holds, in stored order.
-fn stored_contacts(suite: &Suite<'_>, who: &str) -> Vec<String> {
+fn stored_contacts(suite: &mut Suite<'_>, who: &str, row: &str) -> Vec<String> {
     suite
-        .store
-        .read(&suite.tenant, &aor(who))
+        .read(row, who)
         .0
         .all()
         .iter()
@@ -1215,7 +1266,7 @@ fn ls_k_cas_conflict(suite: &mut Suite<'_>) {
     );
 
     // Two commands read the same revision, the way two nodes racing on one AoR would.
-    let (set, revision) = suite.store.read(&suite.tenant, &aor(who));
+    let (set, revision) = suite.read("LS-K-1", who);
     let second = command(&suite.tenant, who, "i2", 1, 10, vec![cb()]);
     let outcome = crate::process::process(&second, &set, &policy());
     let Outcome::Commit { set: staged, .. } = outcome else {
@@ -1294,6 +1345,54 @@ fn ls_k_changes(suite: &mut Suite<'_>) {
     });
 }
 
+// ------------------------------------------------------------- §6 K7, the read failure ---------
+
+fn ls_k_read_failure_under_a_query(suite: &mut Suite<'_>) {
+    // RFC 3261 §10.2.3 — a REGISTER with no `Contact` is a query. It mutates nothing, so nothing
+    // downstream of the read could have discovered that the read failed.
+    let query = command(&suite.tenant, "k7", "i1", 1, 0, Vec::new());
+    let applied = apply(suite.store, &query, &policy(), RETRIES);
+    let status = applied.outcome.status();
+    suite.check("LS-K-7", status == 503, || {
+        format!("a query served from an unreadable store must be refused, got {status}")
+    });
+    let revision = applied.revision;
+    suite.check("LS-K-7", revision.is_none(), || {
+        format!("nothing was read, so no revision may be reported: {revision:?}")
+    });
+}
+
+fn ls_k_read_failure_under_a_no_op_removal(suite: &mut Suite<'_>) {
+    // §5.3 B1 — removing a contact that is not bound is *ignored*, so this is an `Outcome::Noop` and
+    // returns before any commit. It is the shape the revision-predicate argument never covered.
+    let removal = command(
+        &suite.tenant,
+        "k8",
+        "i1",
+        1,
+        0,
+        vec![contact("sip:gone@10.0.0.9", Some(0), None)],
+    );
+    let applied = apply(suite.store, &removal, &policy(), RETRIES);
+    let status = applied.outcome.status();
+    suite.check("LS-K-8", status == 503, || {
+        format!(
+            "a deregistration that never reached the store must not report success, got {status}"
+        )
+    });
+}
+
+fn ls_l_read_failure_is_not_the_empty_target_set(suite: &mut Suite<'_>) {
+    // §7 L8 — the empty set is an answer about the callee; this is the absence of one.
+    let found = suite
+        .store
+        .lookup(&suite.tenant, &aor("l9"), Timestamp::from_secs(10));
+    let answered = found.as_ref().map(Vec::len);
+    suite.check("LS-L-9", found.is_err(), || {
+        format!("a lookup that could not read must not answer a target set: {answered:?}")
+    });
+}
+
 fn ls_l_lookup_order(suite: &mut Suite<'_>) {
     let who = "l1";
     // Two contacts at distinct q, so the order is decided by preference rather than by chance.
@@ -1314,9 +1413,7 @@ fn ls_l_lookup_order(suite: &mut Suite<'_>) {
         RETRIES,
     );
 
-    let found = suite
-        .store
-        .lookup(&suite.tenant, &aor(who), Timestamp::from_secs(10));
+    let found = suite.lookup("LS-L-1", who, Timestamp::from_secs(10));
     let order: Vec<String> = found
         .iter()
         .map(|target| String::from_utf8_lossy(&target.contact).into_owned())
@@ -1331,16 +1428,12 @@ fn ls_l_lookup_order(suite: &mut Suite<'_>) {
         || format!("descending q: expected high then low, got {order:?}"),
     );
 
-    let empty = suite
-        .store
-        .lookup(&suite.tenant, &aor(who), Timestamp::from_secs(100_000));
+    let empty = suite.lookup("LS-L-4", who, Timestamp::from_secs(100_000));
     suite.check("LS-L-4", empty.is_empty(), || {
         format!("every binding expired: expected none, got {}", empty.len())
     });
 
-    let unknown = suite
-        .store
-        .lookup(&suite.tenant, &aor("nobody-here"), Timestamp::from_secs(10));
+    let unknown = suite.lookup("LS-L-7", "nobody-here", Timestamp::from_secs(10));
     suite.check("LS-L-7", unknown.is_empty(), || {
         "an unknown address-of-record is the empty set".to_owned()
     });

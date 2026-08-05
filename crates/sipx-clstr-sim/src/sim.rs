@@ -58,6 +58,32 @@ pub struct Sim {
     /// Per-node timer rate in per-mille, for nodes a `TimerSkew` fault has touched. Absent means
     /// nominal; the map stays empty in every scenario that never skews a clock.
     skew: BTreeMap<NodeId, u32>,
+    /// How many times each node has been restarted, which is its incarnation minus one (`CF-26`).
+    /// Absent means it is still on its first run; nodes are born at incarnation 1.
+    restarts: BTreeMap<NodeId, u32>,
+    /// Which connection each directed pair is on. Bumped by a reconnect and by either end
+    /// restarting, and stamped on every message as it goes out, so a message written to a
+    /// connection that has since been replaced is lost rather than arriving at its successor —
+    /// the harness's half of "a reference resolves to the connection it was minted for, or to
+    /// nothing at all". Absent means the first connection, so this map stays empty in every
+    /// scenario that injures none.
+    connections: BTreeMap<(NodeId, NodeId), u64>,
+    /// Nodes a `StopReading` fault has stopped draining.
+    not_reading: BTreeSet<NodeId>,
+    /// Writes held for a node that is not reading, in the order they were written. Keyed by the
+    /// node that is not reading, because that is what the resume is addressed to.
+    held: BTreeMap<NodeId, Vec<HeldWrite>>,
+}
+
+/// A write sitting in its sender's buffer because the far end is not draining.
+#[derive(Debug)]
+struct HeldWrite {
+    from: NodeId,
+    bytes: Bytes,
+    /// The trace's own words for the message, kept rather than re-derived so that a message which
+    /// is dropped or duplicated on its way out after the flush reads the same as one that was
+    /// never held.
+    summary: String,
 }
 
 #[derive(Debug)]
@@ -66,6 +92,9 @@ enum Event {
         from: NodeId,
         to: NodeId,
         bytes: Bytes,
+        /// Which connection this went out on. A delivery whose connection has been replaced is
+        /// discarded at arrival: the bytes were written into a socket that no longer exists.
+        connection: u64,
     },
     Break {
         node: NodeId,
@@ -75,6 +104,25 @@ enum Event {
     /// ordering against deliveries and timers is the same insertion-sequence rule as everything
     /// else and a schedule replays identically from its seed.
     Fault(Box<Fault>),
+    /// Something the harness has to tell a node about its connections (`CF-26`).
+    ///
+    /// Queued rather than delivered from inside `apply` or `send`, for the reason every other
+    /// consequence is queued: a node must finish emitting the effects it is in the middle of
+    /// before it is handed the next input, or the order a scenario reads would depend on where in
+    /// the scheduler the notice was raised.
+    Notify {
+        node: NodeId,
+        notice: Notice,
+    },
+}
+
+/// What a [`Event::Notify`] carries. One variant per [`Input`] the harness raises by itself.
+#[derive(Debug, Clone, Copy)]
+enum Notice {
+    Connected(NodeId),
+    Restarted(u32),
+    WriteStalled(NodeId),
+    WriteFlushed(NodeId),
 }
 
 impl Sim {
@@ -92,6 +140,10 @@ impl Sim {
             timers: TimerQueue::new(),
             killed: BTreeSet::new(),
             skew: BTreeMap::new(),
+            restarts: BTreeMap::new(),
+            connections: BTreeMap::new(),
+            not_reading: BTreeSet::new(),
+            held: BTreeMap::new(),
             trace: Trace::new(),
             // Generous, but finite. A correct scenario settles in tens of steps; this exists to
             // turn a livelock into a failing test rather than a hung CI job.
@@ -202,15 +254,39 @@ impl Sim {
         self.killed.contains(&node)
     }
 
+    /// Which run of this node the scenario is looking at (`CF-26`).
+    ///
+    /// Nodes are born at 1 and every [`Fault::RestartNode`] adds one, so it is strictly greater
+    /// than the run it replaced — the whole of what [affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
+    /// §12.2 CT2 asks of a real incarnation, without a clock anywhere near it.
+    #[must_use]
+    pub fn incarnation(&self, node: NodeId) -> u32 {
+        self.restarts.get(&node).copied().unwrap_or(0) + 1
+    }
+
+    /// How many writes are held for a node that is not reading (`CF-26`).
+    ///
+    /// The backpressure a scenario asserts on: zero while the node drains, and the size of what a
+    /// resume will release while it does not.
+    #[must_use]
+    pub fn held_writes(&self, node: NodeId) -> usize {
+        self.held.get(&node).map_or(0, Vec::len)
+    }
+
     /// Apply one fault, now.
     fn apply(&mut self, fault: &Fault) {
         // Recorded before it takes effect, so the trace reads as cause then consequence.
         let anchor = match fault {
-            Fault::KillNode(node) | Fault::TimerSkew { node, .. } => *node,
+            Fault::KillNode(node)
+            | Fault::TimerSkew { node, .. }
+            | Fault::RestartNode(node)
+            | Fault::StopReading(node)
+            | Fault::ResumeReading(node) => *node,
             Fault::Partition { a, b } | Fault::Heal { a, b } => {
                 *a.first().or_else(|| b.first()).unwrap_or(&NodeId(0))
             }
             Fault::SetLinkPolicy { from, .. } => *from,
+            Fault::Reconnect { a, .. } => *a,
         };
         let name = self.name_of(anchor).to_owned();
         self.trace.record(
@@ -238,6 +314,10 @@ impl Sim {
                 // drops the generations outright, so the entries still in the queue match nothing
                 // and are discarded when they surface.
                 self.timers.forget_matching(|(owner, _)| owner == node);
+                // A process that is gone took its socket buffers with it (`CF-26`). Nothing here
+                // unless a `StopReading` fault was also in play, which is why it is a discard
+                // rather than a heal.
+                self.discard_held_involving(*node);
             }
             Fault::Partition { a, b } => self.cut_between(a, b, true),
             Fault::Heal { a, b } => self.cut_between(a, b, false),
@@ -255,6 +335,139 @@ impl Sim {
             Fault::TimerSkew { node, per_mille } => {
                 self.skew.insert(*node, *per_mille);
             }
+            Fault::Reconnect { a, b } => self.reconnect(*a, *b),
+            Fault::RestartNode(node) => self.restart(*node),
+            Fault::StopReading(node) => {
+                self.not_reading.insert(*node);
+            }
+            Fault::ResumeReading(node) => self.resume_reading(*node),
+        }
+    }
+
+    /// Close the connection between two nodes and accept a new one (`CF-26`).
+    ///
+    /// Both ends learn, in that order. Nothing about the *link* changes: a reconnect across a link
+    /// a partition has cut establishes a connection the next write will break, which is what a
+    /// scenario asking for both should get.
+    fn reconnect(&mut self, a: NodeId, b: NodeId) {
+        self.bump_connection(a, b);
+        self.bump_connection(b, a);
+        self.discard_held_between(a, b);
+        // Break before Connected, per end: a node that saw the new connection first would have no
+        // moment at which it held neither, which is precisely the moment its table is about.
+        for (node, peer) in [(a, b), (b, a)] {
+            self.queue
+                .schedule_at(self.now, Event::Break { node, peer });
+        }
+        for (node, peer) in [(a, b), (b, a)] {
+            self.queue.schedule_at(
+                self.now,
+                Event::Notify {
+                    node,
+                    notice: Notice::Connected(peer),
+                },
+            );
+        }
+    }
+
+    /// Stop a node and start it again as a new process, under a fresh incarnation (`CF-26`).
+    fn restart(&mut self, node: NodeId) {
+        let was_killed = self.killed.remove(&node);
+        // The timers of the run that ended never fire. Same reasoning as a kill: they belong to a
+        // process that no longer exists.
+        self.timers.forget_matching(|(owner, _)| owner == &node);
+
+        let peers: Vec<NodeId> = (0..self.nodes.len())
+            .map(NodeId)
+            .filter(|peer| *peer != node)
+            .collect();
+        for peer in &peers {
+            // Every connection it had is gone, in both directions, and so is anything written to
+            // one and still on its way.
+            self.bump_connection(node, *peer);
+            self.bump_connection(*peer, node);
+            if was_killed {
+                // Undo exactly what the kill did. A restart of a node nothing stopped is a bounce,
+                // and leaves whatever weather the scenario arranged in place.
+                self.set_partitioned(node, *peer, false);
+                self.set_partitioned(*peer, node, false);
+            }
+        }
+        self.discard_held_involving(node);
+
+        // The peers whose connection just went away find out; a datagram peer had none to lose.
+        for peer in peers {
+            if self.has_stream_link(peer, node) {
+                self.queue.schedule_at(
+                    self.now,
+                    Event::Break {
+                        node: peer,
+                        peer: node,
+                    },
+                );
+            }
+        }
+
+        let restarts = self.restarts.entry(node).or_insert(0);
+        *restarts += 1;
+        let incarnation = *restarts + 1;
+        self.queue.schedule_at(
+            self.now,
+            Event::Notify {
+                node,
+                notice: Notice::Restarted(incarnation),
+            },
+        );
+    }
+
+    /// Let a node read again, releasing what was held for it in the order it was written.
+    fn resume_reading(&mut self, node: NodeId) {
+        self.not_reading.remove(&node);
+        for write in self.held.remove(&node).unwrap_or_default() {
+            // The write leaves the buffer, and only then crosses the link — so it is subject to
+            // that link's policy now rather than to the one in force when it was issued.
+            self.queue.schedule_at(
+                self.now,
+                Event::Notify {
+                    node: write.from,
+                    notice: Notice::WriteFlushed(node),
+                },
+            );
+            self.dispatch(write.from, node, write.bytes, write.summary);
+        }
+    }
+
+    /// Which connection a directed pair is on. Zero until something replaces it.
+    fn connection_of(&self, from: NodeId, to: NodeId) -> u64 {
+        self.connections.get(&(from, to)).copied().unwrap_or(0)
+    }
+
+    fn bump_connection(&mut self, from: NodeId, to: NodeId) {
+        *self.connections.entry((from, to)).or_insert(0) += 1;
+    }
+
+    /// Whether a stream link exists between two nodes, either way round. Only a stream link has a
+    /// connection to break; a datagram peer has nothing to be told about.
+    fn has_stream_link(&self, a: NodeId, b: NodeId) -> bool {
+        [(a, b), (b, a)].iter().any(|pair| {
+            self.links
+                .get(pair)
+                .is_some_and(|link| link.kind == LinkKind::Stream)
+        })
+    }
+
+    fn discard_held_between(&mut self, a: NodeId, b: NodeId) {
+        for (holder, other) in [(a, b), (b, a)] {
+            if let Some(writes) = self.held.get_mut(&holder) {
+                writes.retain(|write| write.from != other);
+            }
+        }
+    }
+
+    fn discard_held_involving(&mut self, node: NodeId) {
+        self.held.remove(&node);
+        for writes in self.held.values_mut() {
+            writes.retain(|write| write.from != node);
         }
     }
 
@@ -414,7 +627,12 @@ impl Sim {
 
     fn handle(&mut self, event: Event) {
         match event {
-            Event::Deliver { from, to, bytes } => self.handle_delivery(from, to, bytes),
+            Event::Deliver {
+                from,
+                to,
+                bytes,
+                connection,
+            } => self.handle_delivery(from, to, bytes, connection),
             Event::Fault(fault) => self.apply(&fault),
             Event::Break { node, peer } => {
                 let name = self.name_of(node).to_owned();
@@ -423,13 +641,53 @@ impl Sim {
                 let effects = self.deliver(node, Input::TransportError { peer });
                 self.perform(node, effects);
             }
+            Event::Notify { node, notice } => self.notify(node, notice),
         }
     }
 
-    fn handle_delivery(&mut self, from: NodeId, to: NodeId, bytes: Bytes) {
+    /// Hand a node one of the inputs the harness raises by itself (`CF-26`).
+    ///
+    /// Only a restart gets a trace entry of its own, and it reuses the vocabulary it already fits:
+    /// a node that has restarted has *started*. The rest are the consequences of a fault whose
+    /// `** FAULT` line is already in the trace one instant earlier, and what a connection notice
+    /// or a stalled write *means* is the node's to record — the harness knows about connections
+    /// and only the node knows about flows.
+    fn notify(&mut self, node: NodeId, notice: Notice) {
+        let input = match notice {
+            Notice::Connected(peer) => Input::Connected { peer },
+            Notice::Restarted(incarnation) => {
+                let name = self.name_of(node).to_owned();
+                self.trace
+                    .record(self.now, node, &name, trace::Event::Started);
+                Input::Restarted { incarnation }
+            }
+            Notice::WriteStalled(peer) => Input::WriteStalled { peer },
+            Notice::WriteFlushed(peer) => Input::WriteFlushed { peer },
+        };
+        let effects = self.deliver(node, input);
+        self.perform(node, effects);
+    }
+
+    fn handle_delivery(&mut self, from: NodeId, to: NodeId, bytes: Bytes, connection: u64) {
         let name = self.name_of(to).to_owned();
         match parse_datagram(bytes, &Limits::default()) {
             Ok(message) => {
+                if connection != self.connection_of(from, to) {
+                    // Written to a connection that has since been replaced (`CF-26`). Recorded
+                    // against the sender, beside the loss it is a kind of: the bytes went into a
+                    // socket, and the socket went away before they came out of the other end.
+                    let sender = self.name_of(from).to_owned();
+                    self.trace.record(
+                        self.now,
+                        from,
+                        &sender,
+                        trace::Event::Dropped {
+                            to,
+                            summary: trace::summarize(&message),
+                        },
+                    );
+                    return;
+                }
                 self.trace.record(
                     self.now,
                     to,
@@ -520,8 +778,40 @@ impl Sim {
         // message it cannot itself write out is a bug this catches and a shared-object handoff
         // would not.
         let bytes = message.to_bytes();
+
+        // A peer that is not draining never lets this reach the link (`CF-26`): the bytes stay in
+        // this node's buffer, and the sender is told so rather than told nothing. Checked before
+        // the link, and consuming no randomness, so a write that never left cannot shift what the
+        // rest of the topology draws.
+        if self.not_reading.contains(&to) {
+            self.held.entry(to).or_default().push(HeldWrite {
+                from,
+                bytes,
+                summary,
+            });
+            self.queue.schedule_at(
+                self.now,
+                Event::Notify {
+                    node: from,
+                    notice: Notice::WriteStalled(to),
+                },
+            );
+            return;
+        }
+
+        self.dispatch(from, to, bytes, summary);
+    }
+
+    /// Put bytes on the link and schedule what it decided.
+    ///
+    /// Split from [`Sim::send`] because a held write crosses the link when it is *released*, not
+    /// when it was issued, and only the sending half of `send` — the trace entry — belongs to the
+    /// instant a node emitted the effect.
+    fn dispatch(&mut self, from: NodeId, to: NodeId, bytes: Bytes, summary: String) {
+        let name = self.name_of(from).to_owned();
         let now = self.now;
         let decision = self.link_between(from, to).decide(now);
+        let connection = self.connection_of(from, to);
 
         match decision {
             Delivery::Dropped => {
@@ -538,8 +828,16 @@ impl Sim {
                 );
             }
             Delivery::Once(after) => {
-                self.queue
-                    .schedule_after(self.now, after, Event::Deliver { from, to, bytes });
+                self.queue.schedule_after(
+                    self.now,
+                    after,
+                    Event::Deliver {
+                        from,
+                        to,
+                        bytes,
+                        connection,
+                    },
+                );
             }
             Delivery::Twice(first, second) => {
                 self.trace.record(
@@ -558,10 +856,19 @@ impl Sim {
                         from,
                         to,
                         bytes: bytes.clone(),
+                        connection,
                     },
                 );
-                self.queue
-                    .schedule_after(self.now, second, Event::Deliver { from, to, bytes });
+                self.queue.schedule_after(
+                    self.now,
+                    second,
+                    Event::Deliver {
+                        from,
+                        to,
+                        bytes,
+                        connection,
+                    },
+                );
             }
         }
     }
@@ -741,6 +1048,66 @@ mod tests {
         let settled = sim.now();
         sim.advance(Duration::from_hours(1)).unwrap();
         assert_eq!(sim.now(), settled.saturating_add(Duration::from_hours(1)));
+    }
+
+    #[test]
+    fn a_message_in_flight_when_the_connection_is_replaced_never_arrives() {
+        // `CF-26`'s sharpest edge, and the one the scenario tests cannot see: a reconnect at the
+        // instant a request is on the wire must lose it. Delivering it would hand the *new*
+        // connection bytes written for the one it replaced — which is the whole failure a flow
+        // reference's generation exists to prevent, reproduced inside the harness.
+        let mut sim = Sim::new(11);
+        sim.link_default(LinkKind::Stream, LinkPolicy::jittery(20, 20));
+        let echo = sim.add_node(Box::new(Echo {
+            name: "echo".to_owned(),
+            seen: 0,
+        }));
+        let caller = sim.add_node(Box::new(Caller {
+            name: "caller".to_owned(),
+            peer: echo,
+            answered: None,
+        }));
+        sim.schedule(&Schedule::new().at(
+            SimTime::from_millis(10),
+            Fault::Reconnect { a: caller, b: echo },
+        ));
+        sim.run_until_idle().unwrap();
+
+        assert_eq!(
+            sim.node::<Echo>(echo).map(|e| e.seen),
+            Some(0),
+            "the request was written to a connection that no longer exists:\n{}",
+            sim.trace().render()
+        );
+        assert_eq!(
+            sim.trace()
+                .count(|entry| matches!(entry.event, trace::Event::Dropped { .. })),
+            1,
+            "and it is traced as lost rather than vanishing"
+        );
+    }
+
+    #[test]
+    fn a_restart_undoes_the_kill_that_stopped_the_node() {
+        // Kill, then restart: the node runs again, is reachable again, and says so. Without the
+        // link half, "restarted" would be a node nobody could reach — an isolation wearing a
+        // restart's name.
+        let mut sim = round_trip(12, LinkPolicy::CLEAN);
+        let echo = NodeId(0);
+        sim.schedule(
+            &Schedule::new()
+                .at(SimTime::from_secs(1), Fault::KillNode(echo))
+                .at(SimTime::from_secs(2), Fault::RestartNode(echo)),
+        );
+        sim.run_until(SimTime::from_secs(3)).unwrap();
+
+        assert!(!sim.is_killed(echo), "a restarted node is running");
+        assert_eq!(sim.incarnation(echo), 2, "and on its second run");
+        assert!(
+            !sim.links.values().any(|link| link.policy.partitioned),
+            "and reachable again:\n{}",
+            sim.trace().render()
+        );
     }
 
     #[test]

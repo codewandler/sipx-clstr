@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**202 of 606 rows proved**; 19 covered for shape only; 385 deferred.
+**209 of 613 rows proved**; 19 covered for shape only; 385 deferred.
 
-Σ over the 61 sections below is 606, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 613, so every row counted above is shown in exactly one table.
 
 Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
 
@@ -95,6 +95,7 @@ by a registered prefix's own rows.
 | `PB-F-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-9` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-11` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `503` |
 
 ## Proxy — response processing (§8)
 
@@ -385,6 +386,8 @@ by a registered prefix's own rows.
 | `LS-K-4` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
 | `LS-K-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
 | `LS-K-6` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `6`; not compared |
+| `LS-K-7` | proved | `crates/sipx-clstr-registrar/tests/read_faults.rs` — asserts `503` |
+| `LS-K-8` | proved | `crates/sipx-clstr-registrar/tests/read_faults.rs` — asserts `503` |
 
 ## Location service — the lookup contract (§7)
 
@@ -398,6 +401,7 @@ by a registered prefix's own rows.
 | `LS-L-6` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
 | `LS-L-7` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
 | `LS-L-8` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+| `LS-L-9` | proved | `crates/sipx-clstr-node/tests/postgres_store.rs`, `crates/sipx-clstr-proxy/tests/vectors_proxy.rs`, `crates/sipx-clstr-registrar/tests/read_faults.rs` — asserts `503` |
 
 ## Location service — the sharding key (§8)
 
@@ -675,7 +679,7 @@ by a registered prefix's own rows.
 |---|---|---|
 | `CC-D-1` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-D-2` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
-| `CC-D-3` | deferred | `RG-22` — The `registrar` section. `cluster.registrar` (`usePath`, `methodFiltering`) is recognised and not descended into, so a typo inside it is accepted today; `DP-16` opened `keys` and `shardMap` and deliberately did not open a third section whose content location-service and registrar-auth own. `RG-22` is the story that gives `usePath` a consumer, and the closed world one level down arrives with it. |
+| `CC-D-3` | deferred | `KO-3` — The `registrar` section's closed world, one level down. `cluster.registrar` (`usePath`, `methodFiltering`) is recognised and not descended into, so a typo inside it is accepted today. `KO-3` is the owner rather than a registrar story because `KO-3` already owns [sipx-cluster-crd](../specs/sipx-cluster-crd.md) §12's `SC-A-1`, whose Expect is verbatim this row's — `E(cluster.registrar.usePathh, CC-V2)` — and whose Acceptance requires an invalid resource to be "rejected with a message naming the offending field". Admission validates through §8's own rules, so `KO-3` cannot prove `SC-A-1` without producing this error. |
 | `CC-D-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `0` |
 | `CC-D-5` | proved | `crates/sipx-clstr-node/src/startup.rs` — asserts `0` |
 | `CC-D-6` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
@@ -716,7 +720,7 @@ by a registered prefix's own rows.
 | `CC-V-2` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-3` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
-| `CC-V-5` | deferred | `ET-6` — The `probe` section. `cluster.probe` (`targets`, `schedule`, `tenant`) is e2e-probe §5's, and this build refuses the `e2e-tester` role at start-up precisely because nothing reads it. The cross-section check that `probe.tenant` names a declared tenant needs the section to be descended into first, which `ET-6` does when it runs the role in the reference topology. |
+| `CC-V-5` | deferred | `ET-4` — The `probe` section, descended into. `cluster.probe` (`targets`, `schedule`, `tenant`) is [e2e-probe](../specs/e2e-probe.md) §5's, and this build refuses the `e2e-tester` role at start-up precisely because nothing reads it. `DP-13`'s Acceptance names the successor in as many words — "`e2e-tester` has no runtime driver today, so an identity containing it refuses startup until `ET-4`/`ET-6` supply that driver" — and `ET-4` is the earlier of the two and the one whose `GET /probes` cannot answer without the section being read. The cross-section half is then unavoidable rather than optional: a probe registers in the tenant it names, and a run against an undeclared one has nowhere to register. |
 | `CC-V-6` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-7` | deferred | `RT-2` — The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there. |
 | `CC-V-8` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `70` |
@@ -734,6 +738,8 @@ by a registered prefix's own rows.
 | `CC-V-20` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-V-21` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-V-22` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-23` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-24` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — key reload (§9.3)
 
@@ -745,6 +751,7 @@ by a registered prefix's own rows.
 | `CC-K-4` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-K-5` | proved | `crates/sipx-clstr-node/src/config/tests.rs` — asserts `1` |
 | `CC-K-6` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-K-7` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 
 ## Cluster config — trunk reload (§9.2)
 

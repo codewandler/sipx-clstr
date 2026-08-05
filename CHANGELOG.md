@@ -20,6 +20,49 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+### Added
+
+- **The deterministic harness can now injure a connection, not just a link** (`CF-26`). Three of
+  `owner-rpc` §10's failure scenarios were unwritable because `fault.rs` offered five faults and
+  none of them could drop and re-establish a connection, restart a node under a fresh
+  incarnation, or stop a peer reading. All three now exist — plus `ResumeReading`, because a
+  stall with no resume is indistinguishable from a client that never came back and the accounting
+  bugs live in the flush — and the two backpressure rejection causes stay the two distinct rows
+  §10 insists on: the per-flow bound and `T_write` expiry are reached by different paths. Nothing
+  draws from the harness PRNG, so no existing seed changes meaning: verified by compiling one
+  probe at two revisions and comparing rendered traces byte-for-byte, which is a stronger check
+  than the suite's own run-to-run replays could make. `AF-7` can now write those scenarios
+  against a real owner instead of restating them.
+
+### Fixed
+
+- **Every release-facing claim is now held to something that can be executed** (`DX-14`,
+  validated synthesis **V-18**). The README badge and the site quoted conformance counts that
+  had gone stale, said "Fifteen specifications" where the registry held thirteen, and described
+  capabilities the released binary does not perform — matched CANCEL and Timer C as `today` when
+  the driver drops the timer effect, and an `ACK` denial that `PX-13` had made false. Counts and
+  the specification inventory are now derived from `check-vectors.py`'s own registries rather
+  than copied, wherever the numbers appear including inside the shields.io badge URL; each
+  governed capability is mapped to its owning story and gated on that story's status **in both
+  directions**, so a claim cannot be promoted while its story is open and a denial cannot outlive
+  its story closing. Dated release notes are deliberately not rewritten, and the count of lines
+  skipped as history is printed on every run. The real-socket proof is described as a
+  same-kernel, separate-process integration test — "independent implementation" is reserved for
+  `CF-3`'s interop target.
+
+- **A location store this node cannot read is no longer treated as an empty store** (`RG-17`,
+  validated synthesis **V-08**). A failed or undecodable PostgreSQL read became empty revision
+  zero, so a REGISTER query answered `200` — telling a UA it is registered nowhere while the
+  durable state was in fact unknown — and a no-op deregistration reported success for a removal
+  that never reached the store. `LocationStore::read` is now fallible, distinguishing absence
+  from a database failure and from an undecodable row; REGISTER answers `503` for every failing
+  shape before processing, and a failed lookup reaches the proxy as `TargetsUnavailable` → `503`,
+  kept distinct from both the empty target set's `480` and proxy-behavior R8's `500`
+  (`PB-F-11`). The new rows run identically against the in-memory double and a live PostgreSQL
+  with deliberately corrupted rows — a backend that needed its own variant would have broken the
+  contract. Operators should expect `503` where a flaky database previously produced a silent
+  `200`/`480`.
+
 - **A normative table that has stopped being a table is now a red gate** (`CF-23`). A Markdown
   table cannot survive a blank line, and in a repository whose rules are cited by ID out of table
   rows, a row that silently stopped being a row is a normative rule that silently stopped being

@@ -74,11 +74,20 @@ saying yes takes more work than saying no.
 
 | Status | What it means |
 |---|---|
-| **proved** | At least one test in the workspace executes this row. The report names the file. |
+| **proved** | A test in the workspace executes this row **and** compares every value the row states. The report names the file. |
+| **shape only** | A test covers the row and never compares a value it states. It runs; the quantity the row exists to pin is not held to anything. These do not count towards *proved*. |
 | **deferred** | No test covers it. The report names the work that will, and quotes the reason. |
 
-There is no third status. A row cannot be partly proved, and there is no "supported" that is not
-one of these two.
+There is no fourth status, and there is no "supported" that is not one of these three. *Shape only*
+exists because a name is not an assertion: one forwarding row read *Timer C set 180 s* while its
+test compared nothing but a list of effect kinds, and the report called that proved for the
+project's whole life.
+
+And there is a boundary none of the three crosses. A row proves what the **decision core emits**,
+which is not the same as what the **released driver performs** — the engine can produce a `CANCEL`
+effect that no socket ever carries. Where those two differ, the difference is stated on
+[What sipx-clstr is](../intro.md) against the story that closes it, and closing a vector row does
+not move it.
 
 ## The report itself
 
@@ -91,10 +100,23 @@ failure this whole mechanism exists to prevent. Read it at the link, where it is
 
 ## Every specification is under the gate
 
-All ten specifications are registered with the checker: proxy behaviour (`PB`), the end-to-end probe
-(`EP`), registrar auth (`RA`), the hook framework (`HF`), location service (`LS`), media relay (`MR`),
-number normalisation (`NN`), affinity token (`AT`, `FR`), cluster config (`CC`) and asserted identity
-(`AI`).
+All thirteen specifications that carry vector tables are registered with the checker, across fifteen
+prefixes — two of them carry two tables each: proxy behaviour (`PB`), the end-to-end probe (`EP`),
+registrar auth (`RA`), the hook framework (`HF` and its queue-policy rows `QP`), location service
+(`LS`), media relay (`MR`), number normalisation (`NN`), affinity token (`AT` and its flow-reference
+rows `FR`), cluster config (`CC`), asserted identity (`AI`), the `SipxCluster` resource (`SC`), the
+optional session service (`SS`) and the operational capability baseline (`OB`).
+
+Two further specifications — cluster membership and the owner RPC — carry normative rules and
+deliberately register no prefix, because their rules execute through another spec's rows or as named
+harness scenarios that arrive with the implementation. That is a decision rather than an omission,
+and it is a **named entry** in the checker with the story that will execute it; the generated report
+lists them under *Outside the vector ledger*. Every file under `docs/specs/` is therefore in exactly
+one of those two places, and a spec in neither fails the gate by name.
+
+That inventory is not maintained here. It is read out of the checker's own registry on every gate
+run, so registering a fourteenth specification turns this paragraph red rather than leaving it
+quietly short.
 
 That was not always true, and how it failed is worth knowing, because it is the failure mode this whole
 page exists to guard against. Six of those specs used to carry vector tables the checker had **no

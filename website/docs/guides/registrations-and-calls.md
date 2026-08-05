@@ -19,8 +19,15 @@ was not ready — almost always a missing `sipx` CLI.
 
 The client side is the [sipx](https://github.com/codewandler/sipx) CLI phone, built from its own
 checkout with `cargo build --bin sipx`. It is deliberately not vendored here: the point of an
-end-to-end proof is that the thing on the other end is an independent implementation, not this
-one talking to itself.
+end-to-end proof is that the thing on the other end is a **separate process on a real socket**, not
+this one talking to itself in memory.
+
+Be precise about what that buys, because the two are easy to conflate. The phone is built from the
+same kernel this repository pins, so this is a **same-kernel, separate-process integration test**: it
+proves the listener binds, that a registration made by one process is found by another, and that
+media flows. It does not prove interoperation with a stack written by somebody else — a parser
+disagreement shared by both ends would pass this test unnoticed. That needs an independent target,
+and it does not exist yet.
 
 The script builds the node, starts it, waits for the `listening on` line, generates a three-second
 440 Hz tone, registers `alice` and `bob` on separate ports, has bob answer and record, has alice

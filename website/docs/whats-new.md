@@ -11,8 +11,10 @@ The current release is **0.13.0**.
 
 **Two nodes sharing one registrar run.** They register users, forward calls between them — including
 calls that cross from one node to the other — and let media flow directly between the endpoints. That
-much is real, tested against independent client software, and you can have it working in about ten
-minutes, ending with a call you can hear: see [Getting started](getting-started.md).
+much is real, proved over real sockets by a **same-kernel, separate-process integration test** — the
+phone on the other end is the `sipx` CLI, built from the kernel checkout this repository pins — and
+you can have it working in about ten minutes, ending with a call you can hear: see
+[Getting started](getting-started.md).
 
 The next cluster layer now exists below the deployment seam: the affinity-token library passes every
 byte vector, and a deterministic call round-trips its `Record-Route`/`Route` token through two edges
@@ -49,11 +51,18 @@ Named, so nobody has to infer it from what the release notes happen to mention:
 | A user-credential store, without which authentication is applied but cannot protect anything | specified, not shipped |
 | Seventeen of the schema's sections — recognised, contents not validated, applied not at all | partly shipped |
 
-**The measuring instrument now measures everything, and it now shows what it measures.** Six
-specifications used to carry vector tables the checker had no registration for — roughly 340
-normative rows that nothing executed, and a fabricated row in one of those families passed the gate
-untouched. Fifteen prefixes are now registered: **157 of 586 rows proved, 19 covered for shape only,
-410 deferred**, each deferral naming what is specifically missing and the story that closes it.
+**The measuring instrument now measures everything, and it now shows what it measures.** Six of the
+specs in this repository used to carry vector tables the checker had no registration for — roughly
+340 normative rows that nothing executed, and a fabricated row in one of those families passed the
+gate untouched. Fifteen prefixes across thirteen specifications are now registered, and every file
+under `docs/specs/` is either registered or named as a deliberate exclusion with the story that will
+execute it: **173 of 602 rows proved, 19 covered for shape only, 410 deferred**, each deferral
+naming what is specifically missing and the story that closes it.
+
+Read that number for what it is. A row proves what a **decision core emits**, never that a socket
+carried it — matched `CANCEL` and Timer C are produced as effects and dropped by the driver
+(`PX-12`), and outbound target resolution returns a UDP target and refuses a hostname (`RT-12`).
+Those two gaps close when their stories land, not when their rows do.
 
 Two of those numbers went the "wrong" way on purpose. *Shape only* is a category `CF-12` created for
 a row whose test runs but never compares the value the row states — a row that used to count as
