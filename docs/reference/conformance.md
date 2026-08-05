@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**167 of 596 rows proved**; 19 covered for shape only; 410 deferred.
+**169 of 598 rows proved**; 19 covered for shape only; 410 deferred.
 
-Σ over the 61 sections below is 596, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 598, so every row counted above is shown in exactly one table.
 
 Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
 
@@ -93,6 +93,8 @@ by a registered prefix's own rows.
 | `PB-F-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-9` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — response processing (§8)
 

@@ -160,13 +160,12 @@ pub fn route_ack(
         tokens: None,
     };
     match forward(&plan, config) {
-        Ok((_, forwarded)) => {
-            let next_hop = route::next_hop_of(&forwarded);
-            AckRoute::Forward {
-                request: Box::new(forwarded),
-                next_hop,
-            }
-        }
+        // F7's next hop comes back with the copy: it depends on whether F6 reformatted the copy
+        // for a strict router, which only `forward` knows (`PX-16`).
+        Ok((_, forwarded, next_hop)) => AckRoute::Forward {
+            request: Box::new(forwarded),
+            next_hop,
+        },
         Err(error) => AckRoute::Unroutable(AckRefusal::NotForwardable(error)),
     }
 }
