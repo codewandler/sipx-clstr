@@ -46,4 +46,4 @@ pub use command::{
 pub use lookup::{Target, order_targets};
 pub use parse::{Admission, EdgeContext, admit, admit_audited, register_command};
 pub use process::process;
-pub use store::{Applied, CasConflict, Change, InMemoryStore, LocationStore, apply};
+pub use store::{Applied, CasConflict, Change, InMemoryStore, LocationStore, ReadFailure, apply};

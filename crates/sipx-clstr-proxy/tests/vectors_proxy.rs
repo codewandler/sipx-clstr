@@ -1041,6 +1041,44 @@ fn pb_f_5_an_empty_target_set_is_480() {
     assert_eq!(statuses(&effects), [480]);
 }
 
+/// `RG-17` — §7: a target set that could not be *resolved* is not an empty one.
+///
+/// covers: LS-L-9
+#[test]
+fn pb_f_11_a_target_set_that_could_not_be_resolved_is_503_and_not_480() {
+    let mut context = ResponseContext::new(config());
+    let effects = context.on_input(Input::Upstream(Box::new(invite(
+        "sip:bob@b.example",
+        vec![],
+    ))));
+    assert_eq!(
+        effects.iter().map(Effect::kind).collect::<Vec<_>>(),
+        [Kind::ResolveTargets],
+        "the engine must have asked before there is a failure to report"
+    );
+
+    let effects = context.on_input(Input::TargetsUnavailable);
+    assert_eq!(
+        statuses(&effects),
+        [503],
+        "a store this platform could not read says nothing about the callee, so it must not \
+         borrow the callee's own 480"
+    );
+    assert!(
+        !effects.iter().any(|effect| effect.kind() == Kind::Forward),
+        "nothing may be forwarded on a target set that was never determined"
+    );
+    assert!(context.is_finished());
+
+    // R8 rewrites a *branch's* `503` to `500`. This one never entered the response context, so
+    // there is nothing for R8 to select among or rewrite — and PB-R-8 proves the other half.
+    assert_ne!(
+        statuses(&effects),
+        [500],
+        "a locally originated 503 is not a branch response"
+    );
+}
+
 #[test]
 fn f4_a_token_over_the_parameter_budget_is_refused_rather_than_truncated() {
     use sipx_clstr_proxy::{

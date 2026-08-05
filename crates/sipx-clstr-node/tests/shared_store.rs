@@ -23,6 +23,10 @@ use sipx_clstr_node::driver::{NodeError, StoreChoice, open_store};
 use sipx_clstr_registrar::{Binding, CanonicalAor, Timestamp};
 
 const URL_VAR: &str = "SIPX_CLSTR_TEST_DATABASE_URL";
+/// These rows are about *where* a binding lives, and every read below is against a store that is up.
+/// §6 K7's failure path has its own tests (`postgres_read_faults.rs`), and absorbing a failure here
+/// would let this file's emptiness assertions pass for the wrong reason.
+const READS: &str = "the store under test must be readable";
 
 fn dsn() -> Option<String> {
     std::env::var(URL_VAR).ok()
@@ -61,7 +65,9 @@ fn binding(contact: &str) -> Binding {
 fn rg12_the_default_store_is_still_in_process() {
     assert_eq!(StoreChoice::default(), StoreChoice::InMemory);
     let store = open_store(&StoreChoice::InMemory).expect("the in-process store always opens");
-    let (set, _revision) = store.read("t", &aor("sip:alice@example.test"));
+    let (set, _revision) = store
+        .read("t", &aor("sip:alice@example.test"))
+        .expect(READS);
     assert!(
         set.all().is_empty(),
         "a fresh in-process store holds nothing"
@@ -121,13 +127,13 @@ fn rg12_a_binding_written_by_one_node_is_visible_to_another() {
     {
         let island_a = open_store(&StoreChoice::InMemory).expect("opens");
         let island_b = open_store(&StoreChoice::InMemory).expect("opens");
-        let (set, revision) = island_a.read(tenant, &alice);
+        let (set, revision) = island_a.read(tenant, &alice).expect(READS);
         let mut written = set.clone();
         written.insert(binding("sip:alice@198.51.100.7:5060"));
         island_a
             .commit(tenant, &alice, revision, written)
             .expect("the write lands locally");
-        let (seen, _) = island_b.read(tenant, &alice);
+        let (seen, _) = island_b.read(tenant, &alice).expect(READS);
         assert!(
             seen.all().is_empty(),
             "two in-process stores must NOT share bindings — that is the defect this story closes"
@@ -144,7 +150,7 @@ fn rg12_a_binding_written_by_one_node_is_visible_to_another() {
         .expect("truncate");
 
     // Node A takes the registration.
-    let (set, revision) = node_a.read(tenant, &alice);
+    let (set, revision) = node_a.read(tenant, &alice).expect(READS);
     assert!(set.all().is_empty(), "the tenant starts empty");
     let mut updated = set.clone();
     updated.insert(binding("sip:alice@198.51.100.7:5060"));
@@ -153,7 +159,7 @@ fn rg12_a_binding_written_by_one_node_is_visible_to_another() {
         .expect("node A commits the binding");
 
     // Node B, which never saw the REGISTER, must be able to route to her. This is the whole story.
-    let (seen, _revision) = node_b.read(tenant, &alice);
+    let (seen, _revision) = node_b.read(tenant, &alice).expect(READS);
     let contacts: Vec<String> = seen
         .all()
         .iter()
@@ -167,8 +173,8 @@ fn rg12_a_binding_written_by_one_node_is_visible_to_another() {
     // And the compare-and-swap contract holds *across* them: node B writing against a revision it
     // read before node A's next commit is refused rather than merged. Two registrars racing for one
     // AoR cannot interleave into a set neither client asked for.
-    let (b_set, b_revision) = node_b.read(tenant, &alice);
-    let (a_set, a_revision) = node_a.read(tenant, &alice);
+    let (b_set, b_revision) = node_b.read(tenant, &alice).expect(READS);
+    let (a_set, a_revision) = node_a.read(tenant, &alice).expect(READS);
 
     let mut a_next = a_set.clone();
     a_next.insert(binding("sip:alice@198.51.100.8:5060"));

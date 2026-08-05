@@ -18,6 +18,12 @@ use sipx_sip::Uri;
 const TENANT: &str = "t1";
 const RETRIES: usize = 3;
 
+/// Why these rows unwrap a read. §6 K7 made `read` fallible, and the in-memory backend it runs
+/// against has no way to reach that failure — absence is an `Ok`. The failure path is
+/// `tests/read_faults.rs`'s subject, so carrying a `Result` through every assertion here would add
+/// noise to prove nothing.
+const READS: &str = "the in-memory backend always reads";
+
 fn aor() -> CanonicalAor {
     CanonicalAor::parse(Bytes::from_static(b"sip:alice@atlanta.example")).expect("a valid AoR")
 }
@@ -118,7 +124,7 @@ fn policy() -> TenantPolicy {
 
 fn run(store: &InMemoryStore, cmd: &RegisterCommand, policy: &TenantPolicy) -> (Outcome, Revision) {
     let applied = apply(store, cmd, policy, RETRIES);
-    (applied.outcome, applied.revision)
+    (applied.outcome, applied.revision.expect(READS))
 }
 
 fn contact_texts(accepted: &Accepted) -> Vec<&str> {
@@ -178,6 +184,7 @@ fn ls_r_3_an_identical_retry_writes_nothing() {
     let (_, after_refresh) = run(&store, &refresh, &policy);
     let deadline = store
         .read(TENANT, &aor())
+        .expect(READS)
         .0
         .all()
         .first()
@@ -206,6 +213,7 @@ fn ls_r_3_an_identical_retry_writes_nothing() {
     assert_eq!(
         store
             .read(TENANT, &aor())
+            .expect(READS)
             .0
             .all()
             .first()
@@ -225,7 +233,7 @@ fn ls_r_4_a_stale_cseq_aborts_and_leaves_the_store_untouched() {
         &Cmd::new("i1", 2, 0).contacts(vec![ca(Some(3_600))]).build(),
         &policy,
     );
-    let before = store.read(TENANT, &aor());
+    let before = store.read(TENANT, &aor()).expect(READS);
 
     let (outcome, _) = run(
         &store,
@@ -237,7 +245,7 @@ fn ls_r_4_a_stale_cseq_aborts_and_leaves_the_store_untouched() {
     assert!(matches!(outcome, Outcome::Reject(Rejection::StaleSequence)));
     assert_eq!(outcome.status(), 500);
     assert_eq!(
-        store.read(TENANT, &aor()),
+        store.read(TENANT, &aor()).expect(READS),
         before,
         "nothing may have changed"
     );
@@ -310,7 +318,7 @@ fn ls_r_7_a_valid_wildcard_removes_everything_and_answers_with_no_contacts() {
     assert!(outcome.commits());
     assert!(outcome.accepted().expect("a 200").contacts.is_empty());
     assert_eq!(revision, Revision(3), "the revision still moves");
-    assert!(store.read(TENANT, &aor()).0.all().is_empty());
+    assert!(store.read(TENANT, &aor()).expect(READS).0.all().is_empty());
 }
 
 #[test]
@@ -354,6 +362,7 @@ fn ls_r_10_a_wildcard_with_a_spent_token_aborts_and_removes_nothing() {
     assert_eq!(
         store
             .read(TENANT, &aor())
+            .expect(READS)
             .0
             .active_count(Timestamp::from_secs(10)),
         1
@@ -508,7 +517,7 @@ fn ls_r_16_one_too_brief_contact_fails_the_whole_request() {
     assert_eq!(outcome.status(), 423);
     assert_eq!(revision, Revision::INITIAL);
     assert!(
-        store.read(TENANT, &aor()).0.all().is_empty(),
+        store.read(TENANT, &aor()).expect(READS).0.all().is_empty(),
         "neither contact may have committed"
     );
 }
@@ -670,7 +679,7 @@ fn ls_k_1_two_writers_serialize_and_neither_update_is_lost() {
     );
 
     // Both commands read the same revision, the way two nodes racing on one AoR would.
-    let (set, revision) = store.read(TENANT, &aor());
+    let (set, revision) = store.read(TENANT, &aor()).expect(READS);
     let first = Cmd::new("i1", 2, 10)
         .contacts(vec![ca(Some(3_600))])
         .build();
@@ -808,7 +817,7 @@ fn ls_k_5_a_multi_binding_replacement_is_one_revision() {
     );
     assert!(outcome.commits());
     assert_eq!(revision, Revision(1));
-    assert_eq!(store.read(TENANT, &aor()).0.all().len(), 2);
+    assert_eq!(store.read(TENANT, &aor()).expect(READS).0.all().len(), 2);
 }
 
 #[test]
@@ -819,7 +828,7 @@ fn ls_k_6_an_authoritative_read_sees_the_commit_it_follows() {
         &Cmd::new("i1", 1, 0).contacts(vec![ca(Some(3_600))]).build(),
         &policy(),
     );
-    assert_eq!(store.read(TENANT, &aor()).1, revision);
+    assert_eq!(store.read(TENANT, &aor()).expect(READS).1, revision);
 }
 
 #[test]
@@ -833,8 +842,11 @@ fn s10_exhausted_cas_retries_answer_503_rather_than_looping() {
             &self,
             _tenant: &str,
             _aor: &CanonicalAor,
-        ) -> (sipx_clstr_registrar::BindingSet, Revision) {
-            (sipx_clstr_registrar::BindingSet::new(), Revision(1))
+        ) -> Result<(sipx_clstr_registrar::BindingSet, Revision), sipx_clstr_registrar::ReadFailure>
+        {
+            // Reads fine, loses every race: this row is about S10's *retry* bound, and a read that
+            // failed would refuse before the loop ever ran (§6 K7).
+            Ok((sipx_clstr_registrar::BindingSet::new(), Revision(1)))
         }
 
         fn commit(
@@ -855,8 +867,8 @@ fn s10_exhausted_cas_retries_answer_503_rather_than_looping() {
             _tenant: &str,
             _aor: &CanonicalAor,
             _now: Timestamp,
-        ) -> Vec<sipx_clstr_registrar::Target> {
-            Vec::new()
+        ) -> Result<Vec<sipx_clstr_registrar::Target>, sipx_clstr_registrar::ReadFailure> {
+            Ok(Vec::new())
         }
 
         fn changes(&self) -> Vec<sipx_clstr_registrar::Change> {
@@ -892,8 +904,12 @@ fn commands_for_different_address_of_records_never_serialize_against_each_other(
 
     let alice_revision = apply(&store, &alice, &policy, RETRIES).revision;
     let bob_revision = apply(&store, &bob, &policy, RETRIES).revision;
-    assert_eq!(alice_revision, Revision(1));
-    assert_eq!(bob_revision, Revision(1), "its own counter, from zero");
+    assert_eq!(alice_revision, Some(Revision(1)));
+    assert_eq!(
+        bob_revision,
+        Some(Revision(1)),
+        "its own counter, from zero"
+    );
 }
 
 // ------------------------------------------------------- an edge the spec leaves sharp ---------
@@ -923,7 +939,7 @@ fn ls_r_22_a_re_presentation_asking_for_a_different_duration_is_not_a_retry() {
         "same token, a different granted duration: a second write, not a retry"
     );
     assert_eq!(
-        store.read(TENANT, &aor()).0.all().len(),
+        store.read(TENANT, &aor()).expect(READS).0.all().len(),
         1,
         "and nothing was written"
     );
@@ -947,6 +963,7 @@ fn ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound() {
     assert_eq!(revision, Revision(1));
     let deadline = store
         .read(TENANT, &aor())
+        .expect(READS)
         .0
         .all()
         .first()
@@ -972,6 +989,7 @@ fn ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound() {
     assert_eq!(
         store
             .read(TENANT, &aor())
+            .expect(READS)
             .0
             .all()
             .iter()
@@ -987,6 +1005,7 @@ fn ls_r_23_a_replayed_token_still_adds_a_contact_it_never_bound() {
 fn stored_texts(store: &InMemoryStore) -> Vec<String> {
     store
         .read(TENANT, &aor())
+        .expect(READS)
         .0
         .all()
         .iter()
@@ -1044,7 +1063,7 @@ fn ls_r_24_a_register_above_the_contact_operation_bound_is_refused() {
         Revision::INITIAL,
         "nothing may commit — the refusal precedes reconciliation (Q2)"
     );
-    assert!(store.read(TENANT, &aor()).0.all().is_empty());
+    assert!(store.read(TENANT, &aor()).expect(READS).0.all().is_empty());
 }
 
 #[test]
@@ -1127,6 +1146,7 @@ fn ls_r_27_a_removal_ahead_of_a_refresh_does_not_move_the_refresh_onto_another_b
     );
     let cc_before = store
         .read(TENANT, &aor())
+        .expect(READS)
         .0
         .all()
         .iter()
@@ -1163,6 +1183,7 @@ fn ls_r_27_a_removal_ahead_of_a_refresh_does_not_move_the_refresh_onto_another_b
     assert_eq!(
         store
             .read(TENANT, &aor())
+            .expect(READS)
             .0
             .all()
             .iter()
@@ -1190,7 +1211,7 @@ fn a_losing_writer_re_reconciles_a_multi_contact_register_against_fresh_state() 
     );
 
     // The losing writer reads revision 1 and reconciles its three operations against that set.
-    let (stale, stale_revision) = store.read(TENANT, &aor());
+    let (stale, stale_revision) = store.read(TENANT, &aor()).expect(READS);
     let loser = Cmd::new("i2", 1, 10)
         .contacts(vec![
             ca(Some(0)),
@@ -1286,6 +1307,7 @@ fn ls_r_29_a_refresh_ahead_of_a_removal_leaves_the_removal_resolving_to_its_own_
     );
     let cc_before = store
         .read(TENANT, &aor())
+        .expect(READS)
         .0
         .all()
         .iter()
@@ -1321,6 +1343,7 @@ fn ls_r_29_a_refresh_ahead_of_a_removal_leaves_the_removal_resolving_to_its_own_
     assert_eq!(
         store
             .read(TENANT, &aor())
+            .expect(READS)
             .0
             .all()
             .iter()
@@ -1448,7 +1471,7 @@ fn fill_to_one_short_of_the_quota(store: &InMemoryStore, policy: &TenantPolicy) 
 
 /// The lifetime the one stored binding was granted, in seconds — B4.1's comparison base.
 fn only_granted_secs(store: &InMemoryStore) -> u64 {
-    let (set, _) = store.read(TENANT, &aor());
+    let (set, _) = store.read(TENANT, &aor()).expect(READS);
     let binding = set.all().first().expect("the stored binding");
     binding.refreshed_at.until(binding.expires_at).as_secs()
 }

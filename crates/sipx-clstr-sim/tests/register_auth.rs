@@ -33,6 +33,9 @@ use sipx_sip::{
 };
 
 const TENANT: &str = "t1";
+/// The in-memory backend cannot fail a read (§6 K7's failure is a property of a backend that talks
+/// to something); `sipx-clstr-registrar/tests/read_faults.rs` owns that path.
+const READS: &str = "the in-memory backend always reads";
 const REALM: &str = "atlanta.example";
 const USER: &str = "alice";
 const PASSWORD: &str = "open sesame";
@@ -103,7 +106,10 @@ impl Edge {
 
     /// How many bindings the AoR currently holds.
     fn bindings(&self, now: Timestamp) -> usize {
-        self.store.lookup(TENANT, &Self::aor(), now).len()
+        self.store
+            .lookup(TENANT, &Self::aor(), now)
+            .expect(READS)
+            .len()
     }
 
     /// The principal recorded on the stored binding, if there is one.
@@ -112,7 +118,7 @@ impl Edge {
     /// principal, because who proved an identity is not a routing input. The audit fact lives on
     /// what was stored, which is the only place asserting it means anything.
     fn stored_principal(&self, now: Timestamp) -> Option<String> {
-        let (set, _) = self.store.read(TENANT, &Self::aor());
+        let (set, _) = self.store.read(TENANT, &Self::aor()).expect(READS);
         set.active(now)
             .next()
             .and_then(|binding| binding.principal.clone())
@@ -124,7 +130,7 @@ impl Edge {
     /// `RA-R-6` is about *what was written*, not merely about what authenticated, and the contact
     /// set is the only place that shows it.
     fn contacts(&self, now: Timestamp) -> Vec<String> {
-        let (set, _) = self.store.read(TENANT, &Self::aor());
+        let (set, _) = self.store.read(TENANT, &Self::aor()).expect(READS);
         set.active(now)
             .map(|binding| String::from_utf8_lossy(&binding.contact).into_owned())
             .collect()

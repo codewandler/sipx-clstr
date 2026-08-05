@@ -22,12 +22,15 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use sipx_clstr_node::postgres_store::PostgresStore;
-use sipx_clstr_registrar::conformance::run_location_store_suite;
+use sipx_clstr_registrar::conformance::{run_location_store_suite, run_read_failure_suite};
 use sipx_clstr_registrar::{
-    BindingSet, CanonicalAor, LocationStore, Revision, TenantPolicy, Timestamp, apply,
+    BindingSet, CanonicalAor, LocationStore, ReadFailure, Revision, TenantPolicy, Timestamp, apply,
 };
 
 const URL_VAR: &str = "SIPX_CLSTR_TEST_DATABASE_URL";
+/// Every row in this file runs against a database that is up; §6 K7's failure path is
+/// `postgres_read_faults.rs`'s subject, and the one row here that exercises it says so.
+const READS: &str = "the database under test must be readable";
 
 /// A connected store with `tenant` emptied, or `None` when no database was configured.
 ///
@@ -86,6 +89,85 @@ fn the_in_memory_backend_passes_it_too_so_the_suite_itself_is_honest() {
     );
 }
 
+/// `RG-17` — §6 K7's rows, against the real backend rather than a double.
+///
+/// The same three rows `sipx-clstr-registrar/tests/read_faults.rs` runs against an unreadable
+/// double: §6.3's "identical suite" applied to the failure path. The fault is a stored set this node
+/// cannot decode, which is the one an operator actually meets — a schema disagreement between
+/// whatever wrote the row and whoever reads it — and it is injected through a second connection so
+/// the store under test learns about it the way a node would.
+#[test]
+fn rg17_the_postgres_backend_passes_the_read_failure_rows_too() {
+    let tenant = "rg17-suite";
+    let Some(store) = store(tenant) else {
+        skipped("postgres read-failure rows");
+        return;
+    };
+    let url = std::env::var(URL_VAR).expect("checked by `store`");
+
+    // A row this node cannot decode has to exist before it can be misread, and the rows below key
+    // their own address-of-records — so every one of them gets a corrupt row of its own.
+    let mut admin = postgres::Client::connect(&url, postgres::NoTls).expect("an admin connection");
+    for who in ["k7", "k8", "l9"] {
+        admin
+            .execute(
+                "INSERT INTO location_bindings (tenant, aor, revision, bindings)
+                 VALUES ($1, $2, 1, '\"not a binding set\"'::jsonb)
+                 ON CONFLICT (tenant, aor) DO UPDATE SET bindings = EXCLUDED.bindings",
+                &[&tenant, &format!("sip:{who}@conformance.example")],
+            )
+            .expect("the corruption itself must succeed");
+    }
+
+    let failures = run_read_failure_suite(&store, "postgres", tenant);
+    assert!(
+        failures.is_empty(),
+        "the PostgreSQL backend must refuse a read it cannot complete:\n{}",
+        failures
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// `RG-17`, §7 L8 — the lookup half, live: an outage is not an address-of-record with no bindings.
+#[test]
+fn ls_l_9_a_lookup_against_an_undecodable_row_is_a_failure_and_not_an_empty_target_set() {
+    let tenant = "rg17-lookup";
+    let Some(store) = store(tenant) else {
+        skipped("postgres lookup fault");
+        return;
+    };
+    let url = std::env::var(URL_VAR).expect("checked by `store`");
+    let aor = CanonicalAor::parse(bytes::Bytes::from_static(b"sip:lookup@conformance.example"))
+        .expect("a valid AoR");
+
+    // An address-of-record with no row at all is still an *answer* — L5's empty set — and the
+    // distinction below is only worth something because this side keeps reading as one.
+    assert_eq!(
+        store.lookup(tenant, &aor, Timestamp::from_secs(10)),
+        Ok(Vec::new()),
+        "an unknown address-of-record is the empty target set (L5, LS-L-7)"
+    );
+
+    postgres::Client::connect(&url, postgres::NoTls)
+        .expect("an admin connection")
+        .execute(
+            "INSERT INTO location_bindings (tenant, aor, revision, bindings)
+             VALUES ($1, $2, 1, '\"not a binding set\"'::jsonb)",
+            &[&tenant, &aor.as_str()],
+        )
+        .expect("the corruption itself must succeed");
+
+    let found = store.lookup(tenant, &aor, Timestamp::from_secs(10));
+    assert!(
+        matches!(found, Err(ReadFailure::Undecodable(_))),
+        "a row this node cannot decode must reach the proxy as a failure — answered as no targets \
+         it becomes a 480 about a callee nobody looked up: {found:?}"
+    );
+}
+
 #[test]
 fn a_binding_survives_a_round_trip_through_the_database_unchanged() {
     // The encoding is the part a second backend adds, and the part a vector suite cannot see: it
@@ -134,7 +216,7 @@ fn a_binding_survives_a_round_trip_through_the_database_unchanged() {
     let applied = apply(&store, &cmd, &TenantPolicy::default(), 3);
     assert!(applied.outcome.commits(), "the fixture should commit");
 
-    let (set, revision) = store.read(tenant, &aor);
+    let (set, revision) = store.read(tenant, &aor).expect(READS);
     assert_eq!(revision, Revision(1));
     let binding = set.all().first().expect("one binding");
 
@@ -238,7 +320,7 @@ fn a_dropped_change_notification_changes_nothing() {
         .expect("a commit");
 
     // Ignore the stream entirely, the way a consumer whose NOTIFY was lost would.
-    let (_, revision) = store.read(tenant, &aor);
+    let (_, revision) = store.read(tenant, &aor).expect(READS);
     assert_eq!(
         revision,
         Revision(1),
