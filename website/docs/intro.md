@@ -43,11 +43,11 @@ the two**, and that is the next thing that has to exist.
 | | | |
 |---|---|---|
 | **Proxy** | RFC 3261 §16 forwarding, forking, loop detection (RFC 5393) | today |
-| **Proxy — `CANCEL`, Timer C** | Modelled in the decision core and **not performed by the driver**: the effects are produced and discarded, so a Timer C is armed with the right value and never fires | engine only |
+| **Proxy — `CANCEL`, Timer C** | Modelled in the decision core and **not performed by the driver**: the effects are produced and discarded, so a Timer C is armed with the right value and never fires (`PX-12`) | engine only |
 | **Registrar** | `REGISTER`, AoR canonicalisation, bindings, compare-and-swap location store | today |
-| **Node roles** | Declared in the document and used to pick listeners and the store — then dropped before dispatch, so **any node answers every method**. A node started as `inbound-proxy` will accept and store a `REGISTER` | engine only |
-| **In-dialog routing** | `ACK` and in-dialog requests are resolved by address-of-record lookup rather than by the `Route` set and the dialog's remote target | engine only |
-| **Transports** | UDP and TCP on one listener; outbound target selection is UDP-only | partly |
+| **Node roles** | *The schema rule:* a role selects which decision paths a node wires, never what a request decides (`cluster-config` §4 R3). *What the released driver does with it:* the node derives a capability set from its declared roles and answers `405` with `Allow` for a method they do not wire, and refuses to start on a role it has no runtime for (`echo`, `e2e-tester`). The refusal shape, the counted `ACK` drop and the `echo` runtime are `DP-13`'s, and are not proved by a real-binary role matrix yet | today, partly |
+| **In-dialog routing** | `ACK` and in-dialog requests follow the dialog's `Route` set and remote target, through the engine's own route preprocessing rather than a second address-of-record lookup (`PX-13`) | today |
+| **Transports** | UDP and TCP on one listener; outbound target resolution returns a UDP target and refuses a hostname outright, so there is no RFC 3263 and nothing selects a transport (`RT-12`) | today, partly |
 | **Media** | Flows directly between endpoints; the platform never touches RTP | today |
 | **Configuration** | One cluster-scoped document in YAML, JSON or TOML; refuses to start rather than apply half of it | today |
 | **Tenant policy** | Served domains (`403` for any other), the per-AoR binding quota, the expiry bounds, and a bound on in-flight transactions (`503` above it) | today |
@@ -65,7 +65,8 @@ Three things will bite you, and none is obvious from the outside.
 
 **It is an open registrar.** Digest authentication is implemented and vector-proved against
 [our own normative spec](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/registrar-auth.md)
-— 23 of its 29 rows proved, 5 covered for shape only, 1 deferred — and reachable from the document.
+— 23 of its 29 `RA` rows proved, 5 covered for shape only, 1 deferred — and reachable from the
+document.
 It still cannot protect this node, because there is no user-credential store yet. Declare
 `tenant[].auth` and the node either **refuses to start** (if its nonce `secretRef` resolves — refusing
 beats running a registrar that answers `401` to everyone while *looking* protected) or challenges

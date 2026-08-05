@@ -10,9 +10,9 @@
 # The phones run inside the cluster, as a pod. They have to: this machine routes the pod CIDR
 # 10.42.0.0/16 into a WireGuard interface, so a packet from the host to a pod is swallowed by the
 # tunnel and never arrives. Pod-to-pod has no such ambiguity, and it is also the arrangement a real
-# client is in. The `sipx` CLI is baked into a small image rather than built here — it is an
-# independent implementation, and rebuilding it with this repo's tooling would blur the boundary the
-# proof depends on.
+# client is in. The `sipx` CLI is baked into a small image rather than built here — it is a separate
+# process built from the kernel this repo pins, and rebuilding it with this repo's tooling would blur
+# the boundary the proof depends on. Same-kernel, separate-process: integration, not interoperation.
 #
 # What this does not prove: mid-dialog routing through a single Service in front of both pods. Each
 # node record-routes its own pod IP, so the route set names a pod. A shared ClusterIP would spread

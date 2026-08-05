@@ -51,11 +51,19 @@ number would stop being a fact about the cluster.
 
 `edge` · `registrar` · `inbound-proxy` · `outbound-proxy` · `e2e-tester` · `echo`
 
-A role selects which decision paths are wired, never what a request decides. Any combination is
-allowed except that **`echo` and `e2e-tester` are refused beside any proxy role** — a probe that
-enters through the node it is probing measures a path no caller takes.
+A role selects which decision paths are wired, never what a request decides — that is the schema's
+rule. Any combination is allowed except that **`echo` and `e2e-tester` are refused beside any proxy
+role**: a probe that enters through the node it is probing measures a path no caller takes.
 
-An empty role set is refused too: a node that runs nothing should not have been started.
+An empty role set is refused too: a node that runs nothing should not have been started. So is a
+role this build has **no runtime for** — `echo` and `e2e-tester` stop the node at startup by name,
+whatever they are combined with, rather than being accepted and quietly served as something else.
+
+What the binary does with the rest of the set: it derives a capability set from it and dispatches
+through that, so a node without `registrar` answers a `REGISTER` with `405` and an `Allow` header
+naming the methods its roles do wire. The refusal *shape* — `503` with `Retry-After`, and `481` for
+an unmatched `CANCEL` — and the counted `ACK` drop are `DP-13`'s and are not what this build sends
+today.
 
 ### What it prints
 

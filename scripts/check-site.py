@@ -36,7 +36,25 @@ stops it happening again, and it reads exactly what the link checker deliberatel
    the number only goes stale at a cut, and the site deploys *on* a cut, so the first reader of the
    wrong version is a public one. Every fenced block is read, not the command ones only: the banner
    is output, so it lives in exactly the `text` blocks item 4 skips.
-6. **Every proof the site offers is in CI, or says why not.** "In CI" means the gate or a workflow
+6. **Every published conformance count is the generated one.** `DX-14`. The badge, its alt text
+   and the status table each carried a hand-copied triple, and at `v0.12.0` they read `134/492`
+   and `358 deferred` while the generator said `125/549` and `405`. The counts are read out of
+   `docs/reference/conformance.md` — the file `check-vectors.py` writes and the step before this
+   one has just re-checked — so there is one measurement and every public copy is compared to it,
+   by file, line, expected and actual.
+7. **The published specification inventory is the checker's own registry.** Read out of
+   `check-vectors.py`'s `SPECS` and `EXCLUDED` rather than re-listed here, for the reason `CF-25`
+   filed: the registry is what the gate enforces, so a second copy of it on a public page is a
+   claim nothing holds. A count in front of the word *specifications*, and any sentence that
+   enumerates registered prefixes, are both compared against it.
+8. **A release-facing capability claim waits for the driver that performs it.** `V-18`. Four
+   behaviours are modelled by a pure decision core and were, or still are, discarded by the real
+   driver, and the site said *today* about all four. Each is mapped to the story that owns its
+   real-socket proof, and the mapping is enforced in **both** directions off the board's own
+   `status` field: while the story is open the claim is refused, and once it is `done` the denial
+   is refused — because a stale "not implemented" is how `PX-13` shipped a whole release still
+   documented as broken.
+9. **Every proof the site offers is in CI, or says why not.** "In CI" means the gate or a workflow
    **invokes** it — parsed as a command, not matched as a substring, so a commented-out line or a
    step merely *named* after a proof does not count. See `PROOF_DIRECTIVE` for the other branch and
    `invokes` for this one; `self_test` pins both against the ways they can be faked.
@@ -76,6 +94,7 @@ Exit 0 when clean, 1 otherwise. Run from anywhere; paths resolve against this fi
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import pathlib
 import re
@@ -818,6 +837,524 @@ def check_proofs_are_gated() -> list[str]:
     return problems
 
 
+# ------------------------------------------------- `DX-14`: release claims against the evidence ---
+#
+# One question, three sources of truth, none of them retyped in this file: the generated
+# conformance report, the vector checker's own spec registry, and the board's `status` field. A
+# release claim that cannot be traced to one of those is a sentence somebody wrote once.
+
+CHECKER = ROOT / "scripts" / "check-vectors.py"
+CONFORMANCE = ROOT / "docs" / "reference" / "conformance.md"
+STORIES = ROOT / "docs" / "stories"
+
+# Where a page stops describing the present. A release note is a **dated record** — `0.12.0` really
+# did ship `157 of 586`, and rewriting that line whenever the suite moves would turn the release
+# history into a second copy of today's numbers instead of a record of what shipped. So the scan
+# stops at the named heading, and `main` prints how many lines it dropped for this reason: a
+# checker that narrows what it looks at has to say so in its output, which is the rule the rest of
+# this file was written to.
+HISTORICAL = {"website/docs/whats-new.md": "## Releases"}
+
+# The report's headline sentence, exactly as `check-vectors.py`'s `render` writes it. Read rather
+# than recomputed: the gate regenerates and re-checks that file in the step before this one, so the
+# committed report *is* the current measurement, and reading it keeps one generator rather than two.
+HEADLINE = re.compile(
+    r"\*\*(\d+) of (\d+) rows proved\*\*; (\d+) covered for shape only; (\d+) deferred\."
+)
+# One row of one of the report's own tables: `| `PB-F-1` | proved | … |`. Parsed so a claim about a
+# single specification has something to be compared against — see `SCOPE_TOKEN`.
+REPORT_ROW = re.compile(r"^\|\s*`([A-Z]{2})-(?:[A-Z]-)?\d+`\s*\|\s*([a-z ]+?)\s*\|", re.M)
+
+# How a conformance count is written on a public page. Four shapes because the triple appears four
+# ways: as the badge's URL, as the badge's alt text, and twice in prose. The badge is the one a
+# reader sees without opening anything, and it is the copy that was wrong for two releases.
+BADGE_COUNTS = re.compile(r"vectors-(\d+)%2F(\d+)%20proved")
+PROVED_COUNTS = re.compile(
+    r"\b(\d+)\s+of\s+(?:its\s+)?(\d+)\s+(?:`[A-Z]{2}`\s+)?(?:vector\s+)?rows\s+proved"
+)
+SHAPE_COUNT = re.compile(r"\b(\d+)\s+covered for shape only")
+DEFERRED_COUNT = re.compile(r"\b(\d+)\s+deferred\b")
+
+# A count claim may be about one specification rather than the whole ledger — `intro.md` quotes
+# registrar-auth's own rows beside the defect they explain. A scoped claim **names its prefix in
+# backticks on the same line** and is compared against that prefix's rows; an unscoped one is
+# compared against the headline. Naming the prefix is the price of quoting a subset, and it is
+# cheaper than the alternative, which is a published number nothing can check.
+SCOPE_TOKEN = re.compile(r"`([A-Z]{2})`")
+
+# A count in front of the word *specifications*. Only a number is read as a claim, so "normative
+# specifications" is prose and "Fifteen specifications" is a measurement — of the documents the
+# checker registers, which is not the same as the file count under `docs/specs/`: two of them
+# deliberately register no prefix. A sentence about a *past* state must not spell its number this
+# way; the error message says so, because the cheap fix for a false positive is rewording and the
+# cheap fix for a real one is the current number, and both should be visible from the failure.
+SPEC_COUNT = re.compile(r"\b([A-Za-z]+|\d+)\s+specifications?\b")
+NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+    "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+    "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+}
+SPELLED = {value: word for word, value in NUMBER_WORDS.items()}
+
+# An *inventory* of the registered prefixes, as opposed to a sentence that happens to cite one.
+# Three or more bare backticked prefixes in one paragraph is where the corpus separates: a page
+# citing a row writes `` `PB-F-1` `` or `` `PB-*` ``, and only the inventory sentence lists the
+# codes themselves. An inventory that names three must name all of them — a partial list reads as
+# complete, which is exactly how "all ten specifications" survived five registrations.
+INVENTORY_FLOOR = 3
+
+# A table row whose status cell is exactly `today`, in the site's closed vocabulary (`today` ·
+# `today, partly` · `specified, not shipped` · `designed` · `not planned`). Anchored to the end of
+# the line so the qualified form is *not* matched: `today, partly` is the honest answer for a
+# capability the driver performs in part, and a check that refused it would push pages towards the
+# unqualified word it exists to prevent.
+TODAY_CELL = re.compile(r"\|\s*\*{0,2}today\*{0,2}\s*\|?\s*$")
+# `README.md`'s status table keys its rows by state rather than by capability, so its **Working**
+# row is a `today` cell written the other way round.
+WORKING_ROW = re.compile(r"^\s*\|\s*\*{0,2}Working\*{0,2}\s*\|")
+
+# The clause a claim sits in. Table cells and sentences are the units these things are written in,
+# and the unit matters because of `REFUSAL` below: judged over a whole line, one honest "not" in a
+# neighbouring cell would excuse an overstatement three cells away.
+SEGMENT = re.compile(r"[.;|]")
+# A clause that **denies** the capability is the clause this check wants pages to write, so a
+# pattern below is not allowed to fire on one — in either direction. Said plainly rather than
+# implied: this is where the prose half of the rule is approximate. The structural `today`-cell
+# rule carries the weight and cannot be talked out of a verdict; a prose pattern that could not
+# tell "roles gate dispatch" from "roles do not gate dispatch" would push honest wording off the
+# site, and one that ignores the difference is worse than not having it.
+REFUSAL = re.compile(
+    r"\b(?:not|never|no|cannot|nothing|until|yet)\b|\brather than\b|\binstead of\b", re.I
+)
+
+# The four claims a release-facing page may not make on its own authority (`V-18`), each mapped to
+# the story that owns its real-driver proof. The mapping is enforced in both directions off the
+# board's `status` field, because both directions have already failed here: `86e6b10` shipped
+# *declared roles gate runtime dispatch* while the driver dropped the role set, and this tree
+# shipped *`ACK` … resolved by address-of-record lookup* for a whole release after `PX-13` made
+# that false.
+#
+# Closing a vector row moves none of these. A row proves what the pure engine *emits*; every gap
+# here is a driver that does not perform the effect the engine produced, so the promotion is tied
+# to a story's real-socket acceptance and to nothing that `check-vectors.py` can turn green.
+#
+#   `subject`  — the capability, as a page names it. Read only inside a `today` cell, so it can be
+#                broad without turning every mention of `CANCEL` into a defect.
+#   `claims`   — phrasings refused while the story is open, whatever row they sit in.
+#   `denials`  — phrasings refused once the story is `done`; the stale-deferral rule, applied to
+#                prose. Empty is allowed and means only the promotion direction is held.
+#   `instead`  — what is true today, named with the file that decides it, so a failure is
+#                actionable without opening the driver.
+GOVERNED: dict[str, dict] = {
+    "matched CANCEL and Timer C": {
+        "story": "PX-12",
+        "subject": re.compile(r"\bTimer\s+C\b|\bCANCEL\b"),
+        "claims": (
+            re.compile(r"\bTimer\s+C\b[^.|\n]{0,60}\b(?:fires|expires|is performed)\b", re.I),
+        ),
+        "denials": (),
+        "instead": "the engine produces `CancelBranch` and `SetTimer`; the driver logs the first "
+        "and drops the second (crates/sipx-clstr-node/src/driver.rs)",
+    },
+    "role dispatch": {
+        "story": "DP-13",
+        "subject": re.compile(r"\brole\b|\broles\b", re.I),
+        "claims": (
+            re.compile(r"\broles?\b[^.|\n]{0,40}\b(?:gate|drive|select)s?\b[^.|\n]{0,30}"
+                       r"\b(?:runtime )?dispatch\b", re.I),
+        ),
+        "denials": (),
+        "instead": "the released node derives a capability set from the declared roles and answers "
+        "`405` for a method they do not wire (driver.rs `Dispatch::of`), while the refusal shape, "
+        "the counted ACK and the echo runtime are still `DP-13`'s",
+    },
+    "outbound transport resolution": {
+        "story": "RT-12",
+        "subject": re.compile(r"outbound (?:target|transport)|target selection|RFC\s*3263|NAPTR"),
+        "claims": (),
+        "denials": (),
+        "instead": "`destination_of` returns a UDP target and refuses a hostname outright "
+        "(crates/sipx-clstr-node/src/driver.rs), so there is no transport selection to claim",
+    },
+    "in-dialog routing on the node": {
+        "story": "PX-13",
+        "subject": re.compile(r"in-dialog|\bACK\b"),
+        "claims": (),
+        "denials": (
+            re.compile(r"\bACK\b[^.|\n]{0,80}\baddress[- ]of[- ]record lookup\b", re.I),
+            re.compile(r"in-dialog[^.|\n]{0,80}\baddress[- ]of[- ]record lookup\b", re.I),
+        ),
+        "instead": "`PX-13` landed: `forward_ack` follows the engine's `Route` preprocessing and "
+        "in-dialog requests use the core's next hop (crates/sipx-clstr-node/src/driver.rs)",
+    },
+    "the probe's dialog": {
+        "story": "ET-7",
+        "subject": re.compile(r"\bprobe\b[^.|\n]{0,40}\bdialog\b|\bdialog\b[^.|\n]{0,40}\bprobe\b"),
+        "claims": (),
+        "denials": (),
+        "instead": "the probe still builds AoR-shaped `ACK` and `BYE`, so a passing run proves a "
+        "second lookup rather than a dialog route",
+    },
+}
+
+# `CF-3`'s wording, held apart from everybody else's. The end-to-end proofs put the **same kernel**
+# on both ends — the `sipx` CLI is built from the checkout this repository pins — so what they
+# prove is that two processes speaking through real sockets agree, which is worth having and is not
+# what "independent implementation" means. The independent interop target is `CF-3`'s, unbuilt, and
+# borrowing its credibility early is the cheapest way for a release to overstate itself.
+INDEPENDENT = re.compile(
+    r"\bindependent(?:ly)?\s+(implementation|parser|stack|client software|client|sipx|"
+    r"implementations)\b",
+    re.I,
+)
+INTEROP_STORY = "CF-3"
+REQUIRED_WORDING = "same-kernel, separate-process integration test"
+
+
+def vector_checker():
+    """`scripts/check-vectors.py`, imported for its registries rather than copied into this file.
+
+    The spec set has exactly one definition (`CF-25`) and this check exists because second copies
+    of measurements go stale; a second copy of the registry *inside the checker for second copies*
+    would be the same defect one level up. Imported by path because the file name is not an
+    identifier, and importing runs only its module-level definitions — its `main` is behind the
+    usual guard.
+    """
+    spec = importlib.util.spec_from_file_location("check_vectors", CHECKER)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    # No `scripts/__pycache__/` for it: a checker that leaves untracked files behind makes
+    # `git status` dirty on a machine that only ran the gate, and this one runs on every push.
+    written, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = written
+    return module
+
+
+def conformance() -> tuple[dict[str, dict[str, int]], list[str]]:
+    """The generated report's counts: the headline under `""`, and the same four per prefix.
+
+    The per-prefix tally is summed and compared against the headline before anything is judged
+    against either. They are two traversals of one document — the same shape `CF-17` found
+    disagreeing inside `check-vectors.py` itself — and a public copy compared against a misreading
+    would fail for a reason nobody could act on.
+    """
+    if not CONFORMANCE.is_file():
+        return {}, [
+            f"{CONFORMANCE.relative_to(ROOT)} does not exist, so no published conformance count "
+            f"could be checked. Run scripts/check-vectors.py"
+        ]
+    text = CONFORMANCE.read_text(encoding="utf-8")
+    headline = HEADLINE.search(text)
+    if not headline:
+        return {}, [
+            f"{CONFORMANCE.relative_to(ROOT)}: the generated headline could not be read. This "
+            f"check reads the report rather than recomputing it, so it refuses to pass every "
+            f"published number on a parse that failed"
+        ]
+
+    proved, total, shape, waived = (int(value) for value in headline.groups())
+    counts: dict[str, dict[str, int]] = {
+        "": {"proved": proved, "total": total, "shape only": shape, "deferred": waived}
+    }
+    for prefix, state in REPORT_ROW.findall(text):
+        family = counts.setdefault(
+            prefix, {"proved": 0, "total": 0, "shape only": 0, "deferred": 0}
+        )
+        family["total"] += 1
+        if state in family:
+            family[state] += 1
+
+    problems = []
+    for field in ("proved", "total", "shape only", "deferred"):
+        tallied = sum(counts[prefix][field] for prefix in counts if prefix)
+        if tallied != counts[""][field]:
+            problems.append(
+                f"{CONFORMANCE.relative_to(ROOT)}: its headline says {counts[''][field]} "
+                f"{field} and its tables show {tallied}. This check reads both and refuses to "
+                f"hold the site to a reading of the report that does not add up"
+            )
+    return counts, problems
+
+
+def count_problems(line: str, counts: dict[str, dict[str, int]]) -> list[str]:
+    """Every conformance count this line states that the generated report contradicts.
+
+    Returned without a file or a line number so `self_test` can feed it synthetic text; the caller
+    adds those.
+    """
+    scope = ""
+    for candidate in SCOPE_TOKEN.findall(line):
+        if candidate in counts:
+            scope = candidate
+            break
+    if scope not in counts:
+        return []
+    truth = counts[scope]
+    named = f"`{scope}`" if scope else "the whole ledger"
+
+    def mismatch(what: str, stated: int) -> list[str]:
+        if stated == truth[what]:
+            return []
+        return [
+            f"claims {stated} {what} for {named}; the generated report says {truth[what]} "
+            f"(expected {truth[what]}, actual {stated})"
+        ]
+
+    problems: list[str] = []
+    for match in BADGE_COUNTS.finditer(line):
+        problems += mismatch("proved", int(match.group(1)))
+        problems += mismatch("total", int(match.group(2)))
+    for match in PROVED_COUNTS.finditer(line):
+        problems += mismatch("proved", int(match.group(1)))
+        problems += mismatch("total", int(match.group(2)))
+    for match in SHAPE_COUNT.finditer(line):
+        problems += mismatch("shape only", int(match.group(1)))
+    for match in DEFERRED_COUNT.finditer(line):
+        problems += mismatch("deferred", int(match.group(1)))
+    return problems
+
+
+def spec_registry(module) -> tuple[int, set[str], list[str]]:
+    """How many specifications the checker registers, which prefixes they use, and the excluded.
+
+    The count is of **documents**, not prefixes and not files: two specs carry two vector tables
+    each, and two more register no prefix at all by a decision `EXCLUDED` records. A public
+    sentence saying "N specifications" is claiming the first of those numbers.
+    """
+    registered = {path for path, _section, _author in module.SPECS.values()}
+    excluded = [path for path in module.EXCLUDED if path.startswith("docs/specs/")]
+    return len(registered), set(module.SPECS), excluded
+
+
+def spec_count_problems(line: str, registered: int) -> list[str]:
+    """A published count of specifications that the registry contradicts."""
+    problems = []
+    for match in SPEC_COUNT.finditer(line):
+        word = match.group(1)
+        stated = NUMBER_WORDS.get(word.lower()) if not word.isdigit() else int(word)
+        if stated is None or stated == registered:
+            continue
+        spelled = SPELLED.get(registered, str(registered))
+        problems.append(
+            f"says \"{match.group(0)}\"; scripts/check-vectors.py registers {registered} "
+            f"(expected {spelled}, actual {word.lower()}). If the sentence is about a past "
+            f"state, say it without a bare count in front of the word — a number there is read "
+            f"as a claim about the registry"
+        )
+    return problems
+
+
+def inventory_problems(paragraph: str, prefixes: set[str]) -> list[str]:
+    """An enumeration of registered prefixes that has stopped enumerating all of them."""
+    named = {code for code in SCOPE_TOKEN.findall(paragraph) if code in prefixes}
+    if len(named) < INVENTORY_FLOOR:
+        return []
+    if missing := sorted(prefixes - named):
+        return [
+            f"lists {len(named)} of the {len(prefixes)} registered vector prefixes and reads as "
+            f"complete; {', '.join(f'`{code}`' for code in missing)} "
+            f"{'is' if len(missing) == 1 else 'are'} registered in scripts/check-vectors.py and "
+            f"named nowhere in it (expected all {len(prefixes)}, actual {len(named)})"
+        ]
+    return []
+
+
+def story_statuses() -> dict[str, str]:
+    """Every story's `status`, read from its own frontmatter the way `check-vectors.py` reads it."""
+    statuses: dict[str, str] = {}
+    if not STORIES.is_dir():
+        return statuses
+    for path in sorted(STORIES.glob("*.md")):
+        identifier = status = ""
+        for line in path.read_text(encoding="utf-8").splitlines()[:12]:
+            if line.startswith("id:"):
+                identifier = line.split(":", 1)[1].strip()
+            elif line.startswith("status:"):
+                status = line.split(":", 1)[1].strip()
+            elif line.strip() == "---" and identifier:
+                break
+        if identifier:
+            statuses[identifier] = status
+    return statuses
+
+
+def segment_of(line: str, start: int, end: int) -> str:
+    """The clause a match sits in — one table cell, or one sentence."""
+    left = max((found.end() for found in SEGMENT.finditer(line[:start])), default=0)
+    right = min(
+        (end + found.start() for found in SEGMENT.finditer(line[end:])), default=len(line)
+    )
+    return line[left:right]
+
+
+def stated(line: str, pattern: re.Pattern[str]) -> re.Match[str] | None:
+    """A match of `pattern` that its own clause does not deny."""
+    for match in pattern.finditer(line):
+        if not REFUSAL.search(segment_of(line, match.start(), match.end())):
+            return match
+    return None
+
+
+def unknown_owners(statuses: dict[str, str]) -> list[str]:
+    """A gated claim whose owner is not on the board: reported once, and it fails the run."""
+    return [
+        f"scripts/check-site.py: {name} is gated on `{rule['story']}`, and no story carries that "
+        f"id. The promotion rule reads the board's `status`, so an owner that is not on it is a "
+        f"gate that can never fire"
+        for name, rule in GOVERNED.items()
+        if rule["story"] not in statuses
+    ]
+
+
+def capability_problems(line: str, statuses: dict[str, str]) -> list[str]:
+    """Release claims on this line that the owning story does not yet support, or has outlived.
+
+    A rule whose owner is not on the board is skipped here and reported once by `unknown_owners`,
+    which is what keeps that failure from being repeated on every line of the site.
+    """
+    problems: list[str] = []
+    today = TODAY_CELL.search(line)
+    promoted = today or WORKING_ROW.match(line)
+    where = "a `today` row" if today else "the **Working** row"
+    for name, rule in GOVERNED.items():
+        story = rule["story"]
+        status = statuses.get(story)
+        if status is None:
+            continue
+        if status != "done":
+            if promoted and rule["subject"].search(line):
+                problems.append(
+                    f"{where} claims {name}, whose real-driver proof is `{story}` ({status}). "
+                    f"Today {rule['instead']}. Say it in the qualified form the site's vocabulary "
+                    f"already has (`today, partly`), or wait for `{story}`"
+                )
+            for pattern in rule["claims"]:
+                if match := stated(line, pattern):
+                    problems.append(
+                        f"claims \"{match.group(0)}\" — {name} is `{story}`'s ({status}), and "
+                        f"today {rule['instead']}"
+                    )
+        else:
+            for pattern in rule["denials"]:
+                if match := stated(line, pattern):
+                    problems.append(
+                        f"still says \"{match.group(0)}\" — `{story}` is done, and {rule['instead']}"
+                    )
+    return problems
+
+
+def governed_pages() -> list[tuple[str, list[str]]]:
+    """The public tree as lines, with each page's dated-record region dropped.
+
+    `README.md` is in here for the reason it is in `COMMAND_SOURCES`: it is the release-facing page
+    for a reader who never opens the site, and it carried the badge that was wrong.
+    """
+    pages: list[tuple[str, list[str]]] = []
+    for path in tracked(*COMMAND_SOURCES):
+        if path.suffix != ".md":
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        lines = path.read_text(encoding="utf-8").splitlines()
+        pages.append((rel, lines))
+    return pages
+
+
+def present_tense(rel: str, lines: list[str]) -> list[tuple[int, str]]:
+    """A page's numbered lines, up to the heading at which it becomes a dated record."""
+    stop = len(lines)
+    if heading := HISTORICAL.get(rel):
+        for index, line in enumerate(lines):
+            if line.strip() == heading:
+                stop = index
+                break
+    return [(number, line) for number, line in enumerate(lines[:stop], start=1)]
+
+
+def check_release_claims() -> tuple[list[str], dict[str, int]]:
+    """Items 6, 7 and 8: counts, inventory and capability language, against their three sources."""
+    problems: list[str] = []
+    counted = {"pages": 0, "lines": 0, "historical": 0}
+
+    counts, trouble = conformance()
+    problems += trouble
+    module = vector_checker()
+    if module is None:
+        problems.append(
+            f"{CHECKER.relative_to(ROOT)} could not be imported, so the published specification "
+            f"inventory was compared against nothing. Refusing to exit 0 on that"
+        )
+        registered, prefixes = 0, set()
+    else:
+        registered, prefixes, _excluded = spec_registry(module)
+    statuses = story_statuses()
+    problems += unknown_owners(statuses)
+
+    for rel, lines in governed_pages():
+        counted["pages"] += 1
+        governed = present_tense(rel, lines)
+        counted["lines"] += len(governed)
+        counted["historical"] += len(lines) - len(governed)
+        for number, line in governed:
+            for problem in count_problems(line, counts):
+                problems.append(f"{rel}:{number}: {problem}")
+            if module is not None:
+                for problem in spec_count_problems(line, registered):
+                    problems.append(f"{rel}:{number}: {problem}")
+            for problem in capability_problems(line, statuses):
+                problems.append(f"{rel}:{number}: {problem}")
+
+        # Paragraph-grained, because an inventory is a sentence that may wrap. The line number
+        # reported is the paragraph's first, which is where a reader starts editing it.
+        if module is not None and prefixes:
+            start, buffer = 1, []
+            for number, line in governed + [(len(governed) + 1, "")]:
+                if line.strip():
+                    if not buffer:
+                        start = number
+                    buffer.append(line)
+                    continue
+                if buffer:
+                    for problem in inventory_problems(" ".join(buffer), prefixes):
+                        problems.append(f"{rel}:{start}: {problem}")
+                buffer = []
+
+    # The positive half of `CF-3`'s wording rule. A prohibition alone is satisfied by saying
+    # nothing at all about what the end-to-end proof is worth, which is how the overstatement got
+    # in: the reader was told the other end was independent because nobody had written down what it
+    # actually is.
+    if statuses.get(INTEROP_STORY) != "done":
+        readme = ROOT / "README.md"
+        if readme.is_file() and REQUIRED_WORDING not in readme.read_text(encoding="utf-8"):
+            problems.append(
+                f"README.md: the real-socket proof is offered as evidence and never characterised. "
+                f"Describe it as a {REQUIRED_WORDING} — the `sipx` CLI on the other end is built "
+                f"from the kernel checkout this repository pins, so the two ends share a parser"
+            )
+
+    return problems, counted
+
+
+def check_proof_wording() -> list[str]:
+    """"Independent" is `CF-3`'s word, and `CF-3` is not built."""
+    if story_statuses().get(INTEROP_STORY) == "done":
+        return []
+    problems = []
+    for rel, lines in governed_pages():
+        for number, line in present_tense(rel, lines):
+            if match := INDEPENDENT.search(line):
+                problems.append(
+                    f"{rel}:{number}: \"{match.group(0)}\" — the end-to-end proofs run the `sipx` "
+                    f"CLI, built from the kernel checkout this repository pins, so both ends share "
+                    f"one parser. Call it a {REQUIRED_WORDING}; \"independent\" belongs to "
+                    f"`{INTEROP_STORY}`'s interop target, which does not exist yet"
+                )
+    return problems
+
+
 def self_test() -> list[str]:
     """The ways "it runs in CI" can be made to look true without being true.
 
@@ -952,6 +1489,159 @@ def self_test() -> list[str]:
         "the reported line is the file's, not the block's",
         documented_banners(f"intro\n\n```text\n{current}\n```\n") == [(4, current)],
     )
+
+    # `DX-14`. Both classes of release drift, replayed as they were found: a conformance triple
+    # copied by hand and left behind by the generator, and a capability the site called `today`
+    # while the driver discarded the effect. The detectors are pinned in both directions, because
+    # each of them is one false green away from being decoration.
+    truth = {
+        "": {"proved": 169, "total": 598, "shape only": 19, "deferred": 410},
+        "RA": {"proved": 23, "total": 29, "shape only": 5, "deferred": 1},
+    }
+    stale_badge = "vectors-157%2F586%20proved"
+    check("a stale badge is caught", count_problems(stale_badge, truth))
+    check(
+        "and it names both numbers, not just the first",
+        len(count_problems(stale_badge, truth)) == 2,
+    )
+    check(
+        "the current badge passes",
+        not count_problems("vectors-169%2F598%20proved", truth),
+    )
+    check(
+        "a stale triple in prose is caught",
+        len(count_problems("**157 of 586 vector rows proved**, 19 covered for shape only, "
+                           "410 deferred", truth)) == 2,
+    )
+    check(
+        "the current triple passes",
+        not count_problems("**169 of 598 vector rows proved**, 19 covered for shape only, "
+                           "410 deferred", truth),
+    )
+    check(
+        "a one-row denominator change is enough to fail a copy",
+        count_problems("169 of 598 rows proved", {"": dict(truth[""], total=599)}),
+    )
+    check(
+        "a claim scoped to a prefix is compared against that prefix",
+        not count_problems("23 of its 29 `RA` rows proved, 5 covered for shape only, "
+                           "1 deferred", truth),
+    )
+    check(
+        "and the same numbers unscoped are a headline claim, and wrong",
+        count_problems("23 of 29 rows proved", truth),
+    )
+    check(
+        "a prefix nothing registered does not scope anything",
+        count_problems("23 of its 29 `ZZ` rows proved", truth),
+    )
+
+    check(
+        "a stale specification count is caught",
+        spec_count_problems("**Fifteen specifications** with vector tables", 13),
+    )
+    check("the current one passes", not spec_count_problems("Thirteen specifications", 13))
+    check("as does a digit", not spec_count_problems("13 specifications", 13))
+    check(
+        "a word that is not a number is prose, not a count",
+        not spec_count_problems("the normative specifications are published", 13),
+    )
+    check(
+        "an inventory that has stopped enumerating is caught",
+        inventory_problems("registered: `PB`, `EP`, `RA`", {"PB", "EP", "RA", "SC"}),
+    )
+    check(
+        "and names what is missing",
+        "`SC`" in inventory_problems("registered: `PB`, `EP`, `RA`", {"PB", "EP", "RA", "SC"})[0],
+    )
+    check(
+        "a complete one passes",
+        not inventory_problems("`PB`, `EP`, `RA`, `SC`", {"PB", "EP", "RA", "SC"}),
+    )
+    check(
+        "a paragraph citing one prefix is not an inventory",
+        not inventory_problems("the forwarding rules carry a `PB` table", {"PB", "EP", "RA", "SC"}),
+    )
+
+    open_board = {"PX-12": "backlog", "DP-13": "in-progress", "RT-12": "ready",
+                  "PX-13": "done", "ET-7": "backlog", "CF-3": "backlog"}
+    check(
+        "a `today` row claiming an effect the driver discards is refused",
+        capability_problems(
+            "| Calls between two registered devices | forking, `CANCEL`, Timer C | today |",
+            open_board,
+        ),
+    )
+    check(
+        "the qualified form the vocabulary already has is not refused",
+        not capability_problems(
+            "| Calls | forking; `CANCEL` and Timer C are produced and not performed | "
+            "today, partly |",
+            open_board,
+        ),
+    )
+    check(
+        "nor is a `specified, not shipped` row",
+        not capability_problems("| Timer C | the decision core | specified, not shipped |", open_board),
+    )
+    check(
+        "the README's **Working** row is a `today` cell written the other way round",
+        capability_problems("| **Working** | declared roles gate runtime dispatch |", open_board),
+    )
+    check(
+        "and the same sentence is refused outside a table too",
+        capability_problems("declared roles gate runtime dispatch on this build.", open_board),
+    )
+    check(
+        "a denial that outlived its story is refused",
+        capability_problems(
+            "| **In-dialog routing** | `ACK` is resolved by address-of-record lookup | engine only |",
+            open_board,
+        ),
+    )
+    check(
+        "and is allowed again while that story is open",
+        not capability_problems(
+            "| **In-dialog routing** | `ACK` is resolved by address-of-record lookup | engine only |",
+            dict(open_board, **{"PX-13": "ready"}),
+        ),
+    )
+    check("an owner that is not on the board fails the run", unknown_owners({}))
+    check("and a board carrying all of them does not", not unknown_owners(open_board))
+    check(
+        "a clause that denies the capability is what this wants pages to write",
+        not capability_problems(
+            "a Timer C is armed with the right value and never fires", open_board
+        ),
+    )
+    check(
+        "and the denial in one cell does not excuse a claim in another",
+        capability_problems(
+            "| roles gate runtime dispatch | media never enters this process |", open_board
+        ),
+    )
+    check(
+        "\"independent implementation\" is recognised",
+        INDEPENDENT.search("the other end is an independent implementation") is not None,
+    )
+    check(
+        "so is \"independent parser\"",
+        INDEPENDENT.search("an independent parser reads it") is not None,
+    )
+    check(
+        "a separate process is not the same claim",
+        INDEPENDENT.search(f"a {REQUIRED_WORDING}") is None,
+    )
+
+    dated = ["current text", "", "## Releases", "", "157 of 586 rows proved"]
+    check(
+        "the release history is a dated record and is not scanned",
+        [number for number, _ in present_tense("website/docs/whats-new.md", dated)] == [1, 2],
+    )
+    check(
+        "every other page is read to the end",
+        len(present_tense("README.md", dated)) == len(dated),
+    )
     return failures
 
 
@@ -966,6 +1656,7 @@ def main() -> int:
     expected, banner_where, banner_drift = version_banner()
     commands, verified, unrunnable = check_documented_commands(surface, where)
     versions, banners = check_documented_versions(expected, banner_where)
+    claims, scanned = check_release_claims()
     problems = (
         check_reachability()
         + drift
@@ -973,6 +1664,8 @@ def main() -> int:
         + commands
         + banner_drift
         + versions
+        + claims
+        + check_proof_wording()
         + check_proofs_are_gated()
     )
 
@@ -996,6 +1689,21 @@ def main() -> int:
         print(f"site: {len(unrunnable)} documented command(s) need a tool this runner has not got:")
         for line in unrunnable:
             print(f"  {line}")
+
+    # What the release-claim scan actually read. Printed green or red, on this file's own rule: a
+    # check that quietly narrows its scope is indistinguishable from one that passes.
+    counts, _ = conformance()
+    module = vector_checker()
+    registered = spec_registry(module)[0] if module else 0
+    headline = counts.get("", {})
+    print(
+        f"site: release claims held to {headline.get('proved', '?')}/{headline.get('total', '?')} "
+        f"proved, {headline.get('shape only', '?')} shape only, "
+        f"{headline.get('deferred', '?')} deferred (docs/reference/conformance.md), "
+        f"{registered} registered specification(s) and {len(GOVERNED)} gated capability claim(s) "
+        f"— {scanned['lines']} line(s) across {scanned['pages']} page(s), "
+        f"{scanned['historical']} skipped as dated release history"
+    )
 
     pages = len([path for path in tracked("website/docs") if path.suffix == ".md"])
     if problems:

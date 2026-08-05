@@ -63,6 +63,26 @@ document declaring `tenant[].auth` either stops the node or challenges every `RE
 nobody can answer. So the node you can run today is an **open registrar**, and the only thing
 protecting it is the network it is on. Do not expose it.
 
+## Decided, but not performed
+
+There is a second line inside "today", and it is the one that will surprise you. The decision logic
+in this platform is sans-IO — pure state machines that emit *effects* — and the driver that turns an
+effect into a packet is a separate piece of code. Where a core decides something the driver does not
+yet perform, the vector rows go green and **nothing reaches the wire**. A conformance row proves what
+the engine emits; it never proves that a socket carried it.
+
+Four of those, named with the work that closes each:
+
+| Decided by the core | What the released node actually does | Closes with |
+|---|---|---|
+| Matching a `CANCEL` to its forked branches, and arming Timer C | The `CancelBranch` effect is logged and dropped; `SetTimer` reaches no clock, so a Timer C is armed with the right value and never fires. A branch that goes quiet after a provisional is reaped by the kernel's Timer B or not at all | `PX-12` |
+| Selecting an outbound target and its transport | Outbound resolution returns a UDP target and refuses a hostname outright — no RFC 3263, no NAPTR/SRV, no transport choice | `RT-12` |
+| The full role-to-capability matrix | Roles *do* reach dispatch: a node derives its capability set from them and answers `405` with `Allow` for a method they do not wire, and refuses to start on a role it has no runtime for. The refusal shape (`503`/`481`), the counted `ACK` drop and an `echo` runtime are not built, and the matrix has no real-binary proof yet | `DP-13` |
+| The probe establishing and tearing down a real dialog | The probe still builds address-of-record-shaped `ACK` and `BYE`, so a passing run proves a second lookup rather than a dialog route. The *node's* in-dialog path is not affected: it follows the dialog's `Route` set and remote target | `ET-7` |
+
+None of these moves because a vector row closes. Each moves when its story's real-socket acceptance
+passes, and the gate refuses to let this site say otherwise before then.
+
 ## Where the claims come from
 
 Correctness is expressed as numbered vectors inside the normative specs — for example the

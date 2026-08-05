@@ -3,9 +3,11 @@
 # M1's exit proof: two real `sipx` CLI phones register through one sipx-clstr node, call each other
 # through it, and hang up — with media flowing **directly between the phones**.
 #
-# Real sockets, real UDP, a real independent implementation of the client side. Everything the
-# deterministic harness cannot tell you: that the listener binds, that the parser agrees with someone
-# else's serializer, that a registration made by one process is found by another.
+# Real sockets, real UDP, a separate process on the client side — a same-kernel, separate-process
+# integration test. Everything the deterministic harness cannot tell you: that the listener binds,
+# that a registration made by one process is found by another, that media flows. Not what an
+# independent implementation would tell you: the phone is built from the kernel this repo pins, so a
+# parser disagreement shared by both ends passes this unnoticed. That target is `CF-3`'s.
 #
 # Usage:  scripts/e2e-call.sh [--sipx <path to the sipx CLI>] [--port <node port>]
 #
@@ -49,7 +51,7 @@ if [[ -z "$sipx" || ! -x "$sipx" ]]; then
     echo "e2e-call: no sipx CLI." >&2
     echo "  Build it from the sipx checkout (cargo build --bin sipx) and pass --sipx <path>," >&2
     echo "  or set SIPX. It is the kernel's own phone and is deliberately not vendored here:" >&2
-    echo "  the point of this test is that the client side is an independent implementation." >&2
+    echo "  the point of this test is that the client side is a separate process on a real socket." >&2
     exit 2
 fi
 
