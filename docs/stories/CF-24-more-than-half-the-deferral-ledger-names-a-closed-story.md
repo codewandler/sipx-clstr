@@ -16,18 +16,20 @@ Make a deferral that names a closed story fail the gate, and re-point the 239 ro
 so "deferred with a reason" means a reason someone will act on.
 
 ## Acceptance
-- [ ] `scripts/check-vectors.py` fails when a `[[deferred]]` entry names a story whose `status` is
+- [x] `scripts/check-vectors.py` fails when a `[[deferred]]` entry names a story whose `status` is
       `done` — it reads `story` today and never reads that story's status.
-- [ ] The same check covers `[[unasserted]]` entries if they name a story.
-- [ ] **Failing-first:** the check is red on the current tree, naming all 239 rows and their four
+- [x] The same check covers `[[unasserted]]` entries if they name a story.
+- [x] **Failing-first:** the check is red on the current tree, naming all 239 rows and their four
       stories. It goes green only once every one is re-pointed.
-- [ ] The 239 rows are re-pointed at the story that will actually cover them, or covered, or
+- [x] The 239 rows are re-pointed at the story that will actually cover them, or covered, or
       explicitly re-deferred with a live owner. **A deferral may not name the story that wrote the
       spec** — see the diagnosis below; that is the mechanism that produced most of these.
-- [ ] `docs/reference/conformance.md`'s wording is reconsidered: it reports a deferred count as
+- [x] `docs/reference/conformance.md`'s wording is reconsidered: it reports a deferred count as
       though every entry has a live owner, which is the claim this story falsifies.
-- [ ] The header tally in `docs/reference/vector-scope.toml` is corrected if the sweep moves rows
-      between prefixes; that file keeps its counts exact.
+- [x] The header tally in `docs/reference/vector-scope.toml` is corrected if the sweep moves rows
+      between prefixes; that file keeps its counts exact. (The sweep moved none: 410 rows over the
+      same thirteen prefixes, still naming fifteen stories — recounted against the swept file, and
+      the header was already exact.)
 
 ## Progress
 
@@ -54,6 +56,25 @@ so "deferred with a reason" means a reason someone will act on.
 - **Fence note for whoever resumes:** `docs/reference/vector-scope.toml` is normally coordinator-owned,
   and I lifted that for this story only, because the file is its subject matter. The rest of the fence
   holds.
+- **2026-08-05 — resumed on `impl/CF-24`, merged `main` (clean), swept, green.** Verified the WIP
+  check red at the merge base's ledger state: exactly 239 problems, naming `RT-7` 97, `ME-1` 90,
+  `DP-8` 51, `PX-2` 1. Then re-pointed every one:
+  - `AI-*` 97 → **`RT-2`** — asserted-identity's own coverage note: "`RT-2`'s trunk model is the
+    story that lands them".
+  - `MR-*` 90 → **`ME-2`** — media-relay §12: "`ME-2`'s tests derive from these"; the trait lands
+    with `ME-2` per the spec header.
+  - `CC-*` 51 split by consumer: **`DP-16`** 35 (the 21 its Acceptance claims by name, plus the 14
+    plain loader-validation rows — `CC-D-1`…`9`, `CC-I-2`/`3`, `CC-V-5`/`8`/`11` — as the loader's
+    one live story); **`RT-2`** 9 (`CC-T-1`…`4`, `CC-V-1`/`2`/`3`/`6`/`7` — the `trunk[]` section,
+    per the consumer table and RL7/RL8); **`DP-13`** 5 (`CC-R-2`…`6`, its Acceptance matrix);
+    **`FC-1`** 2 (`CC-R-9`/`10`, listener exposure per its V-07 item).
+  - `PB-C-4` → **`PX-4`** — the reason always said "PX-4's stateless path"; only the `story` field
+    had never caught up.
+  The 14 loader rows to `DP-16` are the one judgement call: no story's Acceptance claims them, and
+  `DP-16` is the only live story working the loader. The new gate makes the call self-correcting —
+  the day `DP-16` closes without them, every one goes red again and must be re-pointed or covered.
+  `conformance.md`'s preamble now states the enforced rule (live story, not the spec's author) and
+  the gate's green line reads "deferred with a live owner".
 
 ## Notes
 - **Measured on `4b0bc65`:** 428 deferred rows, of which **239 (56%) name a `done` story**.
