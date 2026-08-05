@@ -58,6 +58,7 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 ## Next (ready — take the top one unless the user named a story)
 - [DX-15 — Sweep both doc trees for claims the beta-line kernel bump invalidated](DX-15-sweep-the-docs-for-claims-the-kernel-bump-invalidated.md) · Foundation · CX-12 fixed the claims the gate can see; this sweeps the ones it cannot — "at the pinned v0.10.0" citations that are still true but now name the wrong pin, and prose anchored to a kernel state twelve releases old
 - [CF-27 — Validate story status values, instead of denylisting `done`](CF-27-validate-story-status-values-instead-of-denylisting-done.md) · Core · found reviewing CF-24 — the dead-letter gate fails open on a mistyped status, and the template's {{ID}} registers as a live story
+- [RG-26 — A removals-only REGISTER must not trip the binding quota](RG-26-a-removals-only-register-must-not-trip-the-quota.md) · Registrar · found by RG-16 round 4 — with 12 bindings held against a quota of 10, a REGISTER that only removes one is refused 403, while location-service §5.5's prose says removals never trip the quota
 
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
