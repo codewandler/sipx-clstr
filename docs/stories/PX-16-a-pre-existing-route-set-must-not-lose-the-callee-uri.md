@@ -21,7 +21,7 @@ replacing the Request-URI — the callee's own URI — with the answer to a ques
       and its Request-URI still names the callee on the wire.
 - [x] The location service is not asked about a `Route` URI. A `Route` names a proxy; an address of
       record names a user, and asking the former as the latter is the category error this closes.
-- [x] RFC 3261 §16.6 step 12's strict-router swap still happens where it is required, and `F7`'s `lr`
+- [x] RFC 3261 §16.6 step 6's strict-router swap still happens where it is required, and `F7`'s `lr`
       test is made total across `F6` rather than assumed — a route set of
       `[ours;lr, strict(no lr), p2;lr]` currently skips the strict router the swap exists to traverse.
 - [x] **Failing-first vector.** `PB-F-4` encodes the current double swap as expected bytes, so this
@@ -50,7 +50,7 @@ replacing the Request-URI — the callee's own URI — with the answer to a ques
   resolved location answer about the first `Route`, written over the Request-URI by F2 before F6
   ran. The swap was real; the bytes it swapped were wrong, and `sip:bob@b.example` — the callee —
   was no longer in the message at all. The new bytes keep the callee at the Route end, where
-  §16.6 step 12 puts the real destination for the strict router to find. Same argument, in the
+  §16.6 step 6 puts the real destination for the strict router to find. Same argument, in the
   row itself, in `proxy-behavior` §12.
 - New rows `PB-F-9` (loose pre-existing route set; callee kept on the wire; hop = first `Route`)
   and `PB-F-10` (strict router mid-set is traversed, not skipped) are registered and proved;

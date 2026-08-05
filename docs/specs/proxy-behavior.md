@@ -404,7 +404,7 @@ of the swapped Route set, described as *"the original Request-URI moved to the e
 value was the **resolved location answer about the first `Route`**, which F2 had already written
 over the Request-URI before F6 ran. The described swap was real; the bytes it swapped were wrong,
 because the callee's URI had left the message one step earlier. The new bytes keep the callee at
-the Route end, which is what §16.6 step 12's swap is *for*: the strict router finds the real
+the Route end, which is what §16.6 step 6's swap is *for*: the strict router finds the real
 destination as the last `Route` value. The old bytes could not have reached the callee at all.
 
 **Responses (PB-R):**

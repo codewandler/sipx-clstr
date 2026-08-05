@@ -139,7 +139,7 @@ pub fn forward(
     }
 
     // F6 — route postprocessing for a strict-routing next hop: the Request-URI moves to the end of
-    // the Route set and the first Route becomes the Request-URI. RFC 3261 §16.6 step 12. Runs after
+    // the Route set and the first Route becomes the Request-URI. RFC 3261 §16.6 step 6. Runs after
     // the route set is applied, since the first hop is now the path's topmost value. Whether it
     // fired is F7's input, so the answer is kept rather than re-derived from the copy.
     let reformatted = apply_strict_route_swap(&mut request);
@@ -211,7 +211,7 @@ fn record_route_value(config: &ProxyConfig, token: Option<&Bytes>) -> Result<Str
     }
 }
 
-/// §16.6 step 12: if the next hop is a strict router, swap the Request-URI and the last Route.
+/// §16.6 step 6: if the next hop is a strict router, swap the Request-URI and the last Route.
 ///
 /// Returns whether it did — F7's condition (RFC 3261 §16.6 step 7), which cannot be re-read off
 /// the finished copy: after a swap over `[strict, p2;lr]` the first `Route` carries `lr` again.
@@ -229,7 +229,7 @@ fn apply_strict_route_swap(request: &mut Request) -> bool {
         return false;
     };
     // A loose router advertises `;lr`. Its absence is what identifies a strict router, and RFC 3261
-    // §16.6 step 12 is explicit that the swap is only for that case.
+    // §16.6 step 6 is explicit that the swap is only for that case.
     if address
         .uri
         .params()
