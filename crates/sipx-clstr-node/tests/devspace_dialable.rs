@@ -4,7 +4,7 @@
 //! resolves no names, so the address-of-record's host must be something a socket can send to.
 //! `FC-4` refuses a `REGISTER` whose address-of-record is outside the tenant's `domains`
 //! (location-service §5.1 S1, compared byte-exactly), so that host must be a literal in the
-//! cluster document. And `FC-5` put that document in a ConfigMap written before any pod exists,
+//! cluster document. And `FC-5` put that document in a `ConfigMap` written before any pod exists,
 //! so the host cannot be a runtime-assigned address. The one string that satisfies all three is
 //! an address that is *declared* rather than assigned: the per-node Service's static `clusterIP`,
 //! stated in the same manifest as the document that serves it.
@@ -34,9 +34,10 @@ use sipx_clstr_node::config::{self, NodeIdentity, Role};
 
 /// A file read from the repository root, so the test holds the artifacts that actually ship.
 fn repo_file(rel: &str) -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(rel);
+    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {}: {e}", path.display()))
 }
 
 /// The manifest's YAML documents. Split on whole `---` lines rather than parsed as a stream, so a
@@ -76,7 +77,7 @@ fn object<'a>(documents: &'a [Value], kind: &str, name: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("the manifest should contain a {kind} named {name}"))
 }
 
-/// The cluster document both nodes mount, exactly as the ConfigMap carries it.
+/// The cluster document both nodes mount, exactly as the `ConfigMap` carries it.
 fn cluster_document(documents: &[Value]) -> String {
     object(documents, "ConfigMap", "sipx-clstr-cluster")
         .get("data")
@@ -91,7 +92,7 @@ fn host_of(uri: &str) -> String {
     let body = uri.trim_start_matches("sip:");
     let after_user = body.rsplit_once('@').map_or(body, |(_, host)| host);
     after_user
-        .split(|c: char| c == ':' || c == ';' || c == '?')
+        .split([':', ';', '?'])
         .next()
         .unwrap_or(after_user)
         .to_owned()
@@ -118,12 +119,15 @@ fn loaded_config() -> config::Config {
         zone: "a".to_owned(),
         roles: [Role::Edge, Role::Registrar].into_iter().collect(),
     };
-    let env: BTreeMap<String, String> =
-        [("POD_IP".to_owned(), "10.42.0.10".to_owned())].into();
-    config::load(cluster_document(&manifest_documents()).as_bytes(), &identity, &env)
-        .unwrap_or_else(|errors| {
-            panic!("the devspace document should load through the node's own loader: {errors:?}")
-        })
+    let env: BTreeMap<String, String> = [("POD_IP".to_owned(), "10.42.0.10".to_owned())].into();
+    config::load(
+        cluster_document(&manifest_documents()).as_bytes(),
+        &identity,
+        &env,
+    )
+    .unwrap_or_else(|errors| {
+        panic!("the devspace document should load through the node's own loader: {errors:?}")
+    })
 }
 
 #[test]
