@@ -22,6 +22,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The membership, key and shard-map sections a node is handed now load and validate**
+  (`DP-16`). `AF-6` specified `membership[]`, `keys[]` and `shardMap`, `DP-8` closed without
+  owning them, and nothing loaded them — a document written to `cluster-membership.md` would not
+  start a node. All three are now parsed and validated against their specs: a member on the call
+  path must declare its `rpc` endpoint (`MB5`, so **an existing cluster document without one
+  stops starting until it grows the field**), key windows must be well-formed instants, and a
+  reload is judged as a whole — refused unless every rollout-class section is unchanged, the
+  version advances, no id is re-pointed, and the incoming mint key's window covers the overlap
+  bound the retiring key needs (`RL10`/`RL11`). Twenty-five of the conformance rows that had been
+  deferred to a closed story are now proved and ten re-pointed at stories that will actually
+  prove them, taking deferrals from 410 to 385. What these sections still do **not** do is reach
+  the runtime — they are reported as unapplied rather than silently ignored, and `DP-17` owns
+  closing that.
+
 - **The deterministic harness can now injure a connection, not just a link** (`CF-26`). Three of
   `owner-rpc` §10's failure scenarios were unwritable because `fault.rs` offered five faults and
   none of them could drop and re-establish a connection, restart a node under a fresh

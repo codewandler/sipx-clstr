@@ -81,7 +81,6 @@ _The site a stranger lands on should say what this does and how to run it, not w
 
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
-- [DP-16 — Load the membership, key and shard-map sections the config loader still refuses](DP-16-load-the-membership-key-and-shard-map-sections.md) · Cluster · AF-6 specified them and DP-8 is closed, so nothing owns loading them — a document written to cluster-membership.md will not start a node
 - [FC-7 — Expose the contact-operation bound beside the quota it must not contradict](FC-7-expose-the-contact-operation-bound-beside-the-quota-it-must-not-contradict.md) · Cluster · RG-25 made max_contact_ops a per-tenant policy field with no document key — raise maxBindingsPerAor past it and whole-set refreshes start answering 403
 - [FC-8 — Write down the redaction rule the loader already follows](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · the loader already redacts an inline DSN and an inline nonce secret against no written rule — KY3 made it three call sites governed by nothing
 
@@ -242,6 +241,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [DP-10 — Read a cluster document at startup and replace the provisional flags](DP-10-read-a-cluster-document-at-startup.md) · Cluster · the missing link — DP-8 reads a document, RG-12 can use one, and nothing connects them yet
 - [DP-11 — Give the node an admission bound, not only an inherited queue bound](DP-11-give-the-node-an-admission-bound.md) · Cluster · one tokio::spawn per new transaction with no semaphore — the only backpressure is the kernel's queue
 - [DP-12 — Settle the self-refuting Timer C default, and stop discarding accepted keys in silence](DP-12-settle-the-self-refuting-timer-c-default.md) · Platform · a document carrying a timers section with no timerC is refused by the loader's own declared default
+- [DP-16 — Load the membership, key and shard-map sections the config loader still refuses](DP-16-load-the-membership-key-and-shard-map-sections.md) · Cluster · AF-6 specified them and DP-8 is closed, so nothing owns loading them — a document written to cluster-membership.md will not start a node
 - [DX-1 — Split the published site from the internal docs tree](DX-1-split-the-site-from-the-internal-docs-tree.md) · Foundation · the old link gate would have gone green by no longer looking — inverted rather than dropped
 - [DX-2 — Lay down the site's information architecture, navigation and landing page](DX-2-lay-down-the-information-architecture.md) · Foundation · URLs are stable from the start — stub pages beat stub URLs that move later
 - [DX-3 — Write the entry pair — what sipx-clstr is, and getting started](DX-3-write-the-entry-pair.md) · Foundation · the two facts that bite — open registrar, in-memory bindings — are stated on the first page

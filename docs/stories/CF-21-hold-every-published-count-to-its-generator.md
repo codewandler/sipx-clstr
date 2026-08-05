@@ -40,7 +40,8 @@ Make a published number that disagrees with the tool that produces it a red gate
       on every run rather than passing silently. **Landed with `DX-14`**: the site check imports
       `check-vectors.py` by path and refuses to exit 0 if that import fails.
 
-**What is left, and it is the whole of this story now:** the count of registered spec **prefixes**.
+**What is left, and it is the whole of this story now:** the count of registered spec
+**prefixes**, and making the published counts *generated* rather than hand-copied.
 
 ## Progress
 - (not started)
@@ -67,4 +68,11 @@ Make a published number that disagrees with the tool that produces it a red gate
   were implemented by `DX-14`'s check and are ticked above with the evidence; leaving them open
   would have this story claiming work that has landed, which is `CF-18`'s defect in a different
   costume. What remains is one line: the prefix count.
+- [ ] **The published counts are rewritten by a generator, not by hand.** `DX-14` made them
+      *checked*; they are still hand-edited copies. Since the check is in the gate, every story
+      that adds a vector row now turns `README.md` and `website/docs/whats-new.md` red and must
+      edit both to reach its own green — `DP-16` hit exactly this and flagged it. So two
+      concurrent stories collide on those lines, and the numbers remain a copy of a generated
+      figure, which is the shape this story exists to remove. A `--write` mode on the check (or a
+      sibling generator the gate runs) settles both.
 

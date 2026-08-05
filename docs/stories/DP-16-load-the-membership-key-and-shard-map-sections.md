@@ -2,7 +2,7 @@
 id: DP-16
 title: Load the membership, key and shard-map sections the config loader still refuses
 pillar: Cluster
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/deployment.md
 epic: fail-closed-config
@@ -144,3 +144,28 @@ Written as `\x00` now.
   attributes and binds a change to a new `apiVersion`. Do not alter that interface here.
 - Considered for upstream: **no.** Loading this platform's cluster document is orchestration; the
   kernel has no notion of our membership.
+
+- **Integrated 2026-08-05 after one rework round, gate green on `main` (209/613 rows proved,
+  deferrals down from 410 to 385).** The review found two blocking defects, both in code this
+  story added: `parse_rfc3339_utc` reached unchecked arithmetic on an operator-supplied field, so
+  a `verifyFrom` year of `300000000000` **panicked in debug and silently wrapped in release** —
+  the fail-closed surface failing open, accepting a verify window nobody wrote. And Acceptance
+  item 3 was ticked claiming "RL10/RL11 hold" while RL11's second clause (the incoming mint key's
+  window must cover the same bound) was unimplemented and undisclosed. Both fixed and proved in
+  **both profiles**, which is the only way the release-mode defect is visible.
+- **RL11's width bound, and why it is a width.** `overlap_window` computes `W = max(L, E_max) + S`
+  from the *incoming* document. The spec states the rule against the wall clock, and §2 D1 denies
+  the loader a clock — so the width is its strongest clock-free consequence, necessary rather
+  than sufficient, with the wall-clock half left to `RB5`. Recorded because it is a real
+  operational edge: a fleet whose mint window is narrower than `W` cannot reload *anything* until
+  the window widens.
+- **Two of its own tests were nearly worthless, and it caught both.** `cc_v_24`'s seven forbidden
+  RFC 3339 spellings were *already* refused at the base — for the wrong reason ("a window that
+  never opens") — so a test asserting only the rule id would have passed against the very defect
+  it was written for, which is `CF-12`'s exact shape; it now asserts the offending text is what
+  was found. And round 1's test file carried a raw `NUL` byte inside a byte-string literal: it
+  compiled, its tests passed, and it made all 2 000 lines **invisible to `grep`**.
+- **The "apply" half is `DP-17`'s**, filed at this story's review. Every Acceptance item here is
+  worded *accepts*/*validated*/*proved* and is met; only the Goal says *apply*, and `MB5` made
+  the unapplied third state universal rather than opt-in. Splitting kept that honest.
+
