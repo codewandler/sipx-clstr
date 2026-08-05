@@ -13,8 +13,10 @@ the stories, not the generated region. New work? Copy [`_TEMPLATE.md`](_TEMPLATE
 load-bearing specs live in `docs/specs/` — proxy behavior, location service, affinity token, hook
 framework — joined now by `registrar-auth`; the deterministic-harness design is accepted and the
 harness is built. sipx **`v0.4.0`** cleared the ledger as it then stood; the workspace now pins
-**`v0.10.0`**, and the [upstream ledger](../upstream.md) is open again. `CX-7` owns the two
-review-confirmed capability gaps, and `PX-12` waits for a released outgoing-CANCEL surface.
+**`v1.0.0-beta.4`** (`CX-12`, temporarily patched to the sibling checkout), and the
+[upstream ledger](../upstream.md) is open again. `CX-7`'s two capability filings turned out never
+to have merged upstream — `CX-13` re-files them — and `PX-12` still waits for a released
+outgoing-CANCEL surface.
 
 `RG-2` closed the milestone: digest runs *before* REGISTER processing through `parse::admit`, the
 principal it yields reaches the binding, and `sipx-clstr-sim/tests/register_auth.rs` proves the
@@ -48,11 +50,14 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 - [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
+- [CX-12 — Upgrade the pinned sipx kernel from 0.10.0 to 1.0.0-beta.4](CX-12-upgrade-the-sipx-kernel-to-1-0-0-beta-4.md) · Platform · the kernel crossed into its 1.0 beta line — 313 commits, twelve releases, two source changes here; the tag is already on GitHub, and a temporary [patch] to ../sipx rides along until the user's push decision removes it
 - [DP-13 — Wire declared roles into runtime capabilities instead of a method-global dispatcher](DP-13-wire-declared-roles-into-runtime-capabilities.md) · Cluster · V-01 fail-open is closed; the 503/481 shape, the counted ACK and the echo wiring remain
-- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only must refuse until a released sipx carries T-29
+- [FC-1 — Refuse a listener transport the node cannot serve, instead of silently serving cleartext](FC-1-refuse-a-transport-the-node-cannot-serve.md) · Cluster · V-07 high — TLS downgrade closed; TCP-only must refuse until a released sipx can bind exactly the declared transports — the CX-7 filing (then numbered T-29) was orphaned unmerged and its ID recycled upstream; CX-13 re-files
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 in flight — RG-25 landed and lifted the block; a half-resolved catch-up merge waits in the resume worktree
 
 ## Next (ready — take the top one unless the user named a story)
+- [CX-13 — Re-file the orphaned upstream filings on the kernel's main](CX-13-re-file-the-orphaned-upstream-filings.md) · Platform · UPSTREAM — CX-7's two filings sit on an unmerged kernel branch and their IDs were recycled; until they exist on main, PX-12 and FC-1 wait on stories the kernel repo does not have
+- [DX-15 — Sweep both doc trees for claims the beta-line kernel bump invalidated](DX-15-sweep-the-docs-for-claims-the-kernel-bump-invalidated.md) · Foundation · CX-12 fixed the claims the gate can see; this sweeps the ones it cannot — "at the pinned v0.10.0" citations that are still true but now name the wrong pin, and prose anchored to a kernel state twelve releases old
 
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
@@ -87,6 +92,10 @@ _Accepted means applied, or refused — there is no third state._
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-16 — Make the Helm skeleton advertise only what it actually installs](KO-16-make-the-helm-skeleton-advertise-only-what-it-installs.md) · Cluster · V-19 — metadata promises a full install; the chart emits one unserved custom resource
 
+### Media control
+_The SIP process controls media over a network protocol; it never touches a media packet._
+- [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media · unblocked — ME-1, AF-1 and AF-4 are all done, so the node id has a token to ride in; M2 #14
+
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-15 — Source per-process loop-cookie keys from operating-system randomness](PX-15-source-loop-cookie-keys-from-os-randomness.md) · Signalling · V-15 — the HMAC key is predictable text derived entirely from process startup time
@@ -103,6 +112,7 @@ _The one place the platform is allowed durable state — so its updates must ser
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
 - [RT-12 — Resolve outbound targets and settle every failed branch](RT-12-resolve-outbound-targets-and-settle-every-failed-branch.md) · Signalling · V-12 · outbound selection is UDP-only; since PX-13 this is live on real dialogs — an in-dialog request to a TLS Record-Route goes out as a UDP datagram to the TLS port
+- [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · unblocked — RT-1 and AF-1 are done, and RT-10 closed the totality holes filed against its inputs; M2 #9
 
 ### Optional session services
 _Some features must terminate one dialog and create another. A proxy cannot provide that behavior_
@@ -115,6 +125,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ## Backlog
 - [CX-9 — Pin the qualifying released kernel and clear the M4 upstream ledger](CX-9-pin-the-qualifying-kernel-release.md) · Platform · blocked by every M4 kernel story and a tagged release carrying them
 - [CX-11 — Publish the M4 operational capability release](CX-11-publish-the-operational-capability-release.md) · Platform · blocked by CX-10, KO-12, KO-17 and green release gates
+- [CX-14 — Prove M2 end to end, including the node kill](CX-14-prove-m2-in-a-killed-node-cluster.md) · Platform · M2 #21 · the milestone's own proof — cross-edge call with relayed media, mid-dialog routed by token with the counter at zero, and a node killed without taking the platform's next call with it
 
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
@@ -167,14 +178,13 @@ _One `values.yaml` to a running, healthy, resizable cluster — delivered and ke
 ### Media control
 _The SIP process controls media over a network protocol; it never touches a media packet._
 - [ME-2 — Implement the NG-protocol client](ME-2-implement-the-ng-protocol-client.md) · Media · blocked by ME-1, CF-3
-- [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media · blocked by ME-1, AF-1, AF-4 — the node id rides in the token
 - [ME-4 — Design SDP rewrite in the proxy path](ME-4-design-sdp-rewrite-in-the-proxy-path.md) · Media
 - [ME-5 — Implement the media-anchoring module](ME-5-implement-the-media-anchoring-module.md) · Media · blocked by ME-4, ME-2, EX-3
 
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-4 — Implement the stateless forwarding core](PX-4-implement-the-stateless-forwarding-core.md) · Signalling · M2 — implementation deferred until the token path gives it a consumer; S-15 landed in v0.4.0, PX-1 is done, so PX-3 is the only thing left in front of it
-- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker · blocked until a released sipx carries T-28; local timer/effect wiring must not construct CANCEL by shadowing the kernel
+- [PX-12 — Perform the CANCEL and timer effects the driver discards](PX-12-perform-the-cancel-and-timer-effects-the-driver-discards.md) · Signalling · release blocker · blocked until a released sipx carries a proxy-usable outgoing CANCEL — the CX-7 filing (then numbered T-28) was orphaned unmerged and its ID recycled upstream; CX-13 re-files. Local timer/effect wiring must not construct CANCEL by shadowing the kernel
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
@@ -186,7 +196,6 @@ _The one place the platform is allowed durable state — so its updates must ser
 
 ### Outbound routing & trunks
 _Which egress, in what order, and when to stop — routing as plans, trunks as stateful objects._
-- [RT-2 — Implement the trunk model with breakers and CPS limits](RT-2-implement-the-trunk-model-with-breakers-and-cps-limits.md) · Signalling · blocked by RT-1, AF-1
 - [RT-3 — Implement overload control](RT-3-implement-overload-control.md) · Signalling · RFC 7339 / RFC 7415 · sipx T-19 landed in v0.4.0, so backpressure no longer drops requests silently; waits on RT-1
 - [RT-4 — Specify failover semantics across route candidates](RT-4-specify-failover-semantics-across-route-candidates.md) · Signalling
 - [RT-5 — Implement a per-trunk egress header allowlist](RT-5-implement-per-trunk-egress-header-allowlist.md) · Signalling · confidentiality boundary; blocks a downstream deployment's parity milestone

@@ -6,18 +6,22 @@ document is the hand-written narrative around it.
 
 ## Status
 
-_As of 2026-07-30:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
+_As of 2026-08-05:_ **M0 is complete and M1's fourteen stories are all `done`.** The four load-bearing specs are
 written and cross-reconciled — proxy behavior, location service, affinity token, hook framework
 — the deterministic-harness design is accepted with its sipx-testkit upstream split decided, and
 `CX-1` has filed the kernel gaps as stories in the sipx repo. M1 is scoped below: fourteen
 stories, in order, with exit criteria that name the vectors that prove them. `CX-2` creates the
 Cargo workspace as its first act.
 
-The workspace now pins sipx `v0.10.0`. The original M1 kernel gaps landed, but the
-[upstream ledger](upstream.md) is open again: nonce uniqueness, replay-window complexity and
-per-message overload logging remain unfiled, and the validated review added outgoing proxy CANCEL
-and exact listener-selection gaps for `CX-7` to file. A kernel bump alone cannot be assumed to
-close any row; every row is re-read against the pinned tag.
+The workspace now pins sipx `v1.0.0-beta.4` (`CX-12`, with a temporary `[patch]` to the sibling
+checkout until the current kernel work is pushed). The original M1 kernel gaps landed, and the
+beta line settled most of the M4 dependency table — the call, identity, overload and
+diagnostic-phone stories are in the pinned tag, leaving kernel `C-6` and `A-10` open. But the
+[upstream ledger](upstream.md) is not clear: nonce uniqueness, replay-window complexity and
+per-message overload logging remain unfiled and survived all twelve releases in the bump, and the
+`CX-7` filings for outgoing proxy CANCEL and exact listener selection turned out never to have
+merged upstream — `CX-13` re-files them. A kernel bump alone cannot be assumed to close any row;
+every row is re-read against the pinned tag.
 
 ### Validated review remediation
 
@@ -146,6 +150,84 @@ it was free of. [`RG-8`](https://github.com/codewandler/sipx-clstr/blob/main/doc
 **closed it** — B4's base is the granted duration, not the absolute deadline — and it was the first
 thing after M1 rather than an M2 subject.
 
+### M2 in detail
+
+**Committed 2026-08-05, with the goal set explicitly: M4 done.** M4 is the destination — the
+release gate scoped below — and M2 is the next rung on the ladder to it: M2 makes the cluster
+real, M3 makes it reachable by modern clients, M4 holds both to released, proved, published
+artifacts. M2 is the largest milestone in the plan and it is scoped here the way M1 was: a story
+set in dependency order, exit criteria that are commands, and an explicit out-list.
+
+M2 runs **behind the release-blocker wave**, not instead of it: `DP-13`, `RG-16` and `FC-1` are
+in flight, and the registrar-correctness block (`RG-17` … `RG-20`) sits at priority 1. Those are
+correctness debts on M1's surface; `/track:next` keeps them in front. The affinity chain the
+roadmap named — `CF-22` → `PX-13` → `AF-4` → `AF-5` — has otherwise run its course: the first
+three are `done` and `AF-5` is in flight, so M2's defining criterion is reachable at last.
+
+**The story set, in dependency order.** Statuses as of the commitment date; a story becomes
+`ready` (and takes a priority) as the one in front of it lands.
+
+| # | Story | What it adds | Proved by |
+|---|---|---|---|
+| 1 | `AF-5` | the token minted into `Record-Route`, verified from `Route`, at any edge | in flight — `AT-*` round-trip; gives `PB-A-*` its consumer |
+| 2 | `AF-3` | design: the owner RPC, the epic's only cross-node hop | in flight — design accepted, §10 failure taxonomy named |
+| 3 | `CF-26` | connection-injury faults in the harness | the three owner-rpc §10 scenarios become writable |
+| 4 | `AF-8` | a tokenless mid-dialog platform `Route` refuses instead of downgrading | its failing-first test |
+| 5 | `DP-16` | `membership[]`, `keys[]` and `shardMap` load and apply | cluster-config §12's reload rows |
+| 6 | `AF-7` | the connection table, `flow_ref`, and the owner RPC, implemented | owner-rpc §10 under `CF-26`'s faults |
+| 7 | `PX-4` | the stateless forwarding core — mid-dialog requests get their engine | the `PB-S-*` rows, deferred from M1, run at last |
+| 8 | `RG-5` | rendezvous sharding and drain-then-switch handoff | the shard/handoff vectors |
+| 9 | `RT-2` | trunks as stateful objects: breakers, CPS and concurrency caps | unblocked (`RT-1`, `AF-1` done) — harness load rejections, breaker transitions as metrics |
+| 10 | `CF-3` | the real-network interop harness: SIPp, the sipx CLI, rtpengine | gates `ME-2`'s real-relay acceptance |
+| 11 | `EX-3` | the hook runtime | the module seam `ME-5` plugs into |
+| 12 | `ME-4` | design: SDP rewrite and the anchoring module's hook phases | design accepted |
+| 13 | `ME-2` | the NG-protocol client | verified against a real rtpengine via `CF-3` |
+| 14 | `ME-3` | media-node selection riding in the token | unblocked (`ME-1`, `AF-1`, `AF-4` done) — distribution test + honest re-anchor semantics |
+| 15 | `ME-5` | the anchoring module — the code that actually relays | an anchored call in the harness driving `MediaRelay` |
+| 16 | `DP-3` | metrics that prove the invariants | the cross-node dialog-lookup counter exists, exported, asserted |
+| 17 | `DP-2` | the 3-zone reference topology | authored, with its Kubernetes expression |
+| 18 | `KO-3` | the operator reconcile loop | its 16 `SC` vector rows |
+| 19 | `KO-18` | a devspace address a phone can dial | the getting-started §4 call runs as published; unblocks `DX-13` |
+| 20 | `KO-2` | `helm install` on local k3s — the headline deliverable | the scripted acceptance run: install, register, call, probe `pass` |
+| 21 | `CX-14` | the milestone's own end-to-end proof | cross-edge call, relayed media, token-routed mid-dialog, a node killed and survived |
+
+**Exit criteria.** M2 is done when every one of these is true, and each is a command someone else
+can run:
+
+1. Every `PB-A-*` and `PB-S-*` vector passes in the harness — the two families M1 explicitly
+   deferred because the token path had no consumer. (`AF-5`, `PX-4`)
+2. owner-rpc §10's failure scenarios execute in the harness under injected connection faults —
+   reconnect, restart-with-fresh-incarnation, backpressure — and pass. (`CF-26`, `AF-7`)
+3. A mid-dialog request arriving at an edge that did not create the dialog is routed by its
+   token with **zero** cross-node dialog lookups — asserted by `DP-3`'s counter reading zero
+   during `CX-14`'s real call, not eyeballed. (`AF-5`, `AF-7`, `DP-3`)
+4. A tokenless or tampered mid-dialog platform `Route` is refused, never silently downgraded to
+   an AoR lookup. (`AF-8`'s failing-first test)
+5. `helm install` on a local k3s cluster stands up the platform; two sipx CLI phones register on
+   different edges and call each other **with media through the relay**; the probe deployed by
+   the same chart reports `pass`. (`KO-2`, `ME-5`, `CX-14`)
+6. Kill any single node of that deployment: new registrations and new calls complete within the
+   probe's timer budget, and the invariant counter still reads zero. (`CX-14`)
+7. Trunk breakers and CPS caps reject under harness load with the specified responses, and the
+   breaker transitions are observable as metrics. (`RT-2`)
+8. The gate is green throughout, and every new spec's vector table is under the vector gate.
+
+**Explicitly out of M2, with the reason:**
+
+| Out | Why |
+|---|---|
+| `AF-5`'s `Path` variant | affinity-token M7's direction value is spec-deferred to M3; the `Record-Route`/`Route` round-trip does not wait on it |
+| all M3 reachability (Outbound, GRUU, WSS clients, push, session timers, 100rel, the overload-control consumer) | the kernel surfaces largely landed in the beta line, but the consumer stories are M3's — pulling them forward would make M2's cluster criterion wait on UA-facing work it does not need |
+| `PX-12` CANCEL/timer effects | blocked on a kernel release carrying a proxy-usable outgoing CANCEL (`CX-13` re-files; [ledger](upstream.md) row). A release blocker for the next cut, not an M2 exit criterion — it lands the moment the kernel releases the primitive |
+| `BS-*` session services | M4's opt-in slice, by design separate from the proxy path |
+| `KO-4` … `KO-9` rollout, drain and autoscaling | the operator exists in M2 to reconcile a declared cluster, not yet to orchestrate lifecycle — that is the KO epic's own phase 2 |
+| `RG-21` production PostgreSQL graduation | `RG-17` first; the proof backend carries M2's vectors unchanged |
+
+**The kernel dependency picture, stated once:** M2 itself needs nothing unreleased from the
+kernel. `PX-12` (above) and the two `CX-13` re-filings ride alongside; M4's two remaining kernel
+rows (`C-6`, `A-10`) sit past M3. If the kernel releases the CANCEL primitive mid-milestone,
+`PX-12` joins the cut without changing M2's criteria.
+
 ### M4 in detail
 
 M4 is a **release gate**, not a feature-count milestone. M2 and M3 remain independently
@@ -182,26 +264,22 @@ restart/relay candidates are likewise not smuggled into this milestone.
 
 ## Next
 
-- Close the release-blocking review findings first. `/track:next` remains the authority for the
-  exact take order; dependencies are carried in story frontmatter and notes rather than duplicated
-  here.
-- `CX-7` is the upstream edge: `PX-12` waits for a released outgoing-CANCEL primitive, while
-  `FC-1` must refuse TCP-only configuration until exact listener selection exists. `RG-20` is local
-  because typed `Expires` parsing already exists in the pinned kernel.
-- Resume the M2 affinity, routing, media and deployment sequence after the reviewed release surface
-  is honest and its real-driver behavior is proved.
-- **`PX-13` is on M2's critical path, not beside it.** `AF-5` round-trips the affinity token through
-  `Record-Route` and `Route`, and until the driver routes in-dialog requests **by the route set** it
-  cannot read a token out of one — before `PX-13` every `ACK` was resolved as an address of record
-  instead. So M2's defining criterion, *mid-dialog requests route by token with zero cross-node dialog
-  lookups*, is unreachable while that path does an AoR lookup. `PX-13` is parked on a transaction
-  leak; `CF-22` is the gate step that will let its next attempt prove the fix locally rather than
-  discovering it in CI. That is the sequence: `CF-22` → `PX-13` → `AF-4` → `AF-5`.
-- A second `PX-13` consequence for `AF-4` to plan around, found at review: `Input::Upstream` now
-  returns `on_targets` synchronously for in-dialog requests, so a driver that verifies the token and
-  feeds `TokenFact(Invalid)` afterwards gets its `403` **after** `Effect::Forward` was emitted.
-  Verification has to sit before the in-dialog branch or inside the engine. Unreachable today —
-  `TokenFact` has no producer — and live the moment `AF-4` mints a real token.
+- **The goal is set: M4 done** (2026-08-05). The path there is M2 → M3 → M4, and **M2 is the
+  committed next milestone**, scoped in [M2 in detail](#m2-in-detail) the way M1 was: story set
+  in dependency order, exit criteria as commands, an explicit out-list.
+- Close the release-blocking review findings first — they are correctness debts on M1's surface
+  and run ahead of the M2 sequence. `/track:next` remains the authority for the exact take order;
+  dependencies are carried in story frontmatter and notes rather than duplicated here.
+- `CX-13` is the upstream edge now: `CX-7`'s filings were orphaned on an unmerged kernel branch
+  and their IDs recycled, so the outgoing-CANCEL primitive (`PX-12`) and exact listener selection
+  (`FC-1`) must be re-filed on the kernel's `main` before either can wait on a release honestly.
+  `RG-20` is local because typed `Expires` parsing already exists in the pinned kernel.
+- The affinity chain that made M2 reachable has run: `CF-22`, `PX-13` and `AF-4` are `done`,
+  `AF-5` is in flight. The consequence found at `PX-13`'s review still stands and is now
+  **`AF-5`'s to land correctly**: `Input::Upstream` returns `on_targets` synchronously for
+  in-dialog requests, so a driver that verifies the token *after* feeding the request gets its
+  `403` after `Effect::Forward` was already emitted — verification sits before the in-dialog
+  branch or inside the engine. Live now that real tokens exist.
 
 ## Epics
 
