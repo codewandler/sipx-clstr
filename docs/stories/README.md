@@ -47,7 +47,6 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 ## Now (in progress)
 - [AF-3 — Design the connection-owner RPC](AF-3-design-the-connection-owner-rpc.md) · Cluster
 - [AF-5 — Round-trip tokens through Record-Route and Route](AF-5-round-trip-tokens-through-record-route-and-route.md) · Cluster · round trip lands; the Path variant waits on affinity-token M7's direction value, which the spec defers to M3 — not on the kernel
-- [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CX-5 — File the nonce-uniqueness defect upstream and make nonce uniqueness normative](CX-5-file-the-nonce-uniqueness-defect-upstream.md) · Platform · DELIBERATELY OPEN — RA-R-8 is deferred to this story; closing it orphans the row. Was: the nonce is a function of the clock alone, so honest users collide in the replay window
 - [CX-8 — Track M4 as the operational capability baseline](CX-8-track-the-operational-capability-baseline.md) · Platform · M4 tracker — remains open until every local story, released upstream dependency, proof and artifact is complete
 - [CX-12 — Upgrade the pinned sipx kernel from 0.10.0 to 1.0.0-beta.4](CX-12-upgrade-the-sipx-kernel-to-1-0-0-beta-4.md) · Platform · the kernel crossed into its 1.0 beta line — 313 commits, twelve releases, two source changes here; the tag is already on GitHub, and a temporary [patch] to ../sipx rides along until the user's push decision removes it
@@ -58,6 +57,7 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 
 ## Next (ready — take the top one unless the user named a story)
 - [DX-15 — Sweep both doc trees for claims the beta-line kernel bump invalidated](DX-15-sweep-the-docs-for-claims-the-kernel-bump-invalidated.md) · Foundation · CX-12 fixed the claims the gate can see; this sweeps the ones it cannot — "at the pinned v0.10.0" citations that are still true but now name the wrong pin, and prose anchored to a kernel state twelve releases old
+- [CF-27 — Validate story status values, instead of denylisting `done`](CF-27-validate-story-status-values-instead-of-denylisting-done.md) · Core · found reviewing CF-24 — the dead-letter gate fails open on a mistyped status, and the template's {{ID}} registers as a live story
 
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
@@ -231,6 +231,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
 - [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
 - [CF-22 — The gate cannot see a leaked transaction](CF-22-the-gate-cannot-see-a-leaked-transaction.md) · Foundation · re-specified — the first Acceptance demanded a bound correct code cannot meet; PX-13 drains at 128·T1 and is not a leak
+- [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio

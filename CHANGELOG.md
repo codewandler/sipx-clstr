@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A deferred conformance row is now judged by its named story's status, not by the name's
+  existence** (`CF-24`). 239 of 428 deferred rows — 56% — named a story that had already closed,
+  so the report's "deferred with a reason" was a dead letter for more than half its rows.
+  `check-vectors.py` now refuses a `[[deferred]]` or `[[unasserted]]` entry whose story is `done`,
+  missing, or the story that merely *wrote* the spec (a spec story closes the day the spec lands,
+  orphaning its own rows — that pattern alone accounted for 188 of the 239). Every dead letter was
+  re-pointed at the live story whose Acceptance or spec text actually claims the row — `RT-2` 106,
+  `ME-2` 90, `DP-16` 35, `DP-13` 5, `FC-1` 2, `PX-4` 1 — and the new gate ratchets: if one of
+  those stories closes without proving its rows, they go red again at that close. The report's
+  green line now reads "deferred with a **live owner**", which is the sentence the gate actually
+  enforces.
+
 ## [0.13.0] — 2026-08-04
 
 This release puts M2's defining invariant into executable form: an edge mints the affinity token

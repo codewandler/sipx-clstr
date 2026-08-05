@@ -2,7 +2,7 @@
 id: CF-24
 title: More than half the deferral ledger names a story that has already closed
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 epic: conformance-harness
 areas: [gate, conformance]
