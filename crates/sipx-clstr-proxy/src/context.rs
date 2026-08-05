@@ -95,6 +95,7 @@ impl ResponseContext {
         match input {
             Input::Upstream(request) => self.on_upstream(*request),
             Input::TargetsResolved(targets) => self.on_targets(targets),
+            Input::TargetsUnavailable => self.on_targets_unavailable(),
             Input::BranchResponse(response, branch) => self.on_branch_response(*response, &branch),
             Input::BranchTransportError(branch) => self.on_branch_failure(&branch),
             Input::TokenFact(verdict) => self.on_token(&verdict),
@@ -229,6 +230,23 @@ impl ResponseContext {
         targets.sort_by_key(|target| std::cmp::Reverse(target.q));
         self.queued = targets;
         self.fork_next_group()
+    }
+
+    /// §7 — the location service could not answer, which is not an empty target set.
+    ///
+    /// `480` is a statement about the callee: this platform looked, and the address of record has no
+    /// active binding. This is a statement about this platform, which could not look
+    /// (location-service §6 K7, §7 L8), so it is `503` — and a caller that reads `480` for a store
+    /// outage is told to stop trying a callee who may be perfectly reachable.
+    ///
+    /// Originated here, so it is not a branch response: nothing was forwarded, no final enters the
+    /// response context, and R8 — which rewrites a *branch's* `503` to `500` — has no subject. The
+    /// same position location-service §5.1 S10 takes for the registrar's own `503`.
+    fn on_targets_unavailable(&mut self) -> Vec<Effect> {
+        let Some(request) = self.request.clone() else {
+            return self.terminate();
+        };
+        self.respond_and_finish(&request, 503, "Service Unavailable")
     }
 
     /// Forward the next `q` group in parallel.

@@ -244,8 +244,14 @@ impl Edge {
                 ProxyEffect::ResolveTargets(query) => {
                     // §16.5 — the location service answers. Bindings in, forking targets out,
                     // with the lookup's own order preserved.
+                    // §7 L8 — a lookup is fallible, and this harness runs on the in-memory
+                    // backend, whose reads cannot fail. The failure input the socket driver feeds
+                    // (`ProxyInput::TargetsUnavailable`) is proved by `PB-F-11`.
                     let found = match CanonicalAor::parse(query.uri.clone()) {
-                        Ok(aor) => self.store.lookup(TENANT, &aor, self.now),
+                        Ok(aor) => self
+                            .store
+                            .lookup(TENANT, &aor, self.now)
+                            .expect("the in-memory backend always reads"),
                         Err(_) => Vec::new(),
                     };
                     let targets = targets_from_lookup(&found);

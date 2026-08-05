@@ -26,7 +26,8 @@
 //! that is a story, not a patch: it changes the trait for every backend.
 
 use sipx_clstr_registrar::{
-    BindingSet, CanonicalAor, CasConflict, Change, LocationStore, Revision, Target, Timestamp,
+    BindingSet, CanonicalAor, CasConflict, Change, LocationStore, ReadFailure, Revision, Target,
+    Timestamp,
 };
 
 /// Wraps a synchronous [`LocationStore`] so it can be called from async code.
@@ -50,7 +51,11 @@ impl<S> BlockingStore<S> {
 }
 
 impl<S: LocationStore + Send + Sync> LocationStore for BlockingStore<S> {
-    fn read(&self, tenant: &str, aor: &CanonicalAor) -> (BindingSet, Revision) {
+    fn read(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+    ) -> Result<(BindingSet, Revision), ReadFailure> {
         tokio::task::block_in_place(|| self.inner.read(tenant, aor))
     }
 
@@ -64,7 +69,12 @@ impl<S: LocationStore + Send + Sync> LocationStore for BlockingStore<S> {
         tokio::task::block_in_place(|| self.inner.commit(tenant, aor, expected, set))
     }
 
-    fn lookup(&self, tenant: &str, aor: &CanonicalAor, now: Timestamp) -> Vec<Target> {
+    fn lookup(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+        now: Timestamp,
+    ) -> Result<Vec<Target>, ReadFailure> {
         tokio::task::block_in_place(|| self.inner.lookup(tenant, aor, now))
     }
 

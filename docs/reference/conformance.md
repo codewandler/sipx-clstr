@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**169 of 598 rows proved**; 19 covered for shape only; 410 deferred.
+**173 of 602 rows proved**; 19 covered for shape only; 410 deferred.
 
-Σ over the 61 sections below is 598, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 602, so every row counted above is shown in exactly one table.
 
 Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
 
@@ -95,6 +95,7 @@ by a registered prefix's own rows.
 | `PB-F-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-9` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-10` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-11` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `503` |
 
 ## Proxy — response processing (§8)
 
@@ -385,6 +386,8 @@ by a registered prefix's own rows.
 | `LS-K-4` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
 | `LS-K-5` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
 | `LS-K-6` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `6`; not compared |
+| `LS-K-7` | proved | `crates/sipx-clstr-registrar/tests/read_faults.rs` — asserts `503` |
+| `LS-K-8` | proved | `crates/sipx-clstr-registrar/tests/read_faults.rs` — asserts `503` |
 
 ## Location service — the lookup contract (§7)
 
@@ -398,6 +401,7 @@ by a registered prefix's own rows.
 | `LS-L-6` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
 | `LS-L-7` | proved | `crates/sipx-clstr-registrar/src/lookup.rs` |
 | `LS-L-8` | deferred | `RG-5` — The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them. |
+| `LS-L-9` | proved | `crates/sipx-clstr-node/tests/postgres_store.rs`, `crates/sipx-clstr-proxy/tests/vectors_proxy.rs`, `crates/sipx-clstr-registrar/tests/read_faults.rs` — asserts `503` |
 
 ## Location service — the sharding key (§8)
 

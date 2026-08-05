@@ -27,6 +27,28 @@ pub struct CasConflict {
     pub current: Revision,
 }
 
+/// Why an authoritative read could not answer (§6 K7).
+///
+/// Distinct from absence on purpose, and that is the whole of this type's job: `Ok((∅, Revision(0)))`
+/// says the store was read and holds nothing for this address-of-record, while a `ReadFailure` says
+/// the durable state is **unknown**. Answering the second as the first is what lets a query or a
+/// no-op removal come back `200 OK` describing bindings nobody looked at.
+///
+/// Two variants because they are different operational faults — one is connectivity, the other says
+/// this node and whatever wrote the row disagree about the schema — and one refusal, because §5.1 S10
+/// has the same answer for both and no caller has a remedy that differs between them. The detail is a
+/// `String` rather than a backend's own error type: this crate is sans-IO and never learns what a
+/// database or a codec is.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum ReadFailure {
+    /// The backend could not be reached, or refused the query.
+    #[error("the location store could not be read: {0}")]
+    Unavailable(String),
+    /// A stored binding set could not be decoded.
+    #[error("a stored binding set could not be decoded: {0}")]
+    Undecodable(String),
+}
+
 /// A change notification (§6 K4).
 ///
 /// Carries no binding payload on purpose: a consumer re-reads. An event that shipped state would
@@ -43,11 +65,18 @@ pub struct Change {
 
 /// Where bindings live.
 pub trait LocationStore {
-    /// The latest committed set and its revision.
+    /// The latest committed set and its revision, or why it could not be read.
     ///
     /// Staleness here is a liveness concern only: a stale read shows up as a [`CasConflict`] and a
-    /// retry, never as a lost update (§6 K6).
-    fn read(&self, tenant: &str, aor: &CanonicalAor) -> (BindingSet, Revision);
+    /// retry, never as a lost update (§6 K6). **Failure is not staleness**, which is why it is a
+    /// [`ReadFailure`] and not an empty set: K6's fencing argument only reaches commands that commit,
+    /// and the ones that answer without committing — a query, an idempotent retry, the removal of a
+    /// contact that is not bound — would carry the invented absence all the way to the UA (§6 K7).
+    ///
+    /// An address-of-record with no bindings is `Ok((BindingSet::new(), Revision::INITIAL))`, and
+    /// that is the only thing revision zero ever means.
+    fn read(&self, tenant: &str, aor: &CanonicalAor)
+    -> Result<(BindingSet, Revision), ReadFailure>;
 
     /// Install `set` iff the stored revision is still `expected`, atomically.
     fn commit(
@@ -58,8 +87,17 @@ pub trait LocationStore {
         set: BindingSet,
     ) -> Result<Revision, CasConflict>;
 
-    /// The forking-ordered target set for an AoR at `now` (§7).
-    fn lookup(&self, tenant: &str, aor: &CanonicalAor, now: Timestamp) -> Vec<Target>;
+    /// The forking-ordered target set for an AoR at `now` (§7), or why it could not be read.
+    ///
+    /// §7 L8: the failure is not L5's empty set. An empty `Ok` means this platform looked and the
+    /// address-of-record has no active binding — the proxy's `480`; an `Err` means it could not look
+    /// — the proxy's `503`.
+    fn lookup(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+        now: Timestamp,
+    ) -> Result<Vec<Target>, ReadFailure>;
 
     /// Every change committed so far, oldest first.
     ///
@@ -76,8 +114,13 @@ pub const DEFAULT_CAS_RETRIES: usize = 3;
 pub struct Applied {
     /// What was decided.
     pub outcome: Outcome,
-    /// The revision the address-of-record ended at.
-    pub revision: Revision,
+    /// The revision the address-of-record ended at, when one was learned.
+    ///
+    /// `None` only when the authoritative read failed (§6 K7): nothing was read, so there is no
+    /// revision to report and nothing may be inferred from its absence. Reporting `Revision::INITIAL`
+    /// there would be the same invention this field exists to stop — revision zero is a real,
+    /// readable state, and a failed read is not it.
+    pub revision: Option<Revision>,
     /// How many CAS conflicts were absorbed on the way.
     ///
     /// Reported rather than hidden so a scenario can assert that a race *happened* — a
@@ -92,6 +135,12 @@ pub struct Applied {
 /// as it is.
 ///
 /// Returns the outcome actually applied, and the revision the AoR ended at.
+///
+/// A read that fails ends this before `process` is ever called (§6 K7): the decision function is
+/// pure in its inputs, so handing it an invented empty set produces a confidently wrong answer
+/// rather than an error. §5.1 S10's `503` is that refusal, and it is reached identically by every
+/// command shape — a query and an absent-contact removal never commit, so nothing downstream of the
+/// read could have noticed.
 pub fn apply<S: LocationStore + ?Sized>(
     store: &S,
     cmd: &RegisterCommand,
@@ -100,14 +149,29 @@ pub fn apply<S: LocationStore + ?Sized>(
 ) -> Applied {
     let mut conflicts = 0;
     loop {
-        let (current, revision) = store.read(&cmd.tenant, &cmd.aor);
+        let (current, revision) = match store.read(&cmd.tenant, &cmd.aor) {
+            Ok(found) => found,
+            Err(failure) => {
+                tracing::error!(
+                    tenant = %cmd.tenant,
+                    aor = %cmd.aor.as_str(),
+                    %failure,
+                    "the location store could not be read; refusing the REGISTER"
+                );
+                return Applied {
+                    outcome: Outcome::Reject(Rejection::Unavailable),
+                    revision: None,
+                    conflicts,
+                };
+            }
+        };
         let outcome = process(cmd, &current, policy);
 
         let Outcome::Commit { set, response } = outcome else {
             // A Noop or a Reject writes nothing, so there is no race to lose.
             return Applied {
                 outcome,
-                revision,
+                revision: Some(revision),
                 conflicts,
             };
         };
@@ -116,7 +180,7 @@ pub fn apply<S: LocationStore + ?Sized>(
             Ok(committed) => {
                 return Applied {
                     outcome: Outcome::Commit { set, response },
-                    revision: committed,
+                    revision: Some(committed),
                     conflicts,
                 };
             }
@@ -127,7 +191,7 @@ pub fn apply<S: LocationStore + ?Sized>(
                     // branch response and proxy-behavior's R8 (503 → 500) does not apply to it.
                     return Applied {
                         outcome: Outcome::Reject(Rejection::Unavailable),
-                        revision: conflict.current,
+                        revision: Some(conflict.current),
                         conflicts,
                     };
                 }
@@ -191,12 +255,21 @@ impl InMemoryStore {
 }
 
 impl LocationStore for InMemoryStore {
-    fn read(&self, tenant: &str, aor: &CanonicalAor) -> (BindingSet, Revision) {
-        self.inner()
+    /// Infallible in practice, and typed fallible anyway: the contract is §6 K7's, not this
+    /// backend's, and a trait whose shape depended on which store happened to be behind it would be
+    /// exactly the drift §6.3 exists to prevent. Absence is `Ok`, because absence is what this store
+    /// actually knows.
+    fn read(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+    ) -> Result<(BindingSet, Revision), ReadFailure> {
+        Ok(self
+            .inner()
             .rows
             .get(&(tenant.to_owned(), aor.clone()))
             .cloned()
-            .unwrap_or_else(|| (BindingSet::new(), Revision::INITIAL))
+            .unwrap_or_else(|| (BindingSet::new(), Revision::INITIAL)))
     }
 
     fn commit(
@@ -230,12 +303,19 @@ impl LocationStore for InMemoryStore {
         Ok(next)
     }
 
-    fn lookup(&self, tenant: &str, aor: &CanonicalAor, now: Timestamp) -> Vec<Target> {
+    fn lookup(
+        &self,
+        tenant: &str,
+        aor: &CanonicalAor,
+        now: Timestamp,
+    ) -> Result<Vec<Target>, ReadFailure> {
         let inner = self.inner();
         let Some((set, _)) = inner.rows.get(&(tenant.to_owned(), aor.clone())) else {
-            return Vec::new(); // L5, L7 — an unknown AoR is the empty set, not an error.
+            // L5, L7 — an unknown AoR is the empty set, and it is an *answer*: this store looked.
+            // L8's failure is the other thing, and this backend has no way to reach it.
+            return Ok(Vec::new());
         };
-        order_targets(set, now)
+        Ok(order_targets(set, now))
     }
 
     fn changes(&self) -> Vec<Change> {
@@ -283,7 +363,7 @@ mod tests {
         // More refreshes than the feed holds.
         let total = CHANGE_FEED_CAPACITY * 4;
         for i in 0..total {
-            let (set, revision) = store.read("t", &aor);
+            let (set, revision) = store.read("t", &aor).expect("the in-memory store reads");
             let mut next = set.clone();
             next.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
             store
@@ -306,7 +386,7 @@ mod tests {
         let store = InMemoryStore::new();
         let aor = aor("sip:alice@example.test");
         for i in 0..(CHANGE_FEED_CAPACITY + 10) {
-            let (set, revision) = store.read("t", &aor);
+            let (set, revision) = store.read("t", &aor).expect("the in-memory store reads");
             let mut next = set.clone();
             next.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
             store

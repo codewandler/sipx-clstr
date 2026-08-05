@@ -99,18 +99,23 @@ enum Outcome {
 
 fn process(cmd: &RegisterCommand, current: &BindingSet, policy: &TenantPolicy) -> Outcome;
 
+enum ReadFailure { Unavailable, Undecodable }        // §6 K7 — two causes, one refusal
+
 trait LocationStore {
-    fn read(&self, tenant: &TenantId, aor: &CanonicalAor) -> (BindingSet, Revision);
+    fn read(&self, tenant: &TenantId, aor: &CanonicalAor)
+        -> Result<(BindingSet, Revision), ReadFailure>;      // §6 K7
     fn commit(&self, tenant: &TenantId, aor: &CanonicalAor,
               expected: Revision, set: BindingSet) -> Result<Revision, CasConflict>;
-    fn lookup(&self, tenant: &TenantId, aor: &CanonicalAor, now: Instant) -> TargetSet;
+    fn lookup(&self, tenant: &TenantId, aor: &CanonicalAor, now: Instant)
+        -> Result<TargetSet, ReadFailure>;                   // §7 L8
     fn changes(&self) -> ChangeStream;               // best-effort, §6
 }
 ```
 
 The driver loop is: `read` → `process` → on `Commit`, `commit(expected)` → on `CasConflict`,
 re-read and re-process (bounded retries, §5.1 S10). The idempotency rule (§5.3) is what makes
-this loop safe to repeat.
+this loop safe to repeat. A `read` that fails ends the loop **before** `process`: the decision
+function is never handed a set that was invented rather than read (§6 K7).
 
 ## 3. AoR canonicalization
 
@@ -230,7 +235,7 @@ Steps run in order; the first failure responds and terminates with nothing commi
 | S7 | Per-contact expiry selection and min/max policy (step 7, §5.2) | `423 Interval Too Brief` + `Min-Expires` |
 | S8 | Per-tenant quota (§5.5) **[sipx-clstr]** | `403 Forbidden` |
 | S9 | Per-binding Call-ID/CSeq application (steps 6–7, §5.3) | `500` on stale-CSeq abort **[sipx-clstr]** |
-| S10 | Atomic commit via CAS; on conflict re-read and re-process, bounded retries (default 3, configurable) | `503 Service Unavailable` when the store is unreachable or retries exhaust — **[sipx-clstr]**; this 503 is originated by the registrar UAS, not a branch response, so proxy-behavior R8 does not apply to it |
+| S10 | Atomic commit via CAS; on conflict re-read and re-process, bounded retries (default 3, configurable) | `503 Service Unavailable` when the authoritative read fails (§6 K7), when the store is unreachable, or when retries exhaust — **[sipx-clstr]**; this 503 is originated by the registrar UAS, not a branch response, so proxy-behavior R8 does not apply to it |
 | S11 | `200 OK` with the complete active set (step 8, §5.6) | — |
 
 ### 5.2 Expiry selection
@@ -557,6 +562,16 @@ nothing hooks between `read` and `commit`.
 | K4 | **Change stream.** Every commit emits `Change { tenant, aor, revision }` — no binding payload; consumers re-read. Delivery is **best-effort**: the stream is a latency optimization and correctness never depends on it (K5 is the correctness bound) |
 | K5 | **TTL-bounded read staleness.** `lookup` MAY be served from a cache whose age is bounded by the configured staleness TTL — **[sipx-clstr]** default 5 s. A consumer that misses every change event still converges within one TTL. Caches are never the source of correctness: the bound, not the invalidation, is the guarantee |
 | K6 | **Reads feeding the CAS loop.** `read` returns the latest committed `(set, revision)`. Staleness there is a liveness concern only — a stale read manifests as a `CasConflict` and a retry, never as a lost update. That is the sense in which per-AoR serialization holds "regardless of backend" |
+| K7 | **A store that cannot be read is not an empty store.** `read` and `lookup` are fallible, and their failure is distinct from the absence K6's `(∅, 0)` reports: a backend that refuses the query (`Unavailable`) and a stored set this node cannot decode (`Undecodable`) are both failures, and neither may be answered as an address-of-record with no bindings. The two causes stay distinguishable because they are different operational faults — one is connectivity, the other says this node and whatever wrote the row disagree about the schema — and one refusal, because no caller has a remedy that differs between them. Callers: §5.1 S10 (`503`, before `process` runs) and §7 L8 |
+
+**K7 is fail-closed, and the reason is that K6 cannot cover it.** K6's argument is that a stale read
+costs nothing because the commit is fenced by the revision predicate — a read that came back with an
+old set produces a `CasConflict` and a retry. That argument holds only for a command that *commits*.
+§5.3 B4's idempotent retry, §10.2.3's query and B1's removal of a contact that is not bound all reach
+`Outcome::Noop`, which returns before the commit and therefore meets no predicate; a read failure
+converted to `(∅, 0)` reaches the UA as a `200 OK` enumerating no bindings. That answer is not merely
+stale — it is a statement about durable state that was never read, made to a UA that will act on it by
+believing it is registered nowhere or that its deregistration was applied.
 
 The staleness consequence is stated, not hidden: within one TTL, a branch may still be built
 toward a just-removed binding, and a just-added binding may be missed. Both are within
@@ -610,6 +625,7 @@ struct Target {
 | L5 | Unknown AoR, or no active bindings: the empty set. What to answer upstream is the consumer's decision (proxy-behavior §16.5) |
 | L6 | The lookup input is canonicalized with §3 before keying — a Request-URI spelling variant resolves to the identical target set |
 | L7 | `flow_ref` and `route_set` are carried verbatim; the location service never interprets either |
+| L8 | `lookup` is fallible on §6 K7's terms, and its failure is **not** L5's empty set. The consumer receives the failure as a distinct fact: proxy-behavior §7 originates `503 Service Unavailable` for it, where L5's authoritative "no active bindings" remains that spec's `480`. The two answers say different things — `480` reports the callee's state, `503` reports ours — and collapsing them tells a caller the callee is unavailable when what is unavailable is this platform |
 
 ## 8. Sharding key (scope note for RG-5)
 
@@ -708,6 +724,8 @@ Vectors are normative; the harness (RG-3 first, RG-4 against the same suite) exe
 | LS-K-4 | Consumer holds revision 6; event/state labeled 5 arrives | discarded (K3 fencing) |
 | LS-K-5 | One REGISTER replaces CA and CB together | every reader observes the revision-5 set or the revision-6 set, never a mix (K2) |
 | LS-K-6 | Authoritative `read` immediately after the revision-6 commit | returns revision 6 (K6); only `lookup` may lag, bounded by K5 |
+| LS-K-7 | The authoritative `read` fails — the backend refuses the query, or the stored set cannot be decoded — and a REGISTER **query** (RFC 3261 §10.2.3, no `Contact`) arrives | `503` (S10 via K7); `process` is never reached and nothing is committed — an unreadable store is not an empty one, and this shape never commits, so no compare-and-swap exists to discover the fault later |
+| LS-K-8 | The same read failure, under a REGISTER whose only operation removes a contact that is **not** bound (B1's ignore, so `Outcome::Noop`) | `503`; nothing committed and no revision reported. The deregistration a UA is told succeeded is the one that never reached the store |
 
 **Lookup (LS-L).** Fixture set at `now`: A (q 1.0, refreshed t=100, Path [P2, P1]), B (q 1.0,
 refreshed t=200, flow_ref present), C (q 0.5), D (expired), E (no q, refreshed t=50).
@@ -722,6 +740,7 @@ refreshed t=200, flow_ref present), C (q 0.5), D (expired), E (no q, refreshed t
 | LS-L-6 | Target B | carries `flow_ref` opaquely (L7) |
 | LS-L-7 | Unknown AoR | empty set (L5) |
 | LS-L-8 | Lookup keyed by `SIP:alice@Atlanta.COM.` | identical target set to `sip:alice@atlanta.com` (L6) |
+| LS-L-9 | `lookup(t1, K, now)` when the store refuses the read, or holds a set this node cannot decode | a failure, distinct from LS-L-7's empty set; the consumer originates `503 Service Unavailable` rather than answering as though the address-of-record were authoritatively empty (L8) |
 
 **Shard key (LS-H).**
 

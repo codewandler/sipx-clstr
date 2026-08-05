@@ -2,7 +2,7 @@
 id: RG-17
 title: Make authoritative location-store reads fallible instead of inventing absence
 pillar: Registrar
-status: ready
+status: in-progress
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
@@ -19,26 +19,59 @@ and proxy lookup never turn unknown durable state into a successful empty answer
 
 ## Acceptance
 
-- [ ] `LocationStore::read` has a fallible result that distinguishes absence from database and decode
+- [x] `LocationStore::read` has a fallible result that distinguishes absence from database and decode
       failure; every backend, adapter, conformance fixture and caller handles the distinction.
-- [ ] REGISTER read failure becomes `Rejection::Unavailable` and a wire `503`. Query, wildcard
+- [x] REGISTER read failure becomes `Rejection::Unavailable` and a wire `503`. Query, wildcard
       removal, absent-contact removal and mutation all take the same failure path; none relies on a
       later CAS to discover a read error.
-- [ ] Location lookup preserves store failure separately from an empty target set. The proxy receives
+- [x] Location lookup preserves store failure separately from an empty target set. The proxy receives
       an explicit failure input/outcome and originates `503 Service Unavailable` rather than answering
       `480` as though the AoR were authoritatively empty. This locally originated 503 is not a branch
       response and is not rewritten by proxy-behavior R8.
-- [ ] Commit failure and exhausted CAS retries retain their existing bounded `503` behavior.
-- [ ] **Failing-first fault tests:** injected database-read and stored-JSON-decode failures make a
+- [x] Commit failure and exhausted CAS retries retain their existing bounded `503` behavior.
+- [x] **Failing-first fault tests:** injected database-read and stored-JSON-decode failures make a
       REGISTER query, a no-op deregistration, and a call lookup fail explicitly. Each returns false
       absence on `86e6b10`.
-- [ ] The identical location-store conformance suite runs against in-memory and PostgreSQL backends;
+- [x] The identical location-store conformance suite runs against in-memory and PostgreSQL backends;
       live PostgreSQL fault coverage runs when `SIPX_CLSTR_TEST_DATABASE_URL` is set.
 - [ ] `scripts/gate.sh` is green.
 
 ## Progress
 
-- (not started)
+Landed, spec first: location-service §6.1 **K7** (a store that cannot be read is not an empty store)
+and §7 **L8** (a lookup failure is not L5's empty set), with §5.1 S10 amended to name the read and §2's
+trait sketch made fallible; proxy-behavior §2 gains `TargetsUnavailable` and §7 the locally originated
+`503` that R8 does not rewrite. Four vector rows registered and **proved**: `LS-K-7`, `LS-K-8`,
+`LS-L-9`, `PB-F-11` (`docs/reference/conformance.md` regenerated; 173/602 proved, no new deferrals).
+
+The code: `LocationStore::read` and `::lookup` return `Result<_, ReadFailure>`, whose two variants —
+`Unavailable` and `Undecodable` — are `PostgresStore`'s `StoreError::{Database, Decode}` kept apart all
+the way out. `apply` refuses at the read with `Rejection::Unavailable`, **before** `process` runs, so a
+query, an absent-contact removal, a wildcard removal and a mutation take one path. `Applied.revision`
+became `Option<Revision>`: on a failed read nothing was learned, and reporting `Revision::INITIAL`
+there would be the same invention the story closes.
+
+Deliberately *not* changed: `commit`. Its `CasConflict`-on-error behaviour and S10's exhausted-retry
+`503` are untouched, and `vectors_register.rs::s10_exhausted_cas_retries_answer_503_rather_than_looping`
+still proves them.
+
+`driver.rs` is one hunk — the `ProxyEffect::ResolveTargets` arm, which now feeds
+`ProxyInput::TargetsUnavailable` on `Err`. A Request-URI that will not canonicalize still resolves to
+the empty set and `480`: that is an answer, not a failure.
+
+### For the integrator
+
+- Ledgers are untouched by design (`CHANGELOG.md`, the board, `docs/roadmap.md`): this story is
+  `in-progress` and needs `/track:done RG-17` on merge.
+- **The gate is red at the merge base, not from this diff.** `cargo fmt --all --check` and
+  `cargo clippy … -D warnings` both fail on `crates/sipx-clstr-node/tests/devspace_dialable.rs`
+  (unformatted; `doc_markdown` on `ConfigMap` ×2; `manual_pattern_char_comparison`), which arrived on
+  `74b5fc0`/`c3e8301` — "WIP rescue: a dialable devspace address, committed by the coordinator". The
+  file is byte-identical to `main` here; `cargo fmt --all` reformatted it as a side effect and the
+  change was reverted rather than adopted, because it is outside this story's fence.
+- `scripts/check-msrv.sh` could not run: the host filesystem is at 100% and the reclaimable space is
+  other tenants' (Docker images and volumes, and three sibling worktrees' target directories).
+  Nothing here is MSRV-relevant — the new code uses `Result`, `Option` and `matches!` only.
 
 ## Notes
 
