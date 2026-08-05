@@ -152,6 +152,10 @@ _Extensions become declared modules over typed hook phases, never edits to the c
 - [EX-4 — Implement registry codegen for syntax artifacts](EX-4-implement-registry-codegen-for-syntax-artifacts.md) · Platform · UPSTREAM decision per artifact
 - [EX-5 — Implement deployment profiles with compatibility checking](EX-5-implement-deployment-profiles-with-compatibility-checking.md) · Platform
 
+### Fail-closed configuration
+_Accepted means applied, or refused — there is no third state._
+- [DP-17 — Apply the membership, key and shard-map sections a node now loads](DP-17-apply-the-membership-key-and-shard-map-sections.md) · Cluster · DP-16 landed the loading and validation half; these sections still parse into fields nothing reads, and MB5 made that third state universal rather than opt-in
+
 ### Kubernetes operator, Helm packaging & autoscaling
 _One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
 - [KO-3 — Implement the operator reconcile loop](KO-3-implement-the-operator-reconcile-loop.md) · Cluster · unblocked — KO-1 specified the resource; it owns the 16 SC vector rows
