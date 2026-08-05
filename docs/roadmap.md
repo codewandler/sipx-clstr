@@ -13,8 +13,9 @@ written and cross-reconciled — proxy behavior, location service, affinity toke
 stories, in order, with exit criteria that name the vectors that prove them. `CX-2` creates the
 Cargo workspace as its first act.
 
-The workspace now pins sipx `v1.0.0-beta.4` (`CX-12`, with a temporary `[patch]` to the sibling
-checkout until the current kernel work is pushed). The original M1 kernel gaps landed, and the
+The immutable sipx `v1.0.0-beta.5` tag is published. `CX-15` is moving all four workspace pins
+together, refreshing the lock and removing the temporary sibling-checkout patch before the
+patch-free release gate for sipx-clstr `0.14.0`. The original M1 kernel gaps landed, and the
 beta line settled most of the M4 dependency table — the call, identity, overload and
 diagnostic-phone stories are in the pinned tag, leaving kernel `C-6` and `A-10` open. But the
 [upstream ledger](upstream.md) is not clear: nonce uniqueness, replay-window complexity and

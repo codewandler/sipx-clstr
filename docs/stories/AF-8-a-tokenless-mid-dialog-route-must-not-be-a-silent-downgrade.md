@@ -2,12 +2,11 @@
 id: AF-8
 title: A tokenless mid-dialog platform Route must not be a silent downgrade
 pillar: Cluster
-status: ready
-priority: 2
+status: backlog
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity, proxy, security]
-note: AF-5 reports an absent aft as "nothing to verify" because no keys[] loader exists — harmless until a token claim becomes a routing input
+note: blocked on DP-17 applying keys[] to the runtime key set — harmless until a token claim becomes a routing input
 ---
 
 # A tokenless mid-dialog platform Route must not be a silent downgrade
@@ -23,9 +22,9 @@ Close `affinity-token` §8's missing-token rejection once a key set can be requi
       `403` — is enforced, on the premise §5 states: there is no tokenless platform `Route` on a
       mid-dialog request once every edge mints.
 - [ ] The premise is made true before the rule is enforced: a node that Record-Routes has a key set,
-      or it refuses to start. This is the dependency, and it is `DP-16`'s `keys[]` loader —
-      `cluster-membership` §4. Enforcing the rule before that answers `403` to every in-call message
-      on a keyless node.
+      or it refuses to start. This is the dependency, and it is `DP-17`'s runtime application of
+      the `keys[]` document loaded by `DP-16` — `cluster-membership` §4. Enforcing the rule before
+      that answers `403` to every in-call message on a keyless node.
 - [ ] **Failing-first:** a mid-dialog request presenting a platform `Route` with no `aft` is
       forwarded today (`crates/sipx-clstr-proxy/src/types.rs:70-90` reports it as "nothing to
       verify") and is `403` after, with the keyless-node case proved to still work rather than
@@ -55,6 +54,6 @@ Close `affinity-token` §8's missing-token rejection once a key set can be requi
   popped and ignored* on the second platform `Route` — a live defect against `proxy-behavior` §5 P2,
   fixed in `AF-5` itself. This story is the *absent* token case, which is a deliberate, spec-noted
   deviation.
-- Blocked by `DP-16` (`keys[]` and the membership sections the loader still refuses).
+- Blocked by `DP-17`, which applies the already-loaded `keys[]` section to the runtime key set.
 - Considered for upstream: **no.** The token, its parameter and the platform `Route` convention are
   this platform's affinity mechanism; the kernel has no notion of them.

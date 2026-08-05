@@ -53,7 +53,7 @@ anyway.
 | Per-customer branches inside that script | Nothing. Routing policy is composed from modules, and a routing configuration language is a stated non-goal | not planned |
 | A gateway list with failover and distribution | The trunk model: carrier interconnect, egress selection, asserted identity, privacy | specified, not shipped |
 | Number rewriting on the way out | Declarative number normalisation, fenced to exactly two points in the request path and to the number position alone | specified, not shipped |
-| A state store every node reads on the hot path | Nothing, deliberately — routing state rides in the message instead. This is the section below | specified, not shipped |
+| A state store every node reads on the hot path | Nothing, deliberately — the token library and deterministic two-edge route round trip carry routing state in the message; runtime key application and owner delivery remain open | today, partly |
 | Per-edge tracking of NAT'd client connections | Flow references: a signed reference naming both the flow and the node that owns it, plus an RPC to that owner | specified, not shipped |
 | Registrations *partitioned* across nodes, one owner per key | Registrar shards by rendezvous hash, compare-and-swap per binding | specified, not shipped |
 | An RTP relay the proxy controls | An external relay driven over a network control protocol; RTP never enters the signalling process | specified, not shipped |

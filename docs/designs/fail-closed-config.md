@@ -1,7 +1,7 @@
 # Design: Fail-closed configuration
 
 **Status:** proposed · **Pillar:** Cluster · **Epic:** `fail-closed-config` ·
-**Stories:** FC-1 … FC-6
+**Stories:** FC-1 … FC-8
 
 ## Why
 
@@ -132,6 +132,9 @@ arrangement [e2e-probe](../specs/e2e-probe.md) §9 forbids absolutely.
 
 Considered for upstream (AGENTS.md #6): **no.** Which methods a deployment's role serves is cluster
 orchestration; the kernel has no notion of our roles, and the dispatch this changes is our driver's.
+
+`FC-8` makes the same boundary decision for refusal redaction: the rule belongs to this platform's
+cluster-document `ConfigError`, not to SIP syntax or protocol behavior, so there is no kernel change.
 
 ## Out of scope, named so it is not lost
 

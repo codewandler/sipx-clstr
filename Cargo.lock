@@ -1903,7 +1903,7 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "sipx-clstr-affinity"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bytes",
  "chacha20poly1305",
@@ -1915,7 +1915,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-node"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bytes",
  "clap",
@@ -1937,7 +1937,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-probe"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bytes",
  "pretty_assertions",
@@ -1948,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-proxy"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bytes",
  "hmac 0.12.1",
@@ -1963,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-registrar"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bytes",
  "pretty_assertions",
@@ -1976,7 +1976,7 @@ dependencies = [
 
 [[package]]
 name = "sipx-clstr-sim"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "bytes",
  "pretty_assertions",
@@ -1996,7 +1996,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-sip"
-version = "1.0.0-beta.4"
+version = "1.0.0-beta.5"
+source = "git+https://github.com/codewandler/sipx?tag=v1.0.0-beta.5#0133a464f2722b8c8495ccf36b192c6c9642b3bf"
 dependencies = [
  "base64",
  "bytes",
@@ -2010,7 +2011,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-transport"
-version = "1.0.0-beta.4"
+version = "1.0.0-beta.5"
+source = "git+https://github.com/codewandler/sipx?tag=v1.0.0-beta.5#0133a464f2722b8c8495ccf36b192c6c9642b3bf"
 dependencies = [
  "bytes",
  "futures-util",
@@ -2031,7 +2033,8 @@ dependencies = [
 
 [[package]]
 name = "sipx-ua"
-version = "1.0.0-beta.4"
+version = "1.0.0-beta.5"
+source = "git+https://github.com/codewandler/sipx?tag=v1.0.0-beta.5#0133a464f2722b8c8495ccf36b192c6c9642b3bf"
 dependencies = [
  "bytes",
  "hmac 0.12.1",
@@ -2920,7 +2923,3 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
-
-[[patch.unused]]
-name = "sipx-sdp"
-version = "1.0.0-beta.4"

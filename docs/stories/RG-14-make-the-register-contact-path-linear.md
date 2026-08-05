@@ -20,7 +20,7 @@ and the per-address quota is applied only after all of that work has been done a
 
 ## Acceptance
 
-- [ ] Contact matching stops re-parsing on every comparison. `process.rs` calls
+- [x] Contact matching stops re-parsing on every comparison. `process.rs` calls
       `set.all().iter().position(matches_contact)` per operation, and `matches_contact` parses the
       *stored* contact's URI each time; distinct contacts never match, so the scan is always full.
       Parse once into a comparable form, or index the set.
@@ -28,14 +28,14 @@ and the per-address quota is applied only after all of that work has been done a
       [location-service](../specs/location-service.md) rather than only in code. The parser's limits
       (256 headers, 8 KB per header, 64 KB per message) permit thousands of contacts once
       `Address::parse_list` flattens comma lists, and nothing caps `ops.len()`.
-- [ ] **Failing-first**: a test submits a REGISTER carrying a large contact list and asserts a
+- [x] **Failing-first**: a test submits a REGISTER carrying a large contact list and asserts a
       refusal, or asserts a work bound — not merely that it eventually answers. It fails today: the
       request is accepted, the whole quadratic reconciliation runs, and only then does the
       `max_bindings_per_aor` check refuse it.
-- [ ] The quota's *position* is preserved or explicitly changed. Checking the committed outcome is
+- [x] The quota's *position* is preserved or explicitly changed. Checking the committed outcome is
       correct per §5 S8 — it judges the result rather than the request — so the fix is a cheap
       pre-check that cannot disagree with it, not a relocation of the real check.
-- [ ] Existing `LS` vector rows still pass, and any new bound gets its own row.
+- [x] Existing `LS` vector rows still pass, and any new bound gets its own row.
 
 ## Progress
 
@@ -80,6 +80,10 @@ and the per-address quota is applied only after all of that work has been done a
   in as an optimisation.
 - Considered for upstream: no. This is the platform's own reconciliation path.
 - Gate green, shared location-service suite unchanged.
+- **Closure record reconciled by `CF-18`.** The parse-once implementation, counted failing-first test,
+  quota-position analysis and shared LS run justify the four checked items. The contact-operation
+  bound stays unticked exactly as the correction below says; `RG-25`, not this story, later supplied
+  that missing limit and its vector.
 
 ## Notes
 

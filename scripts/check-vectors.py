@@ -5,10 +5,12 @@
 this check closes the loop: it reads the row IDs out of the specification, reads the coverage out of
 the test suite, and fails when the two disagree.
 
-Coverage is derived from **test function names** rather than from a hand-maintained list —
-`fn pb_v_8_a_max_breadth_of_one_…` covers `PB-V-8`. A list would rot; a name cannot, because deleting
-the test deletes the claim. Tests that cover a row without wanting the name can say so in a
-`// covers: PB-R-4` comment instead.
+Coverage is derived from **Cargo-discovered test function names** rather than from a hand-maintained
+list — `#[test] fn pb_v_8_a_max_breadth_of_one_…` covers `PB-V-8` only when the workspace's
+all-feature libtest inventory lists it and does not mark it ignored. A list would rot; this evidence
+cannot, because deleting, ignoring, or cfg-disabling the test deletes the claim. Tests that cover a
+row without wanting the name can say so in a `// covers: PB-R-4` comment in the following executable
+test item's leading trivia instead; file order across a brace or module boundary never binds it.
 
 Two row shapes are accepted, because the specs have two. Most tables number by family —
 `PB-V-8`, `RA-R-7` — and one table per spec is small enough to number straight through:
@@ -111,8 +113,10 @@ Exit 0 when everything agrees, 1 otherwise.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
+import subprocess
 import sys
 import tomllib
 import typing
@@ -121,6 +125,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCOPE = ROOT / "docs" / "reference" / "vector-scope.toml"
 REPORT = ROOT / "docs" / "reference" / "conformance.md"
 STORIES = ROOT / "docs" / "stories"
+CARGO_FIXTURE = ROOT / "scripts" / "fixtures" / "check-vectors-cargo" / "Cargo.toml"
 
 # Every spec that carries a vector table, with the prefix its rows use, the section the table
 # lives in, and the story that *wrote* those rows — the section is quoted in the generated report,
@@ -215,7 +220,12 @@ PREFIXES = "|".join(SPECS)
 # The family letter is optional: `PB-V-8` and `HF-9` are both rows. See the module docstring for
 # why the grammar widened instead of the tables renumbering.
 ROW = re.compile(rf"\b({PREFIXES})-(?:([A-Z])-)?(\d+)\b")
-COVERS = re.compile(rf"//\s*covers:\s*((?:(?:{PREFIXES})-(?:[A-Z]-)?\d+[,\s]*)+)")
+# A declaration is the whole physical line: an ordinary line comment or a Rust doc comment. Search
+# would turn a string literal containing `"// covers: …"`, or a trailing comment after an item, into
+# executable evidence merely because those bytes appeared before some later test.
+COVERS = re.compile(
+    rf"^\s*//(?:/|!)?\s*covers:\s*((?:(?:{PREFIXES})-(?:[A-Z]-)?\d+[,\s]*)+)\s*$"
+)
 
 # A vector-table line whose *first* cell is a row ID — as opposed to a line that merely cites one,
 # which is why the ID has to be anchored at the start rather than found anywhere.
@@ -330,6 +340,8 @@ CLOSED_STATUSES = frozenset({"done"})
 
 FN_LINE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?fn\s+(\w+)")
 NAMED_FOR = re.compile(rf"^({PREFIXES.lower()})_(?:([a-z])_)?(\d+)_")
+TEST_ATTRIBUTE = re.compile(r"#\[(?:(?:[A-Za-z_]\w*)::)*test(?:\s*\([^]]*\))?\]")
+IGNORE_ATTRIBUTE = re.compile(r"#\[ignore(?:\s*=\s*[^]]+)?\]")
 LINE_COMMENT = re.compile(r"//.*$", re.MULTILINE)
 ASSERTION = re.compile(r"\b(?:debug_)?assert(_eq|_ne|_matches)?!\s*\(")
 # How many leading arguments each assertion *compares*. Everything after them is the failure
@@ -779,47 +791,367 @@ class Proof(typing.NamedTuple):
     compared: str
 
 
-def rust_sources() -> list[pathlib.Path]:
-    return sorted(
-        path
-        for path in (ROOT / "crates").rglob("*.rs")
-        if "target" not in path.parts
+class CargoInventory(typing.NamedTuple):
+    executable: frozenset[str]
+    ignored: frozenset[str]
+    sources: tuple[pathlib.Path, ...]
+
+
+class DiscoveryError(RuntimeError):
+    """Cargo could not establish the executable test inventory."""
+
+
+def command(command: list[str], cwd: pathlib.Path) -> subprocess.CompletedProcess[str]:
+    """Run one discovery command, retaining enough output for a fail-closed diagnostic."""
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as error:
+        raise DiscoveryError(f"could not run `{command[0]}`: {error}") from error
+    if result.returncode != 0:
+        detail = "\n".join((result.stderr or result.stdout).splitlines()[-12:])
+        raise DiscoveryError(
+            f"`{' '.join(command)}` exited {result.returncode}"
+            + (f":\n{detail}" if detail else "")
+        )
+    return result
+
+
+def listed_tests(executable: pathlib.Path, ignored: bool) -> set[str]:
+    """Names libtest exposes from one compiled harness, optionally restricted to ignored tests."""
+    arguments = [str(executable), "--list", "--format", "terse"]
+    if ignored:
+        arguments.append("--ignored")
+    output = command(arguments, ROOT).stdout
+    return {
+        line.removesuffix(": test")
+        for line in output.splitlines()
+        if line.endswith(": test")
+    }
+
+
+def cargo_inventory(manifest: pathlib.Path, workspace: bool = True) -> CargoInventory:
+    """Compile and enumerate the all-feature test configuration Cargo would execute.
+
+    Cargo owns both halves of discovery. `metadata` supplies the workspace package roots, so adding
+    a crate or target needs no checker allowlist. Compiler-artifact JSON supplies the actual libtest
+    executables, whose `--list` output excludes inactive cfg items; a second ignored-only listing
+    removes tests Cargo knows about but the gate's ordinary run does not execute.
+    """
+    manifest = manifest.resolve()
+    metadata_command = [
+        "cargo",
+        "metadata",
+        "--format-version",
+        "1",
+        "--no-deps",
+        "--all-features",
+        "--locked",
+        "--manifest-path",
+        str(manifest),
+    ]
+    metadata = json.loads(command(metadata_command, manifest.parent).stdout)
+    members = set(metadata.get("workspace_members", []))
+    package_roots = {
+        pathlib.Path(package["manifest_path"]).resolve().parent
+        for package in metadata.get("packages", [])
+        if package.get("id") in members
+    }
+    if not package_roots:
+        raise DiscoveryError(f"Cargo metadata found no workspace packages for {manifest}")
+
+    build_command = [
+        "cargo",
+        "test",
+        "--manifest-path",
+        str(manifest),
+    ]
+    if workspace:
+        build_command.append("--workspace")
+    build_command += [
+        "--all-features",
+        "--locked",
+        "--no-run",
+        "--message-format=json-render-diagnostics",
+    ]
+    built = command(build_command, manifest.parent)
+    executables: set[pathlib.Path] = set()
+    for line in built.stdout.splitlines():
+        try:
+            message = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise DiscoveryError(f"Cargo emitted non-JSON test inventory output: {line}") from error
+        if (
+            message.get("reason") == "compiler-artifact"
+            and message.get("profile", {}).get("test")
+            and message.get("executable")
+        ):
+            executables.add(pathlib.Path(message["executable"]).resolve())
+    if not executables:
+        raise DiscoveryError(f"Cargo produced no test executables for {manifest}")
+
+    all_tests: set[str] = set()
+    ignored_tests: set[str] = set()
+    for executable in sorted(executables):
+        all_tests.update(listed_tests(executable, ignored=False))
+        ignored_tests.update(listed_tests(executable, ignored=True))
+
+    sources = tuple(
+        sorted(
+            {
+                path.resolve()
+                for package in package_roots
+                for path in package.rglob("*.rs")
+                if "target" not in path.parts and ".git" not in path.parts
+            }
+        )
+    )
+    return CargoInventory(
+        frozenset(all_tests - ignored_tests), frozenset(ignored_tests), sources
     )
 
 
-def covered() -> dict[str, list[Proof]]:
-    """Row ID → what proves it: the file, the test, and the text its assertions compare."""
-    found: dict[str, list[Proof]] = {}
-    for path in rust_sources():
-        name = str(path.relative_to(ROOT))
+def attributes_before(lines: list[str], index: int) -> str:
+    """Rust attributes preceding a function, allowing comments and whitespace between them."""
+    attributes: list[str] = []
+    cursor = index - 1
+    while cursor >= 0:
+        stripped = lines[cursor].strip()
+        if stripped.startswith("#["):
+            attributes.insert(0, stripped)
+        elif stripped and not stripped.startswith("//"):
+            break
+        cursor -= 1
+    return "\n".join(attributes)
+
+
+def raw_string_end(text: str, start: int) -> int | None:
+    """Offset just after a Rust raw string beginning at `r` or `br`, or `None`."""
+    index = start
+    if text.startswith("br", index):
+        index += 1
+    if index >= len(text) or text[index] != "r":
+        return None
+    index += 1
+    hashes = 0
+    while index < len(text) and text[index] == "#":
+        hashes += 1
+        index += 1
+    if index >= len(text) or text[index] != '"':
+        return None
+    closing = '"' + ("#" * hashes)
+    found = text.find(closing, index + 1)
+    return None if found < 0 else found + len(closing)
+
+
+def attribute_end(lines: list[str], start: int, limit: int) -> int | None:
+    """Last line of one complete outer attribute, without interpreting delimiters in literals."""
+    text = "\n".join(lines[start:limit])
+    leading = len(text) - len(text.lstrip())
+    if not text.startswith("#[", leading):
+        return None
+
+    depth = 1
+    index = leading + 2
+    block_depth = 0
+    while index < len(text):
+        if block_depth:
+            if text.startswith("/*", index):
+                block_depth += 1
+                index += 2
+            elif text.startswith("*/", index):
+                block_depth -= 1
+                index += 2
+            else:
+                index += 1
+            continue
+        if text.startswith("/*", index):
+            block_depth = 1
+            index += 2
+            continue
+        if text.startswith("//", index):
+            newline = text.find("\n", index + 2)
+            index = len(text) if newline < 0 else newline + 1
+            continue
+        if raw_end := raw_string_end(text, index):
+            index = raw_end
+            continue
+        if text[index] == '"':
+            index = skip_string(text, index)
+            continue
+        # A char literal can contain a square bracket. A lifetime cannot, so recognize only the
+        # closed one-character/escape shape and otherwise leave the apostrophe ordinary.
+        char = re.match(r"'(?:\\.|[^'\\])'", text[index:])
+        if char:
+            index += len(char.group(0))
+            continue
+        if text[index] == "[":
+            depth += 1
+        elif text[index] == "]":
+            depth -= 1
+            if depth == 0:
+                line_end = text.find("\n", index + 1)
+                remainder = text[index + 1 : None if line_end < 0 else line_end]
+                if remainder.strip() and not remainder.lstrip().startswith("//"):
+                    return None
+                return start + text[: index + 1].count("\n")
+        index += 1
+    return None
+
+
+def covers_leads_item(lines: list[str], comment: int, function: int) -> bool:
+    """Whether a covers comment is leading trivia of this exact function item.
+
+    A file-order relationship is not an item relationship. Only blank lines, line comments and
+    complete Rust attributes may sit between the declaration and function, and both must begin at
+    the same indentation. A brace, module declaration, statement, malformed attribute or any other
+    structural token therefore ends the possible binding instead of letting a trailing comment drift
+    into the next module's first test.
+    """
+    comment_indent = len(lines[comment]) - len(lines[comment].lstrip())
+    function_indent = len(lines[function]) - len(lines[function].lstrip())
+    if comment_indent != function_indent:
+        return False
+
+    index = comment + 1
+    while index < function:
+        stripped = lines[index].strip()
+        if not stripped or stripped.startswith("//"):
+            index += 1
+            continue
+        if stripped.startswith("#["):
+            end = attribute_end(lines, index, function)
+            if end is None:
+                return False
+            index = end + 1
+            continue
+        return False
+    return True
+
+
+def covered(
+    inventory: CargoInventory | None = None,
+) -> tuple[dict[str, list[Proof]], list[str]]:
+    """Row ID → executable proofs, plus rejected proof attempts.
+
+    A Rust-shaped function is not evidence. Its exact function name must occur once in source and in
+    Cargo's active, non-ignored all-feature inventory. Unique source binding prevents an unrelated
+    listed test with the same short name from laundering a helper; Cargo is what settles test
+    attributes, cfg, target membership, workspace membership, and ignored status. `TEST_ATTRIBUTE`
+    is read only to make an absent-inventory diagnostic distinguish a helper from an inactive test,
+    never as a substitute for Cargo's answer.
+    """
+    inventory = inventory or cargo_inventory(ROOT / "Cargo.toml")
+    executable: dict[str, list[str]] = {}
+    ignored: dict[str, list[str]] = {}
+    for full_name in inventory.executable:
+        executable.setdefault(full_name.rsplit("::", 1)[-1], []).append(full_name)
+    for full_name in inventory.ignored:
+        ignored.setdefault(full_name.rsplit("::", 1)[-1], []).append(full_name)
+
+    documents: list[tuple[str, list[str], dict[int, str]]] = []
+    source_locations: dict[str, list[str]] = {}
+    for path in inventory.sources:
+        try:
+            name = str(path.relative_to(ROOT))
+        except ValueError:
+            name = str(path)
         lines = path.read_text(encoding="utf-8").splitlines()
         functions = {
             index: signature.group(1)
             for index, line in enumerate(lines)
             if (signature := FN_LINE.match(line))
         }
+        documents.append((name, lines, functions))
+        for index, function in functions.items():
+            source_locations.setdefault(function, []).append(f"{name}:{index + 1}")
+
+    found: dict[str, list[Proof]] = {}
+    problems: list[str] = []
+    for name, lines, functions in documents:
 
         def proof(index: int) -> Proof:
             return Proof(name, functions[index], compared(function_body(lines, index)))
+
+        def rejection(index: int) -> str | None:
+            function = functions[index]
+            attributes = attributes_before(lines, index)
+            if IGNORE_ATTRIBUTE.search(attributes):
+                return "Cargo lists it as ignored, so the gate does not execute it"
+            if len(source_locations.get(function, [])) != 1:
+                locations = ", ".join(source_locations[function])
+                return (
+                    f"its function name is ambiguous across source locations {locations}; "
+                    "the Cargo listing cannot identify this claimant"
+                )
+            matches = executable.get(function, [])
+            if not matches and ignored.get(function):
+                return "Cargo lists it as ignored, so the gate does not execute it"
+            if not matches:
+                kind = (
+                    "its cfg or target is inactive"
+                    if TEST_ATTRIBUTE.search(attributes)
+                    else "it is a plain helper or uses a test generator Cargo did not list"
+                )
+                return (
+                    "Cargo does not list it in the workspace all-feature test inventory "
+                    f"({kind})"
+                )
+            if len(matches) != 1:
+                return (
+                    "Cargo lists the same short test name more than once, so the source claimant "
+                    "is ambiguous: " + ", ".join(sorted(matches))
+                )
+            return None
 
         for index, function in functions.items():
             named = NAMED_FOR.match(function)
             if named:
                 prefix, letter, number = named.groups()
                 row = canonical(prefix, letter or "", number)
-                found.setdefault(row, []).append(proof(index))
+                if reason := rejection(index):
+                    problems.append(f"{row}: {name}:{index + 1}: `{function}` claims this row, but {reason}")
+                else:
+                    found.setdefault(row, []).append(proof(index))
 
         # A `// covers:` comment sits on the test it speaks for, so the assertions that back it are
-        # the next function's — and a comment with no function after it proves nothing to read.
+        # the next function's. Missing, helper, ignored and inactive targets are rejected by row and
+        # source location instead of silently attaching the claim to arbitrary later code.
         for index, line in enumerate(lines):
-            declared = COVERS.search(line)
+            declared = COVERS.match(line)
             if not declared:
                 continue
-            following = next((at for at in sorted(functions) if at >= index), None)
-            attributed = proof(following) if following is not None else Proof(name, "", "")
             for prefix, letter, number in ROW.findall(declared.group(1)):
-                found.setdefault(canonical(prefix, letter, number), []).append(attributed)
-    return found
+                row = canonical(prefix, letter, number)
+                following = next((at for at in sorted(functions) if at > index), None)
+                if following is None:
+                    problems.append(
+                        f"{row}: {name}:{index + 1}: `// covers:` has no following function, "
+                        "so it cannot name an executable proof"
+                    )
+                    continue
+                function = functions[following]
+                if not covers_leads_item(lines, index, following):
+                    problems.append(
+                        f"{row}: {name}:{index + 1}: `// covers:` is separated from the next "
+                        f"function `{function}` at line {following + 1} by a structural or scope "
+                        "boundary; put the declaration in that executable test item's leading trivia"
+                    )
+                    continue
+                if reason := rejection(following):
+                    problems.append(
+                        f"{row}: {name}:{index + 1}: `// covers:` targets `{function}` at "
+                        f"line {following + 1}, but {reason}"
+                    )
+                    continue
+                found.setdefault(row, []).append(proof(following))
+    return found, problems
 
 
 def verdict(row: str, proofs: list[Proof], claimed: dict[str, list[str]]) -> tuple[str, list[str]]:
@@ -1148,8 +1480,9 @@ def render(
         "",
         f"One row per vector in {sources()}.",
         "",
-        "A row is *proved* when a test in the workspace covers it **and** compares every value the",
-        "row states, *shape only* when a test covers it but never compares a value it states, and",
+        "A row is *proved* when Cargo lists a non-ignored test in the workspace's all-feature test",
+        "configuration, that test covers the row **and** compares every value the row states;",
+        "*shape only* when such a test covers it but never compares a value it states, and",
         "*deferred* when [vector-scope.toml](vector-scope.toml) says why and names a **live** story",
         "that will — one that exists and is not `done`, and is not the story that wrote the spec.",
         "Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 deferred rows",
@@ -1170,9 +1503,10 @@ def render(
         "",
         "## What these words mean",
         "",
-        "**Proved** means: a test named for the row exists and runs, and — where the row's `Expect`",
-        "column states a number — some assertion in that test compares that number. `CF-12` added",
-        "the second half. Before it, `PB-F-1` read *Timer C set 180 s* and its test asserted only",
+        "**Proved** means: Cargo discovers an executable, non-ignored test named for the row in the",
+        "all-feature configuration the gate runs, and — where the row's `Expect` column states a",
+        "number — some assertion in that test compares that number. `CF-12` added the second half.",
+        "Before it, `PB-F-1` read *Timer C set 180 s* and its test asserted only",
         "`[Kind::ResolveTargets, Kind::Forward, Kind::SetTimer]`, so the row and the code never met;",
         "the row was wrong about the value for the project's whole life and the report said proved",
         "throughout.",
@@ -1685,6 +2019,142 @@ def self_test() -> tuple[list[str], int]:
         and "`id: {{ID}}`" in copy_problems[0],
     )
 
+    # `CF-20`: source shape cannot establish execution. This tiny isolated Cargo workspace is
+    # compiled and listed through the same path the real workspace uses, so helper/ignore/cfg
+    # fixtures cannot pass because this self-test repeated the checker's own source assumptions.
+    fixture_proofs: dict[str, list[Proof]] = {}
+    fixture_problems: list[str] = []
+    fixture_inventory = CargoInventory(frozenset(), frozenset(), ())
+    discovery_failure = ""
+    try:
+        fixture_inventory = cargo_inventory(CARGO_FIXTURE)
+        fixture_proofs, fixture_problems = covered(fixture_inventory)
+    except DiscoveryError as error:
+        discovery_failure = str(error)
+    check(
+        "the executable-proof fixture is discovered through Cargo",
+        not discovery_failure
+        and any(path.name == "lib.rs" for path in fixture_inventory.sources),
+    )
+    check(
+        "a plain helper is rejected rather than credited",
+        "PB-V-991" not in fixture_proofs
+        and any(
+            "PB-V-991" in problem
+            and "lib.rs" in problem
+            and "pb_v_991_plain_helper" in problem
+            for problem in fixture_problems
+        ),
+    )
+    check(
+        "an ignored test is rejected rather than credited",
+        "PB-V-992" not in fixture_proofs
+        and any("PB-V-992" in problem and "ignored" in problem for problem in fixture_problems),
+    )
+    check(
+        "a test behind an inactive cfg is rejected rather than credited",
+        "PB-V-993" not in fixture_proofs
+        and any(
+            "PB-V-993" in problem and "Cargo does not list" in problem
+            for problem in fixture_problems
+        ),
+    )
+    check(
+        "an executable non-ignored test is credited",
+        [proof.test for proof in fixture_proofs.get("PB-V-994", [])]
+        == ["pb_v_994_executable_test_is_evidence"],
+    )
+    check(
+        "a covers comment binds to a following executable test",
+        [proof.test for proof in fixture_proofs.get("PB-V-995", [])]
+        == ["a_differently_named_executable_test_is_evidence"],
+    )
+    check(
+        "a covers comment targeting a helper is rejected with row, path and function",
+        "PB-V-996" not in fixture_proofs
+        and any(
+            "PB-V-996" in problem
+            and "lib.rs" in problem
+            and "a_covers_comment_cannot_bind_to_a_plain_helper" in problem
+            for problem in fixture_problems
+        ),
+    )
+    check(
+        "a covers comment with no following function is rejected with row, path and comment",
+        "PB-V-997" not in fixture_proofs
+        and any(
+            "PB-V-997" in problem and "lib.rs" in problem and "`// covers:`" in problem
+            for problem in fixture_problems
+        ),
+    )
+    check(
+        "a trailing covers comment cannot cross a module boundary to a later test",
+        "PB-V-999" not in fixture_proofs
+        and any(
+            "PB-V-999" in problem
+            and "lib.rs" in problem
+            and "a_later_test_in_another_module" in problem
+            and "structural or scope boundary" in problem
+            for problem in fixture_problems
+        ),
+    )
+    check(
+        "covers-like text inside a string literal is not a coverage declaration",
+        "PB-V-1000" not in fixture_proofs
+        and not any("PB-V-1000" in problem for problem in fixture_problems),
+    )
+    check(
+        "a trailing covers comment is not a coverage declaration",
+        "PB-V-1001" not in fixture_proofs
+        and not any("PB-V-1001" in problem for problem in fixture_problems),
+    )
+    check(
+        "attribute string brackets cannot hide an intervening item",
+        "PB-V-1002" not in fixture_proofs
+        and any(
+            "PB-V-1002" in problem
+            and "lib.rs" in problem
+            and "brackets_in_attribute_strings" in problem
+            and "structural or scope boundary" in problem
+            for problem in fixture_problems
+        ),
+    )
+    check(
+        "a complete attribute containing a bracket string still leads to its test item",
+        [proof.test for proof in fixture_proofs.get("PB-V-1003", [])]
+        == ["brackets_in_attribute_strings_still_allow_a_real_test_item"],
+    )
+    check(
+        "duplicate source short names are ambiguous and refused",
+        "PB-V-998" not in fixture_proofs
+        and any(
+            "PB-V-998" in problem
+            and "ambiguous across source locations" in problem
+            and "duplicate_source_name" in problem
+            for problem in fixture_problems
+        ),
+    )
+
+    # Keep the Cargo ambiguity branch independently reachable: the fixture has one PB-V-994 source
+    # function, while this synthetic inventory models two harnesses listing that same short name.
+    cargo_ambiguous = CargoInventory(
+        fixture_inventory.executable
+        | frozenset({"another_harness::pb_v_994_executable_test_is_evidence"}),
+        fixture_inventory.ignored,
+        fixture_inventory.sources,
+    )
+    cargo_ambiguous_proofs, cargo_ambiguous_problems = covered(cargo_ambiguous)
+    check(
+        "multiple Cargo full names for one source short name are ambiguous and refused",
+        "PB-V-994" not in cargo_ambiguous_proofs
+        and any(
+            "PB-V-994" in problem
+            and "same short test name more than once" in problem
+            and "another_harness::pb_v_994" in problem
+            for problem in cargo_ambiguous_problems
+        ),
+    )
+
     return failures, cases
 
 
@@ -1700,8 +2170,8 @@ def main() -> int:
     if "--self-test" in sys.argv:
         print(
             f"vectors: self-test passed — {self_test_cases} pinned cases cover the PB-F-1 "
-            f"proof parser, vector and scenario shapes, live ledger ownership, registry "
-            f"enumeration, and story status/id ingestion"
+            f"proof parser, Cargo-discovered executable proofs, vector and scenario shapes, "
+            f"live ledger ownership, registry enumeration, and story status/id ingestion"
         )
         return 0
 
@@ -1710,8 +2180,13 @@ def main() -> int:
         print("vectors: FAIL — no rows found in any spec", file=sys.stderr)
         return 1
 
-    proofs = covered()
+    try:
+        proofs, proof_problems = covered()
+    except DiscoveryError as error:
+        print(f"vectors: FAIL — executable test discovery failed: {error}", file=sys.stderr)
+        return 1
     waived, problems = deferred()
+    problems = proof_problems + problems
     shape_only, ledger_problems = recorded_shape_only()
     problems += ledger_problems
     claimed = claims()

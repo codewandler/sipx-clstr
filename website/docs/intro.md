@@ -32,6 +32,11 @@ needs in order to route the next request travels in the message itself, signed, 
 `Record-Route`, `Route` and `Path`. A node that has never seen a dialog can still route its
 `BYE` correctly, because everything required is in the request.
 
+That answer is executable below the deployment seam: the token library and a deterministic
+two-edge `Record-Route`/`Route` round trip are proved. It is not a running-node capability yet:
+configuration loads and validates the key set, but the node does not apply it at runtime and no
+connection-owner delivery hop exists.
+
 ## Where this actually is
 
 A node registers users and proxies calls between them, and **two nodes sharing one PostgreSQL
@@ -53,7 +58,7 @@ the two**, and that is the next thing that has to exist.
 | **Tenant policy** | Served domains (`404` when the Request-URI or AoR names another), the per-AoR binding quota, the expiry bounds, and a bound on in-flight transactions (`503` above it) | today |
 | **Two nodes, one registrar** | A shared PostgreSQL location service: register through one node, be called through another | today |
 | **Digest authentication** | Implemented, vector-proved, and applied from `tenant[].auth` — but there is no user-credential store, so a document asking for it is refused or challenges nobody | today, partly |
-| **One address in front of the cluster** | Needs affinity tokens: each node record-routes its own address, so in-dialog requests must return to it | specified, not shipped |
+| **One address in front of the cluster** | Token library and two-edge route round trip proved; runtime key application and owner delivery missing | engine/simulation only |
 | **Registrar shards, flow ownership** | Rendezvous hashing, connection ownership, the owner RPC | specified, not shipped |
 | **Trunks** | Carrier interconnect, number normalisation, asserted identity and privacy | specified, not shipped |
 | **Media control** | External relay over the NG protocol; no RTP in the signalling process, ever | specified, not shipped |
@@ -88,7 +93,9 @@ every binding. `backend: postgres` shares them across nodes and survives a resta
 **Two nodes are a cluster; one address in front of two nodes is not.** Each node writes its *own*
 address into `Record-Route`, so in-dialog requests come back to the node that forwarded them. Put a
 single Service or VIP in front and a `BYE` will land on whichever node the load balancer picks, which
-has no idea about the dialog. That is what affinity tokens are for, and they are not implemented.
+has no idea about the dialog. The affinity token and simulated two-edge route path are implemented;
+the running node still lacks runtime key application and connection-owner delivery, so that proof is
+not yet a deployable one-address path.
 
 Only the **second** is configuration — see [Configuration](reference/configuration.md). The first
 looks like configuration and is not: no value of `tenant[].auth` produces an authenticated registrar

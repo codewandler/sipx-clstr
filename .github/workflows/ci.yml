@@ -49,6 +49,13 @@ jobs:
       - name: tests
         run: cargo test --workspace --all-features
 
+      # `CF-20`. The e2e job below is wired to exercise the same assertion against a live node. This
+      # fixture pins every failure direction without depending on runner sockets or PID visibility.
+      # The local patch was removed by `CX-15`; `CF-20` closes only after a GitHub run reaches and
+      # passes the real-socket assertion, rather than from workflow wiring alone.
+      - name: The e2e socket assertion fails closed
+        run: scripts/tests/e2e-socket-count.sh
+
       - name: features
         run: scripts/check-features.sh
 

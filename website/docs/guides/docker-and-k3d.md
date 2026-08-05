@@ -97,7 +97,8 @@ It does not prove zone spread, media relaying, high availability of the store, T
 an operator would do — because there is no operator here. The Helm chart in `deploy/helm/` renders a
 custom resource that nothing currently serves; the controller that would reconcile it is designed but
 not built. It also does not prove mid-dialog routing behind a single Service: each node record-routes
-its own pod IP, so one address in front of both needs affinity tokens.
+its own pod IP. The affinity token and simulated two-edge route path exist, but one address in front
+of both still needs the loaded key set applied at runtime and a connection-owner delivery hop.
 
 For what that is supposed to become, see [Deploy](../operate/deploy.md) and
 [Scaling](../operate/scaling.md).

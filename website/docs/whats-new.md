@@ -5,7 +5,7 @@ description: "Where sipx-clstr stands, release by release, and what is still mis
 
 # What's new
 
-The current release is **0.13.0**.
+The current release is **0.14.0**.
 
 ## Where this actually is
 
@@ -18,9 +18,9 @@ you can have it working in about ten minutes, ending with a call you can hear: s
 
 The next cluster layer now exists below the deployment seam: the affinity-token library passes every
 byte vector, and a deterministic call round-trips its `Record-Route`/`Route` token through two edges
-with zero cross-node dialog lookups. It is not deployable yet: configuration cannot load the keys,
-there is no connection-owner delivery hop, and there is still no registrar shard, trunk, media relay
-or operator.
+with zero cross-node dialog lookups. It is not deployable yet: configuration loads and validates the
+keys but does not apply them to the runtime, there is no connection-owner delivery hop, and there is
+still no registrar shard, trunk, media relay or operator.
 
 Two things will bite you:
 
@@ -56,7 +56,7 @@ specs in this repository used to carry vector tables the checker had no registra
 340 normative rows that nothing executed, and a fabricated row in one of those families passed the
 gate untouched. Fifteen prefixes across thirteen specifications are now registered, and every file
 under `docs/specs/` is either registered or named as a deliberate exclusion with the story that will
-execute it: **215 of 619 rows proved, 19 covered for shape only, 385 deferred**, each deferral
+execute it: **219 of 621 rows proved, 16 covered for shape only, 386 deferred**, each deferral
 naming what is specifically missing and the story that closes it.
 
 Read that number for what it is. A row proves what a **decision core emits**, never that a socket
@@ -76,6 +76,31 @@ count. A falling percentage here is the report becoming honest rather than the p
 Each entry leads with what changed for someone using this. The full detail — findings, rejected
 alternatives, the reasoning behind each decision — is in
 [CHANGELOG.md](https://github.com/codewandler/sipx-clstr/blob/main/CHANGELOG.md).
+
+### 0.14.0 — registrar truth on the wire
+
+The registrar now says what it actually decided, and refuses to invent confidence when its state is
+unreadable. A successful REGISTER response carries the complete active Contact set with each granted
+lifetime and q value, followed by the stored Path and `Supported: path`; `420`, `421` and `423`
+responses carry the option tags or minimum interval that explain how to retry. An authenticated
+principal cannot use valid credentials to replace or erase another address of record, and a failed
+or undecodable durable-store read answers `503` rather than masquerading as an empty registration.
+
+Configuration moved forward at the deployment seam. `membership[]`, `keys[]` and `shardMap` now load
+and validate as one document, including key windows and reload constraints. They remain deliberately
+reported as unapplied: the runtime key set, shard handoff and connection-owner delivery hop are not
+implemented. Inline DSNs, nonce secrets, affinity secrets and TLS private keys are refused without
+copying their bytes into typed errors, startup messages, stdout or stderr. A call-path member must
+now declare its RPC endpoint, so an existing cluster document without `membership[].rpc` is refused
+until that field is added.
+
+The release also tightens the evidence behind those statements. The deterministic harness can model
+connection loss, restart and stopped readers without changing old replay traces; generated release
+claims are checked against their executable owners; malformed normative tables and specifications
+outside the vector registry stop the gate; and a closed story must carry both checked Acceptance and
+an exact changelog citation. Still absent: an operator, one deployable address in front of the
+cluster, outgoing proxy CANCEL, exact TCP-only listener selection, and an independently implemented
+interop peer.
 
 ### 0.13.0 — affinity on the route, fail-closed at the edge
 

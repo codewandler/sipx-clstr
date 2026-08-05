@@ -20,9 +20,9 @@ use sipx_clstr_proxy::{
     ResponseContext, TokenVerdict, route_ack, targets_from_lookup,
 };
 use sipx_clstr_registrar::{
-    Admission, AuthOutcome, CanonicalAor, EdgeContext, InMemoryCredentials, InMemoryStore,
-    LocationStore, RegistrationAuthorizations, RegistrationPolicy, RequestAuthority, TenantAuth,
-    TenantPolicy, Timestamp, admit_audited, apply,
+    Accepted, Admission, AuthOutcome, CanonicalAor, ContactValue, EdgeContext, InMemoryCredentials,
+    InMemoryStore, LocationStore, Outcome, RegistrationAuthorizations, RegistrationPolicy,
+    Rejection, RequestAuthority, TenantAuth, TenantPolicy, Timestamp, admit_audited, apply,
 };
 use sipx_sip::{
     HeaderName, Host, Method, Request, Response, ResponseBuilder, StatusCode, TransactionKey, Uri,
@@ -1028,6 +1028,145 @@ fn record_authentication(edge: &Edge<'_>, arrival: &Incoming, outcome: &AuthOutc
     }
 }
 
+/// Why a complete registrar outcome could not be represented as SIP headers.
+///
+/// This is a driver failure, never a reason to send a partial success. The outcome is already
+/// decided by the time this can happen; changing its policy answer would reconstruct registrar
+/// semantics here, so the only controlled response is an internal failure with none of the
+/// partially built fact headers attached.
+#[derive(Debug, thiserror::Error)]
+enum RegisterRenderError {
+    /// The kernel refused bytes that cannot safely inhabit one header field.
+    #[error("the kernel refused a required REGISTER response header: {0}")]
+    Header(#[from] sipx_sip::BuildError),
+    /// The sans-IO type stores thousandths in a `u16`; only 0 through 1000 have a SIP q spelling.
+    #[error("the registrar produced Contact q={0}, outside the 0..=1000 invariant")]
+    InvalidQ(u16),
+}
+
+/// Render every fact of a registrar decision, or none of them.
+///
+/// Exhaustive over both [`Outcome`] and [`Rejection`] on purpose. Adding a core outcome must make
+/// this driver decide its wire representation at compile time; a status-only wildcard would reopen
+/// the exact seam `RG-19` closes. No policy is decided here — successful and rejection payloads are
+/// serialized exactly as the sans-IO registrar supplied them.
+fn render_register_outcome(
+    request: &Request,
+    outcome: &Outcome,
+) -> Result<Response, RegisterRenderError> {
+    match outcome {
+        Outcome::Commit { response, .. } | Outcome::Noop { response } => {
+            render_accepted(request, response)
+        }
+        Outcome::Reject(rejection) => render_rejection(request, rejection),
+    }
+}
+
+/// A `200` with the complete current binding set and its shared Path (§5.6).
+fn render_accepted(
+    request: &Request,
+    accepted: &Accepted,
+) -> Result<Response, RegisterRenderError> {
+    let mut response = answer(request, 200, reason_for(200));
+
+    // Order is the outcome's order: the complete active set first, then the stored Path vector.
+    // Each value gets its own row, which the kernel's typed list reader treats identically to one
+    // comma row while preserving exact element order.
+    for contact in &accepted.contacts {
+        push_register_header(&mut response, HeaderName::Contact, render_contact(contact)?)?;
+    }
+    for path in &accepted.path {
+        push_register_header(&mut response, HeaderName::Path, bracketed(path))?;
+    }
+    if !accepted.path.is_empty() {
+        push_register_header(
+            &mut response,
+            HeaderName::Supported,
+            Bytes::from_static(b"path"),
+        )?;
+    }
+
+    Ok(response)
+}
+
+/// A refusal with the remedy facts its typed variant carries.
+fn render_rejection(
+    request: &Request,
+    rejection: &Rejection,
+) -> Result<Response, RegisterRenderError> {
+    let status = rejection.status();
+    let mut response = answer(request, status, reason_for(status));
+    match rejection {
+        Rejection::BadExtension(offenders) => {
+            push_register_header(&mut response, HeaderName::Unsupported, offenders.join(", "))?;
+        }
+        Rejection::IntervalTooBrief { min } => {
+            push_register_header(&mut response, HeaderName::MinExpires, min.to_string())?;
+        }
+        Rejection::ExtensionRequired(extension) => {
+            push_register_header(&mut response, HeaderName::Require, *extension)?;
+        }
+        Rejection::NotFound
+        | Rejection::BadRequest(_)
+        | Rejection::Forbidden(_)
+        | Rejection::StaleSequence
+        | Rejection::Unavailable => {}
+    }
+    Ok(response)
+}
+
+/// Append one required fact, propagating rather than swallowing a builder refusal.
+fn push_register_header(
+    response: &mut Response,
+    name: HeaderName,
+    value: impl Into<Bytes>,
+) -> Result<(), RegisterRenderError> {
+    response.headers.push(sipx_sip::Header::build(name, value)?);
+    Ok(())
+}
+
+/// One stored contact with the granted duration and q, both supplied by the outcome.
+fn render_contact(contact: &ContactValue) -> Result<Bytes, RegisterRenderError> {
+    let q = match contact.q {
+        0..=999 => format!("0.{:03}", contact.q),
+        1_000 => "1.000".to_owned(),
+        other => return Err(RegisterRenderError::InvalidQ(other)),
+    };
+    let mut value = Vec::with_capacity(contact.contact.len() + q.len() + 32);
+    value.push(b'<');
+    value.extend_from_slice(&contact.contact);
+    value.extend_from_slice(b">;expires=");
+    value.extend_from_slice(contact.expires.to_string().as_bytes());
+    value.extend_from_slice(b";q=");
+    value.extend_from_slice(q.as_bytes());
+    Ok(Bytes::from(value))
+}
+
+/// A stored URI as a route-style header value; brackets keep URI parameters inside the URI.
+fn bracketed(uri: &Bytes) -> Bytes {
+    let mut value = Vec::with_capacity(uri.len() + 2);
+    value.push(b'<');
+    value.extend_from_slice(uri);
+    value.push(b'>');
+    Bytes::from(value)
+}
+
+/// Fail closed if any required header cannot be built: a `500`, never a partial original outcome.
+fn register_outcome_or_internal(request: &Request, outcome: &Outcome, tenant: &str) -> Response {
+    match render_register_outcome(request, outcome) {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::error!(
+                tenant,
+                decided_status = outcome.status(),
+                %error,
+                "could not render the complete REGISTER outcome; sending an internal failure"
+            );
+            answer(request, 500, reason_for(500))
+        }
+    }
+}
+
 fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
     let context = EdgeContext {
         tenant: edge.config.tenant.clone(),
@@ -1128,10 +1267,10 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
                 detail,
                 "a REGISTER could not become a command"
             );
-            return answer(
+            return register_outcome_or_internal(
                 &arrival.request,
-                rejection.status(),
-                reason_for(rejection.status()),
+                &Outcome::Reject(rejection),
+                &edge.config.tenant,
             );
         }
     };
@@ -1142,24 +1281,7 @@ fn register(edge: &Edge<'_>, arrival: &Incoming) -> Response {
         edge.policy,
         sipx_clstr_registrar::store::DEFAULT_CAS_RETRIES,
     );
-    let status = applied.outcome.status();
-    let mut response = answer(&arrival.request, status, reason_for(status));
-
-    // §5.6 — the `200` enumerates the **complete** active set, with what each binding was granted.
-    // A response that listed only what changed would leave a UA guessing about its other devices.
-    if let Some(accepted) = applied.outcome.accepted() {
-        for contact in &accepted.contacts {
-            let value = format!(
-                "<{}>;expires={}",
-                String::from_utf8_lossy(&contact.contact),
-                contact.expires
-            );
-            if let Ok(header) = sipx_sip::Header::build(HeaderName::Contact, value) {
-                response.headers.push(header);
-            }
-        }
-    }
-    response
+    register_outcome_or_internal(&arrival.request, &applied.outcome, &edge.config.tenant)
 }
 
 // -------------------------------------------------------------------------------------- proxy ---
@@ -1592,6 +1714,44 @@ mod tests {
         .and_then(|b| b.header(HeaderName::Via, "SIP/2.0/UDP a.example;branch=z9hG4bK-1"))
         .map(sipx_sip::RequestBuilder::build)
         .expect("a well-formed request")
+    }
+
+    /// A builder failure invalidates the whole registrar response, for success and rejection.
+    ///
+    /// The injected line break cannot come from a parsed URI or option tag, but these public
+    /// outcome types can also be populated by a future module. This pins the failure boundary:
+    /// never send the original `200`/`420` with the one fact the builder refused silently absent.
+    #[test]
+    fn rg19_a_required_header_failure_becomes_a_bare_internal_response() {
+        let request = a_request(&Method::Register);
+        let bad_success = Outcome::Noop {
+            response: Accepted {
+                contacts: vec![ContactValue {
+                    contact: Bytes::from_static(b"sip:alice@example.test\r\nInjected: yes"),
+                    expires: 3600,
+                    q: 1000,
+                }],
+                path: Vec::new(),
+            },
+        };
+        assert!(matches!(
+            render_register_outcome(&request, &bad_success),
+            Err(RegisterRenderError::Header(_))
+        ));
+        let response = register_outcome_or_internal(&request, &bad_success, "test");
+        assert_eq!(response.status.code(), 500);
+        assert_eq!(response.headers.count(&HeaderName::Contact), 0);
+
+        let bad_rejection = Outcome::Reject(Rejection::BadExtension(vec![
+            "unknown\r\nInjected: yes".to_owned(),
+        ]));
+        assert!(matches!(
+            render_register_outcome(&request, &bad_rejection),
+            Err(RegisterRenderError::Header(_))
+        ));
+        let response = register_outcome_or_internal(&request, &bad_rejection, "test");
+        assert_eq!(response.status.code(), 500);
+        assert_eq!(response.headers.count(&HeaderName::Unsupported), 0);
     }
 
     /// The bound admits up to itself and then refuses — and a released permit is capacity again.

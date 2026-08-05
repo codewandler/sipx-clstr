@@ -189,8 +189,7 @@ fn bob_fixture() -> (InMemoryStore, CanonicalAor) {
     (store, bob)
 }
 
-// covers: LS-A-3
-fn alice_attacks_bob(contact: &str) {
+fn alice_attacks_bob(contact: &str) -> u16 {
     let (store, bob) = bob_fixture();
     let before = store.read(TENANT, &bob).expect("read Bob");
     assert_eq!(before.1.0, 1, "the fixture is revision 1");
@@ -230,27 +229,28 @@ fn alice_attacks_bob(contact: &str) {
         Some(contact),
         Some(&authorization),
     );
-    assert_eq!(
-        status(admit(
-            &answered,
-            &mut auth,
-            &credentials,
-            &policy,
-            &edge(),
-            NOW,
-        )),
-        403
-    );
+    let denied = status(admit(
+        &answered,
+        &mut auth,
+        &credentials,
+        &policy,
+        &edge(),
+        NOW,
+    ));
 
     // Admission has no store parameter at all; the equality pins both the binding bytes and the
     // revision in case a future driver moves this check after `apply`.
     assert_eq!(store.read(TENANT, &bob).expect("read Bob again"), before);
+    denied
 }
 
 #[test]
 fn ls_a_3_alice_cannot_explicitly_or_wildcard_register_bob() {
-    alice_attacks_bob("<sip:mallory@10.6.6.6>;expires=3600");
-    alice_attacks_bob("*");
+    assert_eq!(
+        alice_attacks_bob("<sip:mallory@10.6.6.6>;expires=3600"),
+        403
+    );
+    assert_eq!(alice_attacks_bob("*"), 403);
 }
 
 #[test]

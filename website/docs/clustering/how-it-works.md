@@ -6,8 +6,12 @@ description: "The one architectural idea that decides everything else — the cl
 # How the cluster works
 
 :::caution Preview
-Specified and normative, but **not implemented**. One node runs today; nothing on this page does.
-The links go to the specs that define it.
+The token half is implemented below the deployment seam: the library passes its byte vectors, and a
+deterministic call round-trips the signed `Record-Route`/`Route` pair through two edges with zero
+cross-node dialog lookups. Two running nodes can also share one PostgreSQL registrar. What is not
+shipped is the deployable join between them: configuration validates the keys but does not apply
+them at runtime, and there is no connection-owner delivery or registrar sharding. The links go to
+the specs that define the complete path.
 :::
 
 ## The idea

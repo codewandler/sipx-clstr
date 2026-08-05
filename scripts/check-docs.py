@@ -6,7 +6,7 @@ public site, authored for end users. `docs/` is internal contributor material �
 the roadmap, design records, the normative specs — and **none of it is published**. A broken
 relative link in either is cheap to check and expensive to notice late.
 
-Five checks:
+Six checks:
 
 1. **Every relative link resolves.** Absolute URLs and bare anchors are out of scope; anything
    with a path is resolved against the file that contains it. This covers both trees.
@@ -55,6 +55,21 @@ Five checks:
    `RG-25` shape (and each sibling defect) against fixtures on every run, because a structure
    check that has quietly stopped parsing tables is this file's own §3 failure mode again.
 
+6. **A `done` story left both closure records** (`CF-18`). The changelog is the durable account of
+   what landed, and the story's checked Acceptance boxes are the local account of what satisfied
+   its contract. Every done story must therefore have an exact story-ID token inside a
+   parenthetical `CHANGELOG.md` citation and at least one checked box in its Acceptance section.
+   A bare mention is not a citation, and `DX-20` cannot satisfy `DX-2`; a parenthetical list and a
+   qualifier are accepted because both are established changelog forms. Requiring one checked box
+   rather than all of them is deliberate: a closed story may leave a rejected branch unticked or
+   hand it to another story.
+
+   The generated board is deliberately **not** reproduced here. Its source is story frontmatter
+   and its implementation belongs to the external track plugin; copying that generator into this
+   repository would create two board definitions that can drift. Current policy remains to run
+   `/track:board` after any board-visible frontmatter change and review the generated diff. This
+   check holds the two closure records that are repository-native and independently reproducible.
+
 Two rules about *what* gets read, both learned the hard way:
 
 - **The file set comes from git, not from a directory walk.** See `markdown_files`.
@@ -76,7 +91,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 DOCS = ROOT / "docs"
 SPECS = DOCS / "specs"
+STORIES = DOCS / "stories"
 LEDGER = DOCS / "upstream.md"
+CHANGELOG = ROOT / "CHANGELOG.md"
 SITE_DOCS = ROOT / "website" / "docs"
 GITHUB_TREE = "https://github.com/codewandler/sipx-clstr/blob/main"
 EXTERNAL = ("http://", "https://", "#", "mailto:")
@@ -87,6 +104,29 @@ LEDGER_ROW = re.compile(r"ledger rows?", re.I)
 # raise` — the story ID optionally in backticks, because half the occurrences were and half were
 # not. Matched against the raw text rather than the code-stripped prose for that reason.
 DEFERRED_TO_STORY = re.compile(r"\bfor\s+`?([A-Z]{1,3}-\d+)`?\s+to\s+(?:file|raise)\b")
+# A citation is an exact story-ID token inside parentheses. Backticks are canonical but optional
+# for the early grouped release entries, which predate that house style. The token boundaries are
+# the load-bearing part: a bare mention is prose, and `DX-20` must not satisfy `DX-2`.
+CITED_STORY = re.compile(
+    r"(?<![A-Z0-9-])(?:`([A-Z]{1,3}-\d+)`|([A-Z]{1,3}-\d+))(?![A-Z0-9-])"
+)
+FRONTMATTER = re.compile(r"\A---\n(.*?)\n---", re.S)
+FRONTMATTER_FIELD = re.compile(r"^([a-z]+):[ \t]*(.*)$", re.M)
+# Keep these spellings aligned with check-vectors.py's CF-27 ingestion boundary. Story ids and
+# lifecycle names are deliberately a closed scalar schema: ordinary plain and quoted YAML scalars
+# (plus comments) are normalized, while empty or structured values are refused instead of silently
+# falling out of the closure check.
+PLAIN_FRONTMATTER_SCALAR = re.compile(
+    r"\A([A-Za-z0-9][A-Za-z0-9-]*)(?:[ \t]+#.*)?\Z"
+)
+SINGLE_QUOTED_FRONTMATTER_SCALAR = re.compile(r"\A'([^'\r\n]*)'(?:[ \t]+#.*)?\Z")
+DOUBLE_QUOTED_FRONTMATTER_SCALAR = re.compile(r'\A"([^"\\\r\n]*)"(?:[ \t]+#.*)?\Z')
+STORY_FILE_ID = re.compile(r"\A[A-Z]{2}-\d+\Z")
+LIFECYCLE_STATUSES = ("backlog", "ready", "in-progress", "blocked", "done")
+CHECKED_ACCEPTANCE = re.compile(r"^[ \t]*-\s+\[[xX]\](?:\s|$)", re.M)
+ACCEPTANCE_SECTION = re.compile(
+    r"^## Acceptance(?:\s*/\s*done)?[ \t]*\n(.*?)(?=^##(?:\s|$)|\Z)", re.M | re.S
+)
 
 
 def markdown_files() -> list[pathlib.Path]:
@@ -190,6 +230,107 @@ def check_stories() -> list[str]:
         if design and not (ROOT / design.group(1)).exists():
             problems.append(f'{story.name}: design path "{design.group(1)}" does not exist')
     return problems
+
+
+def frontmatter_scalar(raw: str) -> str | None:
+    """A scalar spelling admitted by the story id/status schema, or `None` when structured."""
+    value = raw.strip()
+    for pattern in (
+        PLAIN_FRONTMATTER_SCALAR,
+        SINGLE_QUOTED_FRONTMATTER_SCALAR,
+        DOUBLE_QUOTED_FRONTMATTER_SCALAR,
+    ):
+        if matched := pattern.match(value):
+            return matched.group(1)
+    return None
+
+
+def frontmatter_values(text: str, field: str) -> list[str]:
+    """All raw values for one frontmatter field; duplicates remain visible and are refused."""
+    if not (front := FRONTMATTER.match(text)):
+        return []
+    return [raw for name, raw in FRONTMATTER_FIELD.findall(front.group(1)) if name == field]
+
+
+def parenthetical_groups(text: str) -> list[str]:
+    """Outermost parenthetical groups, retaining nested Markdown links inside a citation."""
+    groups: list[str] = []
+    depth = 0
+    start = 0
+    for index, character in enumerate(text):
+        if character == "(":
+            if depth == 0:
+                start = index + 1
+            depth += 1
+        elif character == ")" and depth:
+            depth -= 1
+            if depth == 0:
+                groups.append(text[start:index])
+    return groups
+
+
+def changelog_citations(text: str) -> set[str]:
+    """Exact story IDs in parenthetical changelog citations, never bare prose substrings."""
+    cited: set[str] = set()
+    for group in parenthetical_groups(text):
+        cited.update((match.group(1) or match.group(2)) for match in CITED_STORY.finditer(group))
+    return cited
+
+
+def done_story_problems(
+    stories: list[tuple[str, str]], changelog: str
+) -> list[str]:
+    """Closure-record failures for `(repository-relative path, story text)` inputs."""
+    cited = changelog_citations(changelog)
+    problems: list[str] = []
+    for path, text in sorted(stories):
+        raw_statuses = frontmatter_values(text, "status")
+        status = frontmatter_scalar(raw_statuses[0]) if len(raw_statuses) == 1 else None
+        if len(raw_statuses) != 1 or status not in LIFECYCLE_STATUSES:
+            shown = raw_statuses[0].strip() if len(raw_statuses) == 1 else "<missing or duplicate>"
+            problems.append(
+                f"closure metadata  {path}: frontmatter `status: {shown or '<empty>'}` is not "
+                f"exactly one of {' | '.join(LIFECYCLE_STATUSES)} — refusing to skip closure "
+                "checks on an unknown lifecycle value"
+            )
+            continue
+        if status != "done":
+            continue
+
+        raw_ids = frontmatter_values(text, "id")
+        story_id = frontmatter_scalar(raw_ids[0]) if len(raw_ids) == 1 else None
+        if len(raw_ids) != 1 or story_id is None or STORY_FILE_ID.match(story_id) is None:
+            shown = raw_ids[0].strip() if len(raw_ids) == 1 else "<missing or duplicate>"
+            problems.append(
+                f"closure metadata  {path}: done story frontmatter `id: {shown or '<empty>'}` is "
+                "not exactly one story ID — refusing to skip its closure records"
+            )
+            continue
+        if story_id not in cited:
+            problems.append(
+                f"closure ledger  {path}: {story_id} is done but CHANGELOG.md has no "
+                f"parenthetical exact-ID citation — add (`{story_id}`) to its entry"
+            )
+        acceptance = ACCEPTANCE_SECTION.search(text)
+        if (
+            acceptance is None
+            or CHECKED_ACCEPTANCE.search(without_fences(acceptance.group(1))) is None
+        ):
+            problems.append(
+                f"closure record  {path}: {story_id} is done but its Acceptance section has no "
+                "checked box — tick at least one delivered criterion before closing"
+            )
+    return problems
+
+
+def check_done_stories() -> list[str]:
+    """Every tracked done story has the two repository-native closure records CF-18 requires."""
+    stories = [
+        (path.relative_to(ROOT).as_posix(), path.read_text(encoding="utf-8"))
+        for path in markdown_files()
+        if path.parent == STORIES and path.name not in ("README.md", "_TEMPLATE.md")
+    ]
+    return done_story_problems(stories, CHANGELOG.read_text(encoding="utf-8"))
 
 
 def paragraphs(text: str) -> list[tuple[int, str]]:
@@ -497,6 +638,44 @@ A fenced block may quote anything, broken tables included:
 | 1 | 2 |
 """
 
+# `CF-18`'s original twelve property failures, named rather than reduced to a count. There are ten
+# stories because `RG-13` and `RG-14` each failed both records: nine missing citations plus three
+# stories with no checked Acceptance box. The live tree has since grown more done stories; this
+# fixture remains the pinned defect that made the check necessary.
+CLOSURE_MISSING_CITATION = (
+    "DX-2", "DX-4", "DX-7", "DX-8", "DX-9", "DX-10", "FC-2", "RG-13", "RG-14"
+)
+CLOSURE_UNCHECKED_ACCEPTANCE = ("FC-3", "RG-13", "RG-14")
+
+
+def closure_story_fixture(story_id: str, checked: bool) -> str:
+    box = "x" if checked else " "
+    return f"""---
+id: {story_id}
+status: done
+---
+
+# Fixture {story_id}
+
+## Acceptance
+
+- [{box}] The delivered criterion.
+
+## Notes
+
+- Fixture only.
+"""
+
+
+CLOSURE_STORY_FIXTURES = [
+    (
+        f"docs/stories/{story_id}-fixture.md",
+        closure_story_fixture(story_id, story_id not in CLOSURE_UNCHECKED_ACCEPTANCE),
+    )
+    for story_id in sorted(set(CLOSURE_MISSING_CITATION) | set(CLOSURE_UNCHECKED_ACCEPTANCE))
+]
+CLOSURE_CHANGELOG_FIXTURE = "- **Tenant auth landed** (`FC-3`).\n"
+
 
 def self_test() -> list[str]:
     failures: list[str] = []
@@ -504,6 +683,135 @@ def self_test() -> list[str]:
     def check_that(claim: str, held: bool) -> None:
         if not held:
             failures.append(claim)
+
+    def closure_problem_id(problem: str) -> str:
+        match = re.search(r": ([A-Z]{1,3}-\d+) is done", problem)
+        return match.group(1) if match else "<missing>"
+
+    closure = done_story_problems(CLOSURE_STORY_FIXTURES, CLOSURE_CHANGELOG_FIXTURE)
+    closure_signature = {
+        (
+            closure_problem_id(problem),
+            "citation" if problem.startswith("closure ledger") else "acceptance",
+        )
+        for problem in closure
+    }
+    expected_closure = {
+        *((story_id, "citation") for story_id in CLOSURE_MISSING_CITATION),
+        *((story_id, "acceptance") for story_id in CLOSURE_UNCHECKED_ACCEPTANCE),
+    }
+    check_that(
+        f"CF-18's twelve named closure failures are all and only what was found: {closure}",
+        len(closure) == 12 and closure_signature == expected_closure,
+    )
+    check_that(
+        "every closure failure names the story file as well as the exact story id",
+        all(
+            f"docs/stories/{closure_problem_id(problem)}-fixture.md" in problem
+            for problem in closure
+        ),
+    )
+
+    near_match = done_story_problems(
+        [("docs/stories/DX-2-fixture.md", closure_story_fixture("DX-2", True))],
+        "DX-2 is discussed in prose; only (`DX-20`) is cited.\n",
+    )
+    check_that(
+        "a bare mention and a longer story id cannot satisfy an exact parenthetical citation",
+        len(near_match) == 1
+        and near_match[0].startswith("closure ledger")
+        and "DX-2" in near_match[0],
+    )
+
+    quoted_box = closure_story_fixture("CF-998", False).replace(
+        "## Notes",
+        "```markdown\n- [x] A quoted box is not the story's claim.\n```\n\n## Notes",
+    )
+    quoted_box_problems = done_story_problems(
+        [("docs/stories/CF-998-fixture.md", quoted_box)],
+        "- **The fixture landed** (`CF-998`).\n",
+    )
+    check_that(
+        "a checked box quoted in a fenced block does not satisfy Acceptance",
+        len(quoted_box_problems) == 1
+        and quoted_box_problems[0].startswith("closure record"),
+    )
+
+    one_checked = closure_story_fixture("DX-2", False).replace(
+        "- [ ] The delivered criterion.",
+        "- [ ] A deliberately untaken branch.\n- [x] One delivered criterion.",
+    )
+    clean_closure = done_story_problems(
+        [
+            ("docs/stories/DX-2-fixture.md", one_checked),
+            ("docs/stories/DX-4-fixture.md", closure_story_fixture("DX-4", True)),
+            (
+                "docs/stories/CF-999-open-fixture.md",
+                closure_story_fixture("CF-999", False).replace("status: done", "status: ready"),
+            ),
+        ],
+        "- **A grouped historical entry** (DX-2, `DX-4`, [proof](docs/proof.md), validated).\n",
+    )
+    check_that(
+        "a grouped citation, a qualifier, one checked box among open boxes, and an open story pass",
+        clean_closure == [],
+    )
+
+    quoted_scalars = closure_story_fixture("CF-997", True).replace(
+        "id: CF-997\nstatus: done",
+        "id: 'CF-997'\nstatus: \"done\"",
+    )
+    check_that(
+        "quoted YAML id/status scalars still undergo done-story closure checks",
+        done_story_problems(
+            [("docs/stories/CF-997-fixture.md", quoted_scalars)], ""
+        )
+        == [
+            "closure ledger  docs/stories/CF-997-fixture.md: CF-997 is done but "
+            "CHANGELOG.md has no parenthetical exact-ID citation — add (`CF-997`) to its entry"
+        ],
+    )
+
+    commented_scalars = closure_story_fixture("CF-994", True).replace(
+        "id: CF-994\nstatus: done",
+        "id: CF-994 # exact id\nstatus: done # closed",
+    )
+    check_that(
+        "plain YAML id/status scalars with comments still undergo done-story closure checks",
+        done_story_problems(
+            [("docs/stories/CF-994-fixture.md", commented_scalars)], ""
+        )
+        == [
+            "closure ledger  docs/stories/CF-994-fixture.md: CF-994 is done but "
+            "CHANGELOG.md has no parenthetical exact-ID citation — add (`CF-994`) to its entry"
+        ],
+    )
+
+    malformed_status = closure_story_fixture("CF-996", True).replace(
+        "status: done", "status: [done]"
+    )
+    malformed_status_problems = done_story_problems(
+        [("docs/stories/CF-996-fixture.md", malformed_status)],
+        "- **Would otherwise look closed** (`CF-996`).\n",
+    )
+    check_that(
+        "a structured lifecycle value fails closed instead of skipping the story",
+        len(malformed_status_problems) == 1
+        and malformed_status_problems[0].startswith("closure metadata")
+        and "status: [done]" in malformed_status_problems[0],
+    )
+
+    malformed_id = closure_story_fixture("CF-995", True).replace("id: CF-995", "id: [CF-995]")
+    malformed_id_problems = done_story_problems(
+        [("docs/stories/CF-995-fixture.md", malformed_id)],
+        "- **Would otherwise satisfy the ledger** (`CF-995`).\n",
+    )
+    check_that(
+        "a done story with a structured id fails closed instead of skipping its records",
+        len(malformed_id_problems) == 1
+        and malformed_id_problems[0].startswith("closure metadata")
+        and "id: [CF-995]" in malformed_id_problems[0],
+    )
 
     found = table_problems(ORPHANED_ROW_FIXTURE)
     check_that(
@@ -559,11 +867,19 @@ def main() -> int:
         print("\ndocs: FAIL — the check cannot detect what it was built to detect")
         return 1
     if "--self-test" in sys.argv:
-        print("docs: self-test passed — every table defect the fixtures replay is still refused")
+        print(
+            "docs: self-test passed — the twelve named closure failures and every table defect "
+            "the fixtures replay are still refused"
+        )
         return 0
 
     problems = (
-        check_links() + check_stories() + check_spec_deferrals() + check_site_links() + check_tables()
+        check_links()
+        + check_stories()
+        + check_done_stories()
+        + check_spec_deferrals()
+        + check_site_links()
+        + check_tables()
     )
     for problem in problems:
         print(problem)

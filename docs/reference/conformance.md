@@ -4,25 +4,27 @@
 
 One row per vector in [proxy-behavior](../specs/proxy-behavior.md) §12, [e2e-probe](../specs/e2e-probe.md) §10, [registrar-auth](../specs/registrar-auth.md) §8, [hook-framework](../specs/hook-framework.md) §9, [location-service](../specs/location-service.md) §9, [media-relay](../specs/media-relay.md) §12, [number-normalisation](../specs/number-normalisation.md) §11, [affinity-token](../specs/affinity-token.md) §10, [affinity-token](../specs/affinity-token.md) §10, [cluster-config](../specs/cluster-config.md) §12, [asserted-identity](../specs/asserted-identity.md) §13, [hook-framework](../specs/hook-framework.md) §9.1, [sipx-cluster-crd](../specs/sipx-cluster-crd.md) §10, [session-service](../specs/session-service.md) §6 and [operational-capability-baseline](../specs/operational-capability-baseline.md) §5.
 
-A row is *proved* when a test in the workspace covers it **and** compares every value the
-row states, *shape only* when a test covers it but never compares a value it states, and
+A row is *proved* when Cargo lists a non-ignored test in the workspace's all-feature test
+configuration, that test covers the row **and** compares every value the row states;
+*shape only* when such a test covers it but never compares a value it states, and
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names a **live** story
 that will — one that exists and is not `done`, and is not the story that wrote the spec.
 Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 deferred rows
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**215 of 619 rows proved**; 19 covered for shape only; 385 deferred.
+**219 of 621 rows proved**; 16 covered for shape only; 386 deferred.
 
-Σ over the 62 sections below is 619, so every row counted above is shown in exactly one table.
+Σ over the 62 sections below is 621, so every row counted above is shown in exactly one table.
 
 Every file under `docs/specs/` is enumerated: 13 documents registered across 15 prefixes, and 2 outside the vector ledger — named in *Outside the vector ledger* below, beside every other document that carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix that tabulates no rows, and a stale exclusion are each a gate failure, so a spec cannot read as covered by being nominal.
 
 ## What these words mean
 
-**Proved** means: a test named for the row exists and runs, and — where the row's `Expect`
-column states a number — some assertion in that test compares that number. `CF-12` added
-the second half. Before it, `PB-F-1` read *Timer C set 180 s* and its test asserted only
+**Proved** means: Cargo discovers an executable, non-ignored test named for the row in the
+all-feature configuration the gate runs, and — where the row's `Expect` column states a
+number — some assertion in that test compares that number. `CF-12` added the second half.
+Before it, `PB-F-1` read *Timer C set 180 s* and its test asserted only
 `[Kind::ResolveTargets, Kind::Forward, Kind::SetTimer]`, so the row and the code never met;
 the row was wrong about the value for the project's whole life and the report said proved
 throughout.
@@ -361,16 +363,16 @@ by a registered prefix's own rows.
 | `LS-R-8` | proved | `crates/sipx-clstr-registrar/src/parse.rs` — asserts `400` |
 | `LS-R-9` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `400` |
 | `LS-R-10` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `500`; not compared |
-| `LS-R-11` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `423`; not compared |
+| `LS-R-11` | proved | `crates/sipx-clstr-node/tests/register_responses.rs`, `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `423`, `300` |
 | `LS-R-12` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `7200` |
 | `LS-R-13` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `1800` |
 | `LS-R-14` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `3600` |
 | `LS-R-15` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `403`, `200` |
 | `LS-R-16` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `423` |
-| `LS-R-17` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-18` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `421`; not compared |
+| `LS-R-17` | proved | `crates/sipx-clstr-node/tests/register_responses.rs`, `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-18` | proved | `crates/sipx-clstr-node/tests/register_responses.rs`, `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `421` |
 | `LS-R-19` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
-| `LS-R-20` | shape only | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — states `420`; not compared |
+| `LS-R-20` | proved | `crates/sipx-clstr-node/tests/register_responses.rs`, `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `420` |
 | `LS-R-21` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
 | `LS-R-22` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
 | `LS-R-23` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
@@ -751,6 +753,8 @@ by a registered prefix's own rows.
 | `CC-V-22` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-V-23` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
 | `CC-V-24` | proved | `crates/sipx-clstr-node/src/config/tests.rs` |
+| `CC-V-25` | proved | `crates/sipx-clstr-node/src/config/tests.rs`, `crates/sipx-clstr-node/tests/config_secret_redaction.rs` |
+| `CC-V-26` | deferred | `KO-3` — Operator admission-response redaction. The loader and real node process prove all five inline-secret neighbours under `CC-V-25`, but no operator admission consumer exists yet. `KO-3` implements that consumer and already owns invalid-resource messages, so it must prove that its rejection response names every path without reintroducing the refused bytes. CRD A2 remains intact: rejection creates no object and does not mutate an existing object's status. |
 
 ## Cluster config — key reload (§9.3)
 

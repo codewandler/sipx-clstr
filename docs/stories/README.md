@@ -58,14 +58,8 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 - [DX-15 — Sweep both doc trees for claims the beta-line kernel bump invalidated](DX-15-sweep-the-docs-for-claims-the-kernel-bump-invalidated.md) · Foundation · CX-12 fixed the claims the gate can see; this sweeps the ones it cannot — "at the pinned v0.10.0" citations that are still true but now name the wrong pin, and prose anchored to a kernel state twelve releases old
 - [RG-26 — A removals-only REGISTER must not trip the binding quota](RG-26-a-removals-only-register-must-not-trip-the-quota.md) · Registrar · found by RG-16 round 4 — with 12 bindings held against a quota of 10, a REGISTER that only removes one is refused 403, while location-service §5.5's prose says removals never trip the quota
 
-### Cluster affinity & connection ownership
-_What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
-- [AF-8 — A tokenless mid-dialog platform Route must not be a silent downgrade](AF-8-a-tokenless-mid-dialog-route-must-not-be-a-silent-downgrade.md) · Cluster · AF-5 reports an absent aft as "nothing to verify" because no keys[] loader exists — harmless until a token claim becomes a routing input
-
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
-- [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
 
 ### Roles, topology & operations
@@ -76,7 +70,6 @@ _The operational contract: roles by config, a reference topology, and an honest 
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
 - [FC-7 — Expose the contact-operation bound beside the quota it must not contradict](FC-7-expose-the-contact-operation-bound-beside-the-quota-it-must-not-contradict.md) · Cluster · RG-25 made max_contact_ops a per-tenant policy field with no document key — raise maxBindingsPerAor past it and whole-set refreshes start answering 403
-- [FC-8 — Write down the redaction rule the loader already follows](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · the loader already redacts an inline DSN and an inline nonce secret against no written rule — KY3 made it three call sites governed by nothing
 
 ### Media control
 _The SIP process controls media over a network protocol; it never touches a media packet._
@@ -88,7 +81,6 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · CX-7 confirmed no kernel gap: v0.10.0 has fallible Expires; consume it and reject malformed Contact/Path atomically
 - [RG-24 — Reap expired bindings even when the REGISTER changes nothing else](RG-24-reap-expired-bindings-even-when-nothing-else-changes.md) · Registrar · drop_expired runs on a clone that a Noop outcome discards, so an AoR that only ever queries grows without bound
 
@@ -102,6 +94,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [BS-1 — Accept the optional session-service specification](BS-1-accept-the-optional-session-service-spec.md) · Services · M4 spec-first story; no runtime implementation
 
 ## Blocked
+- [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · implementation and local live proof complete; closure awaits an observed GitHub real-socket run
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Backlog
@@ -112,6 +105,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 ### Cluster affinity & connection ownership
 _What makes N nodes one proxy: routing state rides in the message, and every resource has one owner._
 - [AF-7 — Implement connection ownership and the owner RPC](AF-7-implement-connection-ownership-and-the-owner-rpc.md) · Cluster · blocked by AF-2, AF-3 — implements both
+- [AF-8 — A tokenless mid-dialog platform Route must not be a silent downgrade](AF-8-a-tokenless-mid-dialog-route-must-not-be-a-silent-downgrade.md) · Cluster · blocked on DP-17 applying keys[] to the runtime key set — harmless until a token claim becomes a routing input
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
@@ -215,6 +209,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CF-15 — No end-to-end proof runs in CI, and the check that would notice is inert](CF-15-no-end-to-end-proof-runs-in-ci.md) · Foundation · all four proofs took the "recorded reason" branch; the "or it runs in CI" branch has never been exercised
 - [CF-16 — Sweep for done stories that closed with named deltas unlanded](CF-16-sweep-for-done-stories-that-left-named-deltas-unlanded.md) · Foundation · EX-8 was named for two deltas, closed having landed one, and nothing noticed for months
 - [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
+- [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · complete — done stories now require an exact changelog citation and a checked Acceptance item; all historical records are reconciled
 - [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
 - [CF-22 — The gate cannot see a leaked transaction](CF-22-the-gate-cannot-see-a-leaked-transaction.md) · Foundation · re-specified — the first Acceptance demanded a bound correct code cannot meet; PX-13 drains at 128·T1 and is not a leak
 - [CF-23 — A blank line silently truncates a normative table, and the gate reads it as clean](CF-23-a-blank-line-silently-truncates-a-normative-table.md) · Foundation · RG-25 orphaned a hook-phase row into literal pipe text; check-docs.py passed it, and the spec's own sentence still claimed both rows
@@ -229,6 +224,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CX-4 — Upgrade the pinned sipx kernel from 0.7.0 to 0.10.0](CX-4-upgrade-the-sipx-kernel-to-0-10-0.md) · Platform · three releases behind — mostly UA-side work, so this is hygiene rather than a blocker
 - [CX-6 — File the ledger rows CX-1 was named for and never filed](CX-6-file-the-three-ledger-rows-cx-1-was-named-for-and-never-filed.md) · Platform · UPSTREAM — three specs name CX-1 as the filer; upstream.md has no row for any of them
 - [CX-7 — File the review-confirmed kernel gaps upstream](CX-7-file-the-review-confirmed-kernel-gaps-upstream.md) · Platform · UPSTREAM — V-02 and V-07 need released kernel surfaces; V-13 already has typed parsing
+- [CX-15 — Prepare and cut sipx-clstr 0.14.0 on sipx 1.0.0-beta.5](CX-15-prepare-and-cut-sipx-clstr-0-14-0.md) · Platform · released as v0.14.0 from one patch-free commit after the complete gate and same-kernel real-socket call passed
 - [DP-1 — Design roles and the config schema](DP-1-design-roles-and-the-config-schema.md) · Cluster
 - [DP-5 — Support listen-private / advertise-public listeners](DP-5-support-listen-private-advertise-public-listeners.md) · Cluster · blocks a downstream deployment's first milestone
 - [DP-8 — Implement the cluster config loader as a pure function](DP-8-implement-the-cluster-config-loader.md) · Cluster · DP-1 specified the schema and nothing loads it — the binary still has three provisional flags
@@ -268,6 +264,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [FC-4 — Apply or refuse the per-tenant policy fields — domains, expiry and maxBindingsPerAor](FC-4-apply-or-refuse-the-per-tenant-policy-fields.md) · Cluster · domains parses into a struct field nothing reads — a REGISTER for an undeclared domain is accepted
 - [FC-5 — Repair the two-node proofs FC-4 broke, and make a mismatched domain impossible to ship](FC-5-repair-the-two-node-proofs-fc-4-broke.md) · Foundation · the repository's headline cluster proof answers 403 — the script registers in a domain its own document does not serve
 - [FC-6 — Refuse cluster.security policy until a specified consumer applies every declared control](FC-6-refuse-cluster-security-policy-this-build-cannot-apply.md) · Cluster · V-06 closed — the four ingress controls are refused per control, and the chart that declared all four no longer does
+- [FC-8 — Keep refused configuration secrets out of every diagnostic](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · V9 now owns redaction across five inline-secret paths; the failing-first pass also closed listener and management TLS key acceptance
 - [KO-1 — Specify the SipxCluster CRD and the values.yaml contract](KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md) · Cluster · the CR spec *is* the config schema, and a check holds it there
 - [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 - [KO-14 — Bring the chart's values to the config schema, starting with the media block that cannot boot](KO-14-bring-the-chart-to-the-config-schema.md) · Cluster · DP-1 found the shipped default set declares a media policy G-M6 refuses to start on
@@ -305,6 +302,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 — RG-25 landed, resuming on impl/RG-16-r3
 - [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
+- [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-25 — Bound the contact operations one REGISTER may carry, in the spec and not only in code](RG-25-bound-the-contact-operations-one-register-may-carry.md) · Registrar · RG-14 item 2, never landed — one 64 KB datagram costs ~0.2 s of a core, and RG-16 cannot be finished without it
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling

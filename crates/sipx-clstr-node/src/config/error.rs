@@ -88,6 +88,9 @@ pub struct ConfigError {
     /// Which rule, by the owning spec's id.
     pub rule: RuleId,
     /// What was there, when quoting it helps and does not leak a secret.
+    ///
+    /// On a `CC-V9` path this is a description or `None`, never the inline value: the same display
+    /// text is safe to reuse in stderr and in an operator status message.
     pub found: Option<String>,
     /// What would have been accepted.
     pub expected: String,

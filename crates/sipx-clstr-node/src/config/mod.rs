@@ -1619,6 +1619,17 @@ fn read_document(
         .map(|section| cluster_path.field(section))
         .collect();
 
+    // `management` is intentionally still a deferred section, but V9 is a property of the
+    // document and its errors rather than of the eventual TLS consumer. Enforce the one secret
+    // invariant we can already prove without pretending to validate the rest of that future block.
+    if let Some(management) = cluster
+        .get(Value::from("management"))
+        .and_then(Value::as_mapping)
+        && let Some(tls) = management.get(Value::from("tls"))
+    {
+        refuse_inline_tls_key(tls, &cluster_path.field("management").field("tls"), errors);
+    }
+
     let name = required_str(cluster, "name", &cluster_path, "CC-7", errors);
     let environment = required_str(cluster, "environment", &cluster_path, "CC-7", errors);
     let zones = read_zones(cluster, &cluster_path, errors);
@@ -1809,6 +1820,12 @@ fn read_listeners(
                 unapplied.push(at.field(ignored));
             }
         }
+        if let Some(tls) = map.get(Value::from("tls")) {
+            // `FC-1` still owns whether this whole block is applied or refused. Redacting a private
+            // key written beside `keyRef` does not need to wait for that decision: V9 applies to
+            // every document and this targeted check neither accepts nor resolves the TLS block.
+            refuse_inline_tls_key(tls, &at.field("tls"), errors);
+        }
         let roles = read_roles(map.get(Value::from("roles")), &at.field("roles"), errors);
         let transport = required_str(map, "transport", &at, "CC-7", errors)
             .and_then(|declared| check_transport(&declared, &at.field("transport"), errors));
@@ -1827,6 +1844,26 @@ fn read_listeners(
         }
     }
     listeners
+}
+
+/// Refuse an inline TLS private key without echoing it.
+///
+/// TLS blocks are not otherwise consumed by this build (`FC-1` owns that work), so this deliberately
+/// validates only V9's cross-cutting secret rule. A malformed block remains that story's refusal;
+/// a mapping containing the plausible inline neighbour of `keyRef` is already unsafe to print and
+/// can be rejected precisely today.
+fn refuse_inline_tls_key(value: &Value, at: &Path, errors: &mut Vec<ConfigError>) {
+    let Some(tls) = value.as_mapping() else {
+        return;
+    };
+    if tls.contains_key(Value::from("key")) {
+        errors.push(ConfigError::new(
+            at.field("key"),
+            "CC-V9",
+            Some("an inline TLS private key".into()),
+            "keyRef naming a private key the driver resolves; no secret value appears in the document",
+        ));
+    }
 }
 
 /// Accept only a transport this build can actually serve, and refuse the rest **loudly**.

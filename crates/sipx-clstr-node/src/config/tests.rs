@@ -324,10 +324,99 @@ fn cc_v7_timer_c_must_exceed_three_minutes() {
 /// §8 V9 — no secret value in the document, only a reference.
 #[test]
 fn cc_v9_an_inline_dsn_is_refused() {
-    let document = good().replace("dsnRef: location-dsn", "dsn: postgres://user:pw@db/loc");
+    let secret = "postgres://redaction-sentinel@db/loc";
+    let document = good().replace("dsnRef: location-dsn", &format!("dsn: {secret}"));
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
     assert!(rules(&errors).contains(&"CC-V9".to_owned()), "{errors:#?}");
+    let error = errors
+        .iter()
+        .find(|error| {
+            error.path.to_string() == "cluster.locationStore.dsn"
+                && error.rule.to_string() == "CC-V9"
+        })
+        .expect("the V9 refusal");
+    assert_eq!(error.found.as_deref(), Some("an inline DSN"));
+    assert!(!format!("{errors:#?}").contains(secret));
+}
+
+/// **`CC-V-25`.** A V9 refusal may describe an inline value or omit `found`; it never carries the
+/// value into the typed error or the stable refusal line rendered from it.
+///
+/// Five sentinels exercise every reference spelling and home in V9: `dsnRef`, the nonce and affinity
+/// forms of `secretRef`, and listener plus management TLS `keyRef`. Keeping them distinct catches an
+/// implementation that redacts one call site and quotes another.
+#[test]
+fn cc_v_25_every_inline_secret_neighbour_is_redacted_on_every_error_surface() {
+    let cases = [
+        (
+            good().replace(
+                "dsnRef: location-dsn",
+                "dsnRef: location-dsn\n    dsn: postgres://dsn-redaction-sentinel@db/loc",
+            ),
+            "cluster.locationStore.dsn",
+            "dsn-redaction-sentinel",
+            "an inline DSN",
+        ),
+        (
+            good().replace(
+                "      domains: [acme.example]\n",
+                "      domains: [acme.example]\n      auth:\n        realm: acme\n        secretRef: nonce-key\n        secret: nonce-redaction-sentinel\n",
+            ),
+            "cluster.tenant[0].auth.secret",
+            "nonce-redaction-sentinel",
+            "an inline nonce secret",
+        ),
+        (
+            with_keys(&key(3, true, "2026-08-04T12:00:30Z").replace(
+                "      secretRef: affinity-key-3\n",
+                "      secretRef: affinity-key-3\n      secret: affinity-redaction-sentinel\n",
+            )),
+            "cluster.keys[0].secret",
+            "affinity-redaction-sentinel",
+            "an inline key secret",
+        ),
+        (
+            good().replace(
+                "      advertise: 203.0.113.10:5060\n",
+                "      advertise: 203.0.113.10:5060\n      tls:\n        certRef: edge-cert\n        keyRef: edge-key\n        key: tls-redaction-sentinel\n",
+            ),
+            "cluster.listener[0].tls.key",
+            "tls-redaction-sentinel",
+            "an inline TLS private key",
+        ),
+        (
+            good().replace(
+                "  locationStore:\n",
+                "  management:\n    bind: 127.0.0.1:9090\n    tls:\n      certRef: management-cert\n      keyRef: management-key\n      key: management-tls-redaction-sentinel\n  locationStore:\n",
+            ),
+            "cluster.management.tls.key",
+            "management-tls-redaction-sentinel",
+            "an inline TLS private key",
+        ),
+    ];
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+
+    for (document, path, sentinel, description) in cases {
+        let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+        let error = errors
+            .iter()
+            .find(|error| error.path.to_string() == path && error.rule.to_string() == "CC-V9")
+            .unwrap_or_else(|| panic!("missing V9 refusal at {path}: {errors:#?}"));
+        assert_eq!(error.found.as_deref(), Some(description));
+
+        let typed_error = format!("{errors:#?}");
+        let process_line = error.to_string();
+        for (surface, rendered) in [
+            ("typed error", typed_error.as_str()),
+            ("process refusal line", process_line.as_str()),
+        ] {
+            assert!(
+                !rendered.contains(sentinel),
+                "{surface} leaked {sentinel}: {rendered}"
+            );
+        }
+    }
 }
 
 /// §12 `CC-D-4` — an undefined `${NAME}` is an error naming the variable **and the field it was

@@ -1075,6 +1075,17 @@ reason = """
 The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
+[[deferred]]
+id = "CC-V-26"
+story = "KO-3"
+reason = """
+Operator admission-response redaction. The loader and real node process prove all five inline-secret
+neighbours under `CC-V-25`, but no operator admission consumer exists yet. `KO-3` implements that
+consumer and already owns invalid-resource messages, so it must prove that its rejection response
+names every path without reintroducing the refused bytes. CRD A2 remains intact: rejection creates
+no object and does not mutate an existing object's status.
+"""
+
 # FR — 22 rows, closed by AF-7.
 
 [[deferred]]
@@ -2845,28 +2856,6 @@ States "abort, `500`". The test compares the outcome against `Rejection::StaleSe
 nothing was removed. The `500` is the driver's mapping of that rejection and there is no driver in
 this test — the sans-IO layer never produces a status. The row spans two layers; its proof covers
 one.
-"""
-
-[[unasserted]]
-id = "LS-R-11"
-reason = """
-States `423` plus `Min-Expires: 300`. The test compares the minimum against `300` and matches
-`Rejection::IntervalTooBrief`; the `423` appears only inside a `panic!` message. Half the row is
-compared, half is named in prose.
-"""
-
-[[unasserted]]
-id = "LS-R-18"
-reason = """
-States `421 Extension Required` naming `path`. The test compares the named tag against `"path"` and
-that nothing committed, never the status.
-"""
-
-[[unasserted]]
-id = "LS-R-20"
-reason = """
-States `420` plus `Unsupported: nothing-we-know`. The test compares the unsupported tags against
-`["nothing-we-know"]`, never the status.
 """
 
 # ── optional session service (`SS`) ─────────────────────────────────────────────────────────────

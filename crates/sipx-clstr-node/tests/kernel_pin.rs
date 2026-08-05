@@ -42,7 +42,7 @@ fn the_reported_kernel_version_matches_the_pinned_tag() {
     );
 }
 
-/// The release `CX-12` moved to, named as a literal.
+/// The release `CX-15` moved to, named as a literal.
 ///
 /// The test above holds the constant and the manifest to *each other*, which is what stops them
 /// drifting — but it passes just as well when both say `0.7.0`, so on its own it cannot say which
@@ -51,7 +51,7 @@ fn the_reported_kernel_version_matches_the_pinned_tag() {
 /// literal is meant to be edited by whoever moves the pin next, in the same commit that moves it.
 #[test]
 fn the_reported_kernel_is_the_release_this_workspace_moved_to() {
-    assert_eq!(sipx_clstr_node::KERNEL_VERSION, "1.0.0-beta.4");
+    assert_eq!(sipx_clstr_node::KERNEL_VERSION, "1.0.0-beta.5");
 }
 
 /// `--version` is the half of the claim an operator can actually reach.

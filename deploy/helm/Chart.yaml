@@ -19,6 +19,6 @@ type: application
 # no image exists behind appVersion's default tag (KO-17). check-advertised.sh compares both
 # against the workspace, so a release cut that forgets this file is a red check rather than a
 # package number nothing ever released, presented as current fact.
-version: 0.13.0
-appVersion: "0.13.0"
+version: 0.14.0
+appVersion: "0.14.0"
 keywords: [sip, voip, proxy, registrar, rtpengine, cluster]

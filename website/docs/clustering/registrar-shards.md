@@ -6,12 +6,13 @@ description: "How an address-of-record gets exactly one owning shard, and what t
 # Registrar shards
 
 :::caution Preview
-Sharding is **not implemented**. One node runs today and its bindings live in a process-local
-store, so there is no shard map, no owner and nothing to hand off. What is written is the
+Sharding is **not implemented**. Two nodes can share one PostgreSQL location service, while an
+in-memory store remains process-local. Configuration loads and validates `shardMap`, but the running
+node does not apply it, so there is no shard owner and nothing to hand off. What is written is the
 contract: the
 [location-service spec](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/location-service.md)
-is normative, its `LS-*` vectors are executed against the in-memory backend today, and the
-compare-and-swap half of it is the part that already ships.
+is normative, its store vectors run against the in-memory and PostgreSQL backends, and the
+compare-and-swap half of it already ships.
 :::
 
 Registrations are the one piece of state this platform cannot put in the message. A binding

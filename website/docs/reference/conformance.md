@@ -25,19 +25,31 @@ renumbered once published.
 **2. A test proves it by name.** Coverage is derived from **test function names**:
 
 ```rust
+#[test]
 fn pb_v_8_a_max_breadth_of_one_is_not_a_fork() { … }
 ```
 
-That function proves `PB-V-8`. Nothing registers it and nothing lists it. A test that covers a row
-but wants a different name says so in a comment instead:
+That function proves `PB-V-8` only when Cargo discovers it as an executable, non-ignored test in the
+workspace's all-feature configuration — the configuration the gate runs. A plain helper with the
+same name, an ignored test, and a test behind an inactive `cfg` prove nothing. A test that covers a
+row but wants a different name says so in that executable test item's leading trivia:
 
 ```rust
 // covers: PB-R-4
+#[test]
+fn a_response_rule_shared_by_several_vectors() { … }
 ```
 
-The reason coverage is read out of names rather than a checked-in list is that a list rots and a
-name cannot: **deleting the test deletes the claim.** A hand-maintained index would keep asserting
-coverage that no longer exists, and it would be right often enough that nobody re-reads it.
+There is no checked-in inventory of test names. The checker asks Cargo for the workspace packages and
+compiled test harnesses, then intersects source claims with what those harnesses list. Adding a crate
+or test target therefore requires no second registration. **Deleting, ignoring, or cfg-disabling the
+test deletes the claim.** A `// covers:` comment with no following executable test fails by vector,
+source path, and attempted target instead of drifting onto an arbitrary function. A brace, module,
+statement or other structural line ends that leading trivia, so a trailing comment cannot bind to a
+test in a later scope merely because it is the next function in the file. The declaration must be a
+standalone `//`, `///` or `//!` line; matching text inside a string or after another Rust token is not
+a declaration. Attributes are consumed as complete Rust attributes, with delimiters inside strings
+ignored, so an attribute cannot hide an intervening item.
 
 **3. Anything unproved is deferred, in writing, with an owner.** A row that no test covers must
 appear in
@@ -74,8 +86,8 @@ saying yes takes more work than saying no.
 
 | Status | What it means |
 |---|---|
-| **proved** | A test in the workspace executes this row **and** compares every value the row states. The report names the file. |
-| **shape only** | A test covers the row and never compares a value it states. It runs; the quantity the row exists to pin is not held to anything. These do not count towards *proved*. |
+| **proved** | Cargo discovers an executable, non-ignored test in the gate's all-feature configuration; it covers this row **and** compares every value the row states. The report names the file. |
+| **shape only** | Such an executable test covers the row and never compares a value it states. The quantity the row exists to pin is not held to anything. These do not count towards *proved*. |
 | **deferred** | No test covers it. The report names the work that will, and quotes the reason. |
 
 There is no fourth status, and there is no "supported" that is not one of these three. *Shape only*

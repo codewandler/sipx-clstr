@@ -38,7 +38,8 @@ and registrar; the implementation today is two nodes sharing one registrar, addr
 
 ## The state of it, precisely
 
-Everything below the line is specification, not software.
+Everything below the line is not yet a deployable runtime capability. The token rows have
+library/simulation implementations; the remaining join to the running node is stated explicitly.
 
 | | Status |
 |---|---|
@@ -49,8 +50,8 @@ Everything below the line is specification, not software.
 | Two nodes sharing one registrar: register through one, be called through the other | **today** — scripted as two local processes and as two pods on Kubernetes |
 | Digest authentication | implemented, proved and applied from the document — but **no user-credential store**, so a document asking for it is refused or challenges nobody |
 | — | — |
-| One address in front of the nodes | specified, not shipped |
-| Affinity tokens, flow ownership | specified, not shipped |
+| One address in front of the nodes | token library and two-edge route round trip proved; runtime keys and owner delivery missing |
+| Affinity tokens, flow ownership | token library and simulated route path shipped below the driver seam; flow ownership not shipped |
 | Trunks, number normalisation, asserted identity | specified, not shipped |
 | Media relay control | specified, not shipped |
 | Kubernetes operator, Helm, autoscaling | designed |

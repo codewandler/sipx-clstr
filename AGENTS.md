@@ -23,23 +23,27 @@ choice is unclear. [README.md](README.md) is the same project explained for huma
 
 **The state of play, in one line:** M1 is **complete** — all fourteen stories `done`, every exit
 criterion proved, cut as `0.5.0` — and sipx `v0.4.0` cleared the
-[upstream ledger](docs/upstream.md) as it then stood — but it has not stayed clear. The kernel pin
-is now **`v1.0.0-beta.4`** (`CX-12`, from `v0.10.0` — twelve kernel releases in one step), with a
-**temporary `[patch]` to the sibling `../sipx` checkout** riding along until the current kernel
-work is pushed; the patch must not outlive `CX-12`. The bump cost two source changes (a `Quic`
+[upstream ledger](docs/upstream.md) as it then stood — but it has not stayed clear. The kernel
+**`v1.0.0-beta.5`** tag is now published, and `CX-15` is moving all four pins together and removing
+the temporary `[patch]` to the sibling `../sipx` checkout before the release proof. The patch must
+not enter the release. The preceding beta.4 bump (`CX-12`, from `v0.10.0` — twelve kernel releases
+in one step) cost two source changes (a `Quic`
 match arm the listener set already refuses, and a `Via` the echo endpoint had always owed its own
 REGISTER — RFC 3261 §8.1.1.7, surfaced by the kernel's stricter response builder) and settled most
 of the M4 dependency table: only kernel `C-6` and `A-10` remain open there. Three defect rows
-survived all twelve releases and stay open: `CX-5`'s nonce-uniqueness defect and `RG-15`'s `O(n)`
-replay window — `challenge.rs` is **one blob from `v0.7.0` through `v1.0.0-beta.4`** — and
+survived the beta.5 release and stay open: `CX-5`'s nonce-uniqueness defect and `RG-15`'s `O(n)`
+replay window — `challenge.rs` is **one blob from `v0.7.0` through `v1.0.0-beta.5`** — and
 `DP-11`'s per-message overload logging. The `CX-7` filings turned out **never to have merged**
 (orphaned on `filing/clstr-CX-7-public`, IDs recycled upstream), so `CX-13` re-files the
 outgoing-CANCEL and exact-listener-selection asks. The declared Rust floor stays **1.91**, still
-held by local code (the kernel's own floor is 1.88). The gate is green, and M1's one known defect
+held by local code (the kernel's own floor is 1.88). The last complete gate was green before the
+sibling advanced to beta.5; the immutable tag now clears the dependency blocker, and the refreshed
+lock plus patch-free release gate are `CX-15`'s next proof. M1's one known defect
 is **closed**: `RG-8` settled location-service §5.3 B4 on the granted duration, so an ordinary
-retransmitted REGISTER is a `200` rather than a `500`. The last cut is **`0.13.0`** — affinity
-tokens now round-trip across edges with zero cross-node dialog lookups, while key loading and
-connection-owner delivery remain explicit deployment blockers.
+retransmitted REGISTER is a `200` rather than a `500`. The last published cut remains **`0.13.0`**;
+the **`0.14.0`** candidate is being prepared in `CX-15`. Affinity tokens round-trip across edges
+with zero cross-node dialog lookups, and key documents now load and validate, while runtime key
+application and connection-owner delivery remain explicit deployment blockers.
 Check the board before assuming any of that is current.
 
 ## Non-negotiables

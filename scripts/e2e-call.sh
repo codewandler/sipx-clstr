@@ -267,15 +267,15 @@ echo "  ✓ bob recorded $samples samples"
 [[ -s "$work/heard.wav" ]] || fail "the recording is empty"
 echo "  ✓ the recording is $(stat -c%s "$work/heard.wav") bytes"
 
-# **Media went direct.** The node runs no relay — there is no `MediaRelay` in M1 at all — so RTP that
-# reached bob came from alice's socket and nowhere else. Asserted here as the absence of the thing
-# that would contradict it: if the node had touched media, the node would have had to open a media
-# port, and it opens exactly one socket.
-sockets="$(ss -lunp 2>/dev/null | grep -c "pid=$node_pid," || true)"
-if [[ "$sockets" -gt 1 ]]; then
-    fail "the node holds $sockets UDP sockets; M1's node forwards signalling only"
+# The socket observation is deliberately narrower than the media claim. `ss` can establish only
+# what this process owns at one inspection instant, and only when process ownership is readable. It
+# cannot reconstruct the path of every packet. Combined with both phones' audio results and the
+# absence of a relay implementation, exactly one node-owned UDP socket is evidence consistent with
+# direct media; zero, ambiguity, and extra sockets are all failures rather than flattering silence.
+if ! socket_observation="$(scripts/check-node-udp-sockets.sh "$node_pid" 2>&1)"; then
+    fail "$socket_observation"
 fi
-echo "  ✓ the node holds one socket — signalling only, so the media was direct"
+echo "  ✓ $socket_observation"
 
 # A proxy that holds a transaction no timer will collect is a slow, quiet outage, so the node logs
 # how much state the kernel still holds for it and this waits for that to reach zero.

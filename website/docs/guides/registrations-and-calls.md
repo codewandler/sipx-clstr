@@ -85,10 +85,15 @@ which carries the `PB-*` vector table each rule is tested against.
 Nothing in the SDP is rewritten. The two phones exchange addresses and send RTP directly to each
 other. The node sees the offer and the answer as opaque bodies.
 
-The end-to-end script asserts this rather than assuming it: at the end of the call it checks that
-the node holds **exactly one UDP socket** — the signalling one. If media were being relayed there
-would be more. Since no relay exists, more sockets would mean RTP had reached a process that is
-never allowed to carry it.
+The end-to-end script records one deliberately narrow observation after the call: `ss` must expose
+process ownership and show **exactly one UDP socket owned by the node PID**. Missing `ss`, hidden
+ownership metadata, zero matching sockets and multiple matching sockets all fail. The one match is
+the configured signalling listener.
+
+That snapshot does not reconstruct the route of every RTP packet. Together with both phones'
+recorded audio and the absence of a relay implementation, it is evidence consistent with the direct
+media path; by itself it establishes only that the node owned no second observable UDP socket at the
+inspection instant.
 
 When media *does* need to be relayed — for NAT traversal or a carrier that will not talk to your
 clients directly — it will be relayed by a separate process this platform controls over a network

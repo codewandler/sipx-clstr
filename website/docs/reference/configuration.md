@@ -207,10 +207,11 @@ not validated and **nothing applies them**.
 **"Validated, not applied" is the state worth understanding**, because it is the one that looks most
 like working. A `keys` section is read in full: the six attributes, the validity windows, the
 ceiling, the rule that exactly one key mints. A document that gets any of it wrong does not start.
-And no token is minted under any of it, because nothing in this build mints tokens yet. The same is
-true of `shardMap` — the map must be total, its owners must be declared members, and those members
-must run a registrar — while no shard changes hands, and of a member's `rpc` endpoint, which is
-required of every member on the call path and dialled by nobody.
+And no running node mints under that configured set, because this build does not apply the loaded
+keys to its proxy runtime yet. The token library and deterministic route round trip exist; this is
+the missing driver join. The same is true of `shardMap` — the map must be total, its owners must be
+declared members, and those members must run a registrar — while no shard changes hands, and of a
+member's `rpc` endpoint, which is required of every member on the call path and dialled by nobody.
 
 A node logs a warning naming the **paths** it recognised but did not apply, and gives the
 security-relevant ones a line of their own, so this is visible at startup rather than inferred. Every

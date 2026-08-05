@@ -1,0 +1,9 @@
+[package]
+name = "check-vectors-cargo-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# This fixture is deliberately its own workspace. The repository checker discovers the real
+# workspace through Cargo; making the fixture a member would add fabricated PB rows to that inventory.
+[workspace]

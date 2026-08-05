@@ -7,7 +7,75 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-05
+
+This release makes the registrar's answer match both its authority and its durable state. An
+authenticated principal cannot replace or erase another address of record; a location-store read
+that failed or could not be decoded becomes `503` instead of a plausible empty result; multi-contact
+reconciliation remains correct as earlier operations move the set; and the node now renders the
+registrar's complete decided response, including granted Contact lifetimes and q values, Path,
+`Supported`, `Require`, `Unsupported` and `Min-Expires`.
+
+The cluster document takes its next step without pretending the runtime is finished. Membership,
+key and shard-map sections now load and validate, including whole-document reload constraints, but
+keys and placement still do not reach the live affinity and ownership paths. Inline credentials and
+private keys are refused without copying their bytes into errors or process output. Existing
+deployments must also add the now-required RPC endpoint to every call-path member.
+
+The assurance layer is stricter about its own claims: connection faults compose across node death
+and restart, release-facing capability/count statements are checked in both directions, normative
+tables and specifications cannot fall out of the gate silently, and a `done` story must leave both
+an Acceptance record and an exact changelog citation. The release does not add an operator, apply
+runtime keys, deliver to connection owners, execute outgoing proxy CANCEL, select a TCP-only kernel
+listener, or claim an independently implemented SIP peer.
+
+### Changed
+
+- **The complete workspace now resolves the immutable sipx `v1.0.0-beta.5` tag without a sibling
+  checkout participating in the build** (`CX-15`). All four kernel pins moved together, the
+  temporary `[patch]` was removed, and the binary identifies both this release and its kernel as
+  `sipx-clstr 0.14.0 (sipx kernel 1.0.0-beta.5)`. The workspace, six internal lockfile packages,
+  Helm chart, public release marker and checked CLI examples all name `0.14.0`. The patch-free gate
+  and a real-socket call with the phone built from the same released kernel tag passed before the
+  release commit was tagged.
+
 ### Fixed
+
+- **REGISTER responses now carry the registrar's complete decided outcome on the wire** (`RG-19`,
+  validated synthesis **V-10**). One exhaustive driver renderer covers successful and rejected
+  outcomes without reconstructing registrar policy: a `200` lists every active Contact with its
+  granted lifetime and stored q, followed by the stored Path in order and `Supported: path`; `423`,
+  `421` and `420` responses now carry `Min-Expires`, `Require` and every `Unsupported` offender.
+  A required-header build failure discards the partial response and produces a controlled bare
+  `500`. Four failing-first real-UDP node tests prove LS-R-11/17/18/20 through typed kernel parsing.
+
+- **Configuration refusals cannot echo an inline secret into an error or process log** (`FC-8`).
+  `cluster-config` V9 now makes redaction a property of `ConfigError`: a
+  refusal may describe an inline value or omit `found`, but never carries the value. The existing
+  DSN, tenant nonce, and affinity-key paths are pinned with distinct sentinels, and the same test
+  exposed and closed an uncovered `keyRef` neighbour inside deferred listener and management TLS
+  blocks. `CC-V-25` proves all three reference spellings across five paths through the real binary.
+  The operator admission-response surface is honestly deferred as `CC-V-26` to `KO-3`, because no
+  operator exists yet to execute that claim; rejection still creates no object and changes no
+  existing status.
+
+- **A `done` story now has to leave both closure records the repository promises** (`CF-18`).
+  The documentation gate requires an exact story-ID token in a parenthetical changelog citation
+  and at least one checked item in the story's Acceptance section; a bare mention and a longer ID
+  no longer pass by substring. Its self-test pins the original twelve property failures by name.
+  The generated board remains track's definition rather than being independently reimplemented;
+  contributors regenerate it after frontmatter changes. The same pass restores the historical
+  records that the new rule found:
+
+  - Every normative specification was brought under the vector gate, including a fabricated-row
+    rejection that proved the denominator was enforced (`CF-8`).
+  - The public site gained its stable information architecture (`DX-2`), guides for the shipped
+    node (`DX-4`), migration maps (`DX-7`), affinity and registrar-shard explanations (`DX-8`),
+    trunk and media clustering pages (`DX-9`), and deployment and scaling guidance (`DX-10`).
+  - Startup now installs tracing before it reports unapplied configuration (`FC-2`), while a tenant
+    auth block is applied where its policy can be honoured and refused where it cannot (`FC-3`).
+  - The location store retains a bounded newest-first change feed (`RG-13`), and REGISTER contact
+    reconciliation parses stored contacts once instead of once per comparison (`RG-14`).
 
 - **Connection faults in the deterministic harness now compose in either event order** (`CF-28`).
   A killed node can no longer become a stalled reader when `StopReading` fires later, and a kill

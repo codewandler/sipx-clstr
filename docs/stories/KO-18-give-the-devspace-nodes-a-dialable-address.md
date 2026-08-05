@@ -17,19 +17,23 @@ Make the published k3d walkthrough's call step executable, by giving the deploye
 that is both a valid `domains` entry and something `sipx dial` can send to.
 
 ## Acceptance
-- [ ] `website/docs/getting-started.md` §4's caller command runs as written and the call completes.
-- [ ] The greeting endpoint's address of record, the tenant's `domains` entry, and the address the
+- [x] `website/docs/getting-started.md` §4's caller command runs as written and the call completes.
+- [x] The greeting endpoint's address of record, the tenant's `domains` entry, and the address the
       documented `dial` command targets are the same string, and that string is reachable from
       another pod.
-- [ ] `scripts/k8s-two-node-call.sh` passes; it fails today for the same reason.
-- [ ] The fix does not reintroduce what `FC-5` closed: a ConfigMap written before any pod exists
+- [x] `scripts/k8s-two-node-call.sh` passes; it fails today for the same reason.
+- [x] The fix does not reintroduce what `FC-5` closed: a ConfigMap written before any pod exists
       still cannot contain a runtime-assigned address, and a `REGISTER` for a domain the node does not
       serve must still be refused.
-- [ ] Whatever is chosen is stated where a reader of the walkthrough meets it, rather than working by
+- [x] Whatever is chosen is stated where a reader of the walkthrough meets it, rather than working by
       coincidence.
 
 ## Progress
-- (not started)
+- **Closure record reconciled by `CF-18`.** `DX-13` subsequently executed the published command on a
+  clean two-node k3d deployment: the static `10.43.0.60` address is byte-identical across the Service,
+  tenant domain, greeting AoR, script and walkthrough; the call answered with 24000 recorded samples
+  and zero loss, and the scripted proof passed. That evidence closes all five boxes above without
+  changing KO-18's implementation.
 
 ## Notes
 - Found by `DX-13` while making the walkthrough executable, and it is what stopped that story at
@@ -63,4 +67,3 @@ that is both a valid `domains` entry and something `sipx dial` can send to.
   the failure predated its own diff and correctly refusing to tick its gate box. Fixed in the follow-up commit
   (two missing-backtick doc lints, one `manual_pattern_char_comparison`); the test's assertions
   were never at issue and are unchanged.
-

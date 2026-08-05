@@ -6,10 +6,11 @@ description: "What the signed token in Record-Route carries, and how a client's 
 # Affinity and flows
 
 :::caution Preview
-Specified and normative, but **not implemented**. Nodes run — two of them, sharing a registrar — and
-still nothing mints a token and no connection has an owner, which is exactly why each node has to be
-addressed individually. Every rule quoted below has an identifier in a spec that already
-exists — "not shipped" is not "not decided". The specs are
+The token library is implemented and passes its byte vectors, and a deterministic call round-trips
+its `Record-Route`/`Route` pair through two simulated edges with zero cross-node dialog lookups.
+That is below the deployment seam: configuration loads and validates the key set but the running
+node does not apply it, and no connection has an owner yet. Nodes therefore still have to be
+addressed individually. Every rule quoted below has an identifier in a spec. The specs are
 [affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
 and
 [cluster-affinity](https://github.com/codewandler/sipx-clstr/blob/main/docs/designs/cluster-affinity.md).
@@ -191,10 +192,11 @@ Two consequences worth knowing before you deploy this:
 
 ## What is true today
 
-One node, in-memory bindings, no shard map, no tokens and no connection table. Nothing on this
-page is running code. What exists is the specification: byte-level layouts, the key-rotation
-procedure, verification step orders, and test vector tables (`AT-1`…`AT-18`, `FR-1`…`FR-22`) that
-the implementation derives its tests from verbatim.
+Two nodes can share PostgreSQL bindings. The affinity-token library is running code, all of its
+byte vectors pass, and the deterministic harness proves the signed route pair across two simulated
+edges. Configuration also loads and validates `keys` and `shardMap`. The running node does not apply
+those values, there is no registrar-shard owner, and there is no connection table or owner-delivery
+RPC, so none of that makes the one-address deployment path work yet.
 
 ## Where to go next
 

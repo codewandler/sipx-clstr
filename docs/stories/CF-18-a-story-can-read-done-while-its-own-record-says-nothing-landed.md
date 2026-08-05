@@ -2,11 +2,12 @@
 id: CF-18
 title: A story can read done while its own record says nothing landed
 pillar: Foundation
-status: ready
+status: done
 priority: 2
+design: docs/designs/conformance-harness.md
 epic: conformance-harness
 areas: [docs, ci]
-note: 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
+note: complete — done stories now require an exact changelog citation and a checked Acceptance item; all historical records are reconciled
 ---
 
 # A story can read done while its own record says nothing landed
@@ -34,31 +35,59 @@ findings were not (see Notes).
 
 ## Acceptance
 
-- [ ] **Failing-first**: the check is red on the twelve instances above before anything is corrected,
+- [x] **Failing-first**: the check is red on the twelve instances above before anything is corrected,
       and its output names each story and which property it failed. A run that reports a count without
       naming the stories cannot be acted on.
-- [ ] Every `status: done` story is cited by ID in `CHANGELOG.md`. Decide and record what counts as a
+- [x] Every `status: done` story is cited by ID in `CHANGELOG.md`. Decide and record what counts as a
       citation — the `(`ID`)` form above is the observed convention — and make the check read that form
       rather than a bare substring, on `CF-15`'s lesson about `name in text`.
-- [ ] Every `status: done` story has at least one ticked acceptance box. Deliberately, this is the weak
+- [x] Every `status: done` story has at least one ticked acceptance box. Deliberately, this is the weak
       form: an unticked box on a closed story is legitimate and common — `CF-4` moved an item to
       `CF-3`, `PX-8` records the untaken branch, `CF-5` struck one through — so the check must not
       require *all* boxes ticked. **31 unticked boxes across 14 done stories** are almost all of that
       benign kind; a check demanding a full sweep of ticks would fire on all of them and be suppressed
       within a week.
-- [ ] The nine missing `CHANGELOG.md` entries are written and the three stories' acceptance boxes are
+- [x] The nine missing `CHANGELOG.md` entries are written and the three stories' acceptance boxes are
       reconciled, in the same change as the check. A gate that lands red is a gate that gets commented
       out — the check and the twelve corrections are one story on purpose.
-- [ ] Whether the board (`docs/stories/README.md`) is regenerated from current frontmatter is checked
+- [x] Whether the board (`docs/stories/README.md`) is regenerated from current frontmatter is checked
       too, or explicitly left out with a reason. It is the third claim in the same `AGENTS.md` bullet
       and the cheapest of the three to verify.
-- [ ] `scripts/gate.sh` green, and the check runs inside it. If it is added to a workflow instead,
+- [x] `scripts/gate.sh` green, and the check runs inside it. If it is added to a workflow instead,
       `scripts/check-site.py` reads invocations rather than mentions — a commented-out or merely
       *named* invocation will not satisfy it.
 
 ## Progress
 
-- (running log)
+- **Failing-first is captured at the check boundary.** The self-test constructs the ten historical
+  story records named above and requires exactly twelve property failures: all nine missing citations
+  and the three unchecked Acceptance sections, including both failures for `RG-13` and `RG-14`.
+  Every message must name the story file, exact ID and failed property. A near-match fixture proves a
+  bare `DX-2` mention and a citation for `DX-20` do not satisfy `DX-2`; a clean fixture proves that a
+  grouped parenthetical citation, a qualifier and one checked box among unticked alternatives pass.
+- **The live-tree failing run found fifteen defects before repair.** Eleven done stories lacked a
+  parenthetical exact-ID citation: the original nine plus `CF-8` and the subsequently closed `FC-3`.
+  Four lacked any checked Acceptance item: the original `FC-3`, `RG-13`, `RG-14` set plus subsequently
+  closed `KO-18`. `scripts/check-docs.sh` printed all fifteen records and exited 1; after the ledger
+  and story reconciliation it reports all 263 tracked Markdown files clean.
+- **Citation grammar is narrow and recorded in code.** A citation is a complete `AA-123` token inside
+  an outer parenthetical group; code ticks are canonical but optional for early grouped release
+  entries. Parentheses are scanned with nesting so a Markdown link inside the same citation does not
+  hide the story ID. Bare prose and longer IDs cannot satisfy the record.
+- **Historical records are reconciled without pretending every box must be checked.** The changelog's
+  `CF-18` entry restores the eleven missing exact-ID records. `FC-3`, `RG-13`, `RG-14` and `KO-18`
+  now check the criteria their own Progress and later proofs establish; deliberately unlanded or
+  handed-off criteria remain unticked and are explained beside them.
+- **Board currency is explicitly left out, with the reason required by Acceptance.** The board's
+  static preamble, this story, the accepted design and the check's module contract all say the same
+  thing: frontmatter is authoritative; track 0.5.0 regenerates the board after board-visible changes;
+  the gate does not fork the external generator into a second implementation that could drift.
+- Considered for upstream: **no — repository-local tracking policy.** This checks sipx-clstr story
+  frontmatter and its changelog; it adds no protocol-generic parser, transaction behavior or testkit
+  capability to the sipx kernel.
+- **Full gate green.** Formatting, clippy, transaction drain, the complete workspace suite, optional
+  feature combinations, Rust 1.91, provenance, vectors, CRD drift, docs, proof domains and the public
+  site all passed. The docs step ran this closure checker on the repaired live tree.
 
 ## Notes
 

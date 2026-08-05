@@ -64,8 +64,9 @@ alongside it; these are the ones whose *value* is an assertion.
 ### Logs
 
 Structured SIP event logs, with a `logFormat` that selects human or JSON output, and traces that
-correlate a call across nodes. Today's stderr stream is the degenerate case of this: one node, one
-format, no correlation identifier that means anything because there is nowhere for a call to go.
+correlate a call across nodes. Today's stderr stream is the degenerate case of this: one
+process-local stream, one format, and no cross-node correlation identifier even when two nodes
+share a registrar.
 
 ### Call detail records
 

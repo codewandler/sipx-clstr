@@ -1,7 +1,7 @@
 # Design: Conformance & deterministic harness
 
 **Status:** accepted — CF-1 decided the harness; CF-5 realizes it · **Pillar:** Platform ·
-**Epic:** `conformance-harness` · **Stories:** CF-1 … CF-6 · CF-28
+**Epic:** `conformance-harness` · **Stories:** CF-1 … CF-6 · CF-18 · CF-20 · CF-28
 
 ## Why
 
@@ -259,11 +259,21 @@ green in CI against the reference deployment.
 
 `CF-3` labels same-kernel process tests as integration and reserves interoperability claims for an
 independently implemented peer. `CF-20` makes proof discovery fail closed: a vector counts only when
-an enabled test is listed and executed, while the e2e assertion requires exactly one observable UDP
-socket owned by the node and treats unavailable or ambiguous inspection as failure.
+Cargo lists an executable, non-ignored test in the workspace's all-feature configuration, while the
+e2e assertion requires exactly one observable UDP socket owned by the node and treats unavailable or
+ambiguous inspection as failure. Considered for upstream: **no** — this joins the local vector-name
+convention and generated report to this repository's Cargo workspace, and observes the local node
+process; it changes no protocol-generic kernel or testkit primitive.
 
 `CF-28` makes connection-fault composition explicit: a kill is stopped-node state whose incident
 links produce their ordinary cut result without losing their independently scheduled policy, and a
 dead process cannot later acquire backpressure state. Considered for upstream: **no** — this is the
 local multi-node simulator and fault-schedule interpreter identified as local in the component split
 above; it changes no protocol-generic kernel or testkit primitive.
+
+`CF-18` makes story closure a checked cross-file claim: every `done` story has an exact-ID
+parenthetical changelog citation and at least one checked Acceptance item. It deliberately does not
+reimplement track's board generator inside the gate; story frontmatter remains the source, and the
+current policy is to run `/track:board` after every board-visible change and review its generated
+diff. Considered for upstream: **no** — story lifecycle and this repository's changelog are local
+project-tracking policy, not protocol or testkit machinery in the sipx kernel.

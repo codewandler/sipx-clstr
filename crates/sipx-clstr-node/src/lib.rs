@@ -42,7 +42,7 @@ pub mod postgres_store;
 /// Reported by `sipx-clstr --version` because "which kernel version is this behaviour true of?"
 /// is a question an operator asks during an incident, and reading it off a running process beats
 /// inferring it from a lockfile they do not have.
-pub const KERNEL_VERSION: &str = "1.0.0-beta.4";
+pub const KERNEL_VERSION: &str = "1.0.0-beta.5";
 
 /// This node's own version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

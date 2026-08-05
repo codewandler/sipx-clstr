@@ -6,9 +6,10 @@ description: "Exactly what survives losing a node — and the guarantee this pla
 # High availability
 
 :::caution Preview
-This page describes the guarantee the cluster is designed to make. **The cluster does not exist
-yet.** One node runs today, so today there is no high availability of any kind — read
-"Today there is none" below before you read the rest as a promise.
+This page describes the guarantee the cluster is designed to make. Two nodes can share one
+PostgreSQL registrar today, but **service high availability does not exist yet**: there is no
+one-address path or node-loss proof. Read "Today there is none" below before you read the rest as a
+promise.
 :::
 
 ## The guarantee, in one sentence
@@ -64,7 +65,9 @@ That is the whole asymmetry:
 
 ## What recovery looks like
 
-The pieces of the designed answer, none of which are shipped:
+The pieces required for the complete answer are not assembled into a running HA path. Some
+primitives ship below that seam — notably token mint/verify and the deterministic two-edge route
+proof — while the recovery mechanisms in this table do not:
 
 | Failure | What the endpoint observes | What recovers it |
 |---|---|---|
@@ -90,11 +93,13 @@ comes back to the same set. With `backend: memory` none of that holds — a rest
 indistinguishable from a node loss and every phone is unreachable until it re-registers.
 
 What it does not buy is anything else on the table above. Calls in progress on the lost node are
-gone, its connections are gone, and — because nothing mints an affinity token — **callers have to be
-pointed at a specific node**, so losing one is visible to whoever was addressing it. You cannot put
-one address in front of the two and let it fail over: in-dialog requests must return to the node that
+gone, its connections are gone, and **callers have to be pointed at a specific node**, so losing one
+is visible to whoever was addressing it. The token library and a two-edge route round trip are
+proved in deterministic simulation, and configuration validates the key set, but the running node
+does not apply those keys and has no connection-owner delivery hop. You therefore cannot put one
+address in front of the two and let it fail over: in-dialog requests must return to the node that
 forwarded them, and a balancer will send them elsewhere. That is the gap between "two nodes share a
-registrar" and "node loss is survivable", and it is affinity tokens, flow ownership and drain.
+registrar" and "node loss is survivable", and it is runtime token use, flow ownership and drain.
 
 If you need availability today, you need it from something in front of this, and that something
 cannot route mid-dialog requests correctly yet.

@@ -21,16 +21,16 @@ rather than of live registrations.
 
 ## Acceptance
 
-- [ ] The change log is bounded, drained, or gated out of the shipped build. `InMemoryStore` pushes a
+- [x] The change log is bounded, drained, or gated out of the shipped build. `InMemoryStore` pushes a
       `Change` on every commit and `changes()` is called only from `conformance.rs`, a vector test and
       a sim test — plus a pass-through in `blocking_store.rs`. `PostgresStore` has the identical
       structure. Decide whether it is a test facility (then it should not be compiled into the
       production store), a hook feed (then it needs a consumer and a bound), or a replication log
       (then it needs a design, and `AF-*` probably owns it).
-- [ ] **Failing-first**: a test drives N registration refreshes for one address-of-record and asserts
+- [x] **Failing-first**: a test drives N registration refreshes for one address-of-record and asserts
       the store's retained-change count does not grow with N. It fails today — it grows linearly and
       forever.
-- [ ] The row set has a bound or a documented reason it does not need one. `store.rs` keeps empty rows
+- [x] The row set has a bound or a documented reason it does not need one. `store.rs` keeps empty rows
       deliberately — revisions must stay monotonic per [location-service](../specs/location-service.md)
       §6 K3 — so `rows` grows with the number of distinct addresses-of-record *ever seen*, not the
       number currently registered. That is correct for the compare-and-swap contract and unbounded for
@@ -41,7 +41,7 @@ rather than of live registrations.
       forever.
 - [ ] Whatever bound is chosen is expressed in the spec, not only in code — a cap that exists only as
       a constant is a policy nobody can find.
-- [ ] `cargo test -p sipx-clstr-registrar` green, and the Postgres suite green when
+- [x] `cargo test -p sipx-clstr-registrar` green, and the Postgres suite green when
       `SIPX_CLSTR_TEST_DATABASE_URL` is set.
 
 ## Progress
@@ -72,6 +72,10 @@ rather than of live registrations.
   feature), so the out-of-box node never grew here at all.
 - Considered for upstream: no. This is the platform's own store contract.
 - Gate green.
+- **Closure record reconciled by `CF-18`.** The checked items are evidenced by the bounded newest-first
+  feed tests, the K3 explanation for retained empty rows, and the recorded registrar/PostgreSQL run.
+  Cross-AoR expiry and a normative specification of the feed bound remain unticked: Progress already
+  records that the sans-IO store cannot own the reaper, and the `1024` cap still lives only in code.
 
 ## Notes
 

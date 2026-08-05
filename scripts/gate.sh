@@ -58,6 +58,11 @@ scripts/check-provenance.sh
 step "vectors"
 scripts/check-vectors.py --check
 
+# `CF-20`. The real e2e job exercises this against the node, but the gate must prove all failure
+# directions without depending on the runner's current sockets or privilege level.
+step "e2e socket assertion"
+scripts/tests/e2e-socket-count.sh
+
 # `KO-1`. The SipxCluster resource and cluster-config §7 are one definition; this is the half of that
 # claim a contributor can run. Reads names only — the rendered document's *contents* are
 # `deploy/helm/check-values.sh`'s, which needs helm and a built binary and so is not in the gate.

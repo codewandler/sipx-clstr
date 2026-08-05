@@ -21,7 +21,7 @@ authentication gets an open registrar and nothing says so.
 
 ## Acceptance
 
-- [ ] `tenant[].auth` is projected and consumed, or the document is refused when it is present.
+- [x] `tenant[].auth` is projected and consumed, or the document is refused when it is present.
       `TenantSpec` carries `name`, `id`, `domains` and nothing else; `startup.rs` copies only
       `tenant.name`, so `NodeConfig.auth` is always `None`. Either end that, or refuse — the epic's
       rule 1 forbids the current middle.
@@ -32,21 +32,21 @@ authentication gets an open registrar and nothing says so.
 - [ ] The realm, the algorithm and whether authentication is required at all come from the document,
       per [cluster-config](../specs/cluster-config.md) §5 S2, which puts all three under `tenant[]`
       and says why a node-wide spelling would be a second, coarser policy.
-- [ ] The nonce secret arrives **by reference** (§5 S6, §8 V9), not as a literal. S6 is explicit that
+- [x] The nonce secret arrives **by reference** (§5 S6, §8 V9), not as a literal. S6 is explicit that
       it is cluster configuration rather than a per-node accident, because edges sharing a secret can
       answer each other's challenges and a self-generated one invalidates every outstanding nonce on
       restart. `AuthConfig`'s per-node literal is the shape this replaces.
-- [ ] How a document names credentials without inlining them is decided and written down. §8 V9
+- [x] How a document names credentials without inlining them is decided and written down. §8 V9
       forbids inline secrets and there is no `credentialSource` resolution at all today, so this
       story either adds the field or records the decision to defer it — and if it defers, a document
       naming credentials inline is refused rather than accepted.
-- [ ] A tenant with no `auth` block still runs open, exactly as today, and says so on the startup
+- [x] A tenant with no `auth` block still runs open, exactly as today, and says so on the startup
       line (`FC-2`). This story makes authentication *reachable*; it does not change the default.
 - [ ] Nonce lifetime and algorithm get schema fields, or the story records why not.
       `with_lifetime`/`with_algorithm` exist and are exercised only by tests, so the effective values
       are always the kernel defaults — correct values, reached by accident. §7.3 names a short nonce
       lifetime as one of its two operator mitigations and cluster-config has no field for it.
-- [ ] `cargo test -p sipx-clstr-node -p sipx-clstr-registrar` green; the `RA` vector rows still pass.
+- [x] `cargo test -p sipx-clstr-node -p sipx-clstr-registrar` green; the `RA` vector rows still pass.
 
 ## Progress
 
@@ -76,6 +76,12 @@ authentication gets an open registrar and nothing says so.
   (3) the placeholder-key path is behaviourally indistinguishable from open today (nobody can
   register), so the practical protection only exists once credentials exist.
 - Gate green.
+- **Closure record reconciled by `CF-18`.** The five checked items above are the ones the implementation
+  and its recorded gate run actually establish. The original failing-first item remains unticked
+  because the story records a hand-run `401`, not the automated real-UDP test that criterion asks
+  for. The realm/algorithm criterion and the nonce-lifetime criterion remain unticked because the
+  document's `algorithm` is allow-listed but never applied, and no schema/application decision for
+  either algorithm or lifetime landed.
 
 ## Notes
 

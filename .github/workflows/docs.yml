@@ -22,6 +22,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      # `CF-20`: vector coverage now means Cargo-discoverable execution evidence. The report check
+      # compiles and lists the all-feature test harnesses rather than trusting Rust source shape.
+      # `CX-15` removed the temporary sibling patch, so the checked job resolves only the immutable
+      # kernel tag; the first observed GitHub run is still evidence `CF-20` records separately.
+      - name: Install the Rust toolchain used for proof discovery
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
       - name: Links resolve, epics have designs, design paths exist
         run: scripts/check-docs.sh
 
@@ -50,10 +59,9 @@ jobs:
       # Docusaurus happily publishes a page nothing links to, and no gate had ever read a documented
       # command, so ~30 of them invoked flags `DP-8` had deleted — through a release.
       #
-      # There is no Rust toolchain in this job, so the CLI surface here is read statically from
-      # `main.rs` rather than from the binary; the gate runs the same script after `cargo build` and
-      # checks the real `--help`. The script prints which source it used, so a run that verified less
-      # says so in its own output instead of just exiting 0.
+      # This job installs Rust for Cargo's proof inventory but does not build the application binary,
+      # so the CLI surface here is read statically from `main.rs`; the gate checks the real `--help`.
+      # The script prints which source it used, so a run that verified less says so in its own output.
       - name: Every page is reachable and every documented command is real
         run: scripts/check-site.py
 
