@@ -51,3 +51,15 @@ that is both a valid `domains` entry and something `sipx dial` can send to.
   and belongs to the kernel if that is the route chosen.
 - Related: `guides/docker-and-k3d.md`'s `devspace deploy` path has the same gap, and
   `scripts/k8s-two-node-call.sh` needs the same one-line change.
+
+- **Landed with a formatting/lint defect that reached `main`, recorded here because the cause is
+  worth more than the fix.** This story's implementor died on infrastructure before it ever ran
+  `fmt` or `clippy`; the coordinator rescue-committed the diff, and the three integration gates
+  after the merge were **red on `crates/sipx-clstr-node/tests/devspace_dialable.rs`** and were
+  read as green — the gate had been invoked with a command chained after it, so the exit code that
+  came back belonged to the last command in the chain rather than to `gate.sh`. The tree was
+  pushed red; CI went red on `main`, and the `DX-14` implementor independently proved the failure
+  predated its own diff and correctly refused to tick its gate box. Fixed in the follow-up commit
+  (two missing-backtick doc lints, one `manual_pattern_char_comparison`); the test's assertions
+  were never at issue and are unchanged.
+
