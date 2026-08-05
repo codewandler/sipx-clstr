@@ -9,6 +9,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A multi-contact REGISTER now reconciles every operation against the indices as they are, not
+  against a snapshot taken once** (`RG-16`, validated synthesis **V-05**, four rounds). A removal
+  used to leave later operations in the same request matching against positions that no longer
+  existed — the failing-first vector shows a binding surviving the very request that removed it.
+  Reconciliation now rides a `Reconciling` view whose slot identities are stable across
+  mutations, the B8 net-effect question is settled by deferral on a reorder-proof slot id rather
+  than by predicting the final view, and `RG-14`'s pre-reconcile quota check is deleted per
+  location-service §5.5.1 with `RG-25`'s `max_contact_ops` bound doing the cost-limiting before
+  any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
+  added for the deferral, all proved on both store backends — the vector count moves to 167/596.
+
 - **A deferred conformance row is now judged by its named story's status, not by the name's
   existence** (`CF-24`). 239 of 428 deferred rows — 56% — named a story that had already closed,
   so the report's "deferred with a reason" was a dead letter for more than half its rows.

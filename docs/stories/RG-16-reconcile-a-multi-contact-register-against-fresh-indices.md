@@ -2,7 +2,7 @@
 id: RG-16
 title: Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
 pillar: Registrar
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
