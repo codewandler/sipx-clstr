@@ -20,6 +20,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+- **A normative table that has stopped being a table is now a red gate** (`CF-23`). A Markdown
+  table cannot survive a blank line, and in a repository whose rules are cited by ID out of table
+  rows, a row that silently stopped being a row is a normative rule that silently stopped being
+  readable — `RG-25` produced exactly that in location-service §5.7 while the sentence above it
+  still claimed both rows and the gate reported the tree clean. `check-docs.py` now refuses three
+  shapes of the same defect: an **orphaned row** (a `|` line no separator follows), a **split
+  table** (a blank line between header and separator), and a **ragged row** (a cell count that
+  disagrees with its header — GFM pads a short row and *silently drops* a long row's extras). The
+  check immediately found a live second instance the motivating one had hidden: `e2e-probe.md`'s
+  `A7` row grew a third cell from an unescaped `|` inside a code span and lost half its sentence
+  on the rendered site. Every failure names the file, the line and the row.
+
 - **An out-of-dialog request carrying a pre-existing route set keeps the callee's URI**
   (`PX-16`, found by `PX-13`). The proxy asked the location service about a request whose route
   set already determined where it goes, then overwrote the Request-URI with the answer — so the

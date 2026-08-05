@@ -2,7 +2,7 @@
 id: CF-23
 title: A blank line silently truncates a normative table, and the gate reads it as clean
 pillar: Foundation
-status: in-progress
+status: done
 priority: 2
 epic: conformance-harness
 areas: [gate, docs]
@@ -69,3 +69,16 @@ whose rules are cited by ID out of table rows.
   Whoever lands the last of them should consider whether `AGENTS.md` wants the general rule stated
   once instead of three times.
 - Considered for upstream: **no.** This checks this repository's own documents.
+
+- **Closed at integration 2026-08-05.** The implementor stopped mid-gate and a spend limit made
+  resuming it impossible; the coordinator rescue-committed its diff, re-ran the gate (green) and
+  produced the failing-first proof it never reported: with the base `check-docs.py` the tree reads
+  `docs: clean (261 markdown files checked)`, and with the new one against the unrepaired spec it
+  is `docs: FAIL` naming `docs/specs/e2e-probe.md:172` — a row with three cells against a
+  two-column header, because a `|` inside a code span split it and GFM dropped the remainder.
+- **The story's own premise was already resolved by the time this landed.** `RG-25` had orphaned
+  location-service §5.7's `AfterRegistrarUpdate` row into literal pipe text; on the integrated
+  tree both hook-phase rows are adjacent table rows with the explanatory paragraph moved below
+  the table. What the new check then found was a *second, live* instance of the same class in
+  `e2e-probe.md` — which is the better argument for the check than the row that motivated it.
+
