@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar]
-note: round 4 in flight — RG-25 landed and lifted the block; a half-resolved catch-up merge waits in the resume worktree
+note: round 4 — RG-25 landed, resuming on impl/RG-16-r3
 ---
 
 # Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
@@ -19,40 +19,46 @@ carries more than one contact.
 
 ## Acceptance
 
-- [ ] Binding operations use a stable identity or a parsed view updated with every mutation; no
+- [x] Binding operations use a stable identity or a parsed view updated with every mutation; no
       operation applies an index computed against a different vector state.
-- [ ] An insertion becomes visible to later operations in the same REGISTER, and a removal cannot
+- [x] An insertion becomes visible to later operations in the same REGISTER, and a removal cannot
       shift a later match onto another binding or off the end of the vector.
-- [ ] The compare-and-swap contract in [location-service](../specs/location-service.md) §6 still holds:
+- [x] The compare-and-swap contract in [location-service](../specs/location-service.md) §6 still holds:
       a losing writer retries against fresh state rather than committing a stale set.
-- [ ] **Failing-first vector:** from `{A, B}`, one REGISTER with `A;expires=0, B;expires=0` commits the
+- [x] **Failing-first vector:** from `{A, B}`, one REGISTER with `A;expires=0, B;expires=0` commits the
       empty set. On `86e6b10` it returns `Commit` with B still present because `get(1)` follows A's
       removal.
-- [ ] Order-sensitive vectors also cover remove/refresh, refresh/remove, and two operations naming a
+- [x] Order-sensitive vectors also cover remove/refresh, refresh/remove, and two operations naming a
       contact first inserted by the same request; every response enumerates the actual final set.
-- [ ] The new normative `LS-R-*` rows and their test names are registered together.
-- [ ] Both the in-memory and PostgreSQL conformance suites pass unchanged, and `scripts/gate.sh` is
+- [x] The new normative `LS-R-*` rows and their test names are registered together.
+- [x] Both the in-memory and PostgreSQL conformance suites pass unchanged, and `scripts/gate.sh` is
       green.
 
 ## Progress
-- **2026-07-31 — round 4 was dispatched, unblocked, and died on infrastructure in the middle of the
-  catch-up merge.** `RG-25` has landed, so the block recorded below is **lifted**; status moved from
-  `blocked` to `in-progress`. The resume worktree is
-  **`/home/timo/projects/sipx-clstr-RG-16`** on `impl/RG-16-r3` (`7b68929`) — created outside
-  `.claude/worktrees/` deliberately, because that namespace is harness-owned and auto-cleaned.
-  **A merge is in progress in that worktree and it is half resolved:** `MERGE_HEAD` is `a2456b0`
-  (`main`), `crates/sipx-clstr-registrar/src/process.rs` has been resolved (0 conflict markers) but not
-  staged, and `crates/sipx-clstr-registrar/tests/vectors_register.rs` still carries **12 conflict
-  markers**; `docs/reference/conformance.md` and `docs/specs/location-service.md` are also unmerged.
-  The agent's last words were "resolve the second `process.rs` conflict — drop `net_grant`, keep
-  `op_meter`", which is a statement of intent for one hunk, not a completed resolution. A snapshot of
-  the whole state (resolved `process.rs`, conflicted `vectors_register.rs`, staged and unstaged
-  patches) is in the coordinator's scratchpad under `RG-16-merge-state/`, but the worktree itself is
-  the live copy. **Round 4's code was never written** — no implementation work is lost, only merge
-  resolution.
-- **Nothing about the round-4 instruction below has changed.** Delete `RG-14`'s quota pre-check without
-  replacement citing §5.5.1, re-site `op_meter::record()` out of `granted_expiries`, and close the
-  still-open B8 `net_grant` finding. Resume by finishing the merge, then doing that.
+- **Round 4 (2026-08-05): complete on `impl/RG-16-r3`.** The catch-up merge of `main` (`a2456b0`,
+  `60dc93e`) resolved toward main's landed semantics: `RG-25`'s `max_contact_ops` pre-check and its
+  `granted_expiries`/`op_meter` factoring kept verbatim; `RG-14`'s quota pre-check stays deleted with
+  no replacement, §5.5.1 cited at the deletion site. `op_meter::record()` was **not** re-sited after
+  all — the merge adopted main's `granted_expiries` whole, and in the merged tree that is still the
+  first per-operation work, ahead of `Reconciling::new`, so both `LS-R-24`'s zero-count and
+  `LS-R-25`'s exact-count assertions hold where the meter already is.
+- **Row renumbering, so citations resolve:** main's §5.5.1 rows keep `LS-R-24`/`LS-R-25`; this
+  story's B6–B9 rows moved `+2` to `LS-R-26..34` (everything this file's older notes call `LS-R-24..32`
+  is now two higher). Spec prose, `conformance.rs` row ids and `vectors_register.rs` test names moved
+  together; `check-vectors.py` regenerated the report.
+- **The second finding (B8's `net_grant` resolving the future against the current view) is closed.**
+  `net_grant` is gone; the B5-or-B4 decision defers on the matched binding's reorder-proof slot id
+  (`Pending`) and is settled after the loop, when the request's actual last word on every binding is
+  known. Pinned as **`LS-R-35`**: stored `line=1` (`i1`/1) + `line=9` (`i2`/1); REGISTER `i2`/1 with
+  `line=9;expires=7200`, bare `@3600`, `line=9;expires=3600` → `500`, nothing committed. On the r3 tip
+  (`7b68929`) that request answers `200` and commits under the spent token (the bare op lands on the
+  `i1` binding by first-match, the third op lands on the slot the second replaced — B7 — so nothing
+  supersedes op1). At the merge base `LS-R-35` passes — main aborts every spent-token mismatch — so it
+  is a regression pin against r3's approach, not this story's failing-first vector; that one is
+  `LS-R-28` (`ls_r_28_two_removals_commit_the_empty_set`), which fails at `a2456b0` with B still bound.
+- Gate green in the worktree; PostgreSQL suite run against a live postgres:16 (7/7, including the
+  renumbered rows and `LS-R-35`) and the in-memory suite alongside it.
+
 - **`RG-25` landed (2026-07-30) and it changes round 4's instruction.** The triangle is broken from
   the third side, and round 3's approach turns out to have been **correct and complete** — it was the
   missing input bound, not the removed pre-check, that made it look wrong.

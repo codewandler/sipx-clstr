@@ -12,9 +12,9 @@ Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 de
 named a story that had already closed, so the deferred count below read as "waiting on
 somebody" while 56% of its reasons were addressed to nobody.
 
-**157 of 586 rows proved**; 19 covered for shape only; 410 deferred.
+**167 of 596 rows proved**; 19 covered for shape only; 410 deferred.
 
-Σ over the 61 sections below is 586, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 596, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -344,6 +344,16 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `LS-R-23` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
 | `LS-R-24` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `403` |
 | `LS-R-25` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-26` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-27` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
+| `LS-R-28` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-29` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
+| `LS-R-30` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-31` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
+| `LS-R-32` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `10`, `403`, `9` |
+| `LS-R-33` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
+| `LS-R-34` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-35` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
 
 ## Location service — the consistency contract (§6)
 

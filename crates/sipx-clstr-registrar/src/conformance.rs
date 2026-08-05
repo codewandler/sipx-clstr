@@ -95,6 +95,19 @@ pub fn run_location_store_suite(
     ls_r_atomicity(&mut suite);
     ls_r_path(&mut suite);
     ls_r_expired_binding_is_absent(&mut suite);
+    // §5.3.2 — the multi-contact rows. B6 first, then B7, which is only reachable once B6 holds.
+    ls_r_two_removals_and_an_addition(&mut suite);
+    ls_r_a_removal_ahead_of_a_refresh(&mut suite);
+    ls_r_two_removals_commit_the_empty_set(&mut suite);
+    ls_r_a_refresh_ahead_of_a_removal(&mut suite);
+    ls_r_a_removal_of_what_this_request_added(&mut suite);
+    ls_r_a_second_operation_on_what_this_request_added(&mut suite);
+    // B8/B9 and §5.5 — what B6/B7 leave to decide once several operations can reach one binding: the
+    // quota measured on the outcome, and the retransmission of such a request being a retry.
+    ls_r_quota_measures_the_committed_outcome(&mut suite);
+    ls_r_a_retransmission_of_a_contact_named_twice(&mut suite);
+    ls_r_operations_that_cancel_out_commit_nothing(&mut suite);
+    ls_r_a_deferred_decision_follows_the_binding(&mut suite);
     ls_k_cas_conflict(&mut suite);
     ls_k_revision_survives_empty(&mut suite);
     ls_k_changes(&mut suite);
@@ -669,6 +682,527 @@ fn ls_r_expired_binding_is_absent(suite: &mut Suite<'_>) {
             applied.outcome.status()
         )
     });
+}
+
+/// LS-R-26 — two removals and an addition in one REGISTER (§5.3.2 B6).
+///
+/// The multi-contact rows are here, and not only in the registrar's own vector file, because what
+/// they pin is the set that gets **committed** — and a backend is what makes a committed set
+/// durable. `RG-16` was a decision-logic defect, but a backend that dropped or reordered the rows of
+/// one commit would present the identical symptom, a set the request never described, and the
+/// in-memory suite could not tell the two apart. Reconciliation is store-independent, so each row
+/// must give the identical answer on every backend; a backend needing its own version of one has
+/// broken §6.3's "identical suite" claim rather than implemented it.
+fn ls_r_two_removals_and_an_addition(suite: &mut Suite<'_>) {
+    // The first removal shortens the set, so a registrar resolving later operations against a view
+    // captured before it leaves CB bound.
+    let who = "r24";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:a@10.0.0.1", Some(0), None),
+                contact("sip:b@10.0.0.2", Some(0), None),
+                cc(),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-26", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-26", stored == ["sip:c@10.0.0.3".to_owned()], || {
+        format!("expected exactly CC committed, got {stored:?}")
+    });
+}
+
+/// LS-R-27 — remove then refresh (B6). The refresh must land on CB, not on the binding the removal
+/// shifted into CB's former index.
+fn ls_r_a_removal_ahead_of_a_refresh(suite: &mut Suite<'_>) {
+    let who = "r25";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb(), cc()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:a@10.0.0.1", Some(0), None),
+                contact("sip:b@10.0.0.2", Some(7_200), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-27", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check(
+        "LS-R-27",
+        stored == ["sip:b@10.0.0.2".to_owned(), "sip:c@10.0.0.3".to_owned()],
+        || format!("expected CB and CC, each exactly once, got {stored:?}"),
+    );
+}
+
+/// LS-R-28 — two removals, nothing else: the committed set is empty (B6).
+///
+/// The stripped-down shape, where a stale view leaves CB's removal resolving one past the end of the
+/// set the first removal shortened, so CB survives a request that named it.
+fn ls_r_two_removals_commit_the_empty_set(suite: &mut Suite<'_>) {
+    let who = "r26";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:a@10.0.0.1", Some(0), None),
+                contact("sip:b@10.0.0.2", Some(0), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-28", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-28", stored.is_empty(), || {
+        format!("expected the empty set committed, got {stored:?}")
+    });
+}
+
+/// LS-R-29 — LS-R-27's operations in the opposite order (B6). The refresh does not move CA, so the
+/// removal that follows still resolves to CA.
+fn ls_r_a_refresh_ahead_of_a_removal(suite: &mut Suite<'_>) {
+    let who = "r27";
+    apply(
+        suite.store,
+        &command(&suite.tenant, who, "i1", 1, 0, vec![ca(), cb(), cc()]),
+        &policy(),
+        RETRIES,
+    );
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:b@10.0.0.2", Some(7_200), None),
+                contact("sip:a@10.0.0.1", Some(0), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-29", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check(
+        "LS-R-29",
+        stored == ["sip:b@10.0.0.2".to_owned(), "sip:c@10.0.0.3".to_owned()],
+        || format!("expected CB and CC, each exactly once, got {stored:?}"),
+    );
+}
+
+/// LS-R-30 — B7. Two §19.1.4-equivalent spellings in one request: the removal applies to the binding
+/// the addition just made, rather than aborting under this request's own ordering token.
+fn ls_r_a_removal_of_what_this_request_added(suite: &mut Suite<'_>) {
+    let who = "r28";
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![cc(), contact("sip:c@10.0.0.3;line=7", Some(0), None)],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-30", applied.outcome.status() == 200, || {
+        format!(
+            "a contact named twice in one request is not a second write under a spent token: got {}",
+            applied.outcome.status()
+        )
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-30", stored.is_empty(), || {
+        format!("the later operation was the removal, so nothing is bound; got {stored:?}")
+    });
+}
+
+/// LS-R-31 — B7 the other way: the later operation replaces the binding the earlier one added, so the
+/// set holds one binding at the later grant, not two bindings and not an abort.
+fn ls_r_a_second_operation_on_what_this_request_added(suite: &mut Suite<'_>) {
+    let who = "r29";
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![cc(), contact("sip:c@10.0.0.3", Some(7_200), None)],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-31", applied.outcome.status() == 200, || {
+        format!("expected 200, got {}", applied.outcome.status())
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-31", stored == ["sip:c@10.0.0.3".to_owned()], || {
+        format!("expected one binding, not two: got {stored:?}")
+    });
+    let granted = suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .first()
+        .map(|binding| binding.refreshed_at.until(binding.expires_at).as_secs());
+    suite.check("LS-R-31", granted == Some(7_200), || {
+        format!("the later operation's grant is the one that holds: got {granted:?}s")
+    });
+}
+
+/// The nine contacts that fill the default quota to one short of its limit.
+const NINE: [&str; 9] = [
+    "sip:n1@10.0.0.11",
+    "sip:n2@10.0.0.12",
+    "sip:n3@10.0.0.13",
+    "sip:n4@10.0.0.14",
+    "sip:n5@10.0.0.15",
+    "sip:n6@10.0.0.16",
+    "sip:n7@10.0.0.17",
+    "sip:n8@10.0.0.18",
+    "sip:n9@10.0.0.19",
+];
+
+/// LS-R-32 — §5.5. The quota is a test on the committed outcome, so a chain B6/B7 collapses onto one
+/// binding is measured by what it commits and not by the candidates it carries.
+fn ls_r_quota_measures_the_committed_outcome(suite: &mut Suite<'_>) {
+    let fill = |suite: &mut Suite<'_>, who: &str| {
+        let applied = apply(
+            suite.store,
+            &command(
+                &suite.tenant,
+                who,
+                "i1",
+                1,
+                0,
+                NINE.iter()
+                    .map(|text| contact(text, Some(3_600), None))
+                    .collect(),
+            ),
+            &policy(),
+            RETRIES,
+        );
+        suite.check("LS-R-32", applied.outcome.status() == 200, || {
+            format!(
+                "nine bindings fit a quota of ten, got {}",
+                applied.outcome.status()
+            )
+        });
+    };
+
+    // `a, b, c` — `a ≡ b` and `b ≡ c`, but `a ≢ c`. B6 resolves each operation against the set the
+    // preceding ones left, so `b` replaces what `a` added and `c` replaces it again: one binding.
+    let who = "r30";
+    fill(suite, who);
+    let applied = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:c@10.0.0.3;line=1", Some(3_600), None),
+                contact("sip:c@10.0.0.3", Some(3_600), None),
+                contact("sip:c@10.0.0.3;line=2", Some(3_600), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-32", applied.outcome.status() == 200, || {
+        format!(
+            "the committed outcome is ten bindings, which the quota permits; got {}",
+            applied.outcome.status()
+        )
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-32", stored.len() == 10, || {
+        format!(
+            "three operations collapse onto one binding, got {}",
+            stored.len()
+        )
+    });
+
+    // And the other direction: a chain that genuinely commits two bindings is still refused, so the
+    // fix is not "stop asking". `line=1` and `line=2` both carry `line`, so they must agree on it and
+    // do not — neither replaces the other.
+    let other = "r30b";
+    fill(suite, other);
+    let refused = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            other,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:c@10.0.0.3;line=1", Some(3_600), None),
+                contact("sip:c@10.0.0.3;line=2", Some(3_600), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-32", refused.outcome.status() == 403, || {
+        format!(
+            "two operations committing two bindings do exceed the quota, got {}",
+            refused.outcome.status()
+        )
+    });
+    let untouched = stored_contacts(suite, other);
+    suite.check("LS-R-32", untouched.len() == 9, || {
+        format!("a refusal commits nothing, got {}", untouched.len())
+    });
+}
+
+/// LS-R-33 — B8. A verbatim retransmission of LS-R-31's request is B4's retry, because the outcome
+/// the command asks of that binding is the *later* operation's grant, which is what the store holds.
+fn ls_r_a_retransmission_of_a_contact_named_twice(suite: &mut Suite<'_>) {
+    let who = "r31";
+    let first = command(
+        &suite.tenant,
+        who,
+        "i2",
+        1,
+        10,
+        vec![cc(), contact("sip:c@10.0.0.3", Some(7_200), None)],
+    );
+    let applied = apply(suite.store, &first, &policy(), RETRIES);
+    suite.check("LS-R-33", applied.outcome.status() == 200, || {
+        format!(
+            "the first delivery is a 200, got {}",
+            applied.outcome.status()
+        )
+    });
+
+    let mut again = first.clone();
+    again.now = Timestamp::from_nanos(first.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
+    let again = apply(suite.store, &again, &policy(), RETRIES);
+    suite.check("LS-R-33", again.outcome.status() == 200, || {
+        format!(
+            "a retransmission of this request is a retry, not a stale sequence; got {}",
+            again.outcome.status()
+        )
+    });
+    suite.check(
+        "LS-R-33",
+        !again.outcome.commits() && again.revision == applied.revision,
+        || {
+            format!(
+                "B4.2 — a retry commits nothing and leaves the revision: commits={} {:?} → {:?}",
+                again.outcome.commits(),
+                applied.revision,
+                again.revision
+            )
+        },
+    );
+    let granted = suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .first()
+        .map(|binding| binding.refreshed_at.until(binding.expires_at).as_secs());
+    suite.check("LS-R-33", granted == Some(7_200), || {
+        format!("the retry must not rewrite the binding: got {granted:?}s")
+    });
+}
+
+/// LS-R-34 — B9. LS-R-30's request cancels itself out, so neither delivery writes and the revision
+/// stays put; the two deliveries are indistinguishable from the durable state.
+fn ls_r_operations_that_cancel_out_commit_nothing(suite: &mut Suite<'_>) {
+    let who = "r32";
+    // Both deliveries built up front: the second is the first with a later `now`, which is what a
+    // retransmission is, and building them here keeps `suite` free to be checked against.
+    let delivery = command(
+        &suite.tenant,
+        who,
+        "i2",
+        1,
+        10,
+        vec![cc(), contact("sip:c@10.0.0.3;line=7", Some(0), None)],
+    );
+    let mut retransmission = delivery.clone();
+    retransmission.now = Timestamp::from_nanos(delivery.now.as_nanos() + RETRANSMIT_DELAY_NANOS);
+    let before = suite.store.read(&suite.tenant, &aor(who)).1;
+
+    let first = apply(suite.store, &delivery, &policy(), RETRIES);
+    suite.check(
+        "LS-R-34",
+        first.outcome.status() == 200 && first.revision == before,
+        || {
+            format!(
+                "the reconciled set is the set that was read, so nothing commits: status {} revision {:?} → {:?}",
+                first.outcome.status(),
+                before,
+                first.revision
+            )
+        },
+    );
+
+    let retry = apply(suite.store, &retransmission, &policy(), RETRIES);
+    suite.check(
+        "LS-R-34",
+        retry.outcome.status() == 200 && retry.revision == before,
+        || {
+            format!(
+                "and the retransmission is answered identically: status {} revision {:?}",
+                retry.outcome.status(),
+                retry.revision
+            )
+        },
+    );
+    let stored = stored_contacts(suite, who);
+    suite.check("LS-R-34", stored.is_empty(), || {
+        format!("nothing is bound either way, got {stored:?}")
+    });
+}
+
+/// LS-R-35 — B8's deferral. The first operation re-presents a spent token asking a lifetime the
+/// store does not hold, and no later operation of the request resolves to the binding it matched:
+/// the bare spelling lands on the `i1`-written binding first (§5.3), and the third operation lands
+/// on the binding the second one just replaced (B7). The net outcome for the matched binding is
+/// therefore the first operation's own grant — B5's abort — and a registrar that predicted the net
+/// from the current view instead commits the same contact twice under the spent token.
+fn ls_r_a_deferred_decision_follows_the_binding(suite: &mut Suite<'_>) {
+    let who = "r35";
+    apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i1",
+            1,
+            0,
+            vec![contact("sip:c@10.0.0.3;line=1", Some(3_600), None)],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            0,
+            vec![contact("sip:c@10.0.0.3;line=9", Some(3_600), None)],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    let before = suite.store.read(&suite.tenant, &aor(who)).1;
+
+    let aborted = apply(
+        suite.store,
+        &command(
+            &suite.tenant,
+            who,
+            "i2",
+            1,
+            10,
+            vec![
+                contact("sip:c@10.0.0.3;line=9", Some(7_200), None),
+                cc(),
+                contact("sip:c@10.0.0.3;line=9", Some(3_600), None),
+            ],
+        ),
+        &policy(),
+        RETRIES,
+    );
+    suite.check("LS-R-35", aborted.outcome.status() == 500, || {
+        format!(
+            "a spent token asking a new lifetime, superseded by nothing, is B5's abort; got {}",
+            aborted.outcome.status()
+        )
+    });
+    suite.check("LS-R-35", aborted.revision == before, || {
+        format!(
+            "an abort commits nothing: revision {:?} → {:?}",
+            before, aborted.revision
+        )
+    });
+    let stored = stored_contacts(suite, who);
+    suite.check(
+        "LS-R-35",
+        stored
+            == [
+                "sip:c@10.0.0.3;line=1".to_owned(),
+                "sip:c@10.0.0.3;line=9".to_owned(),
+            ],
+        || format!("one contact bound once, not twice, got {stored:?}"),
+    );
+}
+
+/// Every contact this address-of-record holds, in stored order.
+fn stored_contacts(suite: &Suite<'_>, who: &str) -> Vec<String> {
+    suite
+        .store
+        .read(&suite.tenant, &aor(who))
+        .0
+        .all()
+        .iter()
+        .map(|binding| String::from_utf8_lossy(&binding.contact).into_owned())
+        .collect()
 }
 
 fn ls_k_cas_conflict(suite: &mut Suite<'_>) {
