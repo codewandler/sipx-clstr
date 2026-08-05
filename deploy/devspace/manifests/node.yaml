@@ -50,13 +50,16 @@ data:
       tenant:
         - name: default
           id: 1
-          # The domain every address-of-record in this namespace lives in, and it must be one the
-          # phones can actually resolve: `FC-4` answers a REGISTER outside this list `403`, so a
-          # name that merely parses is not enough. `sipx-clstr-node-a` is the per-node ClusterIP
-          # Service defined below — stable across pod restarts, unlike the pod IP this used to be,
-          # and resolvable from any pod in the namespace. Not `[]`, which would mean "any" and
-          # reopen the hole `FC-4` closed. `scripts/check-proof-domains.py` gates the agreement.
-          domains: [sipx-clstr-node-a]
+          # The domain every address-of-record in this namespace lives in, and it must be one a
+          # phone can *dial*, not merely resolve: `sipx dial` takes a literal destination and
+          # resolves no names, so the Service name this used to be satisfied REGISTER (which has
+          # an explicit `--target`) and nothing that calls in (`KO-18`). `10.43.0.60` is node-a's
+          # Service, pinned by the static `clusterIP` below — declared in this same file, so a
+          # document written before any pod exists can hold it, which a runtime-assigned address
+          # never could (the `FC-5` rule). Not `[]`, which would mean "any" and reopen the hole
+          # `FC-4` closed — a REGISTER outside this list is still `403`.
+          # `scripts/check-proof-domains.py` gates the agreement.
+          domains: [10.43.0.60]
 ---
 # The shared location service. Ephemeral on purpose: a database that survived `devspace purge` would
 # make a stale binding look like a bug in the registrar.
@@ -209,6 +212,17 @@ metadata:
     sipx-clstr/node: node-a
 spec:
   type: ClusterIP
+  # Static, and load-bearing: this literal is the tenant's `domains` entry and the greeting's
+  # address-of-record above, because it is the one string that is both dialable — `sipx dial`
+  # takes a literal destination and resolves no names — and knowable in a document written before
+  # any pod exists (`KO-18`; the `FC-5` rule is untouched, since a declared address is not a
+  # runtime-assigned one). 10.43.0.0/16 is k3s's default Service CIDR, so the walkthrough's
+  # default `k3d cluster create` serves it; the first /24 is the band Kubernetes prefers for
+  # static assignment over dynamic allocation, with .1 and .10 already taken by the API server
+  # and cluster DNS. On a cluster with a different Service CIDR the apply fails loudly on this
+  # line — "provided IP is not in the valid range" — rather than deploying a profile whose call
+  # step cannot work.
+  clusterIP: 10.43.0.60
   selector:
     app.kubernetes.io/name: sipx-clstr
     sipx-clstr/node: node-a
@@ -370,11 +384,15 @@ spec:
               # the binding never lapses. Registered through node-b and called through node-a, which
               # is what makes hearing the tone a cross-node proof rather than a local one.
               #
-              # The AoR domain is node-a's Service name, spelled out rather than `$A`: it has to be
-              # a literal in the tenant's `domains` above or `FC-4` answers this REGISTER `403`, and
-              # a value resolved at runtime can never be in a document written before the pods exist.
+              # The AoR domain is node-a's static clusterIP, spelled out rather than `$A`: it has
+              # to be a literal in the tenant's `domains` above or `FC-4` answers this REGISTER
+              # `403`, and a value resolved at runtime can never be in a document written before
+              # the pods exist. The static IP rather than the Service *name* this used to be,
+              # because callers reach this phone with `sipx dial`, which takes a literal
+              # destination and resolves no names (`KO-18`) — a name here made the greeting
+              # registrable and undialable.
               while true; do
-                sipx register "sip:hello@sipx-clstr-node-a" --target "$B:5060" --local "$ME:5060" --json
+                sipx register "sip:hello@10.43.0.60" --target "$B:5060" --local "$ME:5060" --json
                 sipx answer --local "$ME:5060" --play /tone.wav --duration 20 --wait 1200 --json
               done
           env:
