@@ -2,7 +2,7 @@
 id: KO-18
 title: Give the devspace nodes an address a phone can dial, not only one it can register through
 pillar: Cluster
-status: ready
+status: done
 priority: 2
 design: docs/designs/deployment.md
 epic: deployment

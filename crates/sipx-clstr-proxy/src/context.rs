@@ -164,6 +164,17 @@ impl ResponseContext {
             return self.on_targets(vec![target]);
         }
 
+        // §5.1 T3 — out of dialog, but a `Route` set survived preprocessing: an upstream element
+        // already routed this request, so the target set is predetermined exactly as T1's is and
+        // the copy is forwarded to the route it names (F7). Asking the location service here was
+        // `PX-16`'s defect: the question was asked about the first `Route` — a proxy, not an
+        // address of record — and F2 wrote the answer over the callee's URI, so the real
+        // destination left the message entirely.
+        if route::route_set_survived(&request) {
+            let target = route::predetermined_target(&request);
+            return self.on_targets(vec![target]);
+        }
+
         // §5.1 T2 — the Request-URI is an address this platform is responsible for. The proxy asks;
         // the driver answers.
         vec![Effect::ResolveTargets(route::aor_query(&request))]
@@ -273,12 +284,12 @@ impl ResponseContext {
             };
             // A target we cannot build a request for is a target that failed, not a request that
             // dies: the remaining branches still deserve their chance.
-            let Ok((branch, forwarded)) = forward(&plan, &self.config) else {
+            //
+            // F7's next hop comes back with the copy: it depends on whether F6 reformatted the
+            // copy for a strict router, which only `forward` knows (`PX-16`).
+            let Ok((branch, forwarded, next_hop)) = forward(&plan, &self.config) else {
                 continue;
             };
-            // F7 — read off the copy, after F6's swap and after the target's route set went on, so
-            // it is the hop this exact message must reach rather than the URI it is addressed to.
-            let next_hop = route::next_hop_of(&forwarded);
             effects.push(Effect::Forward {
                 branch: branch.clone(),
                 request: Box::new(forwarded),

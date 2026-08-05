@@ -169,7 +169,7 @@ looking at the same measurement the schedule produces.
 | A4 | `POST /probes/{name}/runs` → triggers a run. `202` with `{ run_id }` by default; `?wait=<seconds>` blocks up to that long and returns the completed record, or `202` with the id if it is still running. Blocking is the deployment-gate shape and the bound is the caller's, not ours. |
 | A5 | `GET /probes/{name}/runs/{id}` → the run record: steps, timings, verdict. `404` when unknown, which includes "expired from the buffer" — a bounded buffer that lied about history would be worse than one that admits its horizon. |
 | A6 | A triggered run is subject to the same rate bounds as a scheduled one (§5 T6). Exceeding them is `429` with `Retry-After` — an unbounded trigger is a denial-of-service tool wearing an API. |
-| A7 | The run record's schema is identical whichever way the run started, and carries `trigger: scheduled | api` so the *provenance* is visible without the *shape* differing. |
+| A7 | The run record's schema is identical whichever way the run started, and carries `trigger: scheduled \| api` so the *provenance* is visible without the *shape* differing. |
 
 ## 8. Blast radius
 

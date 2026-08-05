@@ -2,12 +2,12 @@
 id: DX-13
 title: Retire the three-flag CLI from the published surface and from the M1 proof script
 pillar: Foundation
-status: blocked
+status: ready
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
 areas: [docs, deploy]
-note: blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
+note: unblocked — KO-18 gave the greeting a static clusterIP that is dialable, a valid domains entry and knowable before any pod exists; §4 needs re-running against a live k3d cluster
 ---
 
 # Retire the three-flag CLI from the published surface and from the M1 proof script
@@ -48,6 +48,12 @@ disclosure pages whose warnings are now aimed at a CLI that no longer exists.
       block omitted the `auth="open"` field `FC-3` added. §3 now runs end to end, all four
       Deployments `1/1`. **§4's call does not run, for a reason no edit to this page can fix** — see
       `## Progress
+- **Unblocked 2026-08-05: `KO-18` landed.** The greeting's address of record is now node-a's
+  static `clusterIP` (`10.43.0.60`), pinned in the same manifest as the document that declares it —
+  simultaneously dialable by `sipx dial` (a literal, not a name), a valid `domains` entry, and
+  knowable before any pod exists. `crates/sipx-clstr-node/tests/devspace_dialable.rs` holds all four
+  artifacts to that one string. **What remains for this story is to re-run §4 against a live k3d
+  cluster** and correct whatever the run finds; the blocker itself is gone.
 - **Parked 2026-07-30, blocked by [KO-18](KO-18-give-the-devspace-nodes-a-dialable-address.md).**
   Five of the six pages run. `getting-started.md` §3 now runs end to end — the page builds and
   imports the phone image it had only ever assumed, and all four Deployments reach `1/1`, verified
