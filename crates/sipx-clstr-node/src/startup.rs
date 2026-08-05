@@ -478,6 +478,70 @@ mod tests {
         assert!(message.contains("SIPX_CLSTR_NODE"), "{message}");
     }
 
+    /// A document on disk, so a test can go through the whole start-up seam rather than around it.
+    fn written(tag: &str, document: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("dp16-{}-{tag}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        let path = dir.join("cluster.yaml");
+        std::fs::write(&path, document).expect("the document is written");
+        path.to_string_lossy().into_owned()
+    }
+
+    /// §12 `CC-D-5` — **a substituted value is validated exactly like a written one** (§8 V4, §5 P7).
+    ///
+    /// The pair with `CC-D-4`: there the variable was undefined and the loader said so; here it
+    /// resolves, to a value that parses as an address and is not one. `0.0.0.0` is where to listen,
+    /// never where to be reached, and a node that advertised it would look healthy and answer
+    /// nothing. The refusal is `DP-5`'s rule inherited verbatim rather than a second copy of it,
+    /// which is why it surfaces here as a `ListenerError` rather than as a `ConfigError`.
+    #[test]
+    fn cc_d_5_a_substituted_unspecified_address_is_refused_like_a_written_one() {
+        let document = r"
+apiVersion: sipx.dev/v1alpha1
+version: 1
+cluster:
+  name: acme
+  environment: dev
+  zones: [a]
+  listener:
+    - roles: [edge, registrar]
+      transport: udp
+      bind: 0.0.0.0:5060
+      advertise: ${NODE_IP}:5060
+  membership:
+    - node: 1
+      name: node-a
+      zone: a
+      roles: [edge, registrar]
+      rpc: '10.0.0.1:7223'
+  locationStore:
+    backend: memory
+  tenant:
+    - name: default
+      id: 1
+      domains: [acme.example]
+";
+        let path = written("cc-d-5", document);
+        let who = NodeIdentity {
+            node: 1,
+            zone: "a".to_owned(),
+            roles: [Role::Edge, Role::Registrar].into_iter().collect(),
+        };
+
+        let error = from_document(&path, &who, &env(&[("NODE_IP", "0.0.0.0")]))
+            .expect_err("an unspecified advertised address must be refused");
+        let StartupError::Listener(crate::listen::ListenerError::UnspecifiedHost(host)) = error
+        else {
+            panic!("expected an unspecified-host refusal, got {error}");
+        };
+        assert_eq!(host, "0.0.0.0");
+
+        // The same document with a reachable address starts, so what was refused is the value and
+        // not the substitution.
+        from_document(&path, &who, &env(&[("NODE_IP", "203.0.113.10")]))
+            .expect("a routable advertised address is accepted");
+    }
+
     #[test]
     fn an_unknown_role_on_the_command_line_spells_the_closed_set() {
         let error = IdentityArgs {

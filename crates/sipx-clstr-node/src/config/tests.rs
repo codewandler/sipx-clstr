@@ -24,8 +24,12 @@ fn identity(node: u16, zone: &str, roles: &[Role]) -> NodeIdentity {
 }
 
 /// A document that loads, so each test below can break exactly one thing.
+///
+/// The member carries an `rpc` endpoint because `cluster-membership` MB5 requires one of every
+/// member on the call path, and `edge`+`registrar` is exactly that. Before `DP-16` this document
+/// could not have carried it: the closed world of a member was `{node, name, zone, roles}`.
 fn good() -> String {
-    r"
+    r#"
 apiVersion: sipx.dev/v1alpha1
 version: 42
 cluster:
@@ -42,6 +46,7 @@ cluster:
       name: node-a
       zone: a
       roles: [edge, registrar]
+      rpc: "10.0.0.1:7223"
   locationStore:
     backend: postgres
     dsnRef: location-dsn
@@ -49,8 +54,17 @@ cluster:
     - name: default
       id: 1
       domains: [acme.example]
-"
+"#
     .to_owned()
+}
+
+/// The `unapplied` paths every document in this file carries, whatever else it declares.
+///
+/// MB5 makes `rpc` mandatory for a member on the call path, and nothing in this build dials one —
+/// `AF-3`/`AF-7` own the connection-owner RPC. So the baseline is not empty any more, and saying so
+/// once here is what keeps each test below asserting about the key it is actually testing.
+fn baseline_unapplied() -> Vec<String> {
+    vec!["cluster.membership[0].rpc".to_owned()]
 }
 
 fn rules(errors: &[ConfigError]) -> Vec<String> {
@@ -70,9 +84,13 @@ fn a_well_formed_document_loads() {
     assert_eq!(config.timers.timer_c_ms, DEFAULT_TIMER_C_MS);
 }
 
-/// §2 D3 — JSON is the same data model, read by the same parser.
+/// §12 `CC-D-2` — JSON is the same data model, read by the same parser (§2 D3).
+///
+/// The assertion is equality of the whole `Config` rather than a spot check on one field, because
+/// the rule is about the typed tree and not about the spelling: a converter that dropped or retyped
+/// anything would show up here and nowhere else.
 #[test]
-fn cc_d3_json_and_yaml_produce_the_same_config() {
+fn cc_d_2_the_same_tree_in_yaml_and_json_is_one_config() {
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let from_yaml = load(good().as_bytes(), &who, &env()).expect("yaml loads");
     let json = r#"
@@ -80,7 +98,8 @@ fn cc_d3_json_and_yaml_produce_the_same_config() {
   "name":"acme","environment":"dev","zones":["a","b","c"],
   "listener":[{"roles":["edge","registrar"],"transport":"udp",
                "bind":"0.0.0.0:5060","advertise":"203.0.113.10:5060"}],
-  "membership":[{"node":1,"name":"node-a","zone":"a","roles":["edge","registrar"]}],
+  "membership":[{"node":1,"name":"node-a","zone":"a","roles":["edge","registrar"],
+                 "rpc":"10.0.0.1:7223"}],
   "locationStore":{"backend":"postgres","dsnRef":"location-dsn"},
   "tenant":[{"name":"default","id":1,"domains":["acme.example"]}]}}
 "#;
@@ -88,9 +107,13 @@ fn cc_d3_json_and_yaml_produce_the_same_config() {
     assert_eq!(from_yaml, from_json);
 }
 
-/// §8 V1 — **the failing-first test for this story.** Every error, ordered by path, not the first.
+/// §12 `CC-D-6` — a document with unrelated mistakes costs one restart, not one per mistake.
+///
+/// §8 V1: every error, ordered by path, byte-identical across two runs. This was `DP-8`'s own
+/// failing-first test and keeps its assertions; what changed in `DP-16` is its name, so the row it
+/// has always executed is the row a reader can find it by.
 #[test]
-fn cc_v1_reports_every_error_ordered_by_path() {
+fn cc_d_6_reports_every_error_ordered_by_path() {
     let document = r"
 apiVersion: sipx.dev/v1alpha1
 version: 1
@@ -198,20 +221,19 @@ fn fc2_unapplied_configuration_is_reported_by_path_not_by_section() {
     assert!(paths.iter().any(|p| p == "cluster.registrar"), "{paths:?}");
 }
 
-/// A document that asks for nothing this build ignores reports nothing.
+/// A document that asks for nothing this build ignores reports exactly the fields it must.
+///
+/// This assertion was `unapplied.is_empty()` until `DP-16`, and the change is the story in one line:
+/// MB5 makes `rpc` mandatory for every member on the call path, and nothing in this build dials one.
+/// A mandatory field with no consumer is still a field with no consumer, so it is reported — the
+/// alternative is a list that is quiet about the one key every document now carries, which is `FC-2`'s
+/// warning lying in the direction that flatters the node.
 #[test]
-fn fc2_a_fully_applied_document_reports_no_unapplied_paths() {
+fn fc2_a_fully_applied_document_reports_only_what_no_consumer_reads() {
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let config = load(good().as_bytes(), &who, &env()).expect("loads");
-    assert!(
-        config.unapplied.is_empty(),
-        "nothing in the baseline document is ignored, so nothing should be reported: {:?}",
-        config
-            .unapplied
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-    );
+    let paths: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
+    assert_eq!(paths, baseline_unapplied());
 }
 
 /// §4 R1 — the role set is closed, and the refusal spells the whole set.
@@ -259,24 +281,19 @@ fn cc_r6_e2e_tester_with_echo_is_permitted() {
     assert!(errors.is_empty(), "{errors:#?}");
 }
 
-/// §6 I2 — `0` is reserved, and a duplicate names both holders.
+/// §12 `CC-I-2` — `0` is reserved for a tenant id, and `affinity-token` §3 spells it "none/system".
 #[test]
-fn cc_i2_ids_are_unique_and_zero_is_reserved() {
-    let document = good().replace(
-        "    - node: 1\n      name: node-a\n      zone: a\n      roles: [edge, registrar]\n",
-        "    - node: 1\n      name: node-a\n      zone: a\n      roles: [edge, registrar]\n    \
-         - node: 1\n      name: node-b\n      zone: b\n      roles: [edge]\n",
-    );
+fn cc_i_2_a_tenant_id_of_zero_is_reserved() {
+    let document = good().replace("      id: 1\n", "      id: 0\n");
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
     let error = errors
         .iter()
-        .find(|e| e.rule.to_string() == "CC-I2")
-        .expect("a duplicate-id error");
-    assert!(
-        error.expected.contains("node-a"),
-        "must name the other holder: {error}"
-    );
+        .find(|e| e.path.to_string() == "cluster.tenant[0].id")
+        .expect("a reserved-id error");
+    assert_eq!(error.path.to_string(), "cluster.tenant[0].id");
+    assert_eq!(error.rule.to_string(), "CC-I2");
+    assert_eq!(error.found.as_deref(), Some("0"));
 }
 
 /// §8 V6 — where an RFC fixes a value, the schema offers no knob.
@@ -313,9 +330,14 @@ fn cc_v9_an_inline_dsn_is_refused() {
     assert!(rules(&errors).contains(&"CC-V9".to_owned()), "{errors:#?}");
 }
 
-/// §8 V4 — `${NAME}` resolves from the argument, and an undefined name is an error rather than "".
+/// §12 `CC-D-4` — an undefined `${NAME}` is an error naming the variable **and the field it was
+/// written in**, never an address error and never the empty string.
+///
+/// The empty string would turn `advertise: "${NODE_IP}:5060"` into `:5060` and report the wrong
+/// problem one layer down; the document root would report the right problem and leave an operator
+/// grepping for which of forty fields named it.
 #[test]
-fn cc_v4_substitution_comes_from_the_env_argument() {
+fn cc_d_4_an_undefined_variable_is_reported_at_the_field_that_named_it() {
     let document = good().replace("advertise: 203.0.113.10:5060", "advertise: ${NODE_IP}:5060");
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
 
@@ -343,6 +365,7 @@ fn cc_v4_substitution_comes_from_the_env_argument() {
         .find(|e| e.rule.to_string() == "CC-V4")
         .expect("a V4 error");
     assert_eq!(error.found.as_deref(), Some("${NODE_IP}"));
+    assert_eq!(error.path.to_string(), "cluster.listener[0].advertise");
 }
 
 /// §8 V4 — the substitution grammar is exactly `[A-Z_][A-Z0-9_]*`; nothing else is a variable.
@@ -355,9 +378,10 @@ fn cc_v4_only_upper_snake_names_are_variables() {
     assert!(!is_var_name(""));
 }
 
-/// §5 P3 — the document's membership entry is cross-checked against the identity, not obeyed.
+/// §12 `CC-R-7` — the document's membership entry is cross-checked against the identity, never
+/// obeyed (§5 P3, `cluster-membership` MB2), and a mismatch names both sides.
 #[test]
-fn cc_p3_a_membership_mismatch_names_both_sides() {
+fn cc_r_7_a_membership_zone_mismatch_names_both_sides() {
     let who = identity(1, "b", &[Role::Edge, Role::Registrar]); // document says zone a
     let errors = load(good().as_bytes(), &who, &env()).expect_err("must refuse");
     let error = errors
@@ -371,9 +395,41 @@ fn cc_p3_a_membership_mismatch_names_both_sides() {
     assert!(error.expected.contains('b'), "names the identity's value");
 }
 
-/// §5 P3 — a node with *no* entry still starts. The operator may not have published it yet.
+/// §12 `CC-R-11` — a member may declare the fields `cluster-membership` §3 adds.
+///
+/// **The failing-first test for `DP-16`.** `AF-6` wrote §3 and named no story to implement it, so
+/// the closed world of a membership entry stayed `{node, name, zone, roles}` and a document written
+/// to the published spec was refused at the merge base by two `CC-V2` errors naming `rpc` and
+/// `incarnationSource` — the schema and the loader one story apart, which is what the spec's own §12
+/// says and what this story closes.
 #[test]
-fn cc_p3_an_absent_membership_entry_is_not_an_error() {
+fn cc_r_11_a_member_declares_the_rpc_endpoint_and_incarnation_source_of_section_3() {
+    let document = good().replace(
+        "      rpc: \"10.0.0.1:7223\"\n",
+        "      rpc: \"10.0.0.1:7223\"\n      incarnationSource: boot-second\n",
+    );
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let config = load(document.as_bytes(), &who, &env())
+        .expect("`rpc` and `incarnationSource` are fields of a member (cluster-membership §3)");
+
+    let member = config.membership.first().expect("one member");
+    assert_eq!(member.rpc.as_deref(), Some("10.0.0.1:7223"));
+    assert_eq!(member.incarnation_source, IncarnationSource::BootSecond);
+
+    // MB8's default is a documented mechanism, not a silence: omitting the field selects
+    // `boot-second` and says so.
+    let config = load(good().as_bytes(), &who, &env()).expect("loads without the field");
+    let member = config.membership.first().expect("one member");
+    assert_eq!(member.incarnation_source, IncarnationSource::BootSecond);
+    assert_eq!(member.incarnation_ref, None);
+}
+
+/// §12 `CC-R-8` — a node with *no* entry still starts (§5 P3, MB2).
+///
+/// A node whose pod the operator has not yet published would otherwise be unable to start, and the
+/// failure would arrive as a crash loop rather than as a mismatch.
+#[test]
+fn cc_r_8_an_absent_membership_entry_is_not_an_error() {
     let who = identity(7, "a", &[Role::Edge, Role::Registrar]);
     load(good().as_bytes(), &who, &env()).expect("a node the document does not list still loads");
 }
@@ -404,6 +460,7 @@ cluster:
       name: node-a
       zone: a
       roles: [registrar]
+      rpc: '10.0.0.1:7223'
     - node: 2
       name: node-b
       zone: a
@@ -452,17 +509,51 @@ fn cc_p4_a_node_with_no_listener_of_its_own_is_refused() {
     assert!(rules(&errors).contains(&"CC-P4".to_owned()), "{errors:#?}");
 }
 
-/// §3 — the schema version is checked, because a document written for another schema is not this one.
+/// §12 `CC-D-1` — a document written against another schema is refused, and **nothing else is
+/// parsed or reported**.
+///
+/// §3 D6 is unusually explicit about the second half: "It MUST NOT parse a document it does not
+/// fully implement — not on a best-effort basis, not by ignoring what it does not recognise." So
+/// this is the one refusal in the loader that is not accumulated beside others. Reporting §8 V1's
+/// full list here would answer a question nobody asked — every closed-world complaint would be about
+/// a schema this build has no opinion on, which reads as "these keys are wrong" when the true
+/// statement is "this whole document belongs to another version".
 #[test]
-fn a_foreign_api_version_is_refused() {
-    let document = good().replace("sipx.dev/v1alpha1", "sipx.dev/v2");
+fn cc_d_1_a_foreign_api_version_is_refused_and_nothing_else_is_reported() {
+    // Three further faults, every one of which this loader reports when the schema version matches.
+    let document = good()
+        .replace("sipx.dev/v1alpha1", "sipx.dev/v2")
+        .replace("  name: acme", "  name: acme\n  maxContact: 3")
+        .replace("transport: udp", "transport: sctp");
+    let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
+    let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
+
+    assert_eq!(
+        errors.len(),
+        1,
+        "nothing else is parsed or reported: {errors:#?}"
+    );
+    let error = errors.first().expect("one error");
+    assert_eq!(error.path.to_string(), "apiVersion");
+    assert_eq!(error.rule.to_string(), "CC-D6");
+    assert_eq!(error.found.as_deref(), Some("sipx.dev/v2"));
+    assert_eq!(
+        error.expected, API_VERSION,
+        "it names the version it does implement"
+    );
+}
+
+/// §12 `CC-D-9` — there is no default configuration version.
+#[test]
+fn cc_d_9_a_document_with_no_version_is_refused() {
+    let document = good().replace("version: 42\n", "");
     let who = identity(1, "a", &[Role::Edge, Role::Registrar]);
     let errors = load(document.as_bytes(), &who, &env()).expect_err("must refuse");
     let error = errors
         .iter()
-        .find(|e| e.rule.to_string() == "CC-3")
+        .find(|e| e.path.to_string() == "version")
         .expect("a version error");
-    assert_eq!(error.expected, API_VERSION);
+    assert_eq!(error.rule.to_string(), "CC-D9");
 }
 
 /// §8 V8 — declared ceilings are checked at load. Raising one is a spec change, not a flag.
@@ -487,9 +578,9 @@ fn cc_v10_a_refusal_yields_no_config() {
     );
 }
 
-/// §6 I4 — names are matched byte-for-byte. No folding would make two tenants one.
+/// §12 `CC-I-3` — names are matched byte-for-byte (§6 I4). Folding would make two tenants one.
 #[test]
-fn cc_i4_names_are_not_folded() {
+fn cc_i_3_names_are_not_folded() {
     let document = good().replace(
         "    - name: default\n      id: 1\n      domains: [acme.example]\n",
         "    - name: default\n      id: 1\n      domains: []\n    - name: DEFAULT\n      id: 2\n      domains: []\n",
@@ -540,6 +631,7 @@ node = 1
 name = "node-a"
 zone = "a"
 roles = ["edge", "registrar"]
+rpc = "10.0.0.1:7223"
 
 [cluster.locationStore]
 backend = "postgres"
@@ -589,13 +681,7 @@ advertise = "203.0.113.10:5060"
 #[test]
 fn cc_d3_something_that_is_neither_encoding_is_refused() {
     let who = identity(1, "a", &[Role::Edge]);
-    let errors = load(
-        b"[unterminated
-  = = =",
-        &who,
-        &env(),
-    )
-    .expect_err("must refuse");
+    let errors = load(b"[unterminated\n\x00\x01 = = =", &who, &env()).expect_err("must refuse");
     assert!(
         errors.iter().any(|e| e.rule.to_string() == "CC-D3"),
         "{errors:#?}"
@@ -943,6 +1029,7 @@ cluster:
       name: node-a
       zone: a
       roles: [edge, registrar, inbound-proxy, outbound-proxy]
+      rpc: '10.0.0.1:7223'
   locationStore:
     backend: memory
   tenant:
@@ -1109,4 +1196,995 @@ fn fc6_an_empty_security_block_still_loads_with_the_fixed_max_forwards() {
     let empty = with_security("    {}\n");
     let config = load(empty.as_bytes(), &who, &env()).expect("empty security loads");
     assert_eq!(config.security.max_forwards, MAX_FORWARDS);
+}
+
+// ------------------------- DP-16: membership, keys and the shard map (cluster-membership §3–§6) ---
+
+/// The good document with a `keys` section carrying the given already-indented entries.
+fn with_keys(entries: &str) -> String {
+    good().replace(
+        "  locationStore:",
+        &format!("  keys:\n{entries}  locationStore:"),
+    )
+}
+
+/// One well-formed key entry, spelled exactly as `cluster-membership` §4's example spells it.
+fn key(id: u8, mint: bool, until: &str) -> String {
+    key_over(id, mint, "2026-07-28T12:00:00Z", until)
+}
+
+/// The same, with both ends of the verify window stated — for the rules that are about the window
+/// rather than about the key.
+fn key_over(id: u8, mint: bool, from: &str, until: &str) -> String {
+    [
+        format!("    - id: {id}"),
+        "      algorithm: chacha20-poly1305".to_owned(),
+        format!("      secretRef: affinity-key-{id}"),
+        format!("      verifyFrom: \"{from}\""),
+        format!("      verifyUntil: \"{until}\""),
+        format!("      mint: {mint}"),
+        String::new(),
+    ]
+    .join("\n")
+}
+
+/// The good document with a `shardMap` section carrying the given already-indented body.
+fn with_shard_map(body: &str) -> String {
+    good().replace(
+        "  locationStore:",
+        &format!("  shardMap:\n{body}  locationStore:"),
+    )
+}
+
+/// The good document with a second member, already indented under `membership`.
+fn with_member(entry: &str) -> String {
+    good().replace("  locationStore:", &format!("{entry}  locationStore:"))
+}
+
+fn who() -> NodeIdentity {
+    identity(1, "a", &[Role::Edge, Role::Registrar])
+}
+
+fn at_version(document: &str, version: u32) -> String {
+    document.replace("version: 42", &format!("version: {version}"))
+}
+
+fn paths(errors: &[ConfigError]) -> Vec<String> {
+    errors.iter().map(|e| e.path.to_string()).collect()
+}
+
+fn error_at<'a>(errors: &'a [ConfigError], path: &str) -> &'a ConfigError {
+    errors
+        .iter()
+        .find(|e| e.path.to_string() == path)
+        .unwrap_or_else(|| panic!("no error at {path}: {errors:#?}"))
+}
+
+/// **`CC-V-16`.** MB5 — a member on the call path owns flows, so it must say where it is dialled.
+#[test]
+fn cc_v_16_a_call_path_member_without_an_rpc_endpoint_is_refused() {
+    let document = good().replace("      rpc: \"10.0.0.1:7223\"\n", "");
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[0].rpc");
+    assert_eq!(error.rule.to_string(), "CC-MB5");
+    assert_eq!(error.found, None);
+}
+
+/// **`CC-V-17`.** MB5's other direction: an endpoint on a node that owns nothing is a target nobody
+/// should reach. `echo` and `e2e-tester` are off the call path (§4 R6).
+#[test]
+fn cc_v_17_a_member_off_the_call_path_may_not_advertise_an_rpc_endpoint() {
+    let document = with_member(
+        "    - node: 2\n      name: node-echo\n      zone: a\n      roles: [echo]\n      \
+         rpc: \"10.0.0.2:7223\"\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[1].rpc");
+    assert_eq!(error.rule.to_string(), "CC-MB5");
+    assert!(error.expected.contains("no rpc key"), "{error}");
+}
+
+/// **`CC-V-18`.** MB6 — two members advertising one endpoint, named on both sides.
+///
+/// `affinity-token` §13.1 D5 dials the owner a flow reference names and nothing re-checks that the
+/// answer came from it, so an ambiguous endpoint is a request delivered to the wrong node with
+/// nothing anywhere disagreeing.
+#[test]
+fn cc_v_18_two_members_may_not_advertise_one_rpc_endpoint() {
+    let document = with_member(
+        "    - node: 2\n      name: node-b\n      zone: a\n      roles: [edge]\n      \
+         rpc: \"10.0.0.1:7223\"\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[1].rpc");
+    assert_eq!(error.rule.to_string(), "CC-MB6");
+    assert!(
+        error.expected.contains("node-a"),
+        "names both holders: {error}"
+    );
+}
+
+/// **`CC-V-19`.** MB8 — a persisted counter with nowhere to persist is a `boot-second` with extra
+/// words, so the reference is required exactly when the mechanism needs one.
+#[test]
+fn cc_v_19_a_persisted_counter_needs_the_reference_it_is_read_from() {
+    let document = good().replace(
+        "      rpc: \"10.0.0.1:7223\"\n",
+        "      rpc: \"10.0.0.1:7223\"\n      incarnationSource: persisted-counter\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert_eq!(
+        error_at(&errors, "cluster.membership[0].incarnationRef")
+            .rule
+            .to_string(),
+        "CC-MB8"
+    );
+
+    // With the reference, the same document loads and the choice reaches the spec struct.
+    let document = document.replace(
+        "      incarnationSource: persisted-counter\n",
+        "      incarnationSource: persisted-counter\n      incarnationRef: node-a-incarnation\n",
+    );
+    let config = load(document.as_bytes(), &who(), &env()).expect("loads");
+    let member = config.membership.first().expect("one member");
+    assert_eq!(
+        member.incarnation_source,
+        IncarnationSource::PersistedCounter
+    );
+    assert_eq!(
+        member.incarnation_ref.as_deref(),
+        Some("node-a-incarnation")
+    );
+}
+
+/// MB8 — the closed set of mechanisms, spelled in the refusal.
+#[test]
+fn mb8_an_unknown_incarnation_source_names_the_two_mechanisms() {
+    let document = good().replace(
+        "      rpc: \"10.0.0.1:7223\"\n",
+        "      rpc: \"10.0.0.1:7223\"\n      incarnationSource: whatever\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[0].incarnationSource");
+    assert_eq!(error.found.as_deref(), Some("whatever"));
+    assert!(error.expected.contains("persisted-counter"), "{error}");
+}
+
+/// MB6 — the form is §5 P7's, inherited rather than restated, plus the required port.
+///
+/// The three values P7 refuses are refused here by the same code path the listener's advertised
+/// address goes through: a second spelling of those rules is exactly the defect that spec exists to
+/// prevent, so this asserts the *outcome* of sharing one, which is that all three are rejected.
+#[test]
+fn mb6_an_rpc_endpoint_is_an_advertised_address_with_a_port() {
+    for (declared, why) in [
+        ("0.0.0.0:7223", "unspecified"),
+        ("10.0.0.1", "no port"),
+        ("10.0.0.1:0", "port zero"),
+        ("", "empty"),
+    ] {
+        let document = good().replace("10.0.0.1:7223", declared);
+        let errors = load(document.as_bytes(), &who(), &env())
+            .err()
+            .unwrap_or_default();
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.path.to_string() == "cluster.membership[0].rpc"),
+            "an rpc of `{declared}` is {why} and must be refused: {errors:#?}"
+        );
+    }
+}
+
+/// MB4 — a member `name` is unique in the document, byte-compared (§6 I4).
+///
+/// `shardMap[].owner` resolves by name (SM2), so two members answering to one name would make an
+/// ownership assignment ambiguous — DS2's "a shard accepting at two nodes" through the front door.
+#[test]
+fn mb4_two_members_may_not_share_a_name() {
+    let document = with_member(
+        "    - node: 2\n      name: node-a\n      zone: a\n      roles: [edge]\n      \
+         rpc: \"10.0.0.2:7223\"\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[1].name");
+    assert_eq!(error.rule.to_string(), "CC-MB4");
+    assert!(
+        error.expected.contains("node 1"),
+        "names the other holder: {error}"
+    );
+}
+
+/// **`CC-I-1`.** Two members with one id, refused naming both holders.
+///
+/// `affinity-token` §12.2 CT1 makes this a correctness input rather than a convention: two nodes
+/// sharing an id give two different connections one flow identity, and it is the same id
+/// `media-relay` §6.2 C2 needs cluster-unique for NG cookies.
+#[test]
+fn cc_i_1_two_members_with_one_id_are_refused_naming_both() {
+    let document = with_member(
+        "    - node: 1\n      name: node-b\n      zone: a\n      roles: [edge]\n      \
+         rpc: \"10.0.0.2:7223\"\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[1].node");
+    assert_eq!(error.path.to_string(), "cluster.membership[1].node");
+    assert_eq!(error.rule.to_string(), "CC-I2");
+    assert!(
+        error.expected.contains("node-a"),
+        "names both holders: {error}"
+    );
+}
+
+// --------------------------------------------------------------- keys (cluster-membership §4) ---
+
+/// A key set the loader accepts, so each test below can break exactly one rule of §4.
+#[test]
+fn ky1_the_six_attributes_load_into_the_key_the_token_library_consumes() {
+    let document = with_keys(&key(3, true, "2026-08-04T12:00:30Z"));
+    let config = load(document.as_bytes(), &who(), &env()).expect("loads");
+    let entry = config.keys.first().expect("one key");
+    assert_eq!(entry.id, 3);
+    assert_eq!(entry.algorithm, KeyAlgorithm::ChaCha20Poly1305);
+    assert_eq!(entry.secret_ref, "affinity-key-3");
+    assert!(entry.mint);
+    // KY4's instants, resolved to the whole seconds `affinity-token` §8 S2 compares `now` against.
+    assert_eq!(entry.verify_from, 1_785_240_000);
+    assert_eq!(entry.verify_until, 1_785_844_830);
+}
+
+/// **`CC-V-10`.** KY3 — an inline `secret` is refused citing V9, and the refusal does not echo it.
+///
+/// Two different problems lead an operator to two different actions: V2's "unrecognised key" would
+/// read as "this schema has no notion of a secret", which is the opposite of true. And the message
+/// **describes** what was written rather than quoting it — this rule fires exactly when a real
+/// secret is sitting in the field, so a refusal that printed it would be the defect enforcing itself.
+#[test]
+fn cc_v_10_an_inline_key_secret_is_refused_by_reference_not_as_an_unknown_key() {
+    let secret = "1f8b0900000000000003ababababababababababababababab";
+    let document = with_keys(&key(3, true, "2026-08-04T12:00:30Z").replace(
+        "      secretRef: affinity-key-3\n",
+        &format!("      secretRef: affinity-key-3\n      secret: \"{secret}\"\n"),
+    ));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys[0].secret");
+    assert_eq!(error.path.to_string(), "cluster.keys[0].secret");
+    assert_eq!(error.rule.to_string(), "CC-V9");
+    assert_eq!(error.found.as_deref(), Some("an inline key secret"));
+
+    let rendered = format!("{errors:#?}");
+    assert!(
+        !rendered.contains(secret),
+        "a refusal must not echo the secret it refuses"
+    );
+}
+
+/// **`CC-K-5`.** Two entries sharing an id while both windows are open (`affinity-token` §6).
+///
+/// Ids may wrap over the years; two open windows on one id make key selection ambiguous for exactly
+/// the tokens rotation exists to keep verifying.
+#[test]
+fn cc_k_5_two_keys_may_not_share_an_id_with_overlapping_windows() {
+    let document = with_keys(&format!(
+        "{}{}",
+        key(3, true, "2026-08-04T12:00:30Z"),
+        key(3, false, "2026-08-11T12:00:30Z")
+    ));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys[1].id");
+    assert_eq!(error.path.to_string(), "cluster.keys[1].id");
+    assert_eq!(error.rule.to_string(), "CC-KY1");
+    assert!(error.expected.contains("affinity-token §6"), "{error}");
+}
+
+/// **`CC-K-6`.** KY5 — exactly one entry mints, at any configuration version.
+#[test]
+fn cc_k_6_two_minting_keys_are_refused() {
+    let document = with_keys(&format!(
+        "{}{}",
+        key(3, true, "2026-08-04T12:00:30Z"),
+        key(4, true, "2026-08-11T12:00:30Z")
+    ));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys");
+    assert_eq!(error.rule.to_string(), "CC-KY5");
+}
+
+/// **`CC-V-20`.** KY5's other half — a declared section in which nothing mints is refused.
+///
+/// A cluster that mints nothing Record-Routes nothing, and would fail on its first dialog-forming
+/// request rather than at load.
+#[test]
+fn cc_v_20_a_key_section_with_no_minting_key_is_refused() {
+    let document = with_keys(&key(3, false, "2026-08-04T12:00:30Z"));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys");
+    assert_eq!(error.rule.to_string(), "CC-KY5");
+    assert_eq!(error.found.as_deref(), Some("no key marked mint: true"));
+}
+
+/// KY4 — the window is absolute, non-empty, and spelled in UTC.
+#[test]
+fn ky4_a_validity_window_is_two_absolute_instants_in_order() {
+    // Backwards: an entry that can never verify anything.
+    let document = with_keys(&key(3, true, "2026-07-01T12:00:00Z"));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert_eq!(
+        error_at(&errors, "cluster.keys[0].verifyUntil")
+            .rule
+            .to_string(),
+        "CC-KY4"
+    );
+
+    // Relative is unrepresentable on purpose: the loader has no clock, so `7d` would resolve
+    // against whatever moment each node happened to reload.
+    let document = with_keys(&key(3, true, "7d"));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert_eq!(
+        error_at(&errors, "cluster.keys[0].verifyUntil")
+            .rule
+            .to_string(),
+        "CC-KY4"
+    );
+
+    // An offset spelling names the same instant and is a second way to write it.
+    let document = with_keys(&key(3, true, "2026-08-04T14:00:30+02:00"));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert!(
+        error_at(&errors, "cluster.keys[0].verifyUntil")
+            .expected
+            .contains('Z'),
+        "the refusal names the spelling it wants"
+    );
+}
+
+/// The instant reader, against the two boundaries a hand-written date parser gets wrong.
+#[test]
+fn ky4_the_instant_reader_agrees_with_the_calendar() {
+    assert_eq!(parse_rfc3339_utc("1970-01-01T00:00:00Z"), Some(0));
+    // A leap day exists in 2024 and does not in 2026.
+    assert_eq!(
+        parse_rfc3339_utc("2024-02-29T00:00:00Z"),
+        Some(1_709_164_800)
+    );
+    assert_eq!(parse_rfc3339_utc("2026-02-29T00:00:00Z"), None);
+    // 1900 is not a leap year and 2000 is — the rule a modulo-4 parser gets wrong.
+    assert_eq!(parse_rfc3339_utc("1900-02-29T00:00:00Z"), None);
+    assert_eq!(parse_rfc3339_utc("2000-02-29T00:00:00Z"), Some(951_782_400));
+    assert_eq!(parse_rfc3339_utc("2026-13-01T00:00:00Z"), None);
+    assert_eq!(parse_rfc3339_utc("2026-07-28T24:00:00Z"), None);
+    // The fractional part is parsed and discarded: §8 S2 compares whole seconds.
+    assert_eq!(
+        parse_rfc3339_utc("2026-07-28T12:00:00.250Z"),
+        parse_rfc3339_utc("2026-07-28T12:00:00Z")
+    );
+}
+
+/// KY6 — §8 V8's ceiling of sixteen entries, adopted unchanged.
+#[test]
+fn ky6_the_key_ceiling_is_checked_at_load() {
+    let entries: String = (1..=17)
+        .map(|id| key(id, id == 1, "2026-08-04T12:00:30Z"))
+        .collect();
+    let document = with_keys(&entries);
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys");
+    assert_eq!(error.rule.to_string(), "CC-V8");
+    assert_eq!(error.found.as_deref(), Some("17"));
+}
+
+/// §8 V2 still closes one level down: KY1's six attributes are the whole interface.
+#[test]
+fn ky1_a_seventh_attribute_on_a_key_is_refused() {
+    let document = with_keys(&key(3, true, "2026-08-04T12:00:30Z").replace(
+        "      mint: true\n",
+        "      mint: true\n      rotateEvery: 7d\n",
+    ));
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert_eq!(
+        error_at(&errors, "cluster.keys[0].rotateEvery")
+            .rule
+            .to_string(),
+        "CC-V2"
+    );
+}
+
+// ---------------------------------------------------------- the shard map (cluster-membership §5) ---
+
+/// SM1/SM2 — a total map whose owners are declared members loads, and reaches the spec struct.
+#[test]
+fn sm1_a_total_shard_map_loads_with_ds4s_default_drain_timeout() {
+    let document = with_shard_map("    shards:\n      - id: 1\n        owner: node-a\n");
+    let config = load(document.as_bytes(), &who(), &env()).expect("loads");
+    let map = config.shard_map.as_ref().expect("a shard map");
+    assert_eq!(map.drain_timeout_ms, 30_000, "§9.4 DS4's declared default");
+    assert_eq!(map.shards.len(), 1);
+    assert_eq!(map.shards.first().expect("one shard").owner, "node-a");
+}
+
+/// **`CC-V-4`.** SM2 — an owner absent from `membership` is a §8 V5 cross-section failure.
+#[test]
+fn cc_v_4_a_shard_owner_absent_from_membership_is_refused() {
+    let document = with_shard_map("    shards:\n      - id: 1\n        owner: node-z\n");
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.shardMap.shards[0].owner");
+    assert_eq!(error.rule.to_string(), "CC-V5");
+    assert_eq!(error.found.as_deref(), Some("node-z"));
+}
+
+/// **`CC-V-21`.** SM1 — the list is the shard space and it is total: a gap is refused naming it.
+///
+/// A shard with no owner is a slice of the registration key space for which no REGISTER can be
+/// accepted, and it would surface as a tenant's phones going quiet rather than as a config error.
+#[test]
+fn cc_v_21_a_shard_map_with_a_gap_is_refused() {
+    let document = with_shard_map(
+        "    shards:\n      - id: 1\n        owner: node-a\n      - id: 3\n        owner: node-a\n",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.shardMap.shards");
+    assert_eq!(error.rule.to_string(), "CC-SM1");
+    assert!(
+        error.found.as_deref().unwrap_or_default().contains('2'),
+        "{error}"
+    );
+}
+
+/// **`CC-V-22`.** SM3 — a shard owns registration state, so its owner runs a registrar.
+#[test]
+fn cc_v_22_a_shard_owner_that_runs_no_registrar_is_refused() {
+    let document = with_member(
+        "    - node: 2\n      name: node-b\n      zone: a\n      roles: [edge]\n      \
+         rpc: \"10.0.0.2:7223\"\n",
+    )
+    .replace(
+        "  locationStore:",
+        "  shardMap:\n    shards:\n      - id: 1\n        owner: node-b\n  locationStore:",
+    );
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.shardMap.shards[0].owner");
+    assert_eq!(error.rule.to_string(), "CC-SM3");
+}
+
+/// **`CC-S-7`.** DS4's range, checked at load.
+///
+/// Below the floor a drain would expire while an ordinary contended write was still legitimately
+/// retrying (`location-service` §5.1 S10).
+#[test]
+fn cc_s_7_a_drain_timeout_below_the_range_is_refused() {
+    let document =
+        with_shard_map("    drainTimeout: 2s\n    shards:\n      - id: 1\n        owner: node-a\n");
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.shardMap.drainTimeout");
+    assert_eq!(error.rule.to_string(), "CC-DS4");
+    assert_eq!(error.found.as_deref(), Some("2s"));
+}
+
+/// A duration carries its unit. Every other duration in this schema is milliseconds, so a bare `30`
+/// would be two plausible values a thousand-fold apart and the loader guesses at neither.
+#[test]
+fn ds4_a_drain_timeout_without_its_unit_is_refused() {
+    let document =
+        with_shard_map("    drainTimeout: 30\n    shards:\n      - id: 1\n        owner: node-a\n");
+    let errors = load(document.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert!(
+        error_at(&errors, "cluster.shardMap.drainTimeout")
+            .expected
+            .contains("30s"),
+        "the refusal names the form it wants"
+    );
+}
+
+/// Neither section reaches a consumer in this build, and both say so (`FC-2`).
+///
+/// Validating a value is not applying it — the mistake `FC-4` found when `domains` sat in a struct
+/// field unread for a release. `AF-4`'s mint/verify library reaches no driver field yet and the
+/// shard handoff is `RG-5`'s, so a document that declares either gets exactly what this warns about.
+#[test]
+fn fc2_keys_and_the_shard_map_are_validated_and_reported_as_unapplied() {
+    let document = with_keys(&key(3, true, "2026-08-04T12:00:30Z")).replace(
+        "  locationStore:",
+        "  shardMap:\n    shards:\n      - id: 1\n        owner: node-a\n  locationStore:",
+    );
+    let config = load(document.as_bytes(), &who(), &env()).expect("loads");
+    let reported: Vec<String> = config.unapplied.iter().map(ToString::to_string).collect();
+    for expected in ["cluster.keys", "cluster.shardMap"] {
+        assert!(reported.iter().any(|path| path == expected), "{reported:?}");
+    }
+    // And they are genuinely read, which is what makes the report a report rather than a shrug.
+    assert_eq!(config.keys.len(), 1);
+    assert!(config.shard_map.is_some());
+}
+
+/// **`CC-V-23`.** A year RFC 3339 §5.6 cannot express is refused, not reduced to an instant.
+///
+/// `load` documents itself pure and total in its inputs, §8 V10 makes refusing the document the only
+/// failure mode there is, and `AGENTS.md` rule 3 forbids panicking on input. This spelling reached
+/// `days_from_civil(year, …) * 86_400` with `year` parsed unbounded, so it panicked under
+/// `debug-assertions` and — the worse half — **wrapped** under `-O`, accepting a verify window
+/// nobody wrote. A rotation rule judged against a wrapped instant is a safety rule switched off
+/// silently, and silence is the property `cluster-membership` §7.1 RB9 exists to deny the document.
+#[test]
+fn cc_v_23_a_year_outside_rfc_3339_is_refused_rather_than_wrapped() {
+    for year in ["300000000000", "9223372036854775807", "99999", "10000"] {
+        let document = with_keys(&key_over(
+            3,
+            true,
+            &format!("{year}-01-01T00:00:00Z"),
+            "2026-09-01T12:00:00Z",
+        ));
+        // Reported rather than asserted away, because the two builds fail differently and the
+        // release one is the dangerous half: debug panicked, `-O` accepted a wrapped instant.
+        let errors = match load(document.as_bytes(), &who(), &env()) {
+            Ok(config) => panic!(
+                "year `{year}` is not `4DIGIT` and must be refused; loaded verifyFrom = {:?}",
+                config.keys.first().map(|entry| entry.verify_from)
+            ),
+            Err(errors) => errors,
+        };
+        let error = error_at(&errors, "cluster.keys[0].verifyFrom");
+        assert_eq!(error.rule.to_string(), "CC-KY4", "year `{year}`");
+    }
+}
+
+/// **`CC-V-24`.** RFC 3339 §5.6's grammar is the whole grammar: `4DIGIT`, `2DIGIT`, `"." 1*DIGIT`.
+///
+/// `str::parse::<i64>` accepts a leading sign and any number of digits, which is how every spelling
+/// below became an instant this loader accepted. The first one is why the rule is not cosmetic: it
+/// parses to an instant **twenty-six hours away** from the one written, so a document could state a
+/// verify window and get a different one without a single error.
+#[test]
+fn cc_v_24_rfc_3339_section_5_6_is_the_whole_grammar() {
+    for spelling in [
+        "2026-07-28T-1:-5:-9Z",
+        "+2026-07-28T12:00:00Z",
+        "2026-7-8T1:2:3Z",
+        "2026-07-28T+1:00:00Z",
+        "2026-07-28T12:00:00.abcZ",
+        "2026-07-28T12:00:00.Z",
+        "2026-07-28T12:00:00.1.2Z",
+    ] {
+        let document = with_keys(&key(3, true, spelling));
+        let errors = load(document.as_bytes(), &who(), &env())
+            .err()
+            .unwrap_or_else(|| panic!("`{spelling}` is not RFC 3339 §5.6 and must be refused"));
+        let error = error_at(&errors, "cluster.keys[0].verifyUntil");
+        assert_eq!(error.rule.to_string(), "CC-KY4", "`{spelling}`");
+        // The *reason* matters as much as the refusal, and this assertion is why. Every spelling
+        // above parsed to some instant before `verifyFrom` under the old grammar, so all seven were
+        // already refused — as "a window that never opens", a KY4 error at this very path. A test
+        // that stopped at the rule id would have passed against the defect it was written for
+        // (`CF-12`). KY4's parse failure echoes the text it could not read; the window error names
+        // the window.
+        assert_eq!(
+            error.found.as_deref(),
+            Some(spelling),
+            "refused as a window rather than as a spelling: {error}"
+        );
+    }
+}
+
+/// Every spelling §5.6 *does* admit still loads, so the rule above narrowed the grammar to the
+/// grammar and not to a habit — lower-case `t`/`z` are RFC 3339's own alternates, and a fraction is
+/// parsed and discarded because `affinity-token` §8 S2 compares whole seconds.
+#[test]
+fn ky4_the_spellings_rfc_3339_admits_are_still_accepted() {
+    for spelling in [
+        "2026-09-01T12:00:00Z",
+        "2026-09-01t12:00:00z",
+        "2026-09-01T12:00:00.5Z",
+        "2026-09-01T23:59:60Z",
+        "2028-02-29T00:00:00Z",
+        "9999-12-31T23:59:59Z",
+    ] {
+        let document = with_keys(&key(3, true, spelling));
+        load(document.as_bytes(), &who(), &env())
+            .unwrap_or_else(|e| panic!("`{spelling}` is RFC 3339 §5.6 and must load: {e:?}"));
+    }
+}
+
+/// **`CC-K-7`.** RL11's second half — the *incoming* mint key's window must cover the same bound.
+///
+/// Without it the first half is satisfiable by a document that retires nothing and still strands
+/// every record: a key whose window is a minute wide mints tokens that stop verifying long inside
+/// `W`, and the next rotation inherits the problem rather than causing it. Judged as a width because
+/// §2 D1 forbids the loader a clock — RB2's `verifyUntil ≥ t_activate + W` is a wall-clock statement
+/// whose clock-free consequence is that the window is at least `W` wide.
+#[test]
+fn cc_k_7_an_incoming_mint_key_must_cover_the_overlap_window() {
+    let narrow = |mints: bool| {
+        with_keys(&format!(
+            "{}{}",
+            key(3, !mints, "2026-09-01T12:00:00Z"),
+            key_over(4, mints, "2026-07-28T12:00:00Z", "2026-07-28T12:01:00Z")
+        ))
+    };
+    // The narrow window is accepted at `load`: §9.1 RL3 makes every transition rule vacuous where
+    // there is no predecessor, and this rule is a transition rule.
+    let active = load(narrow(false).as_bytes(), &who(), &env()).expect("the active document loads");
+
+    let errors = reload(
+        &active,
+        at_version(&narrow(true), 43).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys[1].verifyUntil");
+    assert_eq!(error.rule.to_string(), "CC-RL11");
+    assert!(
+        error.expected.contains("86430"),
+        "the refusal names the bound it computed: {error}"
+    );
+}
+
+/// `W` is `max(L, E_max) + S` computed from the document, not a constant — `cluster-membership` §7.1
+/// RB1: one tenant raising its registration ceiling lengthens the rotation for the whole cluster.
+#[test]
+fn rl11_the_overlap_window_follows_the_documents_largest_tenant_expiry() {
+    // A window of two days covers the default `W` of 86 430 s and not a `W` raised past it.
+    let two_days = |mints: bool| {
+        with_keys(&format!(
+            "{}{}",
+            key(3, !mints, "2026-09-01T12:00:00Z"),
+            key_over(4, mints, "2026-07-28T12:00:00Z", "2026-07-30T12:00:00Z")
+        ))
+    };
+    let active = load(two_days(false).as_bytes(), &who(), &env()).expect("loads");
+    reload(
+        &active,
+        at_version(&two_days(true), 43).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("two days covers the default overlap window");
+
+    // `E_max` is the tenant's `expiry.max`, and RB1 makes it the document's largest.
+    let raised = |document: &str| {
+        document.replace(
+            "      id: 1\n",
+            "      id: 1\n      expiry:\n        max: 604800\n",
+        )
+    };
+    let active = load(raised(&two_days(false)).as_bytes(), &who(), &env()).expect("loads");
+    let errors = reload(
+        &active,
+        raised(&at_version(&two_days(true), 43)).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect_err("a week-long E_max moves the bound past a two-day window");
+    assert_eq!(
+        error_at(&errors, "cluster.keys[1].verifyUntil")
+            .rule
+            .to_string(),
+        "CC-RL11"
+    );
+}
+
+// ---------------------------------------------------------------------- reload (§9, §6 RD1) ---
+
+/// §7's registry gives every recognised section a reload class, and this proves the table did not
+/// stop at the sections that happened to have one when it was written.
+///
+/// RL1 is why it matters: the class is a property of the field, and a section the node classified by
+/// falling through a default is a section the operator and the node can disagree about.
+#[test]
+fn rl1_every_recognised_section_declares_a_reload_class() {
+    for section in CLUSTER_KEYS.iter().chain(DEFERRED_SECTIONS) {
+        assert!(
+            RELOAD_CLASSES.iter().any(|(name, _)| name == section),
+            "`{section}` is recognised by the closed world and has no §7 reload class"
+        );
+    }
+}
+
+/// **`CC-K-1`.** Adding a verify-only key is accepted, and the plan says which section moved.
+///
+/// This is `affinity-token` §6 K1's first step: `B` is distributed with `mint: false` and an
+/// already-open window, so every node can verify a `B` record before any node mints one. Nothing
+/// else in the document changes, so nothing else in the node does — which is RD1 and RL12, and is
+/// what "reloadable without restart" means for keys.
+#[test]
+fn cc_k_1_adding_a_verify_only_key_is_a_reload_and_disturbs_nothing() {
+    let active = load(
+        with_keys(&key(3, true, "2026-09-01T12:00:00Z")).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("the active document loads");
+    let next = at_version(
+        &with_keys(&format!(
+            "{}{}",
+            key(3, true, "2026-09-01T12:00:00Z"),
+            key(4, false, "2026-09-08T12:00:00Z")
+        )),
+        43,
+    );
+
+    let (config, plan) = reload(&active, next.as_bytes(), &who(), &env()).expect("accepted");
+    assert_eq!(
+        plan.changed
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["cluster.keys".to_owned()],
+        "the plan reports keys changed, and reports nothing else moving"
+    );
+    assert_eq!(config.keys.len(), 2);
+}
+
+/// **`CC-K-2`.** Flipping `mint` to a key the active document already carried is K3, and accepted.
+#[test]
+fn cc_k_2_flipping_mint_to_an_already_distributed_key_is_accepted() {
+    let both = |first_mints: bool| {
+        with_keys(&format!(
+            "{}{}",
+            key(3, first_mints, "2026-09-01T12:00:00Z"),
+            key(4, !first_mints, "2026-09-08T12:00:00Z")
+        ))
+    };
+    let active = load(both(true).as_bytes(), &who(), &env()).expect("the active document loads");
+    let next = at_version(&both(false), 43);
+
+    let (config, plan) = reload(&active, next.as_bytes(), &who(), &env()).expect("accepted");
+    assert_eq!(plan.changed.len(), 1);
+    assert!(config.keys.iter().any(|entry| entry.id == 4 && entry.mint));
+}
+
+/// **`CC-K-3`.** RL10 — a mint flipped to a key the active version never carried is refused, naming
+/// the key id and both versions.
+///
+/// K1 and K3 collapsed into one step: it produces records some healthy node cannot verify yet, and
+/// the node that minted them reports itself healthy because it verifies its own.
+#[test]
+fn cc_k_3_a_mint_flip_to_an_undistributed_key_is_refused() {
+    let active = load(
+        with_keys(&key(3, true, "2026-09-01T12:00:00Z")).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("the active document loads");
+    let next = at_version(
+        &with_keys(&format!(
+            "{}{}",
+            key(3, false, "2026-09-01T12:00:00Z"),
+            key(5, true, "2026-09-08T12:00:00Z")
+        )),
+        43,
+    );
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys[1].mint");
+    assert_eq!(error.rule.to_string(), "CC-RL10");
+    let found = error.found.clone().unwrap_or_default();
+    assert!(
+        found.contains("key id 5") && found.contains("43") && found.contains("42"),
+        "{error}"
+    );
+}
+
+/// **`CC-K-4`.** RL11 — the outgoing mint key's verify window is not brought forward.
+///
+/// Judged from the *declared* windows, because §2 D1 forbids the loader a clock: whether
+/// `max(L, E_max) + S` has actually elapsed is `cluster-membership` §7.1 RB5's, addressed to an
+/// operator with a wall clock.
+#[test]
+fn cc_k_4_bringing_the_mint_keys_verify_window_forward_is_refused() {
+    let active = load(
+        with_keys(&key(3, true, "2026-09-01T12:00:00Z")).as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("the active document loads");
+    let next = at_version(&with_keys(&key(3, true, "2026-08-01T12:00:00Z")), 43);
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.keys[0].verifyUntil");
+    assert_eq!(error.rule.to_string(), "CC-RL11");
+    assert!(error.expected.contains("max(L, E_max) + S"), "{error}");
+}
+
+/// RL11's other half: removing the key that is still minting is refused, not merely discouraged.
+///
+/// RB9 makes emergency retirement a rolling restart on purpose — a safety rule that could be
+/// switched off from the document is one that gets switched off during an incident.
+#[test]
+fn rl11_removing_the_outgoing_mint_key_is_refused() {
+    let active = load(
+        with_keys(&format!(
+            "{}{}",
+            key(3, true, "2026-09-01T12:00:00Z"),
+            key(4, false, "2026-09-08T12:00:00Z")
+        ))
+        .as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("the active document loads");
+    let next = at_version(&with_keys(&key(4, true, "2026-09-08T12:00:00Z")), 43);
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert_eq!(
+        error_at(&errors, "cluster.keys").rule.to_string(),
+        "CC-RL11"
+    );
+}
+
+/// **`CC-D-7`.** D10 — a reload at or below the active version is rejected and nothing changes.
+#[test]
+fn cc_d_7_a_reload_that_does_not_advance_the_version_is_rejected() {
+    let active = load(good().as_bytes(), &who(), &env()).expect("the active document loads");
+    let unchanged = active.clone();
+    let next = good().replace("  environment: dev", "  environment: dev\n  nat: {}");
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "version");
+    assert_eq!(error.rule.to_string(), "CC-D10");
+    assert_eq!(active, unchanged, "the active configuration is untouched");
+}
+
+/// **`CC-D-8`.** RL2 — a document changing a `rollout`-class field is rejected **as a reload**,
+/// naming the field, and the reloadable change riding along with it is not applied either.
+///
+/// Atomicity is the whole content of the rule: the document is validated and then either applied or
+/// not, so an operator never has to reason about which half of a push landed.
+#[test]
+fn cc_d_8_a_rollout_class_change_is_rejected_as_a_reload() {
+    let document = |bind: &str, trunk: &str| {
+        format!(
+            r"
+apiVersion: sipx.dev/v1alpha1
+version: 42
+cluster:
+  name: acme
+  environment: dev
+  zones: [a]
+  listener:
+    - roles: [edge, registrar]
+      transport: udp
+      bind: 0.0.0.0:5060
+      advertise: 203.0.113.10:5060
+    - roles: [e2e-tester]
+      transport: udp
+      bind: {bind}
+      advertise: 203.0.113.10:5062
+  membership:
+    - node: 1
+      name: node-a
+      zone: a
+      roles: [edge, registrar]
+      rpc: '10.0.0.1:7223'
+  trunk:
+    - name: {trunk}
+  locationStore:
+    backend: memory
+  tenant:
+    - name: default
+      id: 1
+      domains: [acme.example]
+"
+        )
+    };
+    let active = load(
+        document("0.0.0.0:5062", "carrier-a").as_bytes(),
+        &who(),
+        &env(),
+    )
+    .expect("the active document loads");
+    let next = at_version(&document("0.0.0.0:5063", "carrier-b"), 43);
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.listener[1].bind");
+    assert_eq!(error.path.to_string(), "cluster.listener[1].bind");
+    assert_eq!(error.rule.to_string(), "CC-RL2");
+    // The trunk change rode along and is not applied: a rejected reload applies nothing at all.
+    assert!(
+        !paths(&errors).iter().any(|path| path == "cluster.trunk"),
+        "the trunk change is reloadable and is not what was refused: {errors:#?}"
+    );
+}
+
+/// **`CC-I-4`.** I3 and RD4 — a `node` id is not re-pointed to a different `name` by a reload.
+///
+/// Reusing an id early is indistinguishable, on the wire, from the record it collides with. The
+/// loader owns the version-to-version half; §7.2 RB11's `W` wait is the operator's, because it needs
+/// a wall clock this loader does not have.
+#[test]
+fn cc_i_4_a_node_id_is_not_re_pointed_to_a_different_name() {
+    let active = load(good().as_bytes(), &who(), &env()).expect("the active document loads");
+    let next = at_version(&good().replace("name: node-a", "name: node-b"), 43);
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    let error = error_at(&errors, "cluster.membership[0].node");
+    assert_eq!(error.rule.to_string(), "CC-I3");
+    let found = error.found.clone().unwrap_or_default();
+    assert!(
+        found.contains("node-a") && found.contains("node-b"),
+        "{error}"
+    );
+}
+
+/// RD2 — adding or removing a member is a reload, with no restart and no quiescence.
+///
+/// And RD1 with it: the plan names `membership` alone, so nothing that rebinds a listener, closes a
+/// connection or expires a registration is part of what the node is being asked to do.
+#[test]
+fn rd2_adding_a_member_is_a_reload() {
+    let active = load(good().as_bytes(), &who(), &env()).expect("the active document loads");
+    let next = at_version(
+        &with_member(
+            "    - node: 2\n      name: node-b\n      zone: a\n      roles: [edge]\n      \
+             rpc: \"10.0.0.2:7223\"\n",
+        ),
+        43,
+    );
+
+    let (config, plan) = reload(&active, next.as_bytes(), &who(), &env()).expect("accepted");
+    assert_eq!(
+        plan.changed
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>(),
+        vec!["cluster.membership".to_owned()]
+    );
+    assert_eq!(config.membership.len(), 2);
+}
+
+/// A document that only reordered a section's keys is not a change.
+///
+/// Without this the canonical rendering would be a spelling test rather than a content test, and an
+/// operator who sorted their YAML would be told to restart the fleet.
+#[test]
+fn rl2_reordering_a_rollout_sections_keys_is_not_a_change() {
+    let active = load(good().as_bytes(), &who(), &env()).expect("the active document loads");
+    let reordered = good().replace(
+        "      transport: udp\n      bind: 0.0.0.0:5060\n",
+        "      bind: 0.0.0.0:5060\n      transport: udp\n",
+    );
+    let next = at_version(&reordered, 43);
+
+    let (_, plan) = reload(&active, next.as_bytes(), &who(), &env()).expect("accepted");
+    assert!(plan.changed.is_empty(), "{plan:?}");
+}
+
+/// §6 RD3 — a reload that changes *this* node's own `zone` or `roles` is refused, and it is refused
+/// by §5 P3's cross-check rather than by a second rule beside it.
+///
+/// Identity is a start-up input (P1) and no document can change what a process was started as.
+#[test]
+fn rd3_a_reload_that_changes_this_nodes_own_identity_is_refused() {
+    let active = load(good().as_bytes(), &who(), &env()).expect("the active document loads");
+    let next = at_version(
+        &good().replace("      zone: a\n      roles:", "      zone: b\n      roles:"),
+        43,
+    );
+
+    let errors = reload(&active, next.as_bytes(), &who(), &env()).expect_err("must refuse");
+    assert!(rules(&errors).contains(&"CC-P3".to_owned()), "{errors:#?}");
+}
+
+/// **`CC-V-8`.** `security.maxForwards` absent loads with 70 (§8 V6).
+///
+/// The literal is RFC 3261 §16.6 step 3's own number rather than the constant that holds it: a test
+/// comparing `MAX_FORWARDS` to `MAX_FORWARDS` would keep passing if the constant moved, and the
+/// whole content of V6 is that this value is fixed somewhere other than in this schema.
+#[test]
+fn cc_v_8_an_absent_max_forwards_loads_with_the_rfcs_value() {
+    let config = load(good().as_bytes(), &who(), &env()).expect("loads");
+    assert_eq!(config.security.max_forwards, 70);
+}
+
+/// **`CC-V-11`.** `tenant[].expiry` omitted keeps location-service §5.2's own defaults (§8 V3).
+///
+/// The three literals are that spec's, adopted unchanged rather than restated differently — a
+/// number spelled twice is a number that drifts, which is what `FC-4` found when the document's
+/// quota loaded and the library's default was what ran.
+#[test]
+fn cc_v_11_an_omitted_expiry_block_keeps_the_owning_specs_defaults() {
+    let config = load(good().as_bytes(), &who(), &env()).expect("loads");
+    let policy = &config.tenants.first().expect("one tenant").policy;
+    assert_eq!(policy.default_expires, 3_600);
+    assert_eq!(policy.min_expires, 60);
+    assert_eq!(policy.max_expires, 86_400);
 }

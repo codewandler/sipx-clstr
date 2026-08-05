@@ -132,14 +132,19 @@ cluster:
       bind: ${NODE_BIND}
       advertise: ${NODE_ADVERTISE}
   membership:
+    # cluster-membership MB5: `rpc` is required of a member whose roles put it on the call path, and
+    # MB6 makes it unique in the document. Nothing dials it yet (AF-3/AF-7), so each node reports it
+    # as configuration it does not apply.
     - node: 1
       name: node-a
       zone: a
       roles: [edge, registrar]
+      rpc: 127.0.0.1:7223
     - node: 2
       name: node-b
       zone: a
       roles: [edge, registrar]
+      rpc: 127.0.0.1:7224
   locationStore:
     backend: postgres
     dsnRef: location-dsn

@@ -35,14 +35,25 @@ data:
           # response routed back to a virtual IP has no pod to answer it.
           advertise: ${POD_IP}:5060
       membership:
+        # `rpc` is where a peer dials this member for the connection-owner RPC
+        # (cluster-membership MB5), required of every member whose roles put it on the call path and
+        # unique in the document (MB6). Two things about the value are deliberate. It is **not**
+        # `${POD_IP}`: the document is cluster-scoped, so one member's entry is read by every node,
+        # and a per-pod substitution here would give every member the reader's own address. And it
+        # is the Service **name** rather than a literal, unlike the tenant's `domains` above — that
+        # one has to be a literal because `sipx dial` resolves no names, while this endpoint is
+        # dialled by the platform, which has a resolver. Nothing dials it in this build (AF-3/AF-7
+        # own the RPC), so each node reports it as configuration it accepts and does not apply.
         - node: 1
           name: node-a
           zone: a
           roles: [edge, registrar]
+          rpc: sipx-clstr-node-a:7223
         - node: 2
           name: node-b
           zone: a
           roles: [edge, registrar]
+          rpc: sipx-clstr-node-b:7223
       locationStore:
         backend: postgres
         # A reference, never a value (cluster-config §8 V9). Resolved from LOCATION_DSN.

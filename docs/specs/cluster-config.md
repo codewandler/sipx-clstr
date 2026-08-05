@@ -374,15 +374,16 @@ table rather than waiting on it. `number-normalisation` stands in the same place
 | CC-R-8 | Identity `node: 9`; membership carries no entry for `9` | Loads (P3) — a node the operator has not yet published still starts |
 | CC-R-9 | Two projected UDP listeners, `10.0.0.7:5060` and `10.0.0.7:5070` | `E(cluster.listener[1], CC-P6)` naming both, while `receiving` keys on transport alone |
 | CC-R-10 | Projected listeners UDP and TLS, different advertised hosts | Loads; the identity set holds both (P5) |
+| CC-R-11 | A member declaring `rpc` and `incarnationSource` ([cluster-membership](cluster-membership.md) §3) | Loads; both are fields of a member, and an omitted `incarnationSource` selects `boot-second` (MB8) |
 
 **Logical ids (CC-I).**
 
 | # | Given | Expect |
 |---|---|---|
-| CC-I-1 | Two `membership` entries with `id: 12` | `E(cluster.membership[1].id, affinity-token §12.2 CT1)` naming both holders |
+| CC-I-1 | Two `membership` entries with `node: 12` | `E(cluster.membership[1].node, CC-I2)` naming both holders, for [affinity-token](affinity-token.md) §12.2 CT1's reason |
 | CC-I-2 | `tenant[0].id: 0` | `E(cluster.tenant[0].id, CC-I2)` — `0` is reserved |
 | CC-I-3 | Two tenants named `acme` and `ACME` | Both load: names are byte-compared (I4) |
-| CC-I-4 | `reload` reassigning id `12` from node `edge-a` to node `edge-b` | `E(cluster.membership[…].id, CC-I3)` — an id in circulation is not re-pointed |
+| CC-I-4 | `reload` reassigning id `12` from node `edge-a` to node `edge-b` | `E(cluster.membership[…].node, CC-I3)` — an id in circulation is not re-pointed |
 
 **Validation across sections (CC-V).**
 
@@ -403,6 +404,15 @@ table rather than waiting on it. `number-normalisation` stands in the same place
 | CC-V-13 | `security.unknownSource: drop` | `E(cluster.security.unknownSource, CC-V10)` — no consumer in this build applies it, and the refusal describes what was declared rather than echoing it (V9) |
 | CC-V-14 | A `security` block declaring `unknownSource`, `sanityCheck`, `userAgentDenyList` and `internalZone` | One error per declared control, each naming its own path, ordered by path (V1); no `Config` is produced (§7) |
 | CC-V-15 | The same four controls carrying wrong-shaped values — a sequence where a scalar was declared, a scalar where a mapping was | Refused all the same: refusing an unappliable control before typing it is admissible, accepting a value for it is not |
+| CC-V-16 | A member whose `roles` include `edge`, declaring no `rpc` | `E(cluster.membership[…].rpc, CC-MB5)` — a member on the call path owns flows, and a peer with no endpoint to dial cannot deliver toward a client it owns |
+| CC-V-17 | A member whose only role is `echo`, declaring an `rpc` | `E(cluster.membership[…].rpc, CC-MB5)` — MB5 is fail-closed in both directions, and an endpoint on a node that owns nothing is a target nobody should reach |
+| CC-V-18 | Two members advertising one `rpc` endpoint | `E(cluster.membership[…].rpc, CC-MB6)` naming both holders ([affinity-token](affinity-token.md) §13.1 D5 dials what a reference names and re-checks nothing) |
+| CC-V-19 | `incarnationSource: persisted-counter` with no `incarnationRef` | `E(cluster.membership[…].incarnationRef, CC-MB8)` — a counter with nowhere to persist is a `boot-second` with extra words |
+| CC-V-20 | A `keys` section in which no entry carries `mint: true` | `E(cluster.keys, CC-KY5)` — a cluster that mints nothing Record-Routes nothing, and would fail on its first dialog-forming request rather than at load |
+| CC-V-21 | `shardMap.shards` carrying ids `1` and `3` | `E(cluster.shardMap.shards, CC-SM1)` naming the missing id — the list is the shard space and it is total |
+| CC-V-22 | `shardMap` assigning a shard to a member whose `roles` omit `registrar` | `E(cluster.shardMap.shards[…].owner, CC-SM3)` — a shard owns registration state, so its writes would have nowhere to land |
+| CC-V-23 | `verifyFrom: "300000000000-01-01T00:00:00Z"` | `E(cluster.keys[…].verifyFrom, CC-KY4)` — RFC 3339 §5.6 fixes the year at four digits, and a year outside it is refused rather than reduced to an instant by wrapping. `load` is total in its inputs (§2 D1), so neither a panic nor a wrap is an admissible reading |
+| CC-V-24 | A `verifyUntil` spelled as §5.6 forbids: a signed year, one-digit fields, a signed hour, an empty or non-numeric `time-secfrac` | Each refused `E(cluster.keys[…].verifyUntil, CC-KY4)`, echoing the text it could not read. The negative-component spelling is why the rule is not cosmetic — read leniently it names a **different** instant from the one written, and a window nobody can review in a diff is what §2 D5 refuses |
 
 **Key reload (CC-K).**
 
@@ -414,6 +424,7 @@ table rather than waiting on it. `number-normalisation` stands in the same place
 | CC-K-4 | New document brings `A`'s `verifyUntil` forward while `A` was the mint key | Rejected, `E(cluster.keys[…].verifyUntil, CC-RL11)` citing `max(L, E_max) + S` |
 | CC-K-5 | Two `keys` entries share `id: 3` with overlapping windows | `E(cluster.keys[1].id, affinity-token §6)` |
 | CC-K-6 | New document declares two keys with `mint: true` | `E(cluster.keys, affinity-token §6)` — exactly one at any configuration version |
+| CC-K-7 | A reload flipping `mint` to a distributed key whose declared verify window is narrower than `W` | `E(cluster.keys[…].verifyUntil, CC-RL11)` — RL11’s second half: the incoming mint key’s window covers `max(L, E_max) + S`, computed from the incoming document ([cluster-membership](cluster-membership.md) §7.1 RB1, RB2) |
 
 **Trunk reload (CC-T).**
 
