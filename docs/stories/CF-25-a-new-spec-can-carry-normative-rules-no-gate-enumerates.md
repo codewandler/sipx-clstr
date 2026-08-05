@@ -2,7 +2,7 @@
 id: CF-25
 title: A new spec can carry normative rules no gate ever enumerates
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 epic: conformance-harness
 areas: [gate, conformance, specs]
@@ -31,7 +31,7 @@ cannot exist outside the coverage picture that claims to describe them.
 - [x] The published conformance count and inventory move with it: a spec that is registered but
       contributes no rows must not read as covered. Coordinate with `CF-21`, which owns holding a
       published count to its generator.
-- [ ] `scripts/gate.sh` is green.
+- [x] `scripts/gate.sh` is green.
 
 ## Progress
 - 2026-08-05 — Implemented in `scripts/check-vectors.py`, on `impl/CF-25`.

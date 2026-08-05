@@ -20,6 +20,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+- **A normative spec can no longer exist outside the vector gate's view** (`CF-25`). `AF-3`'s
+  296-line owner-rpc spec sat under `docs/specs/` with thirteen §10 failure scenarios while
+  `check-vectors.py` stayed green without reading one of them — the checker only ever looked at
+  specs its own `SPECS` table named. Every file under `docs/specs/` (and every registered design
+  table) is now either registered or **excluded by a named entry carrying a reason and a live
+  story** — the exclusion list is ratcheted in both directions (a dead document, an empty reason,
+  a dead story, or a registered-and-excluded contradiction all go red), a registered prefix with
+  no tabulated rows is refused rather than read as covered, and scenario tables keyed by
+  test-function names are visible to the unowned-row guard. The generated report now renders the
+  registered inventory and an "outside the vector ledger" table from the registries themselves.
+
 - **The Helm chart now says what installing it does not do, and a check holds it there**
   (`KO-16`, validated synthesis **V-19**). `helm show chart` used to promise the operator, CRDs
   and RBAC while the only template was one custom resource nothing serves. The description now

@@ -31,6 +31,13 @@ whose whole point is refusing dead letters. No other gate validates status value
       case that proves a deferral naming `{{ID}}` is refused as "no story", not accepted.
 - [ ] `check-vectors.py`'s module docstring and `--self-test` success line describe the full case
       set they actually replay (both still describe only the PB-F-1 case).
+- [ ] (from CF-25's review) `SCENARIO_LINE` documents its two-word evasion but not the
+      parenthesized form: a scenario cell written `` `owner_rpc_delivers()` `` is invisible to
+      the unowned-row guard. Either the pattern covers it or the comment and a self-test case
+      say why not.
+- [ ] (from CF-25's review) the registered-AND-excluded contradiction check filters to
+      `docs/specs/` paths, so an excluded design that later gains a registration would not trip
+      it — extend the check to every tree the registries name.
 
 ## Progress
 
