@@ -58,8 +58,9 @@ that is both a valid `domains` entry and something `sipx dial` can send to.
   after the merge were **red on `crates/sipx-clstr-node/tests/devspace_dialable.rs`** and were
   read as green — the gate had been invoked with a command chained after it, so the exit code that
   came back belonged to the last command in the chain rather than to `gate.sh`. The tree was
-  pushed red; CI went red on `main`, and the `DX-14` implementor independently proved the failure
-  predated its own diff and correctly refused to tick its gate box. Fixed in the follow-up commit
+  pushed red. CI's `fmt` step did see it — that step resolves no dependencies, so it runs even
+  while the rest of CI cannot — but the `DX-14` implementor is what actually surfaced it, proving
+  the failure predated its own diff and correctly refusing to tick its gate box. Fixed in the follow-up commit
   (two missing-backtick doc lints, one `manual_pattern_char_comparison`); the test's assertions
   were never at issue and are unchanged.
 

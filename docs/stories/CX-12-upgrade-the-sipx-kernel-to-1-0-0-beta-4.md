@@ -72,6 +72,13 @@ against a tag instead of against promises.
   filing commit sits on the unmerged branch `filing/clstr-CX-7-public` and kernel `main`
   recycled the IDs `T-28`/`T-29` for unrelated stories, so the outgoing-CANCEL and
   exact-listener-selection asks are effectively unfiled again. `CX-13` now owns the re-filing.
+- **CI on `main` is red for as long as the `[patch]` stays, and that is the authorized cost, not
+  a defect.** The runner has no sibling checkout, so `cargo` cannot resolve
+  `../sipx/crates/sipx-sdp` and the `clippy`, `msrv` and `postgres` jobs all fail at dependency
+  resolution before running anything. Only `fmt` — which resolves nothing — still reports on the
+  code itself. Anyone reading red CI in this window should check the cause is that resolution
+  error before believing a real regression: the tag `v1.0.0-beta.4` is on the GitHub remote, so
+  deleting the `[patch]` section is the whole fix whenever the decision is made.
 - Not done here: the CHANGELOG entry (comes with close), the `[patch]` removal (waits on the
   user's push decision), and the real-phone e2e proof against a `sipx` CLI built from the same
   tag — the story stays `in-progress` until those settle.
