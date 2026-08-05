@@ -249,21 +249,26 @@ The caller is the same [sipx](https://github.com/codewandler/sipx) CLI, out of t
 image you built in step 3 — a separate project, deliberately not vendored here, because the point of
 an end-to-end proof is that the other end is an independent implementation.
 
-Dial it from inside the cluster. The greeting's address-of-record is `hello@sipx-clstr-node-a` —
-node-a's Service name, which is also the domain the profile's tenant declares, because `domains` is
-enforced and a `REGISTER` outside it is answered `403`. A name rather than the Service's address:
-the document is written before any pod or Service has one:
+Dial it from inside the cluster. The greeting's address-of-record is `hello@10.43.0.60` —
+node-a's Service address, which the profile pins with a static `clusterIP` and also declares as the
+tenant's domain, because `domains` is enforced and a `REGISTER` outside it is answered `403`. One
+string has to wear three hats here: `sipx dial` sends to the literal address it is given and
+resolves no names, the tenant's list can only hold what is known before any pod exists, and a
+static `clusterIP` is the one address that is both — declared in the manifest, dialable on the
+wire. It sits in k3s's default Service CIDR (`10.43.0.0/16`), so the cluster from step 3 serves it;
+a cluster created with a different CIDR refuses the Service at apply time rather than failing when
+you dial:
 
 ```bash
 kubectl -n sipx-clstr-dev run caller --rm -i --restart=Never \
   --image=sipx-phone:dev --image-pull-policy=IfNotPresent --command -- \
   /bin/sh -c "ME=\$(hostname -i | awk '{print \$1}'); \
-    sipx dial sip:hello@sipx-clstr-node-a --local \$ME:15080 \
+    sipx dial sip:hello@10.43.0.60 --local \$ME:15080 \
       --duration 6 --record /tmp/heard.wav --stats --json"
 ```
 
 ```text
-{"status":"answered","peer":"sip:hello@sipx-clstr-node-a","duration_ms":3566,
+{"status":"answered","peer":"sip:hello@10.43.0.60","duration_ms":3566,
  "samples_recorded":24000,"heard_audio":true,"loss":0.0000,"jitter_ms":0,"mos":4.40}
 ```
 

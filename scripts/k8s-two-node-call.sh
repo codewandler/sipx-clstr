@@ -106,19 +106,20 @@ step "two phones, registering through different pods"
 # arrangement a real client would be in.
 kubectl -n "$NS" delete pod sipx-phones --ignore-not-found --wait=true >/dev/null 2>&1
 
-# The address-of-record domain is node-a's *Service name* for both users, while bob is registered
-# *through* node-b with `--target`. That is what makes this a cross-node test: bob's binding is
-# written by node-b, and the INVITE that finds it is resolved by node-a. `sipx dial` takes no
-# `--target` — the URI it is given is the destination — so the AoR domain has to be something that
-# resolves to node-a, and one shared domain keeps both AoRs in the same namespace for the lookup.
-# No port in the AoR — `register` refuses one there, and `dial` defaults to 5060, which is the
-# Service port.
+# The address-of-record domain is node-a's *static clusterIP* for both users, while bob is
+# registered *through* node-b with `--target`. That is what makes this a cross-node test: bob's
+# binding is written by node-b, and the INVITE that finds it is resolved by node-a. `sipx dial`
+# takes no `--target` — the URI it is given is the destination, sent to literally, with no name
+# resolution — so the AoR domain has to be an address that *is* node-a, and one shared domain
+# keeps both AoRs in the same namespace for the lookup. No port in the AoR — `register` refuses
+# one there, and `dial` defaults to 5060, which is the Service port.
 #
-# The Service name rather than the pod IP `$NODE_A`, which is what this used to be. `FC-4` made a
-# REGISTER outside the tenant's served domains a `403`, and `domains` is a literal list in a
-# ConfigMap that is written before any pod has an IP — so a runtime address can never be in it. A
-# per-node ClusterIP is stable, is in the document, and resolves to exactly the pod the IP named.
-DOMAIN="sipx-clstr-node-a"
+# A static clusterIP rather than the Service name, which is what this used to be — and the pod IP
+# `$NODE_A` before that. The name satisfied `FC-4` and `FC-5` (a literal, in a ConfigMap written
+# before any pod has an IP) and then `dial` exited on it, because a name is not a destination
+# (`KO-18`). The static IP, declared in the same manifest as the document, is still not a runtime
+# value — and it is one a phone can send to.
+DOMAIN="10.43.0.60"
 cat > "$work/phones.sh" <<SCRIPT
 set -u
 ME="\$(hostname -i | awk '{print \$1}')"
