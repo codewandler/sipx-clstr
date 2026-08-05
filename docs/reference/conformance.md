@@ -9,9 +9,9 @@ row states, *shape only* when a test covers it but never compares a value it sta
 *deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that
 will.
 
-**138 of 585 rows proved**; 19 covered for shape only; 428 deferred.
+**164 of 593 rows proved**; 19 covered for shape only; 410 deferred.
 
-Σ over the 61 sections below is 585, so every row counted above is shown in exactly one table.
+Σ over the 61 sections below is 593, so every row counted above is shown in exactly one table.
 
 ## What these words mean
 
@@ -57,6 +57,8 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-P-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-P-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `403` |
 | `PB-P-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `403` |
+| `PB-P-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-P-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — request forwarding (§7)
 
@@ -67,6 +69,9 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `PB-F-3` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-4` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 | `PB-F-5` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` — asserts `480` |
+| `PB-F-6` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-7` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
+| `PB-F-8` | proved | `crates/sipx-clstr-proxy/tests/vectors_proxy.rs` |
 
 ## Proxy — response processing (§8)
 
@@ -334,15 +339,18 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 | `LS-R-21` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` |
 | `LS-R-22` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
 | `LS-R-23` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-24` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
-| `LS-R-25` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
+| `LS-R-24` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `403` |
+| `LS-R-25` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
 | `LS-R-26` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
 | `LS-R-27` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
 | `LS-R-28` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
 | `LS-R-29` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
-| `LS-R-30` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `10`, `403`, `9` |
+| `LS-R-30` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
 | `LS-R-31` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
-| `LS-R-32` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-32` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `10`, `403`, `9` |
+| `LS-R-33` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200`, `7200` |
+| `LS-R-34` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `200` |
+| `LS-R-35` | proved | `crates/sipx-clstr-registrar/tests/vectors_register.rs` — asserts `500` |
 
 ## Location service — the consistency contract (§6)
 
@@ -592,24 +600,24 @@ exactly what the test is worth. And nothing here says the spec itself is right.
 
 | Row | Status | Proved by / deferred to |
 |---|---|---|
-| `AT-1` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-2` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-3` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-4` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-5` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-6` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-7` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-8` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-9` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-10` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-11` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-12` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-13` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-14` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-15` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-16` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-17` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
-| `AT-18` | deferred | `AF-4` — The affinity token. No token is minted, signed or verified anywhere in the workspace — `AF-4` implements the mint/verify library and `AF-5` round-trips it through `Record-Route`. |
+| `AT-1` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-2` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-3` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `46` |
+| `AT-4` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-5` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `58` |
+| `AT-6` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `114`, `157 B`, `200 B` |
+| `AT-7` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-8` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-9` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `1785326430` |
+| `AT-10` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-11` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-12` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-13` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-14` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-15` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `50` |
+| `AT-16` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` |
+| `AT-17` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `5`, `28`, `20` |
+| `AT-18` | proved | `crates/sipx-clstr-affinity/tests/vectors_affinity_token.rs` — asserts `115`, `114`, `64` |
 
 ## Flow reference — mint, resolution and negative vectors (§14)
 

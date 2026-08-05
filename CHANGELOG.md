@@ -7,7 +7,167 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The affinity token can be minted and verified** (`AF-4`). `crates/sipx-clstr-affinity` implements
+  `affinity-token`'s mint/verify contract, and all **eighteen** of its §10 vectors now pass — the
+  first coverage M2's defining subsystem has ever had, taking the report from 136 to **154 of 583
+  rows proved**. M2's headline criterion is *mid-dialog requests route by token with zero cross-node
+  dialog lookups*; this is the token that makes it possible, and `PX-13` already made in-dialog
+  requests route by the `Route` set it will travel in.
+
+  **The vectors were derived twice, independently, by parties that never met.** The implementor
+  recomputed `AT-1`…`AT-18` against an independent ChaCha20-Poly1305 before writing any Rust; the
+  review then recomputed nine of them from **§3's field table** rather than §10's printed hex, using
+  OpenSSL rather than RustCrypto, and reproduced the plaintexts, tokens and base64url parameters
+  byte-identically. That agreement is only possible if header composition, field order, endianness
+  and the AAD all match — so the spec and the implementation were not bent toward each other.
+
+  **Sans-IO is enforced by the dependency graph, not by review.** `default-features = false` on the
+  AEAD is load-bearing: the default feature set pulls in `getrandom`, which would put an
+  operating-system entropy source inside a crate whose whole contract is that randomness arrives as an
+  *injected* value. `getrandom` reaches this crate for none of its three versions, checked again after
+  the dependency moved to `[workspace.dependencies]`.
+
+  **`CX-5`'s defect class is closed rather than avoided.** That finding — a nonce that is a pure
+  function of the second, the realm and the secret, so two clients challenged in the same second
+  collide — is the obvious failure mode for a minted token. The nonce here is 96 *injected* bits,
+  never derived; `AT-1` and `AT-2` share claims and differ in every byte after offset 1; and §8 `S9`
+  refuses a pair whose two entries share one.
+
+  The AAD is the whole 14-byte header **including version and key id**, so a token cannot be
+  relabelled to another key or replayed as a flow reference. Both AEAD failure modes collapse to a
+  single `Reason::Tag` — there is no padding and no distinguishable branch, so no oracle — and
+  `Reason` has neither a `Display` nor an `Error` impl, so it cannot be formatted into a response by
+  accident. Verification is stateless *structurally*: `verify` takes `&KeySet` and the crate contains
+  no interior mutability, so a replay ledger would not compile.
+
+  Robustness was measured rather than sampled: 200 000 random buffers, 260 000 structured mutants at
+  every facts length, and the `u32` corners, in **debug** with overflow checks on. No panic, and no
+  random input ever verified.
+
+- **Cluster membership, keys and the shard map are specified, and key rotation has a runbook**
+  (`AF-6`). `docs/specs/cluster-membership.md` defines the `membership[]`, `keys[]` and `shardMap`
+  sections, the reload contract, and the two-phase rotation an operator actually follows. It is M2's
+  key-distribution contract: `AF-4`'s token library consumes `keys[]` as an input, and `KY1` freezes
+  its six attributes and binds a change to a new `apiVersion`, so the interface cannot move under a
+  proved surface.
+
+  `cluster-config` keeps every rule of §1–§9 — only three *pointers* moved, which its own §10 `A6`
+  authorises. Nothing is defaulted twice: `L`, `S`, `E_max` and the `keys` ceiling all cite their
+  owners rather than restating them, per §8 `V3`.
+
+  **`CX-5`'s defect class is closed rather than avoided.** That finding — the kernel's digest nonce
+  being a pure function of the second, the realm and the secret, so two clients challenged in the same
+  second collide — has an obvious analogue in key distribution: two nodes deriving the same material
+  from the same inputs. `UQ2`/`UQ3` forbid derivation outright and make distribution a verbatim
+  transport with no agreement step; `UQ4` tabulates every unique-required value with the point at
+  which a duplicate is refused; and `UQ5` names `boot-second` as having *exactly* `CX-5`'s shape and
+  points at its mitigation.
+
+  **Retiring a compromised key is restart-class, and the spec says so** rather than implying
+  otherwise: `cluster-config` §9.3 `RL11` has no in-document escape, so `RB9` activates the successor
+  by reload everywhere and then rolls a restart with the compromised key removed, with exposure
+  bounded by the roll. One security operation that configuration cannot perform, stated where an
+  operator will meet it.
+
+  Specified, not yet loaded: a document written to §3 will not start a node today — `rpc` and
+  `incarnationSource` fall outside the loader's closed world and `keys`/`shardMap` are still deferred
+  sections. `DP-16` owns closing that, and carries the four in-tree documents `MB5` will invalidate
+  the day it does.
+
+- **A transaction nothing will collect now fails the gate** (`CF-22`). No gate step started a node,
+  completed a call, and watched the transaction accounting return to zero. `scripts/e2e-call.sh` did
+  — and `CF-15` deliberately made it a separate CI job rather than a gate step, so that a red reads
+  "the end-to-end call broke" rather than "the gate is red" and `gate.sh` stays runnable without a
+  second checkout. A good decision, and this is the hole it left: the one check watching resource
+  lifetime was the one contributors never ran.
+
+  **The bound is `128·T1`, not `64·T1`, and the derivation lives in the code rather than in a comment
+  beside a constant.** For a proxied non-INVITE to a silent next hop the two windows are additive and
+  neither is optional: Timer F (`64·T1`, §17.1.2.2) concludes the client transaction — §16.8 confines
+  Timer C to INVITE, so nothing proxy-level ends it sooner — and only then does §16.7 have a final
+  response to forward, at which point Timer J (`64·T1`, §17.2.2) starts. Until then the server
+  transaction sits in Trying/Proceeding, which §17.2.2 gives **no timer at all**.
+
+  The failing-first proof is an **injected hold nothing answers**, and its permanent form asserts the
+  hold is the same size twenty windows later — so it proves unboundedness rather than slowness. The
+  bound is load-bearing rather than decorative, falsified twice: halving it to one window makes the
+  RFC's own worst case fail.
+
+  It also corrects **`scripts/e2e-call.sh`**, whose drain loop waited **50 s** — strictly between one
+  window and two — under a comment that budgeted for one. That threshold reverted a correct fix; the
+  loop now waits past `128·T1`, spells out the arithmetic, and stops calling a bounded drain a leak.
+
 ### Fixed
+
+- **Every `ACK` was resolved as an address of record, and dropped when there was no binding**
+  (`PX-13`, validated review finding `V-03`). An `ACK` went through a path that ignored the `Route`
+  set, treated the Request-URI as an AoR, asked the location service, took the first registration, and
+  **silently dropped the request when there was none**. An ordinary remote `Contact` is not the
+  registered AoR, so a normal call's `ACK` was dropped. Other in-dialog methods were preprocessed
+  correctly by the pure engine and then the driver resolved their next hop as an AoR lookup anyway —
+  a global lookup on the signalling hot path, which non-negotiable #5 calls wrong *by definition*
+  rather than merely slow.
+
+  `ACK` is now split by semantics, specified as `proxy-behavior` §7.2: the kernel's generated
+  downstream `ACK` for a non-2xx stays transaction-scoped, an upstream non-2xx `ACK` is absorbed by
+  its server transaction, and a 2xx `ACK` is a **separately routed request that is never answered**.
+  The two this does not touch were verified against the pinned kernel's own transaction code. In-dialog
+  requests take the core's selected next hop, and an unaddressable branch settles as an explicit
+  `BranchTransportError` — §16.9 `R10` → `R8` — instead of being skipped while the context waits for a
+  response nothing will send.
+
+  **Why the harness never caught it:** the simulation's `ACK`/`BYE` are AoR-shaped, so they resolved by
+  accident. The proof asserts the negative *positively* — two trap sockets registered under the
+  contacts' canonical AoRs must both stay at zero hits, and the pre-fix run **observes** the hit rather
+  than inferring the defect from silence.
+
+  It also narrowed `P1`, which turned out to be required: `is_ours` is host-scoped and port-agnostic,
+  so on a loopback deployment `P1` fired on ordinary mid-dialog requests and replaced the remote target
+  with our own `Record-Route`. Verified in both directions — it cannot consume a route it does not own,
+  and still fires on every value this platform places.
+
+  **This shipped, was reverted, and was re-landed unchanged.** It was reverted for failing
+  `e2e-call.sh`'s drain check; `CF-22` then established by measurement that the *check* was the defect
+  — the store drains at exactly `64.000 s = 128·T1`, which the RFC permits, and the script waited
+  50 s. The old check passed on `main` only because `main` answered a dialog's `BYE` `480` itself
+  instead of delivering it, which is this very defect. It rewarded the bug and punished the fix.
+
+- **One REGISTER could buy a fifth of a second of a core** (`RG-25`). Nothing capped how many contact
+  operations a single REGISTER may carry. Roughly 3500 fit inside the 64 KB message limit once
+  `Address::parse_list` flattens comma lists, and reconciliation is quadratic in that count, so
+  against an address of record at its quota one datagram cost **211 ms** where a bounded one costs
+  1.15 ms. `REGISTER` is deliberately exempt from the node's admission bound — a registration storm
+  *is* the overload, and shedding refreshes turns a spike into an outage — so nothing upstream limited
+  it either, and the registrar is open.
+
+  `location-service` **§5.5.1** now states the bound normatively as rules `Q1`–`Q5`, anchored into
+  §5.1's step order as **S6.1**, with an over-limit request answered `403`. The refusal sits before
+  the wildcard/explicit split, so no stored binding is read, cloned, parsed or compared — position is
+  the rule rather than an optimisation, because a bound applied *after* reconciliation refuses the
+  same requests and prevents nothing.
+
+  **The failing-first proof is 65 removals**, and the choice is the point: a removal never grows the
+  set, so §5.5's binding quota cannot refuse such a request however long it is. That is why a second
+  bound has to exist at all, and why `RG-14`'s quota pre-check could never have covered this class
+  wherever it sat. The proof is measured, not timed — a new `op_meter` counts the request's own
+  operations, because the existing `parse_meter` counts *stored* contacts and so reads `0` against an
+  empty address of record whether the request carries one operation or three thousand.
+
+  The bound is a per-tenant policy field rather than a constant, since a flat constant would collide
+  with a configurable `maxBindingsPerAor`; §5.5.1 states the consistency rule and `FC-7` enforces it
+  at load, because enforcement belongs to a configuration surface and not to a pure decision function.
+
+  **Considered for upstream and declined, with the reason recorded in the spec rather than only in a
+  commit:** a parser-level element cap *is* protocol-generic, and it would buy nothing this does not.
+  Flattening is linear and the kernel already bounds 64 KB per message, 8 KB per header and 256
+  headers, so the amplification is entirely in our reconciliation. Independently, §5.7's
+  `BeforeRegistrarUpdate` may *adjust* the contact operations after parsing — so a parser-only bound
+  is one a module could walk past.
+
+  This is `RG-14`'s Acceptance item 2, which never landed. `RG-14` is `done` with **zero** of its five
+  boxes ticked and no changelog entry; its parse-once view genuinely shipped and this did not.
 
 - **A node answered every method, whatever roles it was given** (`DP-13`, validated review finding
   `V-01`, filed as `FC-6` before the review backlog renumbered it). The projected role set was read,

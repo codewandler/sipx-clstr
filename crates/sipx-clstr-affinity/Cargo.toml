@@ -1,0 +1,31 @@
+[package]
+name = "sipx-clstr-affinity"
+description = "Sans-IO affinity tokens: mint, encode, parse, verify, with key rotation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+# Nothing is published until M1's exit criteria hold, and this crate is M2's.
+publish = false
+
+[dependencies]
+bytes.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+chacha20poly1305.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+# The §10 negative vectors `AT-17` and `AT-18` are records `mint` refuses to produce — a lying
+# framing byte and an over-budget region — so the suite seals them itself from the plaintexts the
+# spec prints. Sealing them through a second, independent code path is worth more than a hex blob
+# copied twice: it is what makes "this fixture is what the spec describes" a checked claim.
+chacha20poly1305.workspace = true
+
+[lints]
+workspace = true

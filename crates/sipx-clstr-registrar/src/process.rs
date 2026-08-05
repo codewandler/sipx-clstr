@@ -46,6 +46,27 @@ pub fn process(cmd: &RegisterCommand, current: &BindingSet, policy: &TenantPolic
         return Outcome::Reject(Rejection::ExtensionRequired("path"));
     }
 
+    // S6.1 — §5.5.1 Q1/Q2, the bound on the *request*, decided before any per-contact work and
+    // before a single stored binding is read. Position is the whole rule: reconciling one REGISTER
+    // compares every operation it carries against every stored binding, so the work is
+    // `operations × bindings`, and §5.5's quota constrains only the second factor. A bound applied
+    // after reconciliation would refuse the same requests and prevent nothing.
+    //
+    // Not a cheaper spelling of the quota, either. A REGISTER made entirely of refreshes and
+    // removals never grows the set, so §5.5 cannot refuse it however long it is (Q5) — which is why
+    // `RG-14`'s pre-check could never have covered this class, and why the input needs a bound of
+    // its own rather than an earlier evaluation of the outcome's.
+    //
+    // A wildcard is exempt (Q4): it is one operation whose cost is proportional to the stored set
+    // alone, which the quota already bounds, so the request's length cannot amplify it.
+    if let ContactOps::Explicit(ops) = &cmd.contacts
+        && ops.len() > policy.max_contact_ops
+    {
+        return Outcome::Reject(Rejection::Forbidden(
+            "the REGISTER carries more contact operations than this tenant permits",
+        ));
+    }
+
     match &cmd.contacts {
         ContactOps::Wildcard => wildcard(cmd, current),
         ContactOps::Explicit(ops) => explicit(cmd, current, policy, ops),
@@ -89,7 +110,50 @@ fn wildcard(cmd: &RegisterCommand, current: &BindingSet) -> Outcome {
     }
 }
 
+/// S7 — the granted lifetime of every contact operation, decided before any mutation.
+///
+/// E6 fails the *whole* request, so every contact has to be decided before the first one is
+/// applied; otherwise a too-brief second contact would leave the first one committed.
+///
+/// This is also the **first per-operation work** a reconciliation does, which is why §5.5.1's meter
+/// sits here: an over-limit request is refused in [`process`] and never reaches this function, so
+/// the count it reports is zero.
+fn granted_expiries(
+    cmd: &RegisterCommand,
+    policy: &TenantPolicy,
+    ops: &[ContactOp],
+) -> Result<Vec<u32>, Rejection> {
+    let mut granted = Vec::with_capacity(ops.len());
+    for op in ops {
+        #[cfg(any(test, feature = "test-suite"))]
+        op_meter::record();
+
+        let requested = op
+            .expires // E1
+            .or(cmd.expires_header) // E2
+            .unwrap_or(policy.default_expires); // E3
+
+        if requested == 0 {
+            granted.push(0); // E4 — removal, never subject to E5 or E6.
+            continue;
+        }
+        if requested < policy.min_expires {
+            // E6 — and the response must state the minimum, or the UA cannot correct itself.
+            return Err(Rejection::IntervalTooBrief {
+                min: policy.min_expires,
+            });
+        }
+        // E5 — silently lowered. §10.3 step 7 allows shortening, and the response states what was
+        // actually granted, so the UA is not misled about when to refresh.
+        granted.push(requested.min(policy.max_expires));
+    }
+    Ok(granted)
+}
+
 /// §5.2, §5.3, §5.5 — explicit `Contact` values.
+///
+/// §5.5.1's bound on how many of them there may be is decided in [`process`], before this is
+/// reached: an over-limit request must not pay for anything here.
 fn explicit(
     cmd: &RegisterCommand,
     current: &BindingSet,
@@ -104,34 +168,10 @@ fn explicit(
         };
     }
 
-    // S7 — expiry selection for every contact, before any mutation. E6 fails the *whole* request,
-    // so it has to be decided for all contacts before the first one is applied; otherwise a
-    // too-brief second contact would leave the first one committed.
-    //
-    // `grants[i]` is what operation `i` is granted, and it is kept as a whole vector rather than
-    // consumed one element at a time because B8 has to read the *other* entries: whether an
-    // operation is the command's last word on a binding depends on the ones after it.
-    let mut grants = Vec::with_capacity(ops.len());
-    for op in ops {
-        let requested = op
-            .expires // E1
-            .or(cmd.expires_header) // E2
-            .unwrap_or(policy.default_expires); // E3
-
-        if requested == 0 {
-            grants.push(0); // E4 — removal, never subject to E5 or E6.
-            continue;
-        }
-        if requested < policy.min_expires {
-            // E6 — and the response must state the minimum, or the UA cannot correct itself.
-            return Outcome::Reject(Rejection::IntervalTooBrief {
-                min: policy.min_expires,
-            });
-        }
-        // E5 — silently lowered. §10.3 step 7 allows shortening, and the response states what was
-        // actually granted, so the UA is not misled about when to refresh.
-        grants.push(requested.min(policy.max_expires));
-    }
+    let grants = match granted_expiries(cmd, policy, ops) {
+        Ok(grants) => grants,
+        Err(rejection) => return Outcome::Reject(rejection),
+    };
 
     let mut set = current.clone();
     set.drop_expired(cmd.now);
@@ -141,9 +181,12 @@ fn explicit(
     let reaped = set.all().len() != current.all().len();
     let mut view = Reconciling::new(set);
     let mut changed = false;
+    // §5.3.2 B8's deferred decisions. Empty for every request that does not re-present a spent
+    // ordering token, which is every request but a retransmission.
+    let mut pending: Vec<Pending> = Vec::new();
 
-    // §5.5 is decided **after** the loop, on the reconciled set, and there is deliberately no
-    // pre-check ahead of it any more.
+    // §5.5 is decided **after** the loop, on the reconciled set, and `RG-14`'s pre-check ahead of it
+    // is gone with no replacement.
     //
     // The rule is a test on the *committed outcome* — "a REGISTER whose committed outcome would
     // exceed it fails `403 Forbidden`" — and it says in terms that "refreshes, replacements and
@@ -156,15 +199,18 @@ fn explicit(
     // The first counted every positive-expiry operation as an addition and refused refreshes
     // (LS-R-15). The second counted a candidate unless it was equivalent to one already counted —
     // an *upper* bound on additions, so `x;line=1, x, x;line=2` against nine held bindings was
-    // answered `403` where the committed outcome is ten (LS-R-30). Both were conservative, and
+    // answered `403` where the committed outcome is ten (LS-R-32). Both were conservative, and
     // conservative is the wrong direction here: a `403` is a policy refusal a UA cannot retry out of,
     // so refusing what the quota permits is worse than costing one more pass over the operations.
     //
-    // No cheap bound rescues it either. Counting a candidate unless it is equivalent to *any*
-    // preceding one is exact for that chain — §19.1.4 equivalence is non-transitive, so `a ≡ b`,
-    // `b ≡ c`, `a ≢ c` genuinely commits one binding in that order and two in the order `a, c, b` —
-    // but it is still an upper bound once the request also carries a removal of something it added.
-    // The reconciled set is the only exact answer, so it is the only one asked.
+    // **What the pre-check bought is bought elsewhere now, which is why deleting it costs nothing.**
+    // Its only purpose was to bound reconciliation work, and it was sound solely because the most
+    // active bindings a request could reach was `current_active + genuine_additions` — a premise B6
+    // and B7 retired by letting several operations collapse onto one binding. §5.5.1 bounds the
+    // request's *length* instead (`max_contact_ops`, refused in [`process`] before a single stored
+    // binding is read), and that needs no premise about reconciliation at all: with both factors of
+    // `operations × bindings` bounded by policy, the quota is free to be asked once, on the only set
+    // that can answer it.
     for (op, granted) in ops.iter().zip(grants.iter().copied()) {
         // §5.3 — binding identity by §19.1.4 comparison. Equivalence is non-transitive, so an
         // incoming contact can match more than one stored binding; the first in creation order is
@@ -183,9 +229,24 @@ fn explicit(
                 changed = true;
             }
             Some(index) => {
+                let Some(slot) = view.slot_id(index) else {
+                    continue;
+                };
                 let Some(stored) = view.get(index) else {
                     continue;
                 };
+
+                // §5.3.2 B8 — this operation is now the request's last word on the binding it
+                // resolved to, so every decision still waiting on that binding is re-based onto this
+                // grant. Recorded as the loop walks forward rather than predicted from where it
+                // stands, because "the last operation that resolves to it" is B6's resolution: which
+                // binding an operation lands on depends on what the operations *between* the two did
+                // to the set, and nothing that has not run yet knows that.
+                for deferred in &mut pending {
+                    if deferred.slot == slot {
+                        deferred.net = granted;
+                    }
+                }
 
                 // §5.3.2 B7 — B2–B5 compare this request's token against the token of the request
                 // that last *wrote* the matched binding. When an earlier operation of this same
@@ -217,16 +278,20 @@ fn explicit(
                         // verbatim retransmission of `CC;expires=3600, CC;expires=7200` with B5's
                         // `500` — the stored binding holds 7200, exactly what the command asks — so
                         // the one request B7 exists to legalise was the one a UA could not
-                        // retransmit (LS-R-31).
+                        // retransmit (LS-R-33).
                         //
-                        // Asked only after the cheap comparison fails, and only when a later
-                        // operation supersedes this one, so the ordinary single-operation
-                        // retransmission pays nothing for it.
-                        let net = net_grant(&view, ops, &grants, index).unwrap_or(granted);
-                        if net != granted && already_holds(stored, cmd, net) {
-                            continue;
-                        }
-                        return Outcome::Reject(Rejection::StaleSequence);
+                        // Which later operation supersedes this one is not knowable here, so it is
+                        // not guessed at: the decision is deferred and this operation is left
+                        // unapplied. Deferring is exactly self-consistent, because the two answers
+                        // this branch can give are "no mutation" (B4) and "abort the request" (B5) —
+                        // never "apply" — so the continuation the rest of the loop reconciles is the
+                        // one the answer will turn out to have described, whichever it is.
+                        pending.push(Pending {
+                            slot,
+                            stored: stored.clone(),
+                            net: granted,
+                        });
+                        continue;
                     }
                     // B3 — newer CSeq, same Call-ID: apply.
                 } // B2 — a different Call-ID applies regardless of CSeq: the UA restarted, and its
@@ -247,6 +312,21 @@ fn explicit(
         }
     }
 
+    // §5.3.2 B8, decided now that the request's last word on every binding is known. Each deferred
+    // operation re-presented a spent ordering token; it is B4's retry when the store already holds
+    // what the request asks of that binding, and B5's second write under a spent token when it does
+    // not. B4's remedy needs nothing further — the operation was left unapplied, which is exactly
+    // "no mutation" (B4.2).
+    //
+    // Ahead of the quota deliberately. §5.5 says that where a request would both exceed the quota and
+    // abort under S9, S9's failure is the one reported, so a `500` here must not be overtaken by a
+    // `403` computed from a set this request is not allowed to commit in the first place.
+    for deferred in &pending {
+        if !already_holds(&deferred.stored, cmd, deferred.net) {
+            return Outcome::Reject(Rejection::StaleSequence);
+        }
+    }
+
     let set = view.into_set();
 
     // S8 — the quota (§5.5), and the only place it is asked: on the reconciled set, which is the
@@ -263,7 +343,7 @@ fn explicit(
     // §5.3.2 B9 — a request whose reconciled set is the set it read commits nothing, so the revision
     // does not move (B4.2). `changed` records that an operation *mutated the view*, which is not the
     // same question: an addition a later operation of the same request takes back leaves the durable
-    // set exactly as it was (LS-R-28's shape), and committing it would spend a revision and publish a
+    // set exactly as it was (LS-R-30's shape), and committing it would spend a revision and publish a
     // change event describing no change. The two deliveries of such a request are also
     // indistinguishable from the store — nothing survives to carry the ordering token — so the only
     // way the retransmission can be idempotent is for neither delivery to write.
@@ -304,10 +384,19 @@ struct Reconciling {
     /// second alignment to keep — the invariant is `slots.len() == set.all().len()`, and the three
     /// mutators below are the only things that can change either side of it.
     slots: Vec<Slot>,
+    /// The next unused [`Slot::id`]. Monotonic for the life of one reconciliation.
+    next_id: usize,
 }
 
 /// What reconciliation knows about one binding beyond the binding itself.
 struct Slot {
+    /// A name for this binding that survives the set being reordered under it (§5.3.2 B8).
+    ///
+    /// An index is not a name here: a removal shifts every later binding down one, so a decision
+    /// deferred against index 3 would silently re-target when index 2 went away — the very class of
+    /// defect `RG-16` exists to close, reintroduced one level up. The id is minted on the way in and
+    /// carried through `replace`, because a replaced binding is still the binding the request matched.
+    id: usize,
     /// The binding's contact URI, or `None` when those bytes do not parse.
     ///
     /// A binding whose stored contact will not parse matches nothing, which is the same answer a
@@ -324,6 +413,31 @@ struct Slot {
     written_here: bool,
 }
 
+/// One §5.3.2 B8 decision the loop could not answer where it arose.
+///
+/// An operation that re-presents a spent ordering token is B4's retry or B5's abort depending on the
+/// **net** outcome the request asks of the binding it matched — the grant of the last operation of the
+/// request that resolves there. Resolution is B6's, so what that last operation is depends on what the
+/// operations between the two do to the set, and no amount of looking at the set as it stands now can
+/// tell: predicting it from the current view is the defect this record exists to remove, which
+/// committed `[CC;line=9, CC;line=9]` for a request whose first operation should have aborted it
+/// (LS-R-35).
+///
+/// Deferring costs nothing in soundness, because this branch's two answers are "no mutation" and
+/// "abort the whole request" — never "apply". Leaving the operation unapplied is therefore the
+/// continuation both answers describe, so the rest of the loop reconciles the set that will actually
+/// have happened, and the answer can be read off at the end.
+struct Pending {
+    /// The [`Slot::id`] of the binding the deferred operation matched.
+    slot: usize,
+    /// That binding as the request found it — B4's comparison base, and durable state rather than
+    /// anything this request wrote.
+    stored: crate::binding::Binding,
+    /// The grant of the newest operation seen so far that resolves to `slot`; the deferred
+    /// operation's own until a later one supersedes it.
+    net: u32,
+}
+
 impl Reconciling {
     /// Parse each stored contact **once** for the whole reconciliation (`RG-14`).
     ///
@@ -332,13 +446,15 @@ impl Reconciling {
     /// attacker can tune. The parse is the expensive part; equivalence on two already-parsed URIs
     /// is not.
     fn new(set: BindingSet) -> Self {
-        let slots = set
+        let slots: Vec<Slot> = set
             .all()
             .iter()
-            .map(|binding| {
+            .enumerate()
+            .map(|(index, binding)| {
                 #[cfg(test)]
                 parse_meter::record();
                 Slot {
+                    id: index,
                     uri: sipx_sip::Uri::parse(binding.contact.clone()).ok(),
                     // Everything the set arrived with was written by some earlier request — this
                     // one has not applied an operation yet.
@@ -346,7 +462,12 @@ impl Reconciling {
                 }
             })
             .collect();
-        Self { set, slots }
+        let next_id = slots.len();
+        Self {
+            set,
+            slots,
+            next_id,
+        }
     }
 
     /// The first binding in creation order whose contact is §19.1.4-equivalent to `uri`.
@@ -371,9 +492,16 @@ impl Reconciling {
         self.slots.get(index).is_some_and(|slot| slot.written_here)
     }
 
+    /// The reorder-proof name of the binding at `index` (§5.3.2 B8).
+    fn slot_id(&self, index: usize) -> Option<usize> {
+        self.slots.get(index).map(|slot| slot.id)
+    }
+
     /// Add a binding whose contact parsed to `uri`, keeping both halves in creation order.
     fn insert(&mut self, binding: crate::binding::Binding, uri: sipx_sip::Uri) {
         let at = self.set.insert_at(binding);
+        let id = self.next_id;
+        self.next_id = self.next_id.saturating_add(1);
         // `insert_at` computes its position by `partition_point` over the set *before* the insert,
         // so with `slots.len() == set.all().len()` holding on entry, `at` is at most `slots.len()`
         // — exactly the range `Vec::insert` accepts. The clamp is therefore unreachable, and kept
@@ -383,6 +511,7 @@ impl Reconciling {
         self.slots.insert(
             at,
             Slot {
+                id,
                 uri: Some(uri),
                 written_here: true,
             },
@@ -390,6 +519,9 @@ impl Reconciling {
     }
 
     /// Replace the binding at `index` with one whose contact parsed to `uri`.
+    ///
+    /// The slot keeps its `id`: a replaced binding is still the binding an operation matched, which is
+    /// what §5.3.2 B8's deferred decisions are recorded against.
     fn replace(&mut self, index: usize, binding: crate::binding::Binding, uri: sipx_sip::Uri) {
         if let Some(slot) = self.slots.get_mut(index) {
             slot.uri = Some(uri);
@@ -447,33 +579,45 @@ pub(crate) mod parse_meter {
     }
 }
 
-/// The grant this command's **net** outcome gives the binding at `index` — §5.3.2 B8's comparison
-/// base for B4.
+/// A meter over how many **contact operations of the request** one reconciliation examined
+/// (`RG-25`).
 ///
-/// §5.3 states idempotency per *binding*, against "the command's requested outcome". For a single
-/// operation those are the same thing, which is why the distinction stayed invisible until B6 let
-/// several operations of one request resolve to one binding. When they do, the last of them is the
-/// outcome the command requests: the earlier writes are ones this same request overwrites before
-/// anything commits, so a stored binding holding the *later* grant is a binding that already is what
-/// the command asks for.
+/// A second instrument beside `parse_meter`, because the two count different factors of the same
+/// product and neither can see the other's. `parse_meter` counts *stored* contacts, so it measures
+/// work proportional to the binding set: against an empty address-of-record it reads `0` whether a
+/// REGISTER carries one contact operation or three thousand, which is precisely the class §5.5.1
+/// bounds. This one counts the request's own operations, so an over-limit request reads `0` and a
+/// conforming one reads its length.
 ///
-/// `None` when no operation resolves here, which the caller cannot actually reach — it is asked from
-/// inside the branch where one just did — so the caller falls back to that operation's own grant and
-/// the answer is unchanged rather than guessed at.
+/// A thread-local, for `parse_meter`'s reason: `process` runs synchronously on its caller's
+/// thread, and a global atomic would let a sibling test's operations leak into the delta.
 ///
-/// Resolution is `Reconciling::find`, not `Uri::equivalent` against the operation, so this asks
-/// exactly the question the loop asks: §19.1.4 equivalence is non-transitive and more than one stored
-/// binding can match, so "an operation equivalent to this binding's contact" and "an operation that
-/// would land on this binding" are different sets, and only the second one supersedes anything.
-///
-/// Every comparison is over already-parsed URIs, so `RG-14`'s parse budget — one parse per stored
-/// binding, none per operation — is untouched.
-fn net_grant(view: &Reconciling, ops: &[ContactOp], grants: &[u32], index: usize) -> Option<u32> {
-    ops.iter()
-        .zip(grants.iter().copied())
-        .rev()
-        .find(|(op, _)| view.find(&op.uri) == Some(index))
-        .map(|(_, grant)| grant)
+/// Compiled under `test-suite` as well as `test` so the shared conformance suite can assert the
+/// bound's *cost* on every backend rather than only its answer — the in-memory store and PostgreSQL
+/// run the identical rows, and a row that checked the status alone would pass on a backend that had
+/// paid for the whole reconciliation first.
+#[cfg(any(test, feature = "test-suite"))]
+pub(crate) mod op_meter {
+    use std::cell::Cell;
+
+    thread_local! {
+        static OPS_EXAMINED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// Forget every operation counted so far on this thread.
+    pub(crate) fn reset() {
+        OPS_EXAMINED.with(|count| count.set(0));
+    }
+
+    /// Count one contact operation examined.
+    pub(crate) fn record() {
+        OPS_EXAMINED.with(|count| count.set(count.get() + 1));
+    }
+
+    /// How many contact operations have been examined on this thread since the last [`reset`].
+    pub(crate) fn count() -> usize {
+        OPS_EXAMINED.with(Cell::get)
+    }
 }
 
 /// Whether the stored binding already is what this command asks for — B4's precise condition.
@@ -566,8 +710,8 @@ mod rg14_tests {
             .collect();
         let cmd = command(contacts);
 
-        // A quota big enough not to interfere: this test is about *parses*, and the early quota
-        // refusal (RG-14) would otherwise return before any reconciliation ran, reading as 0.
+        // A quota big enough not to interfere: this test is about *parses*, and a `403` on the way out
+        // would say nothing about how the view was built on the way in.
         let generous = TenantPolicy {
             max_bindings_per_aor: 64,
             ..TenantPolicy::default()
@@ -697,13 +841,17 @@ mod rg14_quota_tests {
         }
     }
 
-    /// **The quota half of `RG-14`.** A request that cannot fit must be refused without paying for
-    /// the full reconciliation. Distinguishing a refresh (never refused) from a new binding (may be
-    /// refused) *requires* the match view, which is one parse per stored binding — so the honest
-    /// floor is exactly that, not zero. The per-op × per-binding re-parse the amplifier was is what
-    /// this is measured against.
+    /// **The quota half of `RG-14`, restated on what remains of it.** `RG-14` refused an over-quota
+    /// request *before* reconciliation, on `current_active + genuine_additions`. `RG-16` deleted that
+    /// pre-check — B6/B7 retired the premise it was sound under — so the refusal now comes from the
+    /// single check on the reconciled set, and `RG-14`'s own numbers are what this still holds:
+    /// the answer is unchanged, and the parse budget is unchanged.
+    ///
+    /// One parse per stored binding is the whole cost either way, because building the match view is
+    /// what the parses are for, and the view is built once. The per-op × per-binding re-parse the
+    /// amplifier was is what this is measured against; §5.5.1 is what bounds the other factor now.
     #[test]
-    fn rg14_an_over_quota_request_is_refused_before_reconciliation() {
+    fn rg14_an_over_quota_request_is_refused_for_one_parse_per_stored_binding() {
         // The address-of-record holds two active bindings; the quota is three. Two additions follow.
         let mut current = BindingSet::new();
         current.insert(binding("sip:alice@10.0.0.1:5060", 3600));
@@ -730,12 +878,11 @@ mod rg14_quota_tests {
         );
     }
 
-    /// The early check and the final check must still agree once B7 lets two operations name one
-    /// contact (§5.3.2). Empty set, quota 1, and one REGISTER naming the same contact twice: the
-    /// committed set is one binding, so the request fits — and an early check that counted both
-    /// operations as additions would refuse `403` something the mutation loop commits within the
-    /// quota. That is the only way the cheap upper bound can disagree with the outcome, so it is
-    /// asserted rather than argued.
+    /// Two operations naming one contact are one binding against the quota (§5.3.2 B6/B7). Empty set,
+    /// quota 1, and one REGISTER naming the same contact twice: the committed set is one binding, so
+    /// the request fits. This is the shape that retired `RG-14`'s pre-check rather than tightening it —
+    /// a check that counted both operations as additions answers `403` where the reconciled set is
+    /// within the quota, and `403` is a refusal a UA cannot retry out of.
     #[test]
     fn b7_two_operations_naming_one_contact_are_one_addition_against_the_quota() {
         let cmd = command(vec![
@@ -764,6 +911,165 @@ mod rg14_quota_tests {
         assert!(
             matches!(outcome, Outcome::Commit { .. } | Outcome::Noop { .. }),
             "a refresh that does not grow the set must be accepted, got {outcome:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod rg25_tests {
+    use super::*;
+    use crate::binding::{Binding, Timestamp};
+    use crate::command::{ContactOp, ContactOps, RegisterCommand};
+    use bytes::Bytes;
+    use sipx_sip::Uri;
+
+    fn aor(uri: &str) -> crate::CanonicalAor {
+        crate::CanonicalAor::parse(uri.to_owned()).expect("a well-formed AoR")
+    }
+
+    /// A removal of `contact`. Removals are what these tests carry, deliberately — see
+    /// `rg25_a_register_above_the_contact_bound_is_refused_before_reconciliation`.
+    fn removal(contact: &str) -> ContactOp {
+        ContactOp {
+            uri: Uri::parse(Bytes::copy_from_slice(contact.as_bytes())).expect("a valid contact"),
+            verbatim: Bytes::copy_from_slice(contact.as_bytes()),
+            expires: Some(0),
+            q: None,
+            instance_id: None,
+            reg_id: None,
+            push: None,
+        }
+    }
+
+    fn removals(count: usize) -> Vec<ContactOp> {
+        (0..count)
+            .map(|i| removal(&format!("sip:alice@198.51.100.9:{}", 5060 + i)))
+            .collect()
+    }
+
+    fn command(contacts: Vec<ContactOp>) -> RegisterCommand {
+        RegisterCommand {
+            tenant: "t".to_owned(),
+            aor: aor("sip:alice@example.test"),
+            call_id: Bytes::from_static(b"rg25-call"),
+            cseq: 1,
+            contacts: ContactOps::Explicit(contacts),
+            expires_header: None,
+            path: Vec::new(),
+            supports_path: false,
+            require: Vec::new(),
+            received: None,
+            flow_ref: None,
+            principal: None,
+            now: Timestamp::from_secs(1_000),
+        }
+    }
+
+    fn binding(contact: &str) -> Binding {
+        Binding {
+            contact: Bytes::copy_from_slice(contact.as_bytes()),
+            q: 1_000,
+            call_id: Bytes::from_static(b"other"),
+            cseq: 1,
+            expires_at: Timestamp::from_secs(3_600),
+            registered_at: Timestamp::from_secs(1),
+            refreshed_at: Timestamp::from_secs(1),
+            path: Vec::new(),
+            received: None,
+            instance_id: None,
+            reg_id: None,
+            flow_ref: None,
+            push: None,
+            principal: None,
+        }
+    }
+
+    /// **`RG-25`'s failing-first test.** A REGISTER carrying more contact operations than the bound
+    /// is refused, and refused *before* reconciliation: not one stored contact is parsed.
+    ///
+    /// The operations are **removals**, deliberately. A removal never grows the set, so §5.5's quota
+    /// cannot refuse this request however long it is — which is exactly why a bound on the *input*
+    /// has to exist beside the bound on the *committed outcome*. Before this story the request below
+    /// is accepted, answers `200`, and pays a full reconciliation on the way there.
+    ///
+    /// Counted rather than timed, for `RG-14`'s reason: wall-clock would be flaky and a parse is the
+    /// expensive unit. Ten bindings are stocked so `parse_meter` has something to count at all; the
+    /// class it is structurally blind to is
+    /// `rg25_the_bound_is_counted_in_contact_operations_not_in_stored_parses`.
+    #[test]
+    fn rg25_a_register_above_the_contact_bound_is_refused_before_reconciliation() {
+        let mut current = BindingSet::new();
+        for i in 0..10 {
+            current.insert(binding(&format!("sip:alice@10.0.0.{i}:5060")));
+        }
+
+        // 65 removals — one more than the default bound of 64.
+        let cmd = command(removals(65));
+
+        parse_meter::reset();
+        let outcome = process(&cmd, &current, &TenantPolicy::default());
+        let parses = parse_meter::count();
+
+        assert!(
+            matches!(outcome, Outcome::Reject(Rejection::Forbidden(_))),
+            "a REGISTER above the contact-operation bound must be refused, got {outcome:?}"
+        );
+        assert_eq!(
+            parses, 0,
+            "the refusal precedes reconciliation, so no stored contact is parsed; got {parses}"
+        );
+    }
+
+    /// The class `parse_meter` is **structurally blind to**, and the reason §5.5.1 needed a second
+    /// instrument rather than a second assertion on the first.
+    ///
+    /// The address-of-record here holds nothing, so there are no stored contacts to parse and
+    /// `parse_meter` reads `0` whether the request carries one operation or thousands. The cost that
+    /// still exists is the request's own length, and `op_meter` is what can see it: an over-limit
+    /// request examines **no** contact operation, and a conforming one examines exactly its own.
+    #[test]
+    fn rg25_the_bound_is_counted_in_contact_operations_not_in_stored_parses() {
+        let empty = BindingSet::new();
+        let policy = TenantPolicy::default();
+
+        op_meter::reset();
+        parse_meter::reset();
+        let refused = process(
+            &command(removals(policy.max_contact_ops + 1)),
+            &empty,
+            &policy,
+        );
+        let examined = op_meter::count();
+
+        assert!(
+            matches!(refused, Outcome::Reject(Rejection::Forbidden(_))),
+            "one operation above the bound must be refused, got {refused:?}"
+        );
+        assert_eq!(
+            examined, 0,
+            "an over-limit request must examine no contact operation at all; got {examined}"
+        );
+        assert_eq!(
+            parse_meter::count(),
+            0,
+            "and the old meter reads zero either way here — which is why this one exists"
+        );
+
+        // Q3 — the bound is inclusive, and a conforming request is unaffected: it examines exactly
+        // the operations it carries, which is the linear cost the story is buying.
+        op_meter::reset();
+        let accepted = process(&command(removals(policy.max_contact_ops)), &empty, &policy);
+        let examined = op_meter::count();
+
+        assert_eq!(
+            accepted.status(),
+            200,
+            "exactly the bound is accepted, not one fewer"
+        );
+        assert_eq!(
+            examined, 64,
+            "a conforming request examines exactly its own operations; got {examined}"
         );
     }
 }

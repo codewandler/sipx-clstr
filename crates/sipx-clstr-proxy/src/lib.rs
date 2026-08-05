@@ -24,15 +24,18 @@
 
 #![doc(html_no_source)]
 
+pub mod ack;
 pub mod config;
 pub mod context;
 pub mod cookie;
 pub mod forward;
 #[cfg(feature = "registrar-targets")]
 pub mod from_registrar;
+mod route;
 pub mod types;
 pub mod validate;
 
+pub use ack::{AckRefusal, AckRoute, route_ack};
 pub use config::{CookieKey, DEFAULT_TIMER_C, EdgeIdentity, ProxyConfig, TIMER_C_FLOOR};
 pub use context::ResponseContext;
 pub use cookie::{CookieInput, branch_for, cookie_of};

@@ -2,8 +2,8 @@
 id: AF-3
 title: Design the connection-owner RPC
 pillar: Cluster
-status: backlog
-priority: 
+status: in-progress
+priority: 2
 design: docs/designs/cluster-affinity.md
 epic: cluster-affinity
 areas: [affinity]

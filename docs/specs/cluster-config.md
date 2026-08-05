@@ -54,7 +54,8 @@ printer columns
 ([KO-1](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/KO-1-specify-the-sipxcluster-crd-and-the-values-contract.md));
 secret *storage* (§8 V9 fixes only that the document never carries a secret's value); and the
 membership and key sections' fields, which are
-[AF-6](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/AF-6-design-config-first-membership-and-key-distribution.md)'s
+[cluster-membership](cluster-membership.md)'s
+([AF-6](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/AF-6-design-config-first-membership-and-key-distribution.md))
 and are integrated by §10 rather than restated.
 
 **Upstream considerations** (AGENTS.md rule 6): **no — none of this is the kernel's.** A
@@ -169,9 +170,9 @@ owns its content, and its reload class (§9). No row restates the owner's fields
 | `profile` | all | [hook-framework](hook-framework.md) §8, EX-5 | rollout |
 | `listener[]` (`roles`, `transport`, `bind`, `advertise`, `connectionLifetime`, `maxConnections`, `tls`) | as declared per listener | `DP-5` / [deployment](../designs/deployment.md), §5 here | rollout |
 | `management` (`bind`, `tls`) | all | this spec | rollout |
-| `membership` | all | **AF-6** (§10) | reloadable |
-| `keys` | all | **AF-6**, attributes fixed by [affinity-token](affinity-token.md) §6 (§10) | reloadable — §9.3 |
-| `shardMap` | `registrar`, `edge` | **AF-6**; assignment over [location-service](location-service.md) §8's key | reloadable — §9.4 |
+| `membership` | all | [cluster-membership](cluster-membership.md) §3 (**AF-6**, §10) | reloadable |
+| `keys` | all | [cluster-membership](cluster-membership.md) §4 (**AF-6**, §10), attributes fixed by [affinity-token](affinity-token.md) §6 | reloadable — §9.3 |
+| `shardMap` | `registrar`, `edge` | [cluster-membership](cluster-membership.md) §5 (**AF-6**, §10); assignment over [location-service](location-service.md) §8's key | reloadable — §9.4 |
 | `locationStore` (`backend`, `dsnRef`, `ha`) | `registrar` | [location-service](location-service.md) §6.2/§6.3 | rollout |
 | `registrar` (`usePath`, `methodFiltering`) | `registrar` | [location-service](location-service.md), [registrar-auth](registrar-auth.md) | rollout |
 | `tenant[]` (`name`, `id`, `domains`, `auth`, `expiry`, `maxBindingsPerAor`) | `registrar`, `edge`, proxies | [registrar-auth](registrar-auth.md) §2/§4, [location-service](location-service.md) §5.2/§5.5/§5.1 S1 | reloadable |
@@ -292,7 +293,12 @@ to prevent is two nodes accepting writes for one shard at once.
 
 `membership`, `keys` and `shardMap` are **[AF-6](https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/AF-6-design-config-first-membership-and-key-distribution.md)'s
 sections**, and this spec neither writes nor duplicates their fields. What it fixes is the seam, so
-that AF-6 can be written against something:
+that AF-6 can be written against something. AF-6 has since written it:
+[cluster-membership](cluster-membership.md) holds the three sections' fields, the rotation runbook
+A5 leaves here, and the record of what a dynamic membership service would replace. **No rule of
+§1–§9 moved when it landed**, which is what A6 asked for; three pointers did — §7's owner cells,
+this paragraph, and one sentence of §1's out-of-scope list now name that document instead of the
+story.
 
 | # | Rule |
 |---|---|

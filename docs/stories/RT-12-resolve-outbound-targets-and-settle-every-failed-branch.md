@@ -7,7 +7,7 @@ priority: 2
 design: docs/designs/routing-trunks.md
 epic: routing-trunks
 areas: [routing, dns, proxy, node]
-note: V-12 · outbound selection is UDP-only; hostname/transport failures are logged without a BranchTransportError and can leave no final response
+note: V-12 · outbound selection is UDP-only; since PX-13 this is live on real dialogs — an in-dialog request to a TLS Record-Route goes out as a UDP datagram to the TLS port
 ---
 
 # Resolve outbound targets and settle every failed branch
@@ -44,6 +44,14 @@ UDP or leaves a branch pending without an event.
 - (not started)
 
 ## Notes
+- **Severity raised by `PX-13` (merged 2026-07-30), without the code changing.** `destination_of`
+  (`crates/sipx-clstr-node/src/driver.rs`) still hard-codes UDP and ignores `;transport=`; what changed
+  is its **input**, from `target.uri` to the dialog's `next_hop`. So a dialog whose `Record-Route` is a
+  TCP or TLS listener's — `<sip:host:5061;transport=tls;lr>` per `listen.rs` — now has its in-dialog
+  requests sent as **UDP datagrams to a TLS port**. Not a regression: before `PX-13` those requests were
+  dropped entirely. But the defect moved from a path nothing used to the path that carries every
+  established call, which is why this story should not wait behind cosmetic work.
+
 
 - Validated synthesis finding [**V-12**](../reviews/00-validated-synthesis.md#v-12--outbound-transport-selection-is-udp-only-and-target-failures-are-not-settled).
 - PX-13 consumes direct dialog next hops; this story generalizes how any next-hop URI becomes one or

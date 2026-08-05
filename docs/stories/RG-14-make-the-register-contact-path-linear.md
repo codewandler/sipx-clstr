@@ -100,3 +100,14 @@ and the per-address quota is applied only after all of that work has been done a
   [upstream.md](../upstream.md) if any of it moves.
 - `set.all()` cloning the whole `BindingSet` twice per REGISTER is fine at quota scale (n ≤ 10) and is
   not what this story is about — do not conflate the two.
+
+- **Correction filed 2026-07-30, by the RG-16 coordinator.** This story is `done` with **zero** of its
+  five acceptance boxes ticked and **no `CHANGELOG.md` entry** — a `CF-18` instance. Its parse-once view
+  and its quota pre-check both genuinely shipped and the Progress above describes them accurately.
+  **Item 2 did not ship:** `docs/specs/location-service.md` contains no bound on the number of contact
+  operations a REGISTER may carry, and nothing in code caps `ops.len()`. That gap is now
+  [RG-25](RG-25-bound-the-contact-operations-one-register-may-carry.md), and it blocks `RG-16`.
+- The soundness argument recorded above — "the maximum active count this request can reach is
+  `current_active + genuine_additions`" — **was valid when written and has since been invalidated** by
+  `RG-16`'s B6/B7, which let several operations collapse onto one binding. The pre-check was not wrong;
+  its premise stopped holding. Read `RG-16`'s Progress before touching the quota's position again.

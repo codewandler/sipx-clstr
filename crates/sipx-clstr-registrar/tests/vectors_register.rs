@@ -994,8 +994,83 @@ fn stored_texts(store: &InMemoryStore) -> Vec<String> {
         .collect()
 }
 
+// ---------------------------------------------------- §5.5.1 — the contact-operation bound ------
+
+/// `count` distinct **removals**.
+///
+/// Removals rather than registrations, because that is what makes these rows about §5.5.1 and not
+/// about §5.5: a removal never grows the set, so the quota cannot refuse the request however long
+/// it is (Q5). A row built from additions would be satisfied by the quota alone and would prove
+/// nothing about the bound.
+fn removals(count: usize) -> Vec<ContactOp> {
+    (0..count)
+        .map(|i| {
+            let text = Bytes::from(format!("sip:alice@198.51.100.9:{}", 5060 + i));
+            ContactOp {
+                uri: Uri::parse(text.clone()).expect("a valid contact URI"),
+                verbatim: text,
+                expires: Some(0),
+                q: None,
+                instance_id: None,
+                reg_id: None,
+                push: None,
+            }
+        })
+        .collect()
+}
+
 #[test]
-fn ls_r_24_two_removals_and_an_addition_commit_exactly_the_set_the_request_describes() {
+fn ls_r_24_a_register_above_the_contact_operation_bound_is_refused() {
+    let store = InMemoryStore::new();
+    let policy = policy();
+
+    // 65 removals against the default bound of 64. Every one of them is a removal of a contact that
+    // was never bound, so on the outcome the request is a no-op: §5.5 has nothing to refuse.
+    let (outcome, revision) = run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(removals(policy.max_contact_ops + 1))
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(
+        outcome.status(),
+        403,
+        "a policy refusal on the request's own length (Q1)"
+    );
+    assert_eq!(
+        revision,
+        Revision::INITIAL,
+        "nothing may commit — the refusal precedes reconciliation (Q2)"
+    );
+    assert!(store.read(TENANT, &aor()).0.all().is_empty());
+}
+
+#[test]
+fn ls_r_25_exactly_the_contact_operation_bound_is_accepted() {
+    let store = InMemoryStore::new();
+    let policy = policy();
+
+    // Q3 — the bound is inclusive. One fewer operation than LS-R-24 carries, and the same request
+    // is answered normally.
+    let (outcome, _) = run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(removals(policy.max_contact_ops))
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(
+        outcome.status(),
+        200,
+        "a conforming request is unaffected by the bound"
+    );
+}
+
+#[test]
+fn ls_r_26_two_removals_and_an_addition_commit_exactly_the_set_the_request_describes() {
     // **`RG-16`'s failing-first test**, and B6 (§5.3.2). One REGISTER, three operations, the first
     // of which *shortens* the set. A registrar that resolves every operation against one view
     // captured before the first mutation has CB's removal pointing past the end of the set it is
@@ -1037,7 +1112,7 @@ fn ls_r_24_two_removals_and_an_addition_commit_exactly_the_set_the_request_descr
 }
 
 #[test]
-fn ls_r_25_a_removal_ahead_of_a_refresh_does_not_move_the_refresh_onto_another_binding() {
+fn ls_r_27_a_removal_ahead_of_a_refresh_does_not_move_the_refresh_onto_another_binding() {
     // The other half of B6, and the more damaging one: with a stale view the removal of CA leaves
     // CB's operation resolving to the entry that slid into CB's index — so CB's refresh overwrites
     // CC, the set loses a binding it was never asked to drop, and gains a duplicate of one it was.
@@ -1156,7 +1231,7 @@ fn a_losing_writer_re_reconciles_a_multi_contact_register_against_fresh_state() 
 }
 
 #[test]
-fn ls_r_26_two_removals_commit_the_empty_set() {
+fn ls_r_28_two_removals_commit_the_empty_set() {
     // B6 stripped to the case that carries nothing else: two bindings, one REGISTER removing both.
     // A registrar resolving both operations against a view captured before the first mutation has
     // CB's removal pointing one past the end of the set it just shortened, so CB survives a request
@@ -1195,8 +1270,8 @@ fn ls_r_26_two_removals_commit_the_empty_set() {
 }
 
 #[test]
-fn ls_r_27_a_refresh_ahead_of_a_removal_leaves_the_removal_resolving_to_its_own_contact() {
-    // LS-R-25's operations in the opposite order, because the two fail differently. There the
+fn ls_r_29_a_refresh_ahead_of_a_removal_leaves_the_removal_resolving_to_its_own_contact() {
+    // LS-R-27's operations in the opposite order, because the two fail differently. There the
     // removal came first and dragged the refresh onto another binding; here the refresh comes first
     // and must not move CA, so the removal that follows still resolves to CA rather than to
     // whatever a stale view or an unaligned re-parse would put in its place.
@@ -1257,7 +1332,7 @@ fn ls_r_27_a_refresh_ahead_of_a_removal_leaves_the_removal_resolving_to_its_own_
 }
 
 #[test]
-fn ls_r_28_a_removal_of_a_contact_this_request_just_added_applies_rather_than_aborting() {
+fn ls_r_30_a_removal_of_a_contact_this_request_just_added_applies_rather_than_aborting() {
     // **B7's failing-first test.** Two §19.1.4-equivalent spellings in one REGISTER: the UA
     // registers its current contact and deregisters what it believes is a line-tagged predecessor.
     // The `line` parameter appears in only one of the two URIs, so §19.1.4 ignores it and they are
@@ -1299,17 +1374,17 @@ fn ls_r_28_a_removal_of_a_contact_this_request_just_added_applies_rather_than_ab
         "the response enumerates the set that actually holds (§5.6)"
     );
     // B9 — the two operations cancel, so the reconciled set is the set that was read and there is
-    // nothing to commit. LS-R-32 is why the revision has to stay put here rather than at 1: the
+    // nothing to commit. LS-R-34 is why the revision has to stay put here rather than at 1: the
     // retransmission of this request is indistinguishable from its first delivery, so a revision bump
     // on either one is a bump on every one.
     assert_eq!(revision, Revision::INITIAL);
 }
 
 #[test]
-fn ls_r_29_a_second_operation_on_a_contact_this_request_added_replaces_it() {
+fn ls_r_31_a_second_operation_on_a_contact_this_request_added_replaces_it() {
     // The other half of B7, and the shape that shows the answer is *the last operation wins* rather
     // than *ignore the duplicate*: one contact twice, with different granted durations. Before B7
-    // this aborted `500` for the reason LS-R-28 did; before B6 it committed the contact twice,
+    // this aborted `500` for the reason LS-R-30 did; before B6 it committed the contact twice,
     // because the second operation never saw the first one's insert.
     let store = InMemoryStore::new();
     let policy = policy();
@@ -1379,7 +1454,7 @@ fn only_granted_secs(store: &InMemoryStore) -> u64 {
 }
 
 #[test]
-fn ls_r_30_the_quota_is_a_test_on_the_committed_outcome_not_on_the_candidates() {
+fn ls_r_32_the_quota_is_a_test_on_the_committed_outcome_not_on_the_candidates() {
     // §5.5 makes the quota a test on the **committed outcome** — "a REGISTER whose committed outcome
     // would exceed it fails `403 Forbidden`", and "refreshes, replacements and removals never grow
     // the set and never trip the quota". A check computed before §5.3's operations are applied cannot
@@ -1462,8 +1537,8 @@ fn ls_r_30_the_quota_is_a_test_on_the_committed_outcome_not_on_the_candidates() 
 }
 
 #[test]
-fn ls_r_31_a_retransmission_of_a_contact_named_twice_is_a_retry_not_a_stale_sequence() {
-    // LS-R-29's own shape, delivered twice. §5.3's idempotency rule is stated per **binding** against
+fn ls_r_33_a_retransmission_of_a_contact_named_twice_is_a_retry_not_a_stale_sequence() {
+    // LS-R-31's own shape, delivered twice. §5.3's idempotency rule is stated per **binding** against
     // "the command's requested outcome", and under B6 the outcome this command requests for that
     // binding is the *later* operation's grant — 7200, which is exactly what the first delivery
     // stored. So the re-presentation is B4's retry: `200` with the current set, nothing committed,
@@ -1522,8 +1597,8 @@ fn ls_r_31_a_retransmission_of_a_contact_named_twice_is_a_retry_not_a_stale_sequ
 }
 
 #[test]
-fn ls_r_32_operations_that_cancel_out_commit_nothing_and_leave_the_revision_alone() {
-    // LS-R-28's shape: an addition and a removal of one contact in a single request. The reconciled
+fn ls_r_34_operations_that_cancel_out_commit_nothing_and_leave_the_revision_alone() {
+    // LS-R-30's shape: an addition and a removal of one contact in a single request. The reconciled
     // set is the set that was read, so there is nothing to commit — and B4.2's "a retry leaves the
     // revision as it is" has to hold for the *second* delivery as well.
     //
@@ -1575,4 +1650,63 @@ fn ls_r_32_operations_that_cancel_out_commit_nothing_and_leave_the_revision_alon
         Vec::<String>::new(),
         "nothing is bound either way"
     );
+}
+
+#[test]
+fn ls_r_35_a_deferred_b8_decision_follows_the_binding_not_the_current_view() {
+    // The vector that pins **when** B8's "last operation that resolves to it" is decided. The
+    // first operation re-presents `i2`/1's spent token against the binding that request wrote,
+    // asking 7200 where the store holds 3600 — B5's abort, unless a later operation of this
+    // request supersedes it (B8). None does: the bare spelling matches the `i1`-written `line=1`
+    // binding first (§5.3 first-match-in-creation-order), and the third operation matches the
+    // binding the second one just replaced (B7). But against the set *as it stands when the first
+    // operation is decided*, the third operation looks as though it resolves to the same binding
+    // with a matching grant — so a registrar predicting the net from the current view treats the
+    // abort as superseded, skips it, and commits the same contact twice under a spent token:
+    // `{CC;line=9, CC;line=9}`, with the request's 7200 neither applied nor refused.
+    let store = InMemoryStore::new();
+    let policy = policy();
+    run(
+        &store,
+        &Cmd::new("i1", 1, 0)
+            .contacts(vec![contact("sip:alice@10.0.0.3:5060;line=1", Some(3_600))])
+            .build(),
+        &policy,
+    );
+    let (outcome, revision_before) = run(
+        &store,
+        &Cmd::new("i2", 1, 0)
+            .contacts(vec![contact("sip:alice@10.0.0.3:5060;line=9", Some(3_600))])
+            .build(),
+        &policy,
+    );
+    assert!(outcome.commits(), "the fixture binds line=1 and line=9");
+
+    let (outcome, revision) = run(
+        &store,
+        &Cmd::new("i2", 1, 10)
+            .delayed_by_millis(500)
+            .contacts(vec![
+                contact("sip:alice@10.0.0.3:5060;line=9", Some(7_200)),
+                cc(Some(3_600)),
+                contact("sip:alice@10.0.0.3:5060;line=9", Some(3_600)),
+            ])
+            .build(),
+        &policy,
+    );
+
+    assert_eq!(
+        outcome.status(),
+        500,
+        "no later operation resolves to the matched binding, so a spent token asking a new lifetime aborts (B5 via B8)"
+    );
+    assert_eq!(
+        stored_texts(&store),
+        [
+            "sip:alice@10.0.0.3:5060;line=1",
+            "sip:alice@10.0.0.3:5060;line=9",
+        ],
+        "an abort commits nothing (K2) — one contact bound once, not twice"
+    );
+    assert_eq!(revision, revision_before, "and the revision does not move");
 }

@@ -190,6 +190,18 @@ restart/relay candidates are likewise not smuggled into this milestone.
   because typed `Expires` parsing already exists in the pinned kernel.
 - Resume the M2 affinity, routing, media and deployment sequence after the reviewed release surface
   is honest and its real-driver behavior is proved.
+- **`PX-13` is on M2's critical path, not beside it.** `AF-5` round-trips the affinity token through
+  `Record-Route` and `Route`, and until the driver routes in-dialog requests **by the route set** it
+  cannot read a token out of one — before `PX-13` every `ACK` was resolved as an address of record
+  instead. So M2's defining criterion, *mid-dialog requests route by token with zero cross-node dialog
+  lookups*, is unreachable while that path does an AoR lookup. `PX-13` is parked on a transaction
+  leak; `CF-22` is the gate step that will let its next attempt prove the fix locally rather than
+  discovering it in CI. That is the sequence: `CF-22` → `PX-13` → `AF-4` → `AF-5`.
+- A second `PX-13` consequence for `AF-4` to plan around, found at review: `Input::Upstream` now
+  returns `on_targets` synchronously for in-dialog requests, so a driver that verifies the token and
+  feeds `TokenFact(Invalid)` afterwards gets its `403` **after** `Effect::Forward` was emitted.
+  Verification has to sit before the in-dialog branch or inside the engine. Unreachable today —
+  `TokenFact` has no producer — and live the moment `AF-4` mints a real token.
 
 ## Epics
 

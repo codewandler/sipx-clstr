@@ -7,7 +7,7 @@ priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
 areas: [registrar]
-note: round 3 on impl/RG-16-r3 — both blocking findings fixed, §5.5 decided on the committed outcome and B8/B9 added; gate and the PostgreSQL suite green
+note: round 4 — RG-25 landed, resuming on impl/RG-16-r3
 ---
 
 # Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once
@@ -19,102 +19,83 @@ carries more than one contact.
 
 ## Acceptance
 
-- [x] Binding operations use a stable identity or a parsed view updated with every mutation; no
+- [ ] Binding operations use a stable identity or a parsed view updated with every mutation; no
       operation applies an index computed against a different vector state.
-- [x] An insertion becomes visible to later operations in the same REGISTER, and a removal cannot
+- [ ] An insertion becomes visible to later operations in the same REGISTER, and a removal cannot
       shift a later match onto another binding or off the end of the vector.
-- [x] The compare-and-swap contract in [location-service](../specs/location-service.md) §6 still holds:
+- [ ] The compare-and-swap contract in [location-service](../specs/location-service.md) §6 still holds:
       a losing writer retries against fresh state rather than committing a stale set.
-- [x] **Failing-first vector:** from `{A, B}`, one REGISTER with `A;expires=0, B;expires=0` commits the
+- [ ] **Failing-first vector:** from `{A, B}`, one REGISTER with `A;expires=0, B;expires=0` commits the
       empty set. On `86e6b10` it returns `Commit` with B still present because `get(1)` follows A's
       removal.
-- [x] Order-sensitive vectors also cover remove/refresh, refresh/remove, and two operations naming a
+- [ ] Order-sensitive vectors also cover remove/refresh, refresh/remove, and two operations naming a
       contact first inserted by the same request; every response enumerates the actual final set.
-- [x] The new normative `LS-R-*` rows and their test names are registered together.
-- [x] Both the in-memory and PostgreSQL conformance suites pass unchanged, and `scripts/gate.sh` is
+- [ ] The new normative `LS-R-*` rows and their test names are registered together.
+- [ ] Both the in-memory and PostgreSQL conformance suites pass unchanged, and `scripts/gate.sh` is
       green.
 
 ## Progress
+- **`RG-25` landed (2026-07-30) and it changes round 4's instruction.** The triangle is broken from
+  the third side, and round 3's approach turns out to have been **correct and complete** — it was the
+  missing input bound, not the removed pre-check, that made it look wrong.
 
-- **Round 3, on `impl/RG-16-r3` (branched from `impl/RG-16-rework`, `main` merged in with `--no-ff`).**
-  The V-05 defect and both findings that held round 2 back are fixed; `scripts/gate.sh` is green and the
-  PostgreSQL suite passes against a live database. Round 1 (`impl/RG-16`) and round 2
-  (`impl/RG-16-rework`, `16480fe`) remain preserved and unmerged.
+  Round 4 should **delete `RG-14`'s quota pre-check without replacement** and measure §5.5 on the
+  committed outcome alone. The pre-check existed only to bound work; its premise
+  (`current_active + genuine_additions`) was invalidated by this story's B6/B7; there is no sound
+  *lower* bound to replace it with. That work is now bought by bounding the **input** instead, where
+  no premise about reconciliation is needed: `location-service` §5.5.1 caps a REGISTER at 64 contact
+  operations, so one 64 KB datagram carries ≤64 rather than ~3500 and the quadratic term is bounded
+  by policy rather than by message size. The amplifier round 3 was accused of restoring is closed.
+  **Cite §5.5.1 when you delete it.**
 
-### What round 2 got right, and is kept unchanged
+  One mechanical note from `RG-25`: round 4 must re-site `op_meter::record()`. It currently lives in
+  `granted_expiries`, and this story's tree has a `Reconciling::new` that `RG-25`'s tree does not.
 
-- `Reconciling` + `Slot` replace the snapshot-index scheme; the invariant `slots.len() == set.all().len()`
-  is held by the three mutators, every `BindingSet` mutator is bounds-checked, and there is no panic
-  path reachable from network input.
-- **`location-service` §5.3.2 B7** decides the question round 1 tripped over: B2–B5 compare against the
-  token of the request that *last wrote* the matched binding, so a binding an earlier operation of the
-  same request wrote leaves them nothing to decide and the operation applies. Reviewed as correct —
-  "last operation naming a contact wins" is the reading RFC 3261 §10.3 produces, `line` is ignored by
-  §19.1.4 (it is not in the user/ttl/method/maddr/transport list), and the `400`-for-duplicates
-  alternative has no §10.3 basis and would contradict item 5's "every response enumerates the actual
-  final set".
-- The six rows are in **`crates/sipx-clstr-registrar/src/conformance.rs`** — the shared suite both
-  backends run — not only in the in-memory test file as round 1 had them. Verified load-bearing on
-  both: deleting the `written_here` guard fails `LS-R-28` on PostgreSQL *and* in memory.
-- `registered_at` is preserved across replacement; `written_here` cannot leak across a CAS retry
-  (`Reconciling::new` sets it false for everything read from the store, and `apply` re-runs `process`
-  on conflict).
+  The second finding — B8's `net_grant` resolving the future against the current view — is untouched
+  by any of this and still open.
 
-### Round 3 — both findings fixed on `impl/RG-16-r3`
 
-Round 2's substance is unchanged: `Reconciling`/`Slot`, B6/B7, `registered_at` preservation, the
-recorded `written_here` flag and the six shared rows are all as they were. What round 3 changed is the
-two things that blocked them, plus the minor revision item.
-
-1. **§5.5 decided against the code, and the pre-check is gone rather than made a lower bound.** §5.5
-   says the *committed outcome* decides, so the conservative pre-check is not a cheaper spelling of the
-   rule but a stricter one, and it may not refuse what the outcome permits. There is now **one** quota
-   check, on the reconciled set, where there were two that had to agree. That is deliberate: two checks
-   have now diverged twice — `RG-14`'s first draft refused refreshes (`LS-R-15`), and round 2's upper
-   bound refused `x;line=1, x, x;line=2` at nine held bindings where the outcome is ten (`LS-R-30`).
-   A lower bound was considered and rejected as unreachable: comparing a candidate against *every*
-   preceding one is exact for that chain, but still an upper bound once the request also removes
-   something it added (`y, z, y;expires=0` at the boundary), so no cheap bound is sound. `LS-R-30`'s
-   second half pins the other direction — `CC;line=1, CC;line=2` genuinely commits two bindings and is
-   still `403` — so removing the pre-check did not remove the quota.
-2. **B4 now compares the command's net outcome per binding — new §5.3.2 B8 — rather than narrowing
-   B7's claim.** §5.3 already states idempotency per *binding* against "the command's requested
-   outcome", so the per-operation reading was a misreading that only became visible once B6 let several
-   operations reach one binding; B7's text was right and the code was wrong. `net_grant` finds the last
-   operation that *resolves to* the binding (via `Reconciling::find`, not raw equivalence, because
-   §19.1.4 non-transitivity makes those different sets) and B4 compares against its grant. Asked only
-   after the cheap per-operation comparison fails and only when a later operation supersedes this one,
-   so an ordinary single-contact retransmission pays nothing. B5 is not softened: what is compared is
-   unchanged, and a command asking for something the store does not hold still aborts.
-3. **Minor folded in as §5.3.2 B9:** a request whose reconciled set *is* the set it read commits
-   nothing. `changed` records that the view was mutated, which is a different question — an addition a
-   later removal takes back leaves the durable set untouched. This also amends `LS-R-28`, whose
-   revision expectation moved from bumped to unmoved: the first delivery and the retransmission of that
-   request are indistinguishable from the durable state (empty set both sides, no binding surviving to
-   carry the token), so there is nothing a registrar could compare to answer them differently, and the
-   only way the retransmission is idempotent is for neither delivery to write (`LS-R-32`).
-
-New rows `LS-R-30`, `LS-R-31`, `LS-R-32` are in **both** the named tests
-(`crates/sipx-clstr-registrar/tests/vectors_register.rs`) and the shared two-backend suite
-(`crates/sipx-clstr-registrar/src/conformance.rs`). Verified load-bearing on PostgreSQL *and* in
-memory by breaking each fix in turn: neutering B9 fails `LS-R-32` on both (`Revision(0) → Revision(1)`,
-then `Revision(2)` on the retransmission — the exact minor defect); neutering B8 fails `LS-R-31` on both
-with `got 500`; replacing the outcome check with a candidate count fails `LS-R-30` **and** `LS-R-15` on
-both.
-
-### Correction to the round-2 report
-
-Its failing-first disclosure said `LS-R-26` and `LS-R-27` already passed at the merge base. That is
-wrong. Measured at the merge base this round ran against, `f949336`, only `LS-R-27` passes:
-`LS-R-24`, `25`, `26`, `28`, `29` and the CAS test
-(`a_losing_writer_re_reconciles_a_multi_contact_register_against_fresh_state`) all fail, with `LS-R-26`
-failing exactly as Acceptance item 4 describes. Round 2's disclosure appears to have been measured
-against round 1's tip rather than the merge base — an error in the conservative direction, but the
-record should be right. The three new rows fail there too: `LS-R-30` with `403`, `LS-R-31` and
-`LS-R-32` on their first assertions, since the base has neither B6/B7 nor B8/B9.
-
-`docs/reference/conformance.md` was regenerated after the merge (138/585). The coordinator is expected
-to redo it on `main`.
+- **Parked after round 3, blocked by [RG-25](RG-25-bound-the-contact-operations-one-register-may-carry.md).**
+  Three branches preserved, none merged: `impl/RG-16` (r1), `impl/RG-16-rework` (r2),
+  `impl/RG-16-r3` (r3, `7b68929` — the furthest along and the one to resume from).
+- **The blocker is upstream of this story and the coordinator caused the last round of it.** Round 3
+  was told the §5.5 ruling permitted either a lower-bound pre-check *or* no pre-check at all. It
+  reasonably took the second option — and that **deleted `RG-14`'s work bound**, restoring a quadratic
+  amplifier: measured 211.5 ms of one core for a single 64 KB datagram carrying ~3500 contacts, against
+  1.15 ms with the pre-check. `RG-14`'s Acceptance item 4 had already settled this exact question — "a
+  cheap pre-check that cannot disagree with it, not a relocation of the real check" — and the dispatch
+  did not read it.
+- **The triangle that has to be broken, stated so round 4 does not re-enter it.** §5.5 requires the
+  quota to be measured on the *committed outcome*. `RG-14`'s pre-check was sound only because the most
+  active bindings a request could reach was `current_active + genuine_additions`; **this story's B6/B7
+  invalidated that premise** by letting several operations collapse onto one binding, so the pre-check
+  began over-refusing what §5.5 permits. There is no sound *lower* bound to replace it with, and
+  removing it restores the amplifier. The only exit is to bound the input — `RG-25`, which is
+  `RG-14`'s never-landed item 2.
+- **Second finding, independent of the above and still open.** B8's `net_grant` resolves the *future*
+  against the view as it stands now, so an operation that will itself be hijacked by an intervening
+  operation still counts as superseding. B8's own text says "the effect of the **last** operation of
+  this request that resolves to it", and B6 fixes resolution "against the set as the preceding
+  operations left it" — the code asks `view.find` now instead. Measured: stored `…;line=1` (Call-ID
+  `other`) plus bare `…` (`i2`/1 at 3600); REGISTER `i2`/1 carrying `…;line=2;expires=7200`,
+  `…;expires=3600`, `…;line=3;expires=3600` → base rejects `500` (B5/LS-R-22), tip commits
+  `[…;line=3 @3600, … @3600]` with op1's requested 7200 neither applied nor aborted. Lower severity
+  than r2's findings — nothing is written under the spent token, no deadline is extended, and §5.6's
+  response tells the UA the truth — but it is this story's own defect class: a decision resolved
+  against a vector state other than the one it is applied to.
+- **What round 3 got right and round 4 must keep.** The quota genuinely cannot be exceeded — only two
+  `Commit` sites exist and both are gated by the reconciled-set check; probes confirm 9+3 → `403`,
+  0+11 → `403`, 9+2-with-one-taken-back → commits 10. **B9 is load-bearing and `LS-R-28` is not a
+  relaxed proof**: neutering B9 fails `LS-R-28` and `LS-R-32` on both deliveries, and `LS-R-28` has
+  never existed on `main`, so its expectation is new rather than weakened. The `reaped` guard means B9
+  can only fire when the durable set is byte-identical, so it does not widen `RG-24`. Nothing normative
+  was lost moving the counterfactuals out of the Expect cells. B8 and B9 are separately load-bearing.
+  `Binding` derives `PartialEq` over every field, so B9's stated field risk is not live.
+- **Also surfaced, worth keeping:** removing the pre-check fixed a *second* over-refusal class nothing
+  pins — 9 held plus `x, y, y;expires=0` (committed outcome 10) is `403` at the base and commits at the
+  tip. And §5.5's amended prose re-asserts "removals never trip the quota" while the single check still
+  refuses one (12 held against a quota of 10, a REGISTER removing one → `403`, at base and tip alike).
+  Pre-existing, and this diff strengthened the sentence the code disagrees with.
 
 ## Notes
 

@@ -258,6 +258,10 @@ fn node_config(
             min_expires: tenant.policy.min_expires,
             max_expires: tenant.policy.max_expires,
             max_bindings_per_aor: tenant.policy.max_bindings_per_aor,
+            // location-service §5.5.1 Q1. No document key carries it yet, so the spec's own default
+            // is taken rather than restated here — §8 V3's rule, and the same reason `FC-4` exists:
+            // a number spelled twice is a number that drifts.
+            max_contact_ops: sipx_clstr_registrar::TenantPolicy::default().max_contact_ops,
         };
         config.domains.clone_from(&tenant.domains);
     }
