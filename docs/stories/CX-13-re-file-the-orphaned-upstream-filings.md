@@ -2,8 +2,7 @@
 id: CX-13
 title: Re-file the orphaned upstream filings on the kernel's main
 pillar: Platform
-status: ready
-priority: 1
+status: in-progress
 design:
 epic:
 areas: [upstream]
@@ -39,6 +38,18 @@ for both rows; this story makes them **filed** again, in a way that cannot silen
 - Filed by `CX-12`'s ledger re-read at `v1.0.0-beta.4`, which found the orphaning: the filing
   commit is an ancestor of no tag and no mainline branch, and `git tag --contains` /
   `git branch --contains` prove it.
+- **Re-filed 2026-08-05 as `T-31` and `T-32`** — the next free IDs on the kernel's `main` — on
+  branch `filing/clstr-CX-13`, in a separate worktree so the user's kernel checkout (on
+  `integration/m13-endpoint-complete`, with uncommitted changes) was never touched. Content
+  re-verified against `v1.0.0-beta.4` rather than copied: the `Handle` surface and
+  `bind_matching_ports` citations were re-read at the tag, and each story's Progress records the
+  orphaning. Branch pushed; **PR open:
+  [sipx#7](https://github.com/codewandler/sipx/pull/7)**. The ledger rows now read *re-filed;
+  pending merge*.
+- What remains is the merge — deliberately left to the user, who has been the merger of record on
+  every kernel PR — and then this story's remaining acceptance: rows to **filed**, and the
+  filed-means-on-main rule written into the ledger's rules. The rule text is already in both rows;
+  it graduates to the rules list when the merge proves the loop closed.
 
 ## Notes
 
