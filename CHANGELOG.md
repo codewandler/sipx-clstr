@@ -20,6 +20,63 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+- **A normative table that has stopped being a table is now a red gate** (`CF-23`). A Markdown
+  table cannot survive a blank line, and in a repository whose rules are cited by ID out of table
+  rows, a row that silently stopped being a row is a normative rule that silently stopped being
+  readable — `RG-25` produced exactly that in location-service §5.7 while the sentence above it
+  still claimed both rows and the gate reported the tree clean. `check-docs.py` now refuses three
+  shapes of the same defect: an **orphaned row** (a `|` line no separator follows), a **split
+  table** (a blank line between header and separator), and a **ragged row** (a cell count that
+  disagrees with its header — GFM pads a short row and *silently drops* a long row's extras). The
+  check immediately found a live second instance the motivating one had hidden: `e2e-probe.md`'s
+  `A7` row grew a third cell from an unescaped `|` inside a code span and lost half its sentence
+  on the rendered site. Every failure names the file, the line and the row.
+
+- **An out-of-dialog request carrying a pre-existing route set keeps the callee's URI**
+  (`PX-16`, found by `PX-13`). The proxy asked the location service about a request whose route
+  set already determined where it goes, then overwrote the Request-URI with the answer — so the
+  callee's address disappeared from the message, and with a strict router in the set it was the
+  proxy's own resolved answer, not the callee, that got parked at the Route end. The decision
+  path now tests the surviving route set **before** any address-of-record lookup (RFC 3261
+  §16.4/§16.5): a loose `;lr` hop leaves the Request-URI untouched on the wire, and §16.6 step
+  6's strict-router swap puts the real callee where the strict router will find it. `PB-F-4`'s
+  expectation is rewritten (its old bytes dropped the callee entirely), `PB-F-9`/`PB-F-10` are
+  new, and all retargeting now goes through the kernel's `Request::set_uri` so no stale start
+  line is forwarded verbatim.
+
+- **The devspace walkthrough's greeting has an address a phone can actually dial** (`KO-18`).
+  Three constraints meet on one string: `sipx dial` sends to a literal and resolves no names,
+  `FC-4` refuses a REGISTER outside the tenant's `domains`, and `FC-5` put that list in a
+  document written before any pod exists. The address of record was a Service *name* — which
+  satisfied the last two and no spelling of `dial` could reach, so the published §4 call step
+  could not work. It is now node-a's **static `clusterIP`**, declared in the same manifest as
+  the document that serves it, and `devspace_dialable.rs` holds all four artifacts that must
+  carry it byte-identically — the tenant's `domains`, the greeting's AoR, the site's `dial`
+  command and the two-node script — to that one string, plus the property that makes it usable.
+  This unblocks `DX-13`.
+
+- **A normative spec can no longer exist outside the vector gate's view** (`CF-25`). `AF-3`'s
+  296-line owner-rpc spec sat under `docs/specs/` with thirteen §10 failure scenarios while
+  `check-vectors.py` stayed green without reading one of them — the checker only ever looked at
+  specs its own `SPECS` table named. Every file under `docs/specs/` (and every registered design
+  table) is now either registered or **excluded by a named entry carrying a reason and a live
+  story** — the exclusion list is ratcheted in both directions (a dead document, an empty reason,
+  a dead story, or a registered-and-excluded contradiction all go red), a registered prefix with
+  no tabulated rows is refused rather than read as covered, and scenario tables keyed by
+  test-function names are visible to the unowned-row guard. The generated report now renders the
+  registered inventory and an "outside the vector ledger" table from the registries themselves.
+
+- **The Helm chart now says what installing it does not do, and a check holds it there**
+  (`KO-16`, validated synthesis **V-19**). `helm show chart` used to promise the operator, CRDs
+  and RBAC while the only template was one custom resource nothing serves. The description now
+  leads with "non-operational schema preview", the rendered manifest itself carries an
+  `# UNSERVED:` header so a saved copy keeps saying it, `NOTES.txt` names the blockers
+  (`KO-2`/`KO-3`/`ET-4`) at the one moment an operator is guaranteed to be reading, and
+  `deploy/helm/check-advertised.sh` holds the metadata to the rendered inventory — including
+  `version`/`appVersion`, which move to the repository's release instead of a `0.1.0` nothing
+  ever cut, so **a release cut that forgets `Chart.yaml` is a red check** (the check needs helm,
+  so like `check-values.sh` it sits beside the gate rather than in it).
+
 - **A deferred conformance row is now judged by its named story's status, not by the name's
   existence** (`CF-24`). 239 of 428 deferred rows — 56% — named a story that had already closed,
   so the report's "deferred with a reason" was a dead letter for more than half its rows.

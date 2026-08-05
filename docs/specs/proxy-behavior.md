@@ -139,12 +139,14 @@ puts an edge on the same address as a gateway.
 
 ## 5.1. Target determination (§16.5)
 
-Applied after preprocessing and before forwarding. §16.5 has two cases, and which one applies is a
-decision, so it belongs in the engine rather than in whatever the driver happens to ask a store:
+Applied after preprocessing and before forwarding, in the order the rows appear. Which case applies
+is a decision, so it belongs in the engine rather than in whatever the driver happens to ask a
+store — and only the last case asks a store anything:
 
 | # | Rule |
 |---|---|
 | T1 | The request is **within a dialog** (its `To` carries a tag): the target set is *predetermined*. The Request-URI is the only target and no location lookup happens — a mid-dialog Request-URI is the dialog's remote target (§12.2.1.1), which is a contact and not an address of record |
+| T3 | Otherwise, when a **`Route` set survived preprocessing**: the target set is predetermined too — the Request-URI is the only target, and the copy is forwarded to the route it names (F7). The location service is never asked about a `Route` URI: a `Route` names a proxy, an address of record names a user, and asking the former as the latter hands F2 an answer about a proxy to write over the callee's URI. An upstream element already routed this request; retargeting belongs to whatever the path ends at, which reaches T2 when the request arrives there with no `Route` left |
 | T2 | Otherwise the Request-URI is an address this platform is responsible for: the targets come from the location service — `ResolveTargets`, answered by `TargetsResolved`, with §7's empty-set rule |
 
 **[sipx-clstr]** T1 is what V-03 was missing, and the failure it caused was total rather than
@@ -153,6 +155,13 @@ as one resolves to an empty set for every normal call — a `BYE` answered `480`
 has no response at all (§7.2), an acknowledgement silently discarded. A registrar that happens to
 hold a binding under that contact's canonical key is worse, not better: the request is then
 delivered to whatever that binding names.
+
+**[sipx-clstr]** T3 is the out-of-dialog half of the same defect, found by the review that closed
+the in-dialog half (`PX-13`, T1) and fixed by `PX-16`. Before it, the engine asked the location
+service about the *first `Route`* whenever one survived, and F2 wrote the resolved answer into the
+Request-URI — so a request from an upstream proxy lost its real destination entirely. T3 sits
+between T1 and T2 in evaluation order, and the order is load-bearing: T2's premise ("the targets
+come from the location service") is only safe once nothing upstream has already decided the path.
 
 ## 6. Via branch and the loop-detection cookie (§16.6 step 8, RFC 5393)
 
@@ -196,7 +205,7 @@ guarantee; the passthrough vectors assert it):
 | F4 | Record-Route (dialog-forming requests when the platform must stay in the path) | One `Record-Route` per side carrying the affinity token as a URI parameter; direction distinguishes the sides. Byte budget: the token URI **parameter** MUST stay ≤ 200 bytes — the budget authority is [affinity-token](affinity-token.md) §3 (worst case 157 B including the 64 B module-facts ceiling); the bound is per parameter, not per header line |
 | F5 | Add headers per policy/hooks | Hook phase `BeforeForward`; modules declare what they touch |
 | F6 | Route postprocessing | Strict-routing next hop: move Request-URI to last Route, first Route to Request-URI |
-| F7 | Determine next hop | Read off **the copy, after F6**: the first `Route` if it carries `lr`, else the Request-URI. The `lr` test is what makes the rule total across F6 — a first `Route` without it means the swap has already put the strict router in the Request-URI, so the Request-URI *is* the next hop. The engine computes it and carries it on the `Forward` effect (§2); the address it resolves to is the driver's (RT-1's route plan), the URI is not |
+| F7 | Determine next hop | Read off **the copy, after F6, carrying F6's answer**: when F6 reformatted the copy for a strict router, the next hop is the Request-URI; otherwise the first `Route` if present, else the Request-URI — RFC 3261 §16.6 step 7's rule, verbatim, including its condition. The condition is F6's *answer* and not the copy's shape: this rule used to read `lr` off the first `Route` instead, on the theory that a first `Route` without `lr` means the swap has happened — true, but not the converse, so over `[strict, p2;lr]` the swap leaves `p2;lr` first with the strict router in the Request-URI, and the `lr` reading followed `p2` and skipped the router the swap exists to traverse (fixed by `PX-16`, proved by `PB-F-10`). The engine computes the hop and carries it on the `Forward` effect (§2); the address it resolves to is the driver's (RT-1's route plan), the URI is not |
 | F8 | Push Via | §6 branch; `rport` per kernel behavior |
 | F9 | `Content-Length` | Present on stream transports (kernel framing rule) |
 | F10 | Forward | `Effect::Forward` — one kernel client transaction per branch |
@@ -381,11 +390,22 @@ the rows here are the normative behavior matrix.
 | PB-F-1 | Dialog-forming INVITE, 1 target | Forward: Via pushed (cookie present), `Max-Forwards` decremented, Record-Route with token parameter ≤ 200 B, Timer C armed at F11's default, **240 s**, and armed *after* the `Forward` |
 | PB-F-2 | 3 targets (q-ordered) | 3 branches, unique branch ids, same cookie field rules, `Max-Breadth` divided |
 | PB-F-3 | Unknown header `X-Vendor: a, b` in request | Byte-identical in every forwarded branch |
-| PB-F-4 | Next hop is a strict router | F6 swap: R-URI ↔ Route ends; F7's next hop is then the Request-URI, because the first `Route` no longer carries `lr` |
+| PB-F-4 | Out-of-dialog request for `sip:bob@b.example`, pre-existing `Route` naming a strict router (no `lr`) | T3 — no `ResolveTargets`; F6 swap: the strict router becomes the Request-URI and the **callee's URI**, `sip:bob@b.example`, moves to the Route end — on the wire, not only in the parsed field; F7's next hop is the Request-URI because F6 reformatted the copy |
 | PB-F-5 | Resolved target set is empty | → Respond `480` |
 | PB-F-6 | In-dialog request, a `Route` for another element survives preprocessing | F7 — the next hop is that `Route`, and the Request-URI is left as the dialog's remote target |
 | PB-F-7 | `ACK` for a 2xx carrying our `Route` | K3 — the `Route` is popped, the remote target is the next hop, `Max-Forwards` is decremented, a `Via` is pushed, no `Record-Route` is added, and nothing is answered |
 | PB-F-8 | `ACK` for a 2xx that cannot be forwarded (`Max-Forwards: 0`) | K3 — an explicit unroutable outcome carrying the reason; no response of any status |
+| PB-F-9 | Out-of-dialog request with a pre-existing `Route` set `[ours;lr, p2;lr]` | T3 — our `Route` popped (P2), no `ResolveTargets`; forwarded with the callee's URI still the Request-URI on the wire; F7's next hop is the surviving first `Route` |
+| PB-F-10 | Out-of-dialog request with a pre-existing `Route` set `[ours;lr, strict(no lr), p2;lr]` | T3, then F6's swap over the survivors: the strict router becomes the Request-URI, the callee's URI goes to the Route end behind the rest of the path; F7's next hop is the Request-URI — **not** the first `Route`, which carries `lr` again after the swap |
+
+`PB-F-4`'s expectation changed with `PX-16`, and per the `CF-12` discipline the change is argued
+here rather than silently re-recorded. The old row expected the strict router's own URI at the end
+of the swapped Route set, described as *"the original Request-URI moved to the end"* — but that
+value was the **resolved location answer about the first `Route`**, which F2 had already written
+over the Request-URI before F6 ran. The described swap was real; the bytes it swapped were wrong,
+because the callee's URI had left the message one step earlier. The new bytes keep the callee at
+the Route end, which is what §16.6 step 6's swap is *for*: the strict router finds the real
+destination as the last `Route` value. The old bytes could not have reached the callee at all.
 
 **Responses (PB-R):**
 

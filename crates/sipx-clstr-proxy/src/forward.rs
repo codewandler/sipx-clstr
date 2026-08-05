@@ -10,6 +10,7 @@ use sipx_sip::{Header, HeaderName, Request, Uri};
 
 use crate::config::ProxyConfig;
 use crate::cookie::branch_for;
+use crate::route;
 use crate::types::{BranchId, RecordRouteTokens, Target};
 use crate::validate::Validated;
 
@@ -62,17 +63,25 @@ pub enum ForwardError {
     BadRecordRoute,
 }
 
-/// Build one forwarded copy, and the branch it goes out on.
+/// Build one forwarded copy, the branch it goes out on, and F7's next hop.
+///
+/// The next hop is computed here rather than by the caller because F7 is not a function of the
+/// finished copy alone: RFC 3261 §16.6 step 7 conditions it on whether step 6 reformatted the copy
+/// for a strict router, and only this function knows F6's answer. A caller reading the copy after
+/// the fact has to infer the swap from the first `Route`'s shape, and that inference has a
+/// counterexample (`PX-16`): `[strict, p2;lr]` swaps to a first `Route` that carries `lr`.
 pub fn forward(
     plan: &ForwardPlan<'_>,
     config: &ProxyConfig,
-) -> Result<(BranchId, Request), ForwardError> {
+) -> Result<(BranchId, Request, Bytes), ForwardError> {
     // F1 — copy. Unknown headers and the body come along untouched.
     let mut request = plan.original.clone();
 
     // F2 — the Request-URI becomes the target, verbatim. A contact from the location service keeps
     // its parameters: re-serializing a parsed URI here would change what the UA registered.
-    request.uri = Uri::parse(plan.target.uri.clone()).map_err(|_| ForwardError::BadTarget)?;
+    // `set_uri`, never field assignment: a parsed request keeps its raw start-line bytes for exact
+    // forwarding, and a copy retargeted around them puts the *original* request line on the wire.
+    request.set_uri(Uri::parse(plan.target.uri.clone()).map_err(|_| ForwardError::BadTarget)?);
 
     // F3 — decrement, after V3's insert rule. An absent header became the configured default
     // during validation, so this is always the decrement of a value we know.
@@ -130,9 +139,10 @@ pub fn forward(
     }
 
     // F6 — route postprocessing for a strict-routing next hop: the Request-URI moves to the end of
-    // the Route set and the first Route becomes the Request-URI. RFC 3261 §16.6 step 12. Runs after
-    // the route set is applied, since the first hop is now the path's topmost value.
-    apply_strict_route_swap(&mut request);
+    // the Route set and the first Route becomes the Request-URI. RFC 3261 §16.6 step 6. Runs after
+    // the route set is applied, since the first hop is now the path's topmost value. Whether it
+    // fired is F7's input, so the answer is kept rather than re-derived from the copy.
+    let reformatted = apply_strict_route_swap(&mut request);
 
     // F8 — push our Via, with §6's branch. Last, so that the branch covers the request as it will
     // actually leave: a Via computed before F2 would attest to a Request-URI we then changed.
@@ -145,10 +155,14 @@ pub fn forward(
         .headers
         .push_front(Header::build(HeaderName::Via, via).map_err(|_| ForwardError::BadRecordRoute)?);
 
+    // F7 — the next hop, read off the copy after F6 and off F6's answer. Computed once the copy is
+    // final, so it is the hop this exact message must reach rather than the URI it is addressed to.
+    let next_hop = route::next_hop_of(&request, reformatted);
+
     // F9 — Content-Length is the kernel's framing rule, applied at serialization.
     // F10/F11 — forwarding and Timer C are effects, which the engine emits.
 
-    Ok((BranchId(branch), request))
+    Ok((BranchId(branch), request, next_hop))
 }
 
 /// The `Record-Route` values to push, **in push order** — ORIG first, so TERM ends up on top (M2).
@@ -197,8 +211,11 @@ fn record_route_value(config: &ProxyConfig, token: Option<&Bytes>) -> Result<Str
     }
 }
 
-/// §16.6 step 12: if the next hop is a strict router, swap the Request-URI and the last Route.
-fn apply_strict_route_swap(request: &mut Request) {
+/// §16.6 step 6: if the next hop is a strict router, swap the Request-URI and the last Route.
+///
+/// Returns whether it did — F7's condition (RFC 3261 §16.6 step 7), which cannot be re-read off
+/// the finished copy: after a swap over `[strict, p2;lr]` the first `Route` carries `lr` again.
+fn apply_strict_route_swap(request: &mut Request) -> bool {
     let routes: Vec<Bytes> = request
         .headers
         .get_all(&HeaderName::Route)
@@ -206,19 +223,19 @@ fn apply_strict_route_swap(request: &mut Request) {
         .collect();
 
     let Some(first) = routes.first() else {
-        return;
+        return false;
     };
     let Ok(address) = Address::parse(first, "Route") else {
-        return;
+        return false;
     };
     // A loose router advertises `;lr`. Its absence is what identifies a strict router, and RFC 3261
-    // §16.6 step 12 is explicit that the swap is only for that case.
+    // §16.6 step 6 is explicit that the swap is only for that case.
     if address
         .uri
         .params()
         .is_some_and(|params| params.get("lr").is_some())
     {
-        return;
+        return false;
     }
 
     // The Request-URI goes to the end of the Route set; the first Route becomes the Request-URI.
@@ -237,7 +254,9 @@ fn apply_strict_route_swap(request: &mut Request) {
     ) {
         request.headers.push(header);
     }
-    request.uri = new_uri;
+    // `set_uri` for the same reason as F2's: the raw start line must not outlive the retarget.
+    request.set_uri(new_uri);
+    true
 }
 
 /// Replace a single-valued header, or add it if absent.

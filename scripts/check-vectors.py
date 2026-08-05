@@ -71,6 +71,17 @@ Ways to fail, and the last two are the ones that matter:
    story, because a story can stop existing and a spec outlives it. This is the same rule in the
    file where the ledger actually lives.
 
+8. A file under `docs/specs/` that `SPECS` never registered and `EXCLUDED` never named. `CF-25` is
+   the measurement: `owner-rpc.md` landed 296 normative lines and a thirteen-row scenario table,
+   and `--check` stayed green at 154/583 with none of it in view — not because anyone decided
+   that, but because enumeration was nobody's job. It now runs in both directions: an
+   unregistered, unexcluded spec is refused by name; a stale exclusion — document gone, spec also
+   registered, reason empty, story closed — is refused the way a stale deferral is; a registered
+   prefix whose owner tabulates no row of it is refused, so registration cannot be nominal; and
+   the unowned-row guard reads past the `XX-N` shape — a rule table keyed by a backticked
+   test-function name is a set of named executable claims, admitted only in a document `EXCLUDED`
+   names.
+
 Also writes `docs/reference/conformance.md`: generated, never hand-edited, and checked in so a
 reader who does not run the suite can still see what is proved. `--check` fails if the committed file
 is out of date, the way the story board is checked.
@@ -145,6 +156,45 @@ SPECS = {
     "OB": (ROOT / "docs" / "specs" / "operational-capability-baseline.md", "§5", "CX-8"),
 }
 
+# Documents whose normative claims deliberately live outside the vector ledger — each one a named
+# entry, because the alternative is the shape `CF-25` was filed on: `owner-rpc.md` landed 296
+# normative lines and a §10 scenario table, and `--check` stayed green without reading one rule of
+# it. Choosing not to register a prefix is legitimate — a row and the test that executes it should
+# arrive in one commit, which is `cluster-membership` §11's own reasoning — but the *choice* has to
+# leave a trace a tool reads, and this table is that trace. Every file under `docs/specs/` is
+# therefore in exactly one place: registered in `SPECS`, or named here with a reason
+# (`unenumerated_specs` refuses both a file in neither and an entry gone stale).
+#
+# `story` is the story that will execute the document's claims, held to the deferral ledger's
+# liveness rule (`CF-24`): it exists and is not `done`. Empty means the claims are already carried
+# by a registered prefix's own rows, so the ledger rather than a story is the owner.
+EXCLUDED: dict[str, dict[str, str]] = {
+    # §11 maps every rule a test executes today onto `cluster-config`'s `CC` rows, each deferred
+    # in vector-scope.toml with a live owner; the fields with no rows yet get them in the same
+    # commit as the loader code that implements them.
+    "docs/specs/cluster-membership.md": {
+        "story": "",
+        "reason": "registers no prefix by design (§11): its rules execute through "
+        "cluster-config's `CC` rows, and the fields without rows yet get them beside their "
+        "loader code",
+    },
+    # §10 names thirteen harness scenarios instead of rows: its rules are the behaviour of two
+    # nodes, a channel and a connection table under faults, and what executes that is a scenario.
+    "docs/specs/owner-rpc.md": {
+        "story": "AF-7",
+        "reason": "registers no prefix by design (§10): its rules are the thirteen named harness "
+        "scenarios that arrive with the implementation",
+    },
+    # The `external_route_*` scenario table under *EX-6: the async external routing hook* —
+    # specified at design grain, and EX-6's own handoff records that nothing executes them until
+    # the hook runtime exists.
+    "docs/designs/extension-framework.md": {
+        "story": "EX-3",
+        "reason": "carries the eleven `external_route_*` scenarios at design grain; nothing "
+        "executes them until the hook runtime exists",
+    },
+}
+
 PREFIXES = "|".join(SPECS)
 # The family letter is optional: `PB-V-8` and `HF-9` are both rows. See the module docstring for
 # why the grammar widened instead of the tables renumbering.
@@ -161,6 +211,17 @@ CLAIM_LINE = re.compile(rf"^\|\s*`?({PREFIXES})-(?:([A-Z])-)?(\d+)`?\s*\|(.*)$")
 # exactly like `HF` rows and were checked by nothing. Anchored at the start for `CLAIM_LINE`'s
 # reason: a line that merely cites a row is not a row.
 ANY_ROW_LINE = re.compile(r"^\|\s*`?([A-Z]{2})-(?:[A-Z]-)?\d+`?\s*\|")
+# The rule-table shape `ANY_ROW_LINE` cannot see (`CF-25`): a row keyed by a backticked
+# test-function name rather than a row ID — `owner-rpc` §10's shape, thirteen named scenarios
+# invisible to the guard above because their first cell is not `XX-N`. Such a row is a named
+# executable claim exactly the way a vector row is, so a document carrying one must be named in
+# `EXCLUDED` with the story that will execute it. Three-plus snake_case words is where the corpus
+# separates: every schema field a spec tabulates is one or two (`call_id`, `last_activity`), and
+# a scenario name is a sentence. A three-word *value* name rides on its document's entry where one
+# exists (`max_pending_per_flow` in `owner-rpc` §8); anywhere else it is an error whose message
+# carries both fixes, because the cheap fix for a false positive is keying the table differently
+# and the cheap fix for a real scenario table is a registry line — both deliberate, both visible.
+SCENARIO_LINE = re.compile(r"^\|\s*`([a-z][a-z0-9]*(?:_[a-z0-9]+){2,})`\s*\|")
 # Where a vector table may legitimately live. Designs are scanned too, and that is the point.
 TABLE_TREES = ("docs/specs", "docs/designs")
 
@@ -340,26 +401,42 @@ def spec_rows() -> set[str]:
 
 
 def unowned_rows() -> list[str]:
-    """Table rows shaped like vectors whose prefix no spec owns.
+    """Table rows shaped like executable claims that no registry reads.
 
-    `spec_rows` reads only the owner of a prefix, which is what stops a design doc inventing a row.
-    The cost of that is silence in the other direction: a table of `QP-*` rows sat in
-    `docs/designs/extension-framework.md` through two stories, looking exactly like a vector table,
-    proving nothing, and passing `--check` — a fabricated row among them passed too. Registration is
-    therefore not something to remember; an unowned row is an error with the fix in the message.
+    Two shapes. A row keyed `XX-N` whose prefix `SPECS` does not own: `spec_rows` reads only the
+    owner of a prefix, which is what stops a design doc inventing a row, and the cost of that is
+    silence in the other direction — `EX-12` found a table of `QP-*` rows in
+    `docs/designs/extension-framework.md` that had sat through two stories, looking exactly like a
+    vector table, proving nothing, and passing `--check`, a fabricated row among them passing too.
+    And a row keyed by a backticked test-function name (`CF-25`): the same kind of claim with no
+    prefix at all, which is how `owner-rpc.md` §10 named thirteen scenarios nothing executed while
+    the gate stayed green. A named-scenario row is admitted only in a document `EXCLUDED` names,
+    because that entry is the trace — the reason, and the live story — that the claims deliberately
+    await their implementation. Registration is therefore not something to remember; an unowned row
+    is an error with the fix in the message.
     """
     problems: list[str] = []
     for tree in TABLE_TREES:
         for path in sorted((ROOT / tree).rglob("*.md")):
+            rel = str(path.relative_to(ROOT))
             for number, line in enumerate(
                 path.read_text(encoding="utf-8").splitlines(), start=1
             ):
                 found = ANY_ROW_LINE.match(line)
                 if found and found.group(1) not in SPECS:
                     problems.append(
-                        f"{path.relative_to(ROOT)}:{number}: a table row with the shape of a "
+                        f"{rel}:{number}: a table row with the shape of a "
                         f"vector, but no spec owns the prefix `{found.group(1)}` — register it in "
                         f"SPECS against the spec that states it, or stop writing it as a row"
+                    )
+                    continue
+                scenario = SCENARIO_LINE.match(line)
+                if scenario and rel not in EXCLUDED:
+                    problems.append(
+                        f"{rel}:{number}: a rule table keyed by `{scenario.group(1)}` — a named "
+                        f"scenario no registered prefix carries — in a document EXCLUDED does not "
+                        f"name; name the document there with a reason and the story that will "
+                        f"execute it, or key the table by registered vector rows"
                     )
     return problems
 
@@ -395,6 +472,87 @@ def unrepresented_families(rows: set[str]) -> list[str]:
             f"{label}: {counted[family]} rows in {owner} and no FAMILIES entry, so the report "
             f"counts them and shows them in no table — give the family a section title in FAMILIES"
         )
+    return problems
+
+
+def unenumerated_specs(
+    existing: set[str],
+    registered: set[str],
+    excluded: dict[str, dict],
+    statuses: dict[str, str],
+) -> list[str]:
+    """Spec files the coverage picture never heard of, and stale entries in the ledger of them.
+
+    `CF-25`: `SPECS` grew by hand, so a new spec was in the coverage picture only if its author
+    remembered — `owner-rpc.md` carried 296 normative lines and a thirteen-row scenario table, and
+    `--check` passed without reading one rule of it. So the direction reverses: every file under
+    `docs/specs/` is either registered in `SPECS` or named in `EXCLUDED` with a reason, and an
+    absence is an error naming the file. The entries themselves get the ratchet rules every other
+    ledger here has — an entry whose document is gone, whose spec is also registered, whose reason
+    is empty, or whose story is closed is refused, because a trace that can rot silently is an
+    absence with better manners (`CF-24`).
+    """
+    problems: list[str] = []
+    for path in sorted(path for path in existing if path.startswith("docs/specs/")):
+        if path in registered and path in excluded:
+            problems.append(
+                f"{path}: registered in SPECS and named in EXCLUDED — the two claims contradict, "
+                f"and a reader cannot tell which one the gate believed; remove one"
+            )
+        elif path not in registered and path not in excluded:
+            problems.append(
+                f"{path}: a spec registered nowhere — its rules exist outside the coverage "
+                f"picture that claims to describe them; register a prefix in SPECS, or name it "
+                f"in EXCLUDED with the reason it carries no vector table"
+            )
+    for path in sorted(excluded):
+        entry = excluded[path]
+        if path not in existing:
+            problems.append(
+                f"{path}: named in EXCLUDED and no such document exists — remove the entry"
+            )
+        if not entry.get("reason", "").strip():
+            problems.append(
+                f"{path}: named in EXCLUDED with no reason — an exclusion is a named reason, "
+                f"not a waiver"
+            )
+        story = entry.get("story", "").strip()
+        if not story:
+            continue
+        if story not in statuses:
+            problems.append(
+                f"{path}: EXCLUDED names `{story}`, which is no story in docs/stories/ — name "
+                f"the story that will execute the document's claims, or the trace is addressed "
+                f"to nobody"
+            )
+        elif statuses[story] in CLOSED_STATUSES:
+            problems.append(
+                f"{path}: EXCLUDED names `{story}`, which is `status: {statuses[story]}` — that "
+                f"story will not execute these claims; re-point the entry at the story that will"
+            )
+    return problems
+
+
+def rowless_registrations(rows: set[str], specs: dict) -> list[str]:
+    """Prefixes registered in `SPECS` whose owner tabulates no row of them.
+
+    The loophole `unenumerated_specs` would otherwise open (`CF-25`): registration silences the
+    enumeration, and a registration is one line — so a prefix with no rows behind it would put a
+    spec inside the coverage picture while adding nothing to the denominator, which reads as
+    covered in exactly the direction nobody checks. `CF-21` owns holding the published copies of
+    the count to its generator; this is the generator refusing to produce a count a nominal entry
+    is hiding inside.
+    """
+    tabulated = {family_of(row)[0] for row in rows}
+    problems: list[str] = []
+    for prefix in specs:
+        if prefix not in tabulated:
+            problems.append(
+                f"{prefix}: registered against {specs[prefix][0].relative_to(ROOT)} and that "
+                f"document tabulates no `{prefix}` row — a rowless registration reads as covered "
+                f"while gating nothing; tabulate the vectors, or move the spec to EXCLUDED with "
+                f"a reason"
+            )
     return problems
 
 
@@ -840,6 +998,21 @@ def render(
             f"above is shown in exactly one table."
         )
 
+    # `CF-25`. The denominator above counts rows; this sentence accounts for *documents*, so a
+    # spec outside the ledger is visible as a decision rather than invisible as an omission. The
+    # counts are computed from the registries the gate enforces, never restated by hand — `CF-21`
+    # owns holding any copy of them elsewhere to this document.
+    registered_files = {path for path, _section, _author in SPECS.values()}
+    excluded_specs = [path for path in EXCLUDED if path.startswith("docs/specs/")]
+    enumeration = (
+        f"Every file under `docs/specs/` is enumerated: {len(registered_files)} documents "
+        f"registered across {len(SPECS)} prefixes, and {len(excluded_specs)} outside the vector "
+        f"ledger — named in *Outside the vector ledger* below, beside every other document that "
+        f"carries named-but-unexecuted scenarios. A spec in neither place, a registered prefix "
+        f"that tabulates no rows, and a stale exclusion are each a gate failure, so a spec "
+        f"cannot read as covered by being nominal."
+    )
+
     lines = [
         "# Conformance — every spec vector, and what proves it",
         "",
@@ -865,6 +1038,8 @@ def render(
         "",
         crosscheck,
         "",
+        enumeration,
+        "",
         "## What these words mean",
         "",
         "**Proved** means: a test named for the row exists and runs, and — where the row's `Expect`",
@@ -887,6 +1062,32 @@ def render(
         "exactly what the test is worth. And nothing here says the spec itself is right.",
         "",
     ]
+
+    # The other half of the inventory (`CF-25`): what the count above deliberately does not
+    # include, named with the story that will change that. Emitted from `EXCLUDED` so it cannot
+    # drift from the registry the gate enforces.
+    if EXCLUDED:
+        lines += [
+            "## Outside the vector ledger",
+            "",
+            "Documents whose normative claims deliberately register no vector prefix — named",
+            "scenarios that arrive with their implementation, or rules that execute through",
+            "another spec's rows. Each is a named entry in `scripts/check-vectors.py`, because the",
+            "alternative was measured: `owner-rpc.md` carried 296 normative lines and a",
+            "thirteen-row scenario table through a green gate that had never read it. An entry's",
+            "story is held live the way a deferral's is; `—` means the claims are already carried",
+            "by a registered prefix's own rows.",
+            "",
+            "| Document | Executed by | Why it registers no prefix |",
+            "|---|---|---|",
+        ]
+        for path in sorted(EXCLUDED):
+            entry = EXCLUDED[path]
+            link = f"[{pathlib.PurePosixPath(path).stem}]({path.replace('docs/', '../', 1)})"
+            story = f"`{entry['story']}`" if entry.get("story", "").strip() else "—"
+            lines.append(f"| {link} | {story} | {entry.get('reason', '')} |")
+        lines.append("")
+
     return "\n".join(lines + sections), emitted
 
 
@@ -1050,6 +1251,133 @@ def self_test() -> list[str]:
         "an [[unasserted]] entry naming no story is not a dead letter",
         letters({"CC-V-9": {"reason": "x"}}, "unasserted") == [],
     )
+
+    # `CF-25`'s half, replayed as the tree stood when it was filed: `docs/specs/owner-rpc.md`
+    # registered nowhere, excluded nowhere, and `--check` green at 154/583 with none of its 296
+    # normative lines in view. The enumeration must refuse that tree by name — and every way an
+    # exclusion entry can rot must be refused too, or the trace is an absence with better manners.
+    tree = {
+        "docs/specs/owner-rpc.md",
+        "docs/specs/proxy-behavior.md",
+        "docs/designs/extension-framework.md",
+    }
+    on_record = {"docs/specs/proxy-behavior.md"}
+    spec_statuses = {"AF-7": "backlog", "AF-3": "done"}
+
+    unregistered = unenumerated_specs(tree, on_record, {}, spec_statuses)
+    check(
+        "a spec registered nowhere is refused, and the message names the file",
+        len(unregistered) == 1 and "docs/specs/owner-rpc.md" in unregistered[0],
+    )
+    entry = {"docs/specs/owner-rpc.md": {"story": "AF-7", "reason": "x"}}
+    check(
+        "a named exclusion with a reason and a live story is the trace that passes",
+        unenumerated_specs(tree, on_record, entry, spec_statuses) == [],
+    )
+    check(
+        "an exclusion with no reason is an absence with a name, and refused",
+        len(
+            unenumerated_specs(
+                tree,
+                on_record,
+                {"docs/specs/owner-rpc.md": {"story": "AF-7", "reason": " "}},
+                spec_statuses,
+            )
+        )
+        == 1,
+    )
+    check(
+        "an exclusion of a registered spec is a contradiction, and refused",
+        len(
+            unenumerated_specs(
+                tree, on_record | {"docs/specs/owner-rpc.md"}, entry, spec_statuses
+            )
+        )
+        == 1,
+    )
+    check(
+        "an exclusion whose document is gone is stale, and refused",
+        len(
+            unenumerated_specs(
+                tree - {"docs/specs/owner-rpc.md"}, on_record, entry, spec_statuses
+            )
+        )
+        == 1,
+    )
+    check(
+        "an exclusion naming a closed story is a dead letter, and refused",
+        len(
+            unenumerated_specs(
+                tree,
+                on_record,
+                {"docs/specs/owner-rpc.md": {"story": "AF-3", "reason": "x"}},
+                spec_statuses,
+            )
+        )
+        == 1,
+    )
+    check(
+        "an exclusion naming a story that does not exist is refused",
+        len(
+            unenumerated_specs(
+                tree,
+                on_record,
+                {"docs/specs/owner-rpc.md": {"story": "ZZ-9", "reason": "x"}},
+                spec_statuses,
+            )
+        )
+        == 1,
+    )
+    check(
+        "an exclusion naming no story passes — the claims are carried by another prefix's rows",
+        unenumerated_specs(
+            tree,
+            on_record,
+            {"docs/specs/owner-rpc.md": {"story": "", "reason": "x"}},
+            spec_statuses,
+        )
+        == [],
+    )
+
+    # Registration must not be nominal: a prefix with no rows behind it silences the enumeration
+    # while adding nothing to the denominator, which reads as covered in exactly the direction
+    # nobody checks.
+    nominal = {"PB": SPECS["PB"], "ZZ": (ROOT / "docs" / "specs" / "zz.md", "§1", "XX-0")}
+    rowless = rowless_registrations({"PB-V-1"}, nominal)
+    check(
+        "a registered prefix that tabulates no row is refused",
+        len(rowless) == 1 and rowless[0].startswith("ZZ:"),
+    )
+    check(
+        "a prefix with rows behind it passes",
+        rowless_registrations({"PB-V-1"}, {"PB": SPECS["PB"]}) == [],
+    )
+
+    # The widened row shape: a rule table keyed by a test-function name is a set of named
+    # executable claims, and the guard has to see it — §10's rows were invisible to
+    # `ANY_ROW_LINE` because their first cell is not `XX-N`.
+    check(
+        "a rule-table row keyed by a test-function name is recognised",
+        (scenario := SCENARIO_LINE.match("| `owner_rpc_delivers_cross_node` | none | claim |"))
+        is not None
+        and scenario.group(1) == "owner_rpc_delivers_cross_node",
+    )
+    check(
+        "a two-word schema field is not a scenario",
+        SCENARIO_LINE.match("| `expires_at` | absolute instant | §5.2 |") is None,
+    )
+    check(
+        "a camelCase configuration key is not a scenario",
+        SCENARIO_LINE.match("| `drainTimeout` | duration | 30 s |") is None,
+    )
+    check(
+        "an uppercase-led value name is not a scenario",
+        SCENARIO_LINE.match("| `T_write` | 2 s | less than `T_owner` | owner-side |") is None,
+    )
+    check(
+        "an unbackticked name is prose, not a claim",
+        SCENARIO_LINE.match("| owner rpc delivers cross node | none | claim |") is None,
+    )
     return failures
 
 
@@ -1078,6 +1406,7 @@ def main() -> int:
     verdicts = {row: verdict(row, proofs[row], claimed) for row in proofs}
     problems += unowned_rows()
     problems += unrepresented_families(rows)
+    problems += rowless_registrations(rows, SPECS)
 
     # `CF-24`. Both ledgers are checked against the board's own `status` field, so "deferred with a
     # reason" means a reason with somebody still behind it.
@@ -1086,6 +1415,17 @@ def main() -> int:
     problems += author_problems
     problems += dead_letters(waived, "deferred", statuses, authors)
     problems += dead_letters(shape_only, "unasserted", statuses, authors)
+
+    # `CF-25`. The enumeration runs in both directions: a spec file nothing registers is refused,
+    # and so is a stale entry in the exclusion ledger — including its story going `done`, which is
+    # `CF-24`'s liveness rule applied to the one ledger it did not yet cover.
+    existing = {
+        str(path.relative_to(ROOT))
+        for tree in TABLE_TREES
+        for path in (ROOT / tree).rglob("*.md")
+    }
+    registered = {str(path.relative_to(ROOT)) for path, _section, _author in SPECS.values()}
+    problems += unenumerated_specs(existing, registered, EXCLUDED, statuses)
 
     for row in sorted(rows, key=sort_key):
         if row not in proofs and row not in waived:

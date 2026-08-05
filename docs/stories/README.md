@@ -65,21 +65,19 @@ _What makes N nodes one proxy: routing state rides in the message, and every res
 
 ### Conformance & deterministic harness
 _The north star made executable: seeded multi-node simulation, and coverage that is measured._
-- [CF-25 — A new spec can carry normative rules no gate ever enumerates](CF-25-a-new-spec-can-carry-normative-rules-no-gate-enumerates.md) · Foundation · AF-3 added a 296-line normative spec and check-vectors.py stayed green at 154/583 without seeing one rule of it
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
-- [CF-23 — A blank line silently truncates a normative table, and the gate reads it as clean](CF-23-a-blank-line-silently-truncates-a-normative-table.md) · Foundation · RG-25 orphaned a hook-phase row into literal pipe text; check-docs.py passed it, and the spec's own sentence still claimed both rows
 - [CF-26 — The harness cannot injure a connection, so three owner-RPC scenarios are unwritable](CF-26-the-harness-cannot-injure-a-connection.md) · Foundation · fault.rs offers five faults, none of them reconnect, restart-with-fresh-incarnation or backpressure — which owner-rpc §10 requires
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
 - [DP-14 — Bound registration and refusal work outside the proxy transaction admission ceiling](DP-14-bound-registration-and-refusal-work.md) · Cluster · V-11 — REGISTER and every refusal still spawn without a process-wide work bound
-- [KO-18 — Give the devspace nodes an address a phone can dial, not only one it can register through](KO-18-give-the-devspace-nodes-a-dialable-address.md) · Cluster · blocks DX-13 — getting-started §4's caller cannot work in any spelling while the AoR is a Service name
 - [DP-15 — Build release-profile images and pin every input used to prove or publish them](DP-15-build-and-pin-the-artifacts-we-release.md) · Cluster · V-20 — the documented image is dev-profile and release evidence follows mutable tags
 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
+- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · unblocked — KO-18 gave the greeting a static clusterIP that is dialable, a valid domains entry and knowable before any pod exists; §4 needs re-running against a live k3d cluster
 - [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
 
 ### Fail-closed configuration
@@ -88,10 +86,6 @@ _Accepted means applied, or refused — there is no third state._
 - [FC-7 — Expose the contact-operation bound beside the quota it must not contradict](FC-7-expose-the-contact-operation-bound-beside-the-quota-it-must-not-contradict.md) · Cluster · RG-25 made max_contact_ops a per-tenant policy field with no document key — raise maxBindingsPerAor past it and whole-set refreshes start answering 403
 - [FC-8 — Write down the redaction rule the loader already follows](FC-8-a-refused-value-must-not-echo-a-secret.md) · Cluster · the loader already redacts an inline DSN and an inline nonce secret against no written rule — KY3 made it three call sites governed by nothing
 
-### Kubernetes operator, Helm packaging & autoscaling
-_One `values.yaml` to a running, healthy, resizable cluster — delivered and kept true over time._
-- [KO-16 — Make the Helm skeleton advertise only what it actually installs](KO-16-make-the-helm-skeleton-advertise-only-what-it-installs.md) · Cluster · V-19 — metadata promises a full install; the chart emits one unserved custom resource
-
 ### Media control
 _The SIP process controls media over a network protocol; it never touches a media packet._
 - [ME-3 — Implement media-node selection and reselection](ME-3-implement-media-node-selection-and-reselection.md) · Media · unblocked — ME-1, AF-1 and AF-4 are all done, so the node id has a token to ride in; M2 #14
@@ -99,7 +93,6 @@ _The SIP process controls media over a network protocol; it never touches a medi
 ### Proxy engine
 _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO engine._
 - [PX-15 — Source per-process loop-cookie keys from operating-system randomness](PX-15-source-loop-cookie-keys-from-os-randomness.md) · Signalling · V-15 — the HMAC key is predictable text derived entirely from process startup time
-- [PX-16 — An out-of-dialog request with a pre-existing route set must not lose the callee's URI](PX-16-a-pre-existing-route-set-must-not-lose-the-callee-uri.md) · Signalling · found by PX-13, which fixed the in-dialog half; F2 overwrites the Request-URI with a location answer about the first Route
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
@@ -119,7 +112,6 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [BS-1 — Accept the optional session-service specification](BS-1-accept-the-optional-session-service-spec.md) · Services · M4 spec-first story; no runtime implementation
 
 ## Blocked
-- [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · blocked by KO-18 — §4's caller cannot work in any spelling while the greeting AoR is a Service name
 - [KO-2 — Ship the Helm chart for a local k3s environment](KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md) · Cluster · the headline deliverable — helm install on k3s
 
 ## Backlog
@@ -231,7 +223,9 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CF-17 — The conformance report omits three quarters of the rows it counts](CF-17-the-conformance-report-omits-three-quarters-of-the-rows-it-counts.md) · Foundation · CF-8 registered seven prefixes in SPECS and none of their 30 families in FAMILIES, so 395 of 533 rows render nowhere
 - [CF-19 — The documented version string is not checked against the binary](CF-19-the-documented-version-string-is-not-checked-against-the-binary.md) · Foundation · check-site.py reads every documented command's flags and never its output — three pages shipped a stale version through 0.11.0
 - [CF-22 — The gate cannot see a leaked transaction](CF-22-the-gate-cannot-see-a-leaked-transaction.md) · Foundation · re-specified — the first Acceptance demanded a bound correct code cannot meet; PX-13 drains at 128·T1 and is not a leak
+- [CF-23 — A blank line silently truncates a normative table, and the gate reads it as clean](CF-23-a-blank-line-silently-truncates-a-normative-table.md) · Foundation · RG-25 orphaned a hook-phase row into literal pipe text; check-docs.py passed it, and the spec's own sentence still claimed both rows
 - [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
+- [CF-25 — A new spec can carry normative rules no gate ever enumerates](CF-25-a-new-spec-can-carry-normative-rules-no-gate-enumerates.md) · Foundation · AF-3 added a 296-line normative spec and check-vectors.py stayed green at 154/583 without seeing one rule of it
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
@@ -278,6 +272,8 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [KO-13 — Run a node in a container and a devspace loop](KO-13-run-a-node-in-a-container-and-a-devspace-loop.md) · Cluster · the first time any of this runs outside a test — no operator, no CRD
 - [KO-14 — Bring the chart's values to the config schema, starting with the media block that cannot boot](KO-14-bring-the-chart-to-the-config-schema.md) · Cluster · DP-1 found the shipped default set declares a media policy G-M6 refuses to start on
 - [KO-15 — One media-pool fact has two spellings in the chart](KO-15-one-media-pool-fact-has-two-spellings-in-the-chart.md) · Cluster · deployment.rtpengine.enabled and cluster.mediaPool[].mode duplicate one fact; harmless only while nothing consumes it
+- [KO-16 — Make the Helm skeleton advertise only what it actually installs](KO-16-make-the-helm-skeleton-advertise-only-what-it-installs.md) · Cluster · V-19 — metadata promises a full install; the chart emits one unserved custom resource
+- [KO-18 — Give the devspace nodes an address a phone can dial, not only one it can register through](KO-18-give-the-devspace-nodes-a-dialable-address.md) · Cluster · blocks DX-13 — getting-started §4's caller cannot work in any spelling while the AoR is a Service name
 - [ME-1 — Specify MediaRelay and the NG adapter contract](ME-1-specify-mediarelay-and-the-ng-adapter-contract.md) · Media
 - [ME-6 — Specify per-trunk codec and SRTP policy](ME-6-specify-per-trunk-codec-and-srtp-policy.md) · Media
 - [PX-1 — Specify proxy behavior](PX-1-specify-proxy-behavior.md) · Signalling · gates PX-2 … PX-7
@@ -292,6 +288,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [PX-11 — Settle which 4xx wins when two branches fail, because the row and its test say different things](PX-11-settle-which-4xx-wins-when-two-branches-fail.md) · Platform · PB-R-5 claims 486 is forwarded; its own test asserts 404, and the spec settles neither
 - [PX-13 — Route ACK and in-dialog requests by the Route set, not by an address-of-record lookup](PX-13-route-ack-and-in-dialog-requests-by-route-set.md) · Signalling · re-landed unchanged — the check that reverted it was the defect, and CF-22 corrected it
 - [PX-14 — A terminal result must not revive a queued lower-q fork group](PX-14-a-terminal-result-must-not-revive-a-queued-fork-group.md) · Signalling · release blocker — after a 200 is forwarded, a later 487 starts a new INVITE to a never-launched target
+- [PX-16 — An out-of-dialog request with a pre-existing route set must not lose the callee's URI](PX-16-a-pre-existing-route-set-must-not-lose-the-callee-uri.md) · Signalling · found by PX-13, which fixed the in-dialog half; F2 overwrites the Request-URI with a location answer about the first Route
 - [RG-1 — Specify the location service](RG-1-specify-the-location-service.md) · Signalling · UPSTREAM: Path header, sipx T-14 — see docs/upstream.md
 - [RG-2 — Implement server-side digest authentication](RG-2-implement-server-side-digest-authentication.md) · Signalling · M1 #9 · the seam, the driver wiring and the harness scenario are in; RG-8 carries what it found
 - [RG-3 — Implement REGISTER processing on the in-memory store](RG-3-implement-register-processing-on-the-in-memory-store.md) · Signalling · M1 #4 · the location service on the in-memory store; runs the LS-* vectors in the harness
