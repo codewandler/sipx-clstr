@@ -20,6 +20,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+- **The Helm chart now says what installing it does not do, and a check holds it there**
+  (`KO-16`, validated synthesis **V-19**). `helm show chart` used to promise the operator, CRDs
+  and RBAC while the only template was one custom resource nothing serves. The description now
+  leads with "non-operational schema preview", the rendered manifest itself carries an
+  `# UNSERVED:` header so a saved copy keeps saying it, `NOTES.txt` names the blockers
+  (`KO-2`/`KO-3`/`ET-4`) at the one moment an operator is guaranteed to be reading, and
+  `deploy/helm/check-advertised.sh` holds the metadata to the rendered inventory — including
+  `version`/`appVersion`, which move to the repository's release instead of a `0.1.0` nothing
+  ever cut, so **a release cut that forgets `Chart.yaml` is a red check** (the check needs helm,
+  so like `check-values.sh` it sits beside the gate rather than in it).
+
 - **A deferred conformance row is now judged by its named story's status, not by the name's
   existence** (`CF-24`). 239 of 428 deferred rows — 56% — named a story that had already closed,
   so the report's "deferred with a reason" was a dead letter for more than half its rows.

@@ -2,7 +2,7 @@
 id: KO-16
 title: Make the Helm skeleton advertise only what it actually installs
 pillar: Cluster
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/k8s-deployment-operator.md
 epic: k8s-deployment-operator
