@@ -2,7 +2,7 @@
 id: PX-16
 title: An out-of-dialog request with a pre-existing route set must not lose the callee's URI
 pillar: Signalling
-status: in-progress
+status: done
 priority: 2
 design: docs/designs/proxy-engine.md
 epic: proxy-engine
@@ -27,7 +27,7 @@ replacing the Request-URI — the callee's own URI — with the answer to a ques
 - [x] **Failing-first vector.** `PB-F-4` encodes the current double swap as expected bytes, so this
       story changes a vector's expectation: state in the row and in the story why the new bytes are
       correct and the old ones were not, per the discipline `CF-12` established.
-- [ ] `scripts/gate.sh` green, and the two-node proofs still pass.
+- [x] `scripts/gate.sh` green, and the two-node proofs still pass.
 
 ## Progress
 - Spec first: `proxy-behavior` §5.1 gained **T3** — a `Route` set that survives preprocessing
@@ -77,3 +77,19 @@ replacing the Request-URI — the callee's own URI — with the answer to a ques
 - Considered for upstream: **no.** This is `proxy-behavior`'s route preprocessing, which is this
   repository's state machine; the kernel owns header surgery and transaction semantics, neither of
   which changes here.
+
+- **Closed at integration 2026-08-05.** The implementor died on spawn infrastructure after writing
+  the diff; the coordinator rescue-committed it verbatim and an independent reviewer produced the
+  failing-first proof the dead agent never reported — at the base, `pb_f_4`, `pb_f_9` and `pb_f_10`
+  all fail on the same `ResolveTargets` assertion, which is the defect: the engine consulted the
+  location service about a request whose route set already determined its target.
+- **The last box was proved, not waved through.** `scripts/two-node-call.sh` was run against the
+  integrated tree with a `sipx` CLI **built from the patched kernel checkout** rather than the
+  system's `sipx 0.8.0` — `CX-3`'s rule is that a proof against a different client build proves
+  nothing. Result: `PASS`, two nodes sharing one location service, the call forwarded by the node
+  that never saw the callee's REGISTER.
+- One correction applied by the coordinator from the review: the strict-route swap cites RFC 3261
+  **§16.6 step 6**, not "step 12" — §16.6 has eleven steps, and step 7's own text says "as
+  described in step 6 above". The miscitation pre-existed in `forward.rs` and this diff had
+  propagated it into normative spec prose.
+

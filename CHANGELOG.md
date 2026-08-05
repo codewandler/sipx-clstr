@@ -20,6 +20,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+- **An out-of-dialog request carrying a pre-existing route set keeps the callee's URI**
+  (`PX-16`, found by `PX-13`). The proxy asked the location service about a request whose route
+  set already determined where it goes, then overwrote the Request-URI with the answer — so the
+  callee's address disappeared from the message, and with a strict router in the set it was the
+  proxy's own resolved answer, not the callee, that got parked at the Route end. The decision
+  path now tests the surviving route set **before** any address-of-record lookup (RFC 3261
+  §16.4/§16.5): a loose `;lr` hop leaves the Request-URI untouched on the wire, and §16.6 step
+  6's strict-router swap puts the real callee where the strict router will find it. `PB-F-4`'s
+  expectation is rewritten (its old bytes dropped the callee entirely), `PB-F-9`/`PB-F-10` are
+  new, and all retargeting now goes through the kernel's `Request::set_uri` so no stale start
+  line is forwarded verbatim.
+
+- **The devspace walkthrough's greeting has an address a phone can actually dial** (`KO-18`).
+  Three constraints meet on one string: `sipx dial` sends to a literal and resolves no names,
+  `FC-4` refuses a REGISTER outside the tenant's `domains`, and `FC-5` put that list in a
+  document written before any pod exists. The address of record was a Service *name* — which
+  satisfied the last two and no spelling of `dial` could reach, so the published §4 call step
+  could not work. It is now node-a's **static `clusterIP`**, declared in the same manifest as
+  the document that serves it, and `devspace_dialable.rs` holds all four artifacts that must
+  carry it byte-identically — the tenant's `domains`, the greeting's AoR, the site's `dial`
+  command and the two-node script — to that one string, plus the property that makes it usable.
+  This unblocks `DX-13`.
+
 - **A normative spec can no longer exist outside the vector gate's view** (`CF-25`). `AF-3`'s
   296-line owner-rpc spec sat under `docs/specs/` with thirteen §10 failure scenarios while
   `check-vectors.py` stayed green without reading one of them — the checker only ever looked at
