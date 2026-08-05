@@ -20,6 +20,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   any per-contact work. The spec's B6–B9 rows renumbered to `LS-R-26`…`LS-R-34` with `LS-R-35`
   added for the deferral, all proved on both store backends — the vector count moves to 167/596.
 
+- **A location store this node cannot read is no longer treated as an empty store** (`RG-17`,
+  validated synthesis **V-08**). A failed or undecodable PostgreSQL read became empty revision
+  zero, so a REGISTER query answered `200` — telling a UA it is registered nowhere while the
+  durable state was in fact unknown — and a no-op deregistration reported success for a removal
+  that never reached the store. `LocationStore::read` is now fallible, distinguishing absence
+  from a database failure and from an undecodable row; REGISTER answers `503` for every failing
+  shape before processing, and a failed lookup reaches the proxy as `TargetsUnavailable` → `503`,
+  kept distinct from both the empty target set's `480` and proxy-behavior R8's `500`
+  (`PB-F-11`). The new rows run identically against the in-memory double and a live PostgreSQL
+  with deliberately corrupted rows — a backend that needed its own variant would have broken the
+  contract. Operators should expect `503` where a flaky database previously produced a silent
+  `200`/`480`.
+
 - **A normative table that has stopped being a table is now a red gate** (`CF-23`). A Markdown
   table cannot survive a blank line, and in a repository whose rules are cited by ID out of table
   rows, a row that silently stopped being a row is a normative rule that silently stopped being

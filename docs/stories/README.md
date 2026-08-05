@@ -96,7 +96,6 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · CX-7 confirmed no kernel gap: v0.10.0 has fallible Expires; consume it and reject malformed Contact/Path atomically
@@ -303,6 +302,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [RG-14 — Make the REGISTER contact path linear, and bound the work before the quota decides](RG-14-make-the-register-contact-path-linear.md) · Signalling · one 64 KB REGISTER costs millions of URI parses, and the quota is checked after the work is done
 - [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 — RG-25 landed, resuming on impl/RG-16-r3
+- [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-25 — Bound the contact operations one REGISTER may carry, in the spec and not only in code](RG-25-bound-the-contact-operations-one-register-may-carry.md) · Registrar · RG-14 item 2, never landed — one 64 KB datagram costs ~0.2 s of a core, and RG-16 cannot be finished without it
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling

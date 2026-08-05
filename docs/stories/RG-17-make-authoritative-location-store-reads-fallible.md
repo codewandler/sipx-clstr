@@ -2,7 +2,7 @@
 id: RG-17
 title: Make authoritative location-store reads fallible instead of inventing absence
 pillar: Registrar
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/registrar-location.md
 epic: registrar-location
@@ -81,3 +81,17 @@ from the `8c61cf4` rescue commit. It was left untouched here (out of fence) and 
   commit, so it has no such fence.
 - **Upstream boundary:** no; fallible authoritative state and its REGISTER/lookup policy are platform
   location-service orchestration, not SIP kernel behavior.
+
+- **Integrated 2026-08-05, gate green on `main` (173/602 rows proved).** An independent review
+  reproduced the base proof against live PostgreSQL rather than trusting the report — three real
+  `200`-vs-`503` assertion failures at the merge base — and audited every `impl LocationStore`,
+  every `Err(_)` in `crates/*/src/`, and every read call site for a surviving `unwrap_or_default`
+  or `.ok()`. None. The one `Err(_) => Ok(Vec::new())` in `driver.rs` is location-service §3.2's
+  own rule (an uncanonicalizable Request-URI is an answer about a malformed URI, and lookup
+  returns the empty set), not a hole.
+- **Two limits this closes with, stated so nobody over-reads it.** The live-PostgreSQL half of
+  `LS-K-7`/`LS-K-8`/`LS-L-9` is enforced by CI's `postgres` job, which currently dies at
+  dependency resolution on `CX-12`'s `[patch]` — so that half rests on local runs until the patch
+  goes. And the new `503` has not been observed on a wire: every proof is in-process, and an
+  end-to-end call with the database stopped is what would settle it.
+
