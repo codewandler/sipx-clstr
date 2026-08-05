@@ -849,8 +849,11 @@ def render(
         "",
         "A row is *proved* when a test in the workspace covers it **and** compares every value the",
         "row states, *shape only* when a test covers it but never compares a value it states, and",
-        "*deferred* when [vector-scope.toml](vector-scope.toml) says why and names the story that",
-        "will.",
+        "*deferred* when [vector-scope.toml](vector-scope.toml) says why and names a **live** story",
+        "that will — one that exists and is not `done`, and is not the story that wrote the spec.",
+        "Both halves are enforced on every run (`CF-24`): before they were, 239 of 428 deferred rows",
+        "named a story that had already closed, so the deferred count below read as \"waiting on",
+        "somebody\" while 56% of its reasons were addressed to nobody.",
         "",
         # Counted, not derived. This used to read `len(rows) - len(waived)`, which is only correct
         # while *every* non-deferred row is covered — true by accident, because the gate refused any
@@ -1168,7 +1171,7 @@ def main() -> int:
         f"vectors: {len([row for row in rows if verdicts.get(row, (None,))[0] == PROVED])}/"
         f"{len(rows)} rows proved, "
         f"{len([row for row in rows if verdicts.get(row, (None,))[0] == SHAPE_ONLY])} "
-        f"covered for shape only, {len(waived)} deferred with a reason"
+        f"covered for shape only, {len(waived)} deferred with a live owner"
     )
     return 0
 

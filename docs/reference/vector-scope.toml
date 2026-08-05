@@ -23,7 +23,7 @@
 
 [[deferred]]
 id = "PB-C-4"
-story = "PX-2"
+story = "PX-4"
 reason = """
 A CANCEL matching no transaction is forwarded statelessly. By definition no response context exists
 for it, so it never reaches the engine — it is the driver's, and the driver design says so. It
@@ -200,1047 +200,1048 @@ Needs the runtime and the configured trunk set to check the default against.
 # closes each family; when that story lands, its rows move from here to a test, not the other way.
 # ---------------------------------------------------------------------------------------------
 
-# AI — 97 rows, closed by RT-7.
+# AI — 97 rows, closed by RT-2, which lands the contract RT-7 wrote.
 
 [[deferred]]
 id = "AI-A-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-8"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-9"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-10"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-11"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-12"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-13"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-14"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-15"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-16"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-17"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-18"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-19"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-20"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-21"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-22"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-23"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-A-24"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-8"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-9"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-10"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-11"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-C-12"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-D-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-N-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-8"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-9"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-10"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-P-11"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-8"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-9"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-10"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-11"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-S-12"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-8"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-9"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-10"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-11"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-12"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-13"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-14"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-15"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-16"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-T-17"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-1"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-2"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-3"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-4"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-5"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-6"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 [[deferred]]
 id = "AI-X-7"
-story = "RT-7"
+story = "RT-2"
 reason = """
-Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable. `RT-7` wrote the contract; the implementation is unscheduled.
+Asserted identity and privacy. Per-trunk identity policy has no trunk to attach to and no egress path to apply on, so none of these rows is reachable yet. `RT-7` wrote the contract and is done; asserted-identity's own coverage note says `RT-2`'s trunk model is the story that lands its types, so these rows wait on `RT-2`.
 """
 
 # `AT` had 18 rows here and has none now: `AF-4` implemented the mint/verify library and every one
 # is proved. A prefix leaving this file entirely is the outcome the ledger exists to reach.
 
-# CC — 53 rows, closed by DP-8.
+# CC — 51 rows, split by consumer: DP-16 the loader and its remaining sections,
+# RT-2 the trunk table, DP-13 roles at startup, FC-1 listener exposure.
 
 [[deferred]]
 id = "CC-D-1"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-2"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-3"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-4"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-5"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-6"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-7"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-8"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-D-9"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-I-1"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-I-2"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-I-3"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-I-4"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-K-1"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-K-2"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-K-3"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-K-4"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-K-5"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-K-6"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-R-2"
-story = "DP-8"
+story = "DP-13"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it.
 """
 
 [[deferred]]
 id = "CC-R-3"
-story = "DP-8"
+story = "DP-13"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it.
 """
 
 [[deferred]]
 id = "CC-R-4"
-story = "DP-8"
+story = "DP-13"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it.
 """
 
 [[deferred]]
 id = "CC-R-5"
-story = "DP-8"
+story = "DP-13"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it.
 """
 
 [[deferred]]
 id = "CC-R-6"
-story = "DP-8"
+story = "DP-13"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Roles at startup. `DP-13` wires declared roles into runtime capabilities: the echo and `e2e-tester` refusals, the R6 mixing rule and the empty or unrecognised role errors are its Acceptance matrix, and `CC-R-1` already moved from this file to a test under it.
 """
 
 [[deferred]]
 id = "CC-R-7"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-R-8"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-R-9"
-story = "DP-8"
+story = "FC-1"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Listener projection. Exact transport exposure is `FC-1`'s: §5 P6's duplicate-transport refusal and P5's advertised identity are the behaviour its V-07 item proves, so these rows wait on `FC-1`.
 """
 
 [[deferred]]
 id = "CC-R-10"
-story = "DP-8"
+story = "FC-1"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Listener projection. Exact transport exposure is `FC-1`'s: §5 P6's duplicate-transport refusal and P5's advertised identity are the behaviour its V-07 item proves, so these rows wait on `FC-1`.
 """
 
 [[deferred]]
 id = "CC-S-1"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-2"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-3"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-4"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-5"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-6"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-7"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-8"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-S-9"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-T-1"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-T-2"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-T-3"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-T-4"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-V-1"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-V-2"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-V-3"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-V-4"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-V-5"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-V-6"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-V-7"
-story = "DP-8"
+story = "RT-2"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+The trunk table. `trunk[]` — its media policy, normalisation binding, quirk bindings and reload — is `RT-2`'s: cluster-config's consumer table maps the section to the trunk model and RL7/RL8 defer trunk identity and plan resume to it, so its validation and reload rows sit beside the `NN-*` rows already deferred there.
 """
 
 [[deferred]]
 id = "CC-V-8"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 [[deferred]]
 id = "CC-V-10"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Membership, key and shard-map loading. `DP-16`'s Acceptance claims this row by name — re-pointed here from `DP-8`, which closed with the sections still refused — and proves it when `keys[]` and `shardMap` leave `DEFERRED_SECTIONS` and reload holds as cluster-membership §6 states it.
 """
 
 [[deferred]]
 id = "CC-V-11"
-story = "DP-8"
+story = "DP-16"
 reason = """
-Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so some of these rows are close to coverage — but the reload half (`RL*`), the sections nothing applies, and the projection vectors have no test. Each needs a test named for its row.
+Configuration loading. `DP-8` implemented ten sections of the schema and `DP-10` wired it to startup, so these rows are close to coverage — each still needs a test named for its row. `DP-16` is the loader's one live story, so they land with its test sweep; if it closes without them, the closed-story gate reopens every one.
 """
 
 # FR — 22 rows, closed by AF-7.
@@ -1436,636 +1437,636 @@ reason = """
 The location service's sharding and change-feed behaviour. The single-node store satisfies the compare-and-swap contract, but rendezvous sharding, shard handoff and the replication feed have no implementation to test against — `RG-5` builds them.
 """
 
-# MR — 90 rows, closed by ME-1.
+# MR — 90 rows, closed by ME-2, which builds the client ME-1 specified.
 
 [[deferred]]
 id = "MR-C-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-C-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-9"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-10"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-11"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-12"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-13"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-14"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-15"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-16"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-17"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-18"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-19"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-E-20"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-F-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-9"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-H-10"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-N-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-N-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-N-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-N-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-N-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-9"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-10"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-11"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-12"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-13"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-14"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-15"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-P-16"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-9"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-10"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-11"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-12"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-T-13"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-1"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-2"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-3"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-4"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-5"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-6"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-7"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-8"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-9"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 [[deferred]]
 id = "MR-X-10"
-story = "ME-1"
+story = "ME-2"
 reason = """
-Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specifies the port and `ME-2` builds it.
+Media relay control. Nothing in this platform speaks the NG protocol yet: there is no relay process, no session, and no port allocation, so every row here describes an interaction that cannot occur. `ME-1` specified the contract and is done; media-relay §12 says `ME-2`'s tests derive from these rows, so they wait on `ME-2`.
 """
 
 # NN — 52 rows, closed by RT-2.
