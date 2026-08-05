@@ -1,10 +1,24 @@
 apiVersion: v2
 name: sipx-clstr
+# This description is the one surface an operator reads without opening a template —
+# `helm show chart`, an OCI registry listing (KO-12) — so it states what installing the chart
+# does NOT do before what it does. Until KO-16 it promised the operator, CRDs and RBAC while the
+# only template was one custom resource nothing serves (V-19); `deploy/helm/check-advertised.sh`
+# now holds this file to the inventory `helm template` actually renders.
 description: >-
-  Installs the sipx-clstr operator, its CRDs and RBAC, and exactly one SipxCluster
-  resource rendered 1:1 from values.yaml. The default values are a self-contained,
-  single-zone environment that stands up on a local k3s/k3d cluster with no edits.
+  Non-operational schema preview, not an installable platform: renders exactly one
+  SipxCluster custom resource, 1:1 from values.yaml, and installs nothing that
+  serves it — no CRD (the API server refuses the resource), no operator, no RBAC,
+  no node, database, media-relay or probe workloads. The resource is the pinned
+  deployment contract (docs/specs/sipx-cluster-crd.md, KO-1); what is absent is the
+  implementation that serves it, starting with the KO-3 reconcile loop. See
+  templates/NOTES.txt for the named blockers.
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+# Both numbers are the repository's release — Cargo.toml [workspace.package] version — because
+# nothing else here has a version of its own to advertise: the chart is unpublished (KO-12) and
+# no image exists behind appVersion's default tag (KO-17). check-advertised.sh compares both
+# against the workspace, so a release cut that forgets this file is a red check rather than a
+# package number nothing ever released, presented as current fact.
+version: 0.13.0
+appVersion: "0.13.0"
 keywords: [sip, voip, proxy, registrar, rtpengine, cluster]

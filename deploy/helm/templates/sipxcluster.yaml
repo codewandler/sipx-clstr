@@ -22,11 +22,22 @@
   through the node's own loader, which is the only thing that checks that
   `.Values.cluster` is the document cluster-config specifies.
 
-  PROVISIONAL: the API version comes from values because KO-1 has not pinned it
-  yet. When it does, it becomes a constant here. It is one value rather than an
-  apiGroup/apiVersion pair, because the resource's API version *is* the schema
-  version of the document it carries.
+  The API version comes from values, and that is no longer provisional: KO-1
+  pinned it as `sipx.dev/v1alpha1` (sipx-cluster-crd §3 G1). It stays a value
+  rather than becoming a constant here because the resource's API version *is*
+  the schema version of the document values carries (§3 G2) — one version field
+  on the thing being versioned — and `scripts/check-crd-drift.py` holds this
+  spelling, the CRD spec, cluster-config §3 and the loader's API_VERSION to one
+  fact. What is still absent is implementation, not a resource contract: no CRD
+  or controller ships with this chart, so the rendered resource is unserved
+  until the KO-3 reconcile loop exists. The comment lines below are deliberately
+  plain `#` rather than part of this block, so `helm template` emits them and a
+  saved manifest still says what applying it will not do.
 */}}
+# UNSERVED: this chart ships no CRD and no controller (KO-2 is blocked on the
+# KO-3 reconcile loop). This document is a rendering of the deployment contract,
+# not a running SIP deployment: the API server refuses it until a CRD exists,
+# and nothing reconciles it into workloads. See NOTES.txt for the blockers.
 apiVersion: {{ .Values.apiVersion }}
 kind: SipxCluster
 metadata:
