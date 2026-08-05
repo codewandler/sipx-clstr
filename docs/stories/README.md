@@ -78,7 +78,6 @@ _The operational contract: roles by config, a reference topology, and an honest 
 ### The public documentation site
 _The site a stranger lands on should say what this does and how to run it, not what we plan next._
 - [DX-13 — Retire the three-flag CLI from the published surface and from the M1 proof script](DX-13-retire-the-three-flag-cli-from-the-published-surface.md) · Foundation · unblocked — KO-18 gave the greeting a static clusterIP that is dialable, a valid domains entry and knowable before any pod exists; §4 needs re-running against a live k3d cluster
-- [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
 
 ### Fail-closed configuration
 _Accepted means applied, or refused — there is no third state._
@@ -255,6 +254,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [DX-10 — Write the deployment and scaling operate pages](DX-10-write-the-deploy-and-scaling-pages.md) · Foundation · HPA on CPU is explicitly rejected — scaling signals are SIP-shaped, and that is the story
 - [DX-11 — Write the observability and high-availability operate pages](DX-11-write-the-observability-and-ha-pages.md) · Foundation · service HA is the guarantee; call survival is never silently promised
 - [DX-12 — Gate that every site page is reachable and every command shown is real](DX-12-gate-that-every-page-is-reachable-and-real.md) · Foundation · the command half is no longer hypothetical — ~30 documented commands and the M1 proof script fail
+- [DX-14 — Hold release claims to executable evidence](DX-14-hold-release-claims-to-executable-evidence.md) · Foundation · V-18 — generated counts and the real driver disagree with release-facing capability claims
 - [ET-1 — Specify the e2e-tester role and the probe contract](ET-1-specify-the-e2e-tester-role-and-probe-contract.md) · Platform · M1 #11 · docs/specs/e2e-probe.md — verdict taxonomy, blast radius, 19 vectors; gates ET-2/ET-3
 - [ET-2 — Implement the sans-IO probe engine](ET-2-implement-the-sans-io-probe-engine.md) · Platform · M1 #12 · the probe engine and scheduler; every EP-* vector proved
 - [ET-3 — Implement the echo answering endpoint](ET-3-implement-the-echo-answering-endpoint.md) · Platform · M1 #13 · the echo endpoint; end to end through the real proxy, registrar and probe

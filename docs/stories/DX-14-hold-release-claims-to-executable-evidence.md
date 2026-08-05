@@ -2,7 +2,7 @@
 id: DX-14
 title: Hold release claims to executable evidence
 pillar: Foundation
-status: in-progress
+status: done
 priority: 1
 design: docs/designs/docs-site.md
 epic: docs-site
@@ -120,3 +120,25 @@ of release claim drifts again.
 - Considered for upstream: **no.** These are this repository's release claims, site inventory, story
   ownership, and generated conformance report. No SIP-generic behavior or reusable kernel primitive
   is implemented here.
+
+- **Integrated 2026-08-05 after one rework round, gate green on `main`.** Round 1 shipped a
+  checker that **passed while the exact false claim it was written for survived**: `stated()`
+  applied the refusal guard to denials as well as claims, and a denial sentence contains a
+  refusal word by construction, so `intro.md`'s "resolved by address-of-record lookup **rather
+  than** by the `Route` set" excused itself. Its self-test pinned a *trimmed* form of that
+  sentence with the defeating clause removed.
+- **The fix is one rule rather than two guards: negation scopes forward.** A refusal word denies
+  what follows it, so only one at or before the end of the match can deny that match. A real
+  denial lands inside the match ("roles do **not** gate dispatch"); a stronger claim in a tail
+  ("…, so **no** method reaches another role's handler") does not. Verified at integration on
+  the real shipped sentence and on honest denials, in both directions — the detector does not
+  work by flagging everything.
+- **The implementor disclosed that its own round-1 base proof was stale**, quoted from a
+  mid-development revision of the guard that never landed (25 problems including the ACK lines,
+  where the committed code gives 23 and none). Recorded here rather than quietly corrected,
+  because a measurement quoted from a revision that no longer exists is precisely the defect
+  this story exists to make impossible — and it reached the story's own proof.
+- Left to others deliberately: the published **prefix** count is still hand-copied (`CF-21`,
+  re-scoped to exactly that), and the stale "One node runs today" denials on
+  `clustering/how-it-works.md:9` and `registrar-shards.md:9` are outside the governed set.
+

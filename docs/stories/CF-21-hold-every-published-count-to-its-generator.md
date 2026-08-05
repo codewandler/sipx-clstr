@@ -16,22 +16,31 @@ Make a published number that disagrees with the tool that produces it a red gate
 `CF-19` made a published version banner that disagrees with the binary a red gate.
 
 ## Acceptance
-- [ ] `scripts/check-site.py` (or a sibling in the gate) fails when a conformance count quoted in
+- [x] `scripts/check-site.py` (or a sibling in the gate) fails when a conformance count quoted in
       `README.md` or under `website/docs/` disagrees with `scripts/check-vectors.py`'s own output —
-      proved, shape-only, deferred and the total, each of them.
-- [ ] The count of registered spec prefixes is checked the same way; `README.md` said "Ten
-      specifications" and the site said "Thirteen prefixes" while the registry held eleven and
-      fifteen respectively.
-- [ ] The check finds the numbers by shape wherever they appear, including inside the shields.io badge
+      proved, shape-only, deferred and the total, each of them. **Landed with `DX-14`.**
+- [ ] The count of registered spec **prefixes** is checked the same way. `DX-14` derived the count
+      of registered *specifications* from the registry, but `SPEC_COUNT` only reads the number in
+      front of the word "specifications" — so "across fifteen prefixes"
+      (`website/docs/reference/conformance.md`) and "Fifteen prefixes" (`website/docs/whats-new.md`)
+      are still hand-copied. Proved at `DX-14`'s review: registering a sixteenth prefix on an
+      already-registered spec left both "fifteen" claims green.
+- [x] The check finds the numbers by shape wherever they appear, including inside the shields.io badge
       URL, rather than by a list of known line numbers — the badge is the copy most likely to be
-      missed and the most publicly visible.
-- [ ] A *historical* number in a released section is not flagged. `whats-new.md`'s "0.12.0 shipped
+      missed and the most publicly visible. **Landed with `DX-14`**, which caught both the badge URL
+      and its alt text when the ledger moved to 173/602.
+- [x] A *historical* number in a released section is not flagged. `whats-new.md`'s "0.12.0 shipped
       125/549" is a true statement about a past release; only current claims are held. State how the
-      two are told apart.
-- [ ] **Failing-first:** with a count one merge behind, the gate is red and names the file, the line,
-      the published figure and the generated one. Demonstrated before it is made green.
-- [ ] The static-reading discipline `CF-19` established is kept: if the generator cannot be run, say so
-      on every run rather than passing silently.
+      two are told apart. **Landed with `DX-14`**: scanning stops at `whats-new.md`'s `## Releases`
+      heading, and the skipped line count is printed on every run so the narrowing is visible.
+- [x] **Failing-first:** with a count one merge behind, the gate is red and names the file, the line,
+      the published figure and the generated one. Demonstrated before it is made green. **Landed
+      with `DX-14`**, and demonstrated twice more at its review by fabricating a vector row.
+- [x] The static-reading discipline `CF-19` established is kept: if the generator cannot be run, say so
+      on every run rather than passing silently. **Landed with `DX-14`**: the site check imports
+      `check-vectors.py` by path and refuses to exit 0 if that import fails.
+
+**What is left, and it is the whole of this story now:** the count of registered spec **prefixes**.
 
 ## Progress
 - (not started)
@@ -53,3 +62,9 @@ Make a published number that disagrees with the tool that produces it a red gate
   first.
 - Considered for upstream: **no.** This checks this repository's published documents against this
   repository's own tooling.
+
+- **Re-scoped 2026-08-05 at `DX-14`'s integration.** Five of this story's six acceptance items
+  were implemented by `DX-14`'s check and are ticked above with the evidence; leaving them open
+  would have this story claiming work that has landed, which is `CF-18`'s defect in a different
+  costume. What remains is one line: the prefix count.
+

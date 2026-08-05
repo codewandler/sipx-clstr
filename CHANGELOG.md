@@ -36,6 +36,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Every release-facing claim is now held to something that can be executed** (`DX-14`,
+  validated synthesis **V-18**). The README badge and the site quoted conformance counts that
+  had gone stale, said "Fifteen specifications" where the registry held thirteen, and described
+  capabilities the released binary does not perform — matched CANCEL and Timer C as `today` when
+  the driver drops the timer effect, and an `ACK` denial that `PX-13` had made false. Counts and
+  the specification inventory are now derived from `check-vectors.py`'s own registries rather
+  than copied, wherever the numbers appear including inside the shields.io badge URL; each
+  governed capability is mapped to its owning story and gated on that story's status **in both
+  directions**, so a claim cannot be promoted while its story is open and a denial cannot outlive
+  its story closing. Dated release notes are deliberately not rewritten, and the count of lines
+  skipped as history is printed on every run. The real-socket proof is described as a
+  same-kernel, separate-process integration test — "independent implementation" is reserved for
+  `CF-3`'s interop target.
+
 - **A location store this node cannot read is no longer treated as an empty store** (`RG-17`,
   validated synthesis **V-08**). A failed or undecodable PostgreSQL read became empty revision
   zero, so a REGISTER query answered `200` — telling a UA it is registered nowhere while the
