@@ -27,6 +27,9 @@ use sipx_sip::{
 };
 
 const TENANT: &str = "t1";
+/// This harness runs on the in-memory backend, whose reads cannot fail (§6 K7's failure is a
+/// property of a backend that talks to something). `tests/read_faults.rs` owns that path.
+const READS: &str = "the in-memory backend always reads";
 /// How long a store round trip takes. Any non-zero value is enough to interleave two edges.
 const STORE_LATENCY: Duration = Duration::from_millis(5);
 const COMMIT_TIMER: TimerId = TimerId(1);
@@ -86,7 +89,7 @@ impl Edge {
             }
         };
 
-        let (set, read_at) = self.store.read(TENANT, &cmd.aor);
+        let (set, read_at) = self.store.read(TENANT, &cmd.aor).expect(READS);
         match process(&cmd, &set, &self.policy) {
             Outcome::Commit { set, .. } => {
                 self.pending = Some(Pending {
@@ -142,7 +145,7 @@ impl Edge {
 
                 // Re-read and re-decide against what is actually there now. The command is
                 // unchanged — including its `now` — which is what makes re-presenting it safe.
-                let (set, read_at) = self.store.read(TENANT, &pending.cmd.aor);
+                let (set, read_at) = self.store.read(TENANT, &pending.cmd.aor).expect(READS);
                 match process(&pending.cmd, &set, &self.policy) {
                     Outcome::Commit { set, .. } => {
                         self.pending = Some(Pending {
@@ -326,7 +329,7 @@ fn two_edges_registering_one_aor_serialize_and_neither_binding_is_lost() {
     );
 
     // Two bindings, two revisions: no lost update.
-    let (set, revision) = store.read(TENANT, &aor());
+    let (set, revision) = store.read(TENANT, &aor()).expect(READS);
     assert_eq!(revision, Revision(2));
     let contacts: Vec<&[u8]> = set.all().iter().map(|b| b.contact.as_ref()).collect();
     assert_eq!(

@@ -207,7 +207,13 @@ impl SimNode for ProxyNode {
                     .on_input(ProxyInput::TimerFired(ProxyTimer::C, Some(branch)));
                 self.perform(effects)
             }
-            Input::TransportError { .. } | Input::Started => Vec::new(),
+            Input::TransportError { .. } | Input::Started
+            // `CF-26`'s connection faults: this node keeps no connection table and no
+            // write accounting, so a reconnect, a restart and a stall are nothing to it.
+            | Input::Connected { .. }
+            | Input::Restarted { .. }
+            | Input::WriteStalled { .. }
+            | Input::WriteFlushed { .. } => Vec::new(),
         }
     }
 }

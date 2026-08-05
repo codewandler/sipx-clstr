@@ -42,6 +42,7 @@ enum Input {
     BranchResponse(Response, BranchId),
     BranchTransportError(BranchId),       // §16.9: treated as 503 from that branch
     TargetsResolved(Vec<Target>),         // location service / routing policy answered
+    TargetsUnavailable,                   // it could not answer (location-service §7 L8) — §7
     TokenFact(TokenVerdict),              // affinity token verified or rejected (AF-4)
     TimerFired(ProxyTimer, Option<BranchId>),
     UpstreamCancelled,                    // CANCEL matched our server transaction
@@ -193,6 +194,22 @@ request that cannot receive ≥ 1 is not forwarded (V5).
 **[sipx-clstr]** An empty resolved target set concludes the context with `480 Temporarily
 Unavailable` (§16.5's terminal case; the location service returns empty sets rather than
 deciding the response — [location-service](location-service.md) §7).
+
+**[sipx-clstr]** A target set that could not be *resolved* is not an empty one. When the location
+service reports failure rather than an answer (`TargetsUnavailable`, per
+[location-service](location-service.md) §6 K7 and §7 L8), the context concludes with `503 Service
+Unavailable` instead. The two say different things about different subjects: `480` is a statement
+about the callee — this platform looked, and the address of record has no active binding — while
+`503` is a statement about this platform, which could not look. Answering `480` for a store outage
+tells the caller to stop trying a callee who may be perfectly reachable, and it does so with the
+same code the callee's own devices would have produced, so nothing downstream can tell the two
+apart.
+
+That `503` is **originated here**, not received from a branch, so R8 does not touch it: R8's subject
+is a response that entered the response context from a downstream element, and this one never
+entered it — no branch was forwarded, so there is nothing to select among (§8 R7) and nothing to
+rewrite. The same reasoning [location-service](location-service.md) §5.1 S10 states for the
+registrar's own `503`.
 
 Per target, in order — the untouched remainder of the message re-serializes byte-exact (kernel
 guarantee; the passthrough vectors assert it):
@@ -397,6 +414,7 @@ the rows here are the normative behavior matrix.
 | PB-F-8 | `ACK` for a 2xx that cannot be forwarded (`Max-Forwards: 0`) | K3 — an explicit unroutable outcome carrying the reason; no response of any status |
 | PB-F-9 | Out-of-dialog request with a pre-existing `Route` set `[ours;lr, p2;lr]` | T3 — our `Route` popped (P2), no `ResolveTargets`; forwarded with the callee's URI still the Request-URI on the wire; F7's next hop is the surviving first `Route` |
 | PB-F-10 | Out-of-dialog request with a pre-existing `Route` set `[ours;lr, strict(no lr), p2;lr]` | T3, then F6's swap over the survivors: the strict router becomes the Request-URI, the callee's URI goes to the Route end behind the rest of the path; F7's next hop is the Request-URI — **not** the first `Route`, which carries `lr` again after the swap |
+| PB-F-11 | T2 asked the location service and it could not answer: `TargetsUnavailable` rather than `TargetsResolved` | → Respond `503`, and no `Forward`. Originated here rather than received from a branch, so R8 does not rewrite it, and it is distinct from the empty-set row above — which stays PB-F-5's answer |
 
 `PB-F-4`'s expectation changed with `PX-16`, and per the `CF-12` discipline the change is argued
 here rather than silently re-recorded. The old row expected the strict router's own URI at the end

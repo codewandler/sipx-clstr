@@ -57,6 +57,7 @@ site · `FC` fail-closed configuration · `BS` optional session services.
 ## Next (ready — take the top one unless the user named a story)
 - [DX-15 — Sweep both doc trees for claims the beta-line kernel bump invalidated](DX-15-sweep-the-docs-for-claims-the-kernel-bump-invalidated.md) · Foundation · CX-12 fixed the claims the gate can see; this sweeps the ones it cannot — "at the pinned v0.10.0" citations that are still true but now name the wrong pin, and prose anchored to a kernel state twelve releases old
 - [CF-27 — Validate story status values, instead of denylisting `done`](CF-27-validate-story-status-values-instead-of-denylisting-done.md) · Core · found reviewing CF-24 — the dead-letter gate fails open on a mistyped status, and the template's {{ID}} registers as a live story
+- [CF-28 — A stalled peer outlives the node it was stalled on](CF-28-a-stalled-peer-outlives-the-node-that-stalled.md) · Foundation · found reviewing CF-26 — killing or restarting a node does not clear StopReading, so a dead node silently absorbs traffic forever and a "new process" re-accumulates held writes
 - [RG-26 — A removals-only REGISTER must not trip the binding quota](RG-26-a-removals-only-register-must-not-trip-the-quota.md) · Registrar · found by RG-16 round 4 — with 12 bindings held against a quota of 10, a REGISTER that only removes one is refused 403, while location-service §5.5's prose says removals never trip the quota
 
 ### Cluster affinity & connection ownership
@@ -68,7 +69,6 @@ _The north star made executable: seeded multi-node simulation, and coverage that
 - [CF-18 — A story can read done while its own record says nothing landed](CF-18-a-story-can-read-done-while-its-own-record-says-nothing-landed.md) · Foundation · 9 of 81 done stories are cited nowhere in CHANGELOG.md and 3 have no ticked acceptance box at all
 - [CF-20 — Make proof claims require executed evidence](CF-20-make-proof-claims-require-executed-evidence.md) · Foundation · V-16 — a plain Rust function counts as a proved vector, and zero sockets prints as exactly one
 - [CF-21 — Hold every published count to its generator, not to whoever last remembered](CF-21-hold-every-published-count-to-its-generator.md) · Foundation · the conformance numbers on the README and the site went stale three times in one session, each time through a green gate
-- [CF-26 — The harness cannot injure a connection, so three owner-RPC scenarios are unwritable](CF-26-the-harness-cannot-injure-a-connection.md) · Foundation · fault.rs offers five faults, none of them reconnect, restart-with-fresh-incarnation or backpressure — which owner-rpc §10 requires
 
 ### Roles, topology & operations
 _The operational contract: roles by config, a reference topology, and an honest HA statement._
@@ -96,7 +96,6 @@ _The forwarding layer the whole platform stands on: RFC 3261 §16 as a sans-IO e
 
 ### Registrar & location service
 _The one place the platform is allowed durable state — so its updates must serialize._
-- [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-18 — Enforce the REGISTER Request-URI domain and principal-to-AoR authorization gates](RG-18-enforce-request-uri-domain-and-principal-aor-authorization.md) · Registrar · V-09 · S1 checks the To-derived AoR with the wrong status and S4 is assumed but has no policy or implementation
 - [RG-19 — Render the complete REGISTER outcome on the wire](RG-19-render-the-complete-register-outcome-on-the-wire.md) · Registrar · V-10 · the core preserves q, Path, Supported, Unsupported and Min-Expires facts that the node silently drops
 - [RG-20 — Reject malformed present registration fields instead of treating them as absent](RG-20-reject-malformed-present-registration-fields.md) · Registrar · V-13 · CX-7 confirmed no kernel gap: v0.10.0 has fallible Expires; consume it and reject malformed Contact/Path atomically
@@ -226,6 +225,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [CF-23 — A blank line silently truncates a normative table, and the gate reads it as clean](CF-23-a-blank-line-silently-truncates-a-normative-table.md) · Foundation · RG-25 orphaned a hook-phase row into literal pipe text; check-docs.py passed it, and the spec's own sentence still claimed both rows
 - [CF-24 — More than half the deferral ledger names a story that has already closed](CF-24-more-than-half-the-deferral-ledger-names-a-closed-story.md) · Foundation · 239 of 428 deferred rows name a done story — the report says "deferred with a reason" and 56% of those reasons are dead letters
 - [CF-25 — A new spec can carry normative rules no gate ever enumerates](CF-25-a-new-spec-can-carry-normative-rules-no-gate-enumerates.md) · Foundation · AF-3 added a 296-line normative spec and check-vectors.py stayed green at 154/583 without seeing one rule of it
+- [CF-26 — The harness cannot injure a connection, so three owner-RPC scenarios are unwritable](CF-26-the-harness-cannot-injure-a-connection.md) · Foundation · fault.rs offers five faults, none of them reconnect, restart-with-fresh-incarnation or backpressure — which owner-rpc §10 requires
 - [CX-1 — File the upstream sipx gap stories](CX-1-file-the-upstream-sipx-gap-stories.md) · Platform · UPSTREAM — touches the sipx repo
 - [CX-2 — Create the Cargo workspace](CX-2-create-the-cargo-workspace.md) · Platform · M1 #1 · the workspace and the gate
 - [CX-3 — Prove M1 against real phones](CX-3-prove-m1-against-real-phones.md) · Platform · M1 #14 · two sipx CLI phones, one node, a real call — media direct, proved by audio
@@ -303,6 +303,7 @@ _Some features must terminate one dialog and create another. A proxy cannot prov
 - [RG-14 — Make the REGISTER contact path linear, and bound the work before the quota decides](RG-14-make-the-register-contact-path-linear.md) · Signalling · one 64 KB REGISTER costs millions of URI parses, and the quota is checked after the work is done
 - [RG-15 — Make authentication observable, and make its replay window O(1)](RG-15-make-authentication-observable.md) · Signalling · the reason for every 401 and 403 is computed and discarded; nothing logs an auth outcome at all
 - [RG-16 — Reconcile a multi-contact REGISTER against fresh indices, not a snapshot taken once](RG-16-reconcile-a-multi-contact-register-against-fresh-indices.md) · Registrar · round 4 — RG-25 landed, resuming on impl/RG-16-r3
+- [RG-17 — Make authoritative location-store reads fallible instead of inventing absence](RG-17-make-authoritative-location-store-reads-fallible.md) · Registrar · V-08 · a failed or undecodable PostgreSQL read becomes empty revision zero, so a query or no-op removal can return a false 200
 - [RG-25 — Bound the contact operations one REGISTER may carry, in the spec and not only in code](RG-25-bound-the-contact-operations-one-register-may-carry.md) · Registrar · RG-14 item 2, never landed — one 64 KB datagram costs ~0.2 s of a core, and RG-16 cannot be finished without it
 - [RT-1 — Design the RoutePlan and shared-cache resolver](RT-1-design-the-routeplan-and-shared-cache-resolver.md) · Signalling · settled upstream — the resolver is the kernel's; what stays here is the plan
 - [RT-6 — Specify declarative number normalisation](RT-6-specify-declarative-number-normalisation.md) · Signalling

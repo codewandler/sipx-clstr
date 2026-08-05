@@ -89,6 +89,73 @@ pub enum Fault {
         /// Per-mille of nominal rate; 1000 is no skew.
         per_mille: u32,
     },
+
+    /// Close the connection between two nodes and accept a new one in its place.
+    ///
+    /// The fault a *link* cannot express, and the reason `CF-26` exists. A partition takes the
+    /// wire away and gives it back; both ends still hold the connection they had, so anything
+    /// naming that connection — a flow reference ([affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
+    /// §11.2) — keeps resolving. A reconnect is the other failure: the connection is *gone*, the
+    /// client comes back on a new one, and every reference to the old one died at that instant
+    /// (§13.2 RS3). Both ends learn — a transport error, then an established connection — because
+    /// a reconnect neither end noticed is a reconnect that changed nothing.
+    ///
+    /// Applied in one instant. A scenario that wants the client to be away for a while
+    /// [partitions](Fault::Partition) first and reconnects at the end of the window.
+    ///
+    /// Both ends are told unconditionally, because the schedule named this pair: a scenario that
+    /// reconnects two nodes is asserting there was a connection between them. Contrast
+    /// [`Fault::RestartNode`], which has to infer whose connections it broke.
+    Reconnect {
+        /// One end.
+        a: NodeId,
+        /// The other.
+        b: NodeId,
+    },
+
+    /// Stop a node and start it again, under an incarnation strictly greater than the one it was
+    /// running under.
+    ///
+    /// Distinct from `KillNode` + a heal, and the distinction is the whole point: a restarted node
+    /// is a **new process**. Its table is empty, so it re-issues connection slots from the
+    /// beginning, and only the incarnation keeps a reference minted before the restart from
+    /// resolving to a connection accepted after it ([affinity-token](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/affinity-token.md)
+    /// §12.2 CT2, and FR-9 for what happens without one). The incarnation is the harness's to
+    /// issue and the node's to receive, never a clock the node reads (AGENTS.md rule 2).
+    ///
+    /// A restart of a node a [`Fault::KillNode`] stopped puts its links back exactly as the kill
+    /// cut them; a restart of a running node leaves link policy alone.
+    ///
+    /// **Which peers are told.** Only those holding a stream link to it. The harness has no
+    /// connection object to consult, so what it uses is the closest thing it has: a link entry
+    /// exists once a message has crossed that pair, which is as close to "a connection was opened"
+    /// as this model gets. A node that has never exchanged a message with the restarted one is
+    /// therefore told nothing, which is right — it had nothing to lose — but it does mean the
+    /// notification follows traffic rather than topology.
+    RestartNode(NodeId),
+
+    /// Accept, but stop draining: writes toward this node are held rather than delivered.
+    ///
+    /// The non-reading peer. It is not loss and it is not a cut — the connection is up, and that
+    /// is what makes it interesting: the bytes sit in the sender's buffer, so a sender that keeps
+    /// writing discovers backpressure rather than an error
+    /// ([owner-rpc](https://github.com/codewandler/sipx-clstr/blob/main/docs/specs/owner-rpc.md)
+    /// §8 BQ2's `max_pending_per_flow`, and the `T_write` that must be able to expire for §7's
+    /// `FlowRejected` to be reachable at all).
+    ///
+    /// Checked **before** the link, because a write that never left never reached the wire. A
+    /// schedule that stalls a node and cuts its links in the same window is asking for two
+    /// contradictory things and gets the stall; [`Fault::Reconnect`], [`Fault::RestartNode`] and
+    /// [`Fault::KillNode`] each discard what was held, because a connection that is gone took its
+    /// buffer with it.
+    StopReading(NodeId),
+
+    /// Read again: everything held for this node goes out, in the order it was written.
+    ///
+    /// The inverse of [`Fault::StopReading`], and the half that finds the bugs — a sender that
+    /// coped with the stall and then mishandles the flush has an accounting defect, and there is
+    /// no way to reach that state without scheduling the resume.
+    ResumeReading(NodeId),
 }
 
 impl Fault {
@@ -114,6 +181,10 @@ impl Fault {
                 policy.loss, policy.duplicate, policy.partitioned
             ),
             Self::TimerSkew { node, per_mille } => format!("skew {node} {per_mille}permille"),
+            Self::Reconnect { a, b } => format!("reconnect {a}|{b}"),
+            Self::RestartNode(node) => format!("restart {node}"),
+            Self::StopReading(node) => format!("stop-reading {node}"),
+            Self::ResumeReading(node) => format!("resume-reading {node}"),
         }
     }
 }
@@ -172,6 +243,17 @@ impl Schedule {
             },
         )
         .at(until, Fault::Heal { a, b })
+    }
+
+    /// Stop a node reading for a window, and let it drain at the end of it.
+    ///
+    /// Paired for the same reason [`Schedule::partition_during`] is: a stall with no resume is
+    /// indistinguishable from a client that never came back, and the accounting bugs live in the
+    /// flush.
+    #[must_use]
+    pub fn stalled_during(self, from: SimTime, until: SimTime, node: NodeId) -> Self {
+        self.at(from, Fault::StopReading(node))
+            .at(until, Fault::ResumeReading(node))
     }
 
     /// Everything in this schedule, then everything in the other.
@@ -250,6 +332,25 @@ mod tests {
     }
 
     #[test]
+    fn a_stall_window_schedules_its_own_resume() {
+        let schedule =
+            Schedule::new().stalled_during(SimTime::from_secs(1), SimTime::from_secs(4), node(1));
+        let shape: Vec<(SimTime, &Fault)> = schedule
+            .entries()
+            .iter()
+            .map(|(at, fault)| (*at, fault))
+            .collect();
+        assert_eq!(
+            shape,
+            vec![
+                (SimTime::from_secs(1), &Fault::StopReading(node(1))),
+                (SimTime::from_secs(4), &Fault::ResumeReading(node(1))),
+            ],
+            "a window is a stall and the resume that ends it"
+        );
+    }
+
+    #[test]
     fn every_fault_renders_a_summary_that_names_what_it_touched() {
         // A failing seed is diagnosed from the trace, so a fault that renders as a blank or an
         // opaque token would make the interesting scenarios the unreadable ones.
@@ -272,6 +373,13 @@ mod tests {
                 node: node(0),
                 per_mille: 1100,
             },
+            Fault::Reconnect {
+                a: node(0),
+                b: node(1),
+            },
+            Fault::RestartNode(node(0)),
+            Fault::StopReading(node(0)),
+            Fault::ResumeReading(node(0)),
         ];
         for fault in faults {
             let summary = fault.summary();
