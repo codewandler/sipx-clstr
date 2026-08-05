@@ -1,0 +1,35 @@
+{{ .Chart.Name }} {{ .Chart.Version }} — release {{ .Release.Name | quote }} is a schema preview, not a deployment.
+
+Nothing is running, and nothing will start. This chart rendered exactly one
+SipxCluster custom resource and installed nothing that serves it:
+
+  no CRD         the API server has no SipxCluster definition, so applying the
+                 rendered resource is refused rather than stored — if this was a
+                 real install and not a dry run, it likely just failed on that.
+  no operator    nothing reconciles the resource into workloads; the reconcile
+                 loop is KO-3, and the CRD, RBAC and per-role workloads land
+                 with it.
+  no RBAC, no node/registrar/proxy workloads, no database, no media relay,
+  no Services, no health checks, no probe.
+
+No SIP port is listening as a result of this install. A successful render —
+helm template, or this dry run — proves the configuration document, never a
+working SIP deployment.
+
+What IS true: the rendered resource is the pinned deployment contract. Its spec
+carries the cluster configuration document of docs/specs/cluster-config.md
+verbatim, the resource contract is pinned by KO-1 in docs/specs/sipx-cluster-crd.md,
+and deploy/helm/check-values.sh proves the default values load for all six roles
+through the node's own loader.
+
+The path from here to a working `helm install` is tracked, not assumed:
+
+  KO-2 (blocked)  ship the chart for a local k3s environment — blocked until a
+                  served CRD, operator image and reconcile loop, RBAC, workload
+                  rendering, Services, health checks and a passing local probe exist
+                  https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/KO-2-ship-the-helm-chart-for-a-local-k3s-environment.md
+  KO-3            implement the operator reconcile loop
+                  https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/KO-3-implement-the-operator-reconcile-loop.md
+  ET-4            implement the probe control API — how the e2e-tester reports
+                  a verdict a chart can gate on
+                  https://github.com/codewandler/sipx-clstr/blob/main/docs/stories/ET-4-implement-the-probe-control-api.md
